@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    background-color: #000000;
+    font-feature-settings: "tnum" 1, "ss01" 1;
+  }
+}
+
+@layer utilities {
+  .hatch {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255,51,51,0.08) 0,
+      rgba(255,51,51,0.08) 4px,
+      transparent 4px,
+      transparent 12px
+    );
+  }
+
+  .scanlines::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent 2px,
+      rgba(0,255,65,0.015) 2px,
+      rgba(0,255,65,0.015) 3px
+    );
+    z-index: 1000;
+  }
+
+  .feed::-webkit-scrollbar        { width: 6px; }
+  .feed::-webkit-scrollbar-track  { background: transparent; }
+  .feed::-webkit-scrollbar-thumb  { background: #003a00; border-radius: 3px; }
+
+  .slider-accent {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #001200;
+    border-radius: 2px;
+    outline: none;
+  }
+  .slider-accent::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #00ff41;
+    cursor: pointer;
+    border: 2px solid #000000;
+  }
+  .slider-accent::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #00ff41;
+    cursor: pointer;
+    border: 2px solid #000000;
+  }
+}

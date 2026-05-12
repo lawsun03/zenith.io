@@ -1,0 +1,21 @@
+{
+  "instrument": "MGC",
+  "timeframes": ["1min"],
+  "replay_delay_ms": 0,
+  "replay_start_delay_s": 5,
+  "account_name": "PRAC-V2-248764-39258280",
+  "entry_mode": "market",
+  "enabled_killzones": ["london", "london_ny", "ny_am", "ny_pm"],
+  "strategy": {
+    "swing_lookback": 1,
+    "min_penetration": "0.05",
+    "multi_bar_window": 5,
+    "atr_period": 14,
+    "body_atr_multiple": "0.4",
+    "min_body_to_range_ratio": "0.35",
+    "min_absolute_body": "0.30",
+    "displacement_window_bars": 6,
+    "stop_buffer": "0.40",
+    "r_multiple": "2.0"
+  }
+}

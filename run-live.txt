@@ -1,0 +1,1 @@
+.\dev.ps1 -Live 2>&1 | Tee-Object -FilePath ".\logs\$(Get-Date -Format 'yyyy-MM-dd').log"

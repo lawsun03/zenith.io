@@ -1,0 +1,33 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# Test/analysis caches
+.pytest_cache/
+.hypothesis/
+
+# Bars data (large CSVs, re-fetchable)
+bars_cache/
+bars_MGC.csv
+
+# Backtest results (generated data) — keep _config_* strategy configs
+backtests/*.json
+!backtests/_config_*.json
+backtest_results/
+
+# Logs
+logs/
+*.log
+bot_stdout.log
+bot_stderr.log
+
+# Claude internal
+.claude/
+
+# Misc
+Capture.PNG
