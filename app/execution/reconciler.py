@@ -1,0 +1,530 @@
+"""
+Reconciler — periodic broker-vs-internal-state diff.
+
+Why this exists:
+
+  WebSocket feeds drop. Fill events get duplicated. The bot restarts
+  mid-session. The user manually closes a position from TopstepX while
+  the bot is running. Any of these put the bot's RiskState out of
+  sync with broker truth — and the gate's decisions become wrong.
+
+  The reconciler runs every N seconds. It pulls broker positions and
+  account balance, compares to RiskState, and:
+
+    - On benign drift (small balance difference): adjust silently and log.
+    - On contract drift (open count differs): flatten everything,
+      lock out for the session, page the operator.
+
+  The asymmetry is intentional. A balance discrepancy of $5 is probably
+  rounding in unrealized P&L. A contract count discrepancy means
+  either we missed a fill or placed an order we don't know about — both
+  scenarios where continuing to trade is reckless.
+
+What this module is NOT:
+
+  - A replacement for fill events. The reconciler is the *backstop*,
+    not the primary path. Fills should arrive via the WebSocket and
+    drive RiskState updates immediately. The reconciler catches what
+    the WebSocket missed.
+
+  - A position-state owner. RiskState owns position state; the
+    reconciler only validates and corrects.
+
+  - A periodic mark-to-market. Equity ticks come on bar closes via
+    the broker; the reconciler doesn't touch equity unless a serious
+    drift forces a flatten.
+
+Lifecycle:
+
+    reconciler = Reconciler(broker, risk_state, engine,
+                            interval_seconds=30)
+    await reconciler.start()    # spawns the loop task
+    # ... runs forever ...
+    await reconciler.stop()     # cancels the task and joins
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Optional
+
+from app.broker.protocol import Broker
+from app.risk.state import LockoutReason, RiskState
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ReconcileReport:
+    """
+    What the reconciler observed on one tick.
+
+    Useful for the dashboard and for tests that want to assert behavior
+    across multiple ticks.
+    """
+
+    ts: datetime
+
+    # Truth from the broker.
+    broker_open_contracts: int
+    broker_balance: Decimal
+
+    # What we thought before this tick.
+    internal_open_contracts: int
+    internal_balance: Decimal
+
+    # Did we take any action?
+    drift_detected: bool
+    drift_kind: Optional[str]  # "contract_count" | "balance" | None
+    flattened: bool
+    notes: str = ""
+
+
+@dataclass
+class ReconcilerConfig:
+    """Tunable thresholds."""
+
+    # How often to run. 30s is a reasonable starting point — frequent
+    # enough to catch drift before it compounds, infrequent enough not
+    # to spam the broker with position queries.
+    interval_seconds: float = 30.0
+
+    # Balance discrepancies smaller than this are silently corrected.
+    # Larger ones flatten and lock out, since "we're $300 off" usually
+    # means we missed a fill or executed a phantom one.
+    balance_tolerance: Decimal = Decimal("50")
+
+    # First-tick grace: the very first reconcile is allowed to discover
+    # any preexisting state without flattening (the bot may have just
+    # started up and inherited a position from a prior session). After
+    # that, any contract drift is a hard error.
+    grace_first_tick: bool = True
+
+    # After the engine places an order, the market fill arrives on the
+    # broker's REST API (get_positions) almost instantly, but the fill
+    # WebSocket event that updates RiskState.open_contracts can lag by
+    # several seconds. If the reconciler ticks during that window it
+    # sees broker=1 vs internal=0 and panics. This grace period
+    # suppresses the contract-count alarm for N seconds after
+    # notify_order_placed() is called. Set to 0 to disable.
+    grace_period_after_order_seconds: float = 15.0
+
+
+class Reconciler:
+    """
+    Periodic state validator. Runs as a background task.
+
+    Single instance per ExecutionEngine. Talks to the same Broker and
+    RiskState the engine uses; calls back into the engine's flatten path
+    when a hard drift is detected.
+    """
+
+    def __init__(
+        self,
+        broker: Broker,
+        risk_state: RiskState,
+        config: Optional[ReconcilerConfig] = None,
+    ) -> None:
+        self.broker = broker
+        self.risk_state = risk_state
+        self.config = config or ReconcilerConfig()
+
+        self._task: Optional[asyncio.Task[None]] = None
+        self._stop_event = asyncio.Event()
+        self._first_tick_done = False
+
+        # Set by notify_order_placed() when the engine successfully places
+        # an order. Used to suppress false-positive contract-count alarms
+        # during the fill-event latency window.
+        self._last_order_placed_at: Optional[datetime] = None
+
+        # Last report kept for dashboard inspection.
+        self._last_report: Optional[ReconcileReport] = None
+
+    # ------------------------------------------------------------------
+    # Read-only views
+    # ------------------------------------------------------------------
+
+    @property
+    def last_report(self) -> Optional[ReconcileReport]:
+        return self._last_report
+
+    def notify_order_placed(self) -> None:
+        """
+        Called by the ExecutionEngine immediately after broker.place_bracket()
+        succeeds. Starts the fill-latency grace window so the next reconciler
+        tick does not false-positive on the gap between the REST position
+        snapshot (which reflects the fill immediately) and the WebSocket fill
+        event (which updates RiskState.open_contracts with some latency).
+        """
+        self._last_order_placed_at = datetime.now(timezone.utc)
+        log.debug(
+            "Reconciler: order-placed notified — grace window started "
+            "(%.0fs)", self.config.grace_period_after_order_seconds,
+        )
+
+    def _is_in_order_grace_period(self, ts: datetime) -> bool:
+        """True if we are still within the post-order-placement grace window."""
+        if (
+            self._last_order_placed_at is None
+            or self.config.grace_period_after_order_seconds <= 0
+        ):
+            return False
+        age = (ts - self._last_order_placed_at).total_seconds()
+        return age < self.config.grace_period_after_order_seconds
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        if self._task is not None:
+            return
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task is None:
+            return
+        self._stop_event.set()
+        try:
+            # The task wakes from sleep when the stop_event fires.
+            # Give it a generous timeout in case it's mid-tick.
+            await asyncio.wait_for(self._task, timeout=5.0)
+        except asyncio.TimeoutError:
+            log.warning("Reconciler stop timed out; cancelling")
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        self._task = None
+
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
+
+    async def _run(self) -> None:
+        """
+        Tick loop. Sleeps `interval_seconds` between checks. Wakes
+        early if stop() is called.
+        """
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    await self.tick()
+                except Exception:
+                    # A failed tick must NOT kill the loop. The next one
+                    # might succeed and recover state.
+                    log.exception("Reconciler tick failed")
+
+                # Sleep with cancellation-aware wait. If stop() is
+                # called during the sleep, we wake immediately.
+                try:
+                    await asyncio.wait_for(
+                        self._stop_event.wait(),
+                        timeout=self.config.interval_seconds,
+                    )
+                    break  # stop_event fired
+                except asyncio.TimeoutError:
+                    pass  # normal — keep ticking
+        except asyncio.CancelledError:
+            log.info("Reconciler loop cancelled")
+            raise
+
+    # ------------------------------------------------------------------
+    # One tick
+    # ------------------------------------------------------------------
+
+    async def tick(self) -> ReconcileReport:
+        """
+        Run one reconcile pass. Returns the report so callers (tests)
+        can assert behavior.
+        """
+        ts = datetime.now(timezone.utc)
+
+        # Pull broker truth. If either call fails, abort the tick;
+        # we'd rather skip than make decisions on partial data.
+        try:
+            broker_positions = await self.broker.get_positions()
+            broker_balance = await self.broker.account_balance()
+        except Exception as e:
+            log.warning("Reconciler could not pull broker state: %s", e)
+            # Build a sentinel report so callers know the tick happened
+            # but produced no information.
+            report = ReconcileReport(
+                ts=ts,
+                broker_open_contracts=-1,
+                broker_balance=Decimal("0"),
+                internal_open_contracts=self.risk_state.open_contracts,
+                internal_balance=self.risk_state.realized_balance,
+                drift_detected=False,
+                drift_kind=None,
+                flattened=False,
+                notes=f"broker query failed: {e}",
+            )
+            self._last_report = report
+            return report
+
+        broker_contracts = sum(
+            p.size for p in broker_positions
+        )
+
+        # open_contracts is signed (negative = short); broker sizes are unsigned.
+        internal_contracts = abs(self.risk_state.open_contracts)
+        internal_balance = self.risk_state.realized_balance
+
+        # First-tick grace: silently accept whatever we find, but mark
+        # ourselves as having seen the first tick so future divergence
+        # is treated as drift.
+        raw_internal = self.risk_state.open_contracts
+        if not self._first_tick_done and self.config.grace_first_tick:
+            report = ReconcileReport(
+                ts=ts,
+                broker_open_contracts=broker_contracts,
+                broker_balance=broker_balance,
+                internal_open_contracts=raw_internal,
+                internal_balance=internal_balance,
+                drift_detected=False,
+                drift_kind=None,
+                flattened=False,
+                notes="first tick — grace period, no action taken",
+            )
+            self._first_tick_done = True
+            self._last_report = report
+            log.info("Reconciler: first tick complete (grace)")
+            return report
+
+        # If a prior drift lockout is in place and contracts now match, auto-clear.
+        if (
+            self.risk_state.locked_out is not None
+            and self.risk_state.locked_out.code == "RECONCILE_DRIFT"
+            and broker_contracts == internal_contracts
+        ):
+            log.info("Reconciler: drift resolved — clearing RECONCILE_DRIFT lockout.")
+            self.risk_state.locked_out = None
+
+        # ----- Contract-count drift: HARD error, flatten + lock out. -----
+        if broker_contracts != internal_contracts:
+            # Suppress the alarm if we are within the fill-latency grace
+            # window. A market order fills almost instantly on the exchange,
+            # but the fill WebSocket event that updates open_contracts can
+            # lag by seconds. During that window the REST position API
+            # already shows the new contract while RiskState still shows
+            # the old count — a transient race, not genuine drift.
+            if self._is_in_order_grace_period(ts):
+                age = (ts - self._last_order_placed_at).total_seconds()  # type: ignore[operator]
+                log.warning(
+                    "Reconciler: contracts mismatch (internal=%d vs broker=%d) "
+                    "within order grace period (age=%.1fs < %.0fs) — "
+                    "skipping. Fill event may not have arrived yet.",
+                    internal_contracts, broker_contracts,
+                    age, self.config.grace_period_after_order_seconds,
+                )
+                report = ReconcileReport(
+                    ts=ts,
+                    broker_open_contracts=broker_contracts,
+                    broker_balance=broker_balance,
+                    internal_open_contracts=raw_internal,
+                    internal_balance=internal_balance,
+                    drift_detected=False,
+                    drift_kind=None,
+                    flattened=False,
+                    notes=(
+                        f"order grace period active (age={age:.1f}s) — "
+                        "skipping contract count check"
+                    ),
+                )
+                self._last_report = report
+                return report
+
+            report = await self._handle_contract_drift(
+                ts=ts,
+                broker_contracts=broker_contracts,
+                broker_balance=broker_balance,
+                internal_contracts=raw_internal,
+                internal_balance=internal_balance,
+            )
+            self._last_report = report
+            return report
+
+        # ----- Balance drift: tolerated up to threshold. -----
+        balance_delta = broker_balance - internal_balance
+        if abs(balance_delta) > self.config.balance_tolerance:
+            report = await self._handle_balance_drift(
+                ts=ts,
+                broker_contracts=broker_contracts,
+                broker_balance=broker_balance,
+                internal_contracts=raw_internal,
+                internal_balance=internal_balance,
+                delta=balance_delta,
+            )
+            self._last_report = report
+            return report
+
+        # ----- Within tolerance. Nudge balance to broker truth silently. -----
+        if balance_delta != Decimal("0"):
+            log.debug(
+                "Reconciler: minor balance drift %s, adjusting silently",
+                balance_delta,
+            )
+            self.risk_state.realized_balance = broker_balance
+
+        report = ReconcileReport(
+            ts=ts,
+            broker_open_contracts=broker_contracts,
+            broker_balance=broker_balance,
+            internal_open_contracts=raw_internal,
+            internal_balance=internal_balance,
+            drift_detected=False,
+            drift_kind=None,
+            flattened=False,
+        )
+        self._last_report = report
+        return report
+
+    # ------------------------------------------------------------------
+    # Drift handlers
+    # ------------------------------------------------------------------
+
+    async def _handle_contract_drift(
+        self,
+        ts: datetime,
+        broker_contracts: int,
+        broker_balance: Decimal,
+        internal_contracts: int,
+        internal_balance: Decimal,
+    ) -> ReconcileReport:
+        """
+        Broker and internal disagree on contract count. The bot's gate
+        decisions are based on internal state, so any future order
+        could blow risk limits.
+
+        Action: cancel all working orders, flatten every position, lock
+        out for the session. The operator must investigate.
+        """
+        log.error(
+            "RECONCILE DRIFT: contracts internal=%d vs broker=%d. "
+            "Flattening and locking out.",
+            internal_contracts, broker_contracts,
+        )
+
+        flattened = await self._emergency_flatten()
+
+        # Force lockout regardless of whether flatten succeeded. We do
+        # NOT want the engine to consider new entries until a human
+        # has reviewed the drift.
+        if self.risk_state.locked_out is None:
+            self.risk_state.locked_out = LockoutReason(
+                code="RECONCILE_DRIFT",
+                message=(
+                    f"Contract drift: internal={internal_contracts} "
+                    f"vs broker={broker_contracts}. Manual review required."
+                ),
+            )
+
+        return ReconcileReport(
+            ts=ts,
+            broker_open_contracts=broker_contracts,
+            broker_balance=broker_balance,
+            internal_open_contracts=internal_contracts,
+            internal_balance=internal_balance,
+            drift_detected=True,
+            drift_kind="contract_count",
+            flattened=flattened,
+            notes="emergency flatten + session lockout",
+        )
+
+    async def _handle_balance_drift(
+        self,
+        ts: datetime,
+        broker_contracts: int,
+        broker_balance: Decimal,
+        internal_contracts: int,
+        internal_balance: Decimal,
+        delta: Decimal,
+    ) -> ReconcileReport:
+        """
+        Balance discrepancy beyond tolerance — likely a missed fill.
+        We adopt broker truth and lock out. Same rationale as contract
+        drift: gate decisions based on stale balance are unsafe.
+        """
+        log.error(
+            "RECONCILE DRIFT: balance internal=%s vs broker=%s (delta=%s). "
+            "Adopting broker truth and locking out.",
+            internal_balance, broker_balance, delta,
+        )
+
+        # Adopt broker balance as truth. We don't synthesize a fill
+        # because we don't know what the missed fill was; the journal
+        # will need a manual reconciliation entry.
+        self.risk_state.realized_balance = broker_balance
+
+        if self.risk_state.locked_out is None:
+            self.risk_state.locked_out = LockoutReason(
+                code="RECONCILE_DRIFT",
+                message=(
+                    f"Balance drift {delta} exceeds tolerance "
+                    f"{self.config.balance_tolerance}. Manual review required."
+                ),
+            )
+
+        # If positions are open, flatten too. Continuing to hold while
+        # locked out is fine on the gate side, but with unexplained
+        # balance drift we want flat.
+        flattened = False
+        if broker_contracts > 0:
+            flattened = await self._emergency_flatten()
+
+        return ReconcileReport(
+            ts=ts,
+            broker_open_contracts=broker_contracts,
+            broker_balance=broker_balance,
+            internal_open_contracts=internal_contracts,
+            internal_balance=internal_balance,
+            drift_detected=True,
+            drift_kind="balance",
+            flattened=flattened,
+            notes=f"balance delta {delta}, adopted broker truth",
+        )
+
+    async def _emergency_flatten(self) -> bool:
+        """
+        Cancel all working orders, flatten all positions across all
+        instruments the broker reports. Returns True if we believe the
+        flatten succeeded (no positions remaining at end).
+
+        Best-effort: any individual call may fail; we keep going and
+        let the next reconciler tick verify.
+        """
+        try:
+            await self.broker.cancel_all()
+        except Exception:
+            log.exception("cancel_all failed during emergency flatten")
+
+        try:
+            positions = await self.broker.get_positions()
+        except Exception:
+            log.exception("get_positions failed during emergency flatten")
+            return False
+
+        instruments = {p.instrument for p in positions}
+        for instrument in instruments:
+            try:
+                await self.broker.flatten(instrument)
+            except Exception:
+                log.exception(
+                    "flatten failed for %s during emergency flatten",
+                    instrument,
+                )
+
+        # Verify.
+        try:
+            after = await self.broker.get_positions()
+            return len(after) == 0
+        except Exception:
+            return False

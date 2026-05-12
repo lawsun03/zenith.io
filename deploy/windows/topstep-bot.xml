@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Task Scheduler definition for topstep-bot.
+  Import with:
+      schtasks /Create /TN "TopstepBot" /XML deploy\windows\topstep-bot.xml
+
+  What this task does:
+    - Runs Mon-Fri at 06:00 (machine local time — see note below).
+    - Wakes the computer if it's asleep (so a 5am sleep doesn't miss
+      the start).
+    - Runs whether the user is logged in or not — but bot still needs
+      a console session for the React dashboard if you want to view
+      it locally; check via http://127.0.0.1:5174 from any browser
+      including phone-on-same-wifi.
+    - Stops at 16:30 local time. Long enough to cover NY PM
+      (13:30-15:00 ET = 13:30-15:00 local for ET machines, or
+      shifted by zone offset). Adjust StopOnIdleEnd / ExecutionTimeLimit
+      if you want longer.
+    - Restarts up to 3 times on failure with 1-minute gaps. If the bot
+      crashes, we want it back up. If it crashes 3 times in a row,
+      something is structurally wrong — Task Scheduler stops trying
+      and the operator sees the failure in next morning's logs.
+
+  TIMEZONE NOTE:
+    Task Scheduler triggers fire on machine local time. This XML uses
+    06:00 with the assumption your machine is set to ET. If your
+    machine is on PT/CT, edit StartBoundary's hour accordingly (06:00
+    ET = 03:00 PT = 05:00 CT). The bot itself handles all session/
+    DST math in code (killzones are in ET regardless of machine zone),
+    so the only thing the trigger time controls is "does the bot
+    start before London opens at 02:00 ET".
+
+    DST: StartBoundary is "wall clock", so the trigger automatically
+    follows DST shifts. No action needed across spring/fall transitions.
+
+  IMPORT INSTRUCTIONS:
+    1. Edit the <Command> path below to your actual install location.
+    2. Edit the <UserId> below to your Windows user (or run as SYSTEM).
+    3. From an Administrator PowerShell:
+         schtasks /Create /TN "TopstepBot" /XML "C:\path\to\topstep-bot.xml"
+    4. Verify with:
+         schtasks /Query /TN "TopstepBot" /V /FO LIST
+    5. Test-run (without waiting for the trigger):
+         schtasks /Run /TN "TopstepBot"
+    6. To remove:
+         schtasks /Delete /TN "TopstepBot" /F
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>topstep-bot: sweep/displacement futures bot. Starts daily at 06:00 local, runs through end of NY PM session. Local-only per Topstep API rules.</Description>
+    <URI>\TopstepBot</URI>
+    <Author>topstep-bot</Author>
+  </RegistrationInfo>
+
+  <Triggers>
+    <CalendarTrigger>
+      <!--
+        StartBoundary specifies WHEN this schedule first becomes valid
+        and the time-of-day for the recurrence. Edit the date to today;
+        the time (06:00:00) is the daily fire time.
+      -->
+      <StartBoundary>2026-05-12T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByWeek>
+        <DaysOfWeek>
+          <Monday />
+          <Tuesday />
+          <Wednesday />
+          <Thursday />
+          <Friday />
+        </DaysOfWeek>
+        <WeeksInterval>1</WeeksInterval>
+      </ScheduleByWeek>
+    </CalendarTrigger>
+  </Triggers>
+
+  <Principals>
+    <Principal id="Author">
+      <!--
+        EDIT THIS: Replace with your Windows username if running as user,
+        or use S-1-5-18 for SYSTEM. RunOnlyIfLoggedOn=false (set via
+        LogonType=Password below) means the task fires at 6am even if
+        you're not logged in — but it can't show GUI windows then, so
+        the React dashboard won't be visible from the local machine
+        until you log in. The HTTP port stays open and viewable from
+        any other device on the network.
+      -->
+      <UserId>EDIT_ME_USERNAME</UserId>
+      <LogonType>Password</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+
+  <Settings>
+    <!--
+      MultipleInstancesPolicy=IgnoreNew: if the previous day's bot
+      somehow didn't stop (rare, but recovery from a hang), today's
+      6am trigger does NOT spawn a second one. This is safer than
+      Parallel for a trading bot — two instances trying to manage the
+      same account would be catastrophic.
+    -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+
+    <!-- Don't run on battery / stop if going to battery: keep enabled
+         only if you're confident on a desktop. Mobile users with a
+         laptop should set both to false. -->
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+
+    <!--
+      WakeToRun: critical. Without this, a sleeping machine misses the
+      6am trigger entirely. With it, the system wakes from S3 sleep to
+      run the task. (Hibernate is NOT supported by WakeToRun on most
+      hardware; configure your power plan to use Sleep, not Hibernate.)
+    -->
+    <WakeToRun>true</WakeToRun>
+
+    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <Priority>5</Priority>
+
+    <!--
+      ExecutionTimeLimit: hard kill after 10h30m. 06:00 + 10:30 = 16:30
+      local. NY PM session ends 15:00 ET; this gives a 90-min buffer
+      for cleanup, dashboard inspection, and any straggler reconciles.
+
+      The bot itself doesn't auto-stop at session end — it just stops
+      taking new entries (killzone gate handles that). This timer is
+      what actually terminates the process daily.
+
+      PT10H30M is ISO 8601 duration: P=period, T=time, 10H=hours,
+      30M=minutes.
+    -->
+    <ExecutionTimeLimit>PT10H30M</ExecutionTimeLimit>
+
+    <!--
+      Restart-on-failure: 3 attempts, 1 minute apart. If the SDK
+      drops connection or a Python exception crashes the loop, we
+      come back up. After 3 consecutive failures, give up — something
+      is structurally broken and operator review is needed.
+    -->
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+
+  <Actions Context="Author">
+    <Exec>
+      <!--
+        EDIT THIS: full absolute path to start.bat in your repo.
+        The wrapper script handles venv activation and env var
+        loading; do NOT change this to call python.exe directly.
+      -->
+      <Command>C:\path\to\topstep-bot\deploy\windows\start.bat</Command>
+      <!--
+        WorkingDirectory: where the .bat will be running from. The
+        wrapper resolves the repo root via %~dp0 anyway, but setting
+        this matters for any relative paths the bot might construct.
+      -->
+      <WorkingDirectory>C:\path\to\topstep-bot</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
