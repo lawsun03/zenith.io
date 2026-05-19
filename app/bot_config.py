@@ -28,6 +28,15 @@ class StrategyParams(BaseModel):
     displacement_window_bars: int = 5
     stop_buffer: Decimal = Decimal("0.30")
     r_multiple: Decimal = Decimal("2.5")
+    trend_ema_period: int = 50  # 0 = disabled; N = only take signals with the N-bar EMA trend
+
+    # Volume profile filter + target
+    vp_enabled: bool = True
+    vp_tick_size: Decimal = Decimal("0.10")       # price quantization for bins
+    vp_value_area_pct: float = 0.70               # fraction of volume defining value area
+    vp_filter_tolerance: Decimal = Decimal("2.0") # price units outside VA edge still accepted
+    vp_hvn_threshold: float = 1.5                 # volume × mean to qualify as HVN
+    vp_min_target_r: Decimal = Decimal("1.0")     # minimum R a VP level must deliver as target
 
 
 class BotConfig(BaseModel):
@@ -37,6 +46,7 @@ class BotConfig(BaseModel):
     replay_start_delay_s: int = 5   # seconds to wait before replay begins (lets browser connect)
     account_name: str | None = None  # live mode: TopstepX account name to trade on
     entry_mode: str = "market"      # "market" or "limit" (custom limit+bracket-after-fill)
+    contracts: int = 1              # number of contracts per signal
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
@@ -63,6 +73,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "replay_start_delay_s": config.replay_start_delay_s,
         "account_name": config.account_name,
         "entry_mode": config.entry_mode,
+        "contracts": config.contracts,
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
     }
