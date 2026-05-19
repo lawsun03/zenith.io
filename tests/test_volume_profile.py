@@ -1,6 +1,5 @@
 """Tests for volume profile: config, profile construction, filter, target."""
 from decimal import Decimal
-from datetime import date
 import pytest
 
 
