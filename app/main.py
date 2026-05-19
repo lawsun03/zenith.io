@@ -35,13 +35,17 @@ but inline defaults are fine for first ship.
 from __future__ import annotations
 
 import asyncio
+import csv
 import logging
 import os
 import signal
+import socket
 import sys
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from app.api.journal import Journal
 from app.api.server import build_app
@@ -56,7 +60,8 @@ from app.execution.engine import (
     StrategyRunner,
 )
 from app.execution.reconciler import Reconciler, ReconcilerConfig
-from app.notifications import EmailNotifier, EndOfDayScheduler
+from app.notifications import EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
+from project_x_py.exceptions import ProjectXConnectionError
 from app.replay import load_bars_csv
 from app.risk.config import config_for_account, fifty_k_combine
 from app.risk.state import RiskState
@@ -64,6 +69,7 @@ from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementCompo
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.killzone import killzones_from_names
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
+from app.strategy.volume_profile import VolumeProfileTracker
 from app.sync.outbox import Outbox
 from app.sync.sender import Sender, SenderConfig
 
@@ -111,33 +117,80 @@ def _build_runner(
             stop_buffer=s.stop_buffer,
             r_multiple=s.r_multiple,
             killzones=zones,  # None falls back to default in the composer
+            trend_ema_period=s.trend_ema_period,
         )),
+        vp=VolumeProfileTracker(),
     )
 
 
-async def _fetch_live_balance(account_name: str | None) -> tuple[Decimal, str]:
+_CT = ZoneInfo("America/Chicago")
+
+
+async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Decimal]:
     """
-    Authenticate and return (balance, resolved_account_name) for the selected
-    account. Used before TradingSuite is created so RiskState gets the right
-    starting config.
+    Authenticate and return (balance, resolved_account_name, session_daily_pnl).
+
+    session_daily_pnl is the sum of realized P&L from all closed trades since
+    the start of the current Topstep trading session (5 PM CT). This lets the
+    bot pick up the correct daily P&L if it restarts mid-session rather than
+    resetting to $0 and making the DLL gate too lenient.
+
+    If the trade-search call fails (endpoint unavailable, auth issue, etc.)
+    we fall back to $0 and log a warning — same as the old behavior.
     """
     from project_x_py import ProjectX  # type: ignore
+
+    now_utc = datetime.now(timezone.utc)
+    now_ct  = now_utc.astimezone(_CT)
+
+    # Trading session starts at 5 PM CT. Before 5 PM → session started yesterday.
+    if now_ct.hour < 17:
+        session_start = (now_ct - timedelta(days=1)).replace(
+            hour=17, minute=0, second=0, microsecond=0
+        )
+    else:
+        session_start = now_ct.replace(hour=17, minute=0, second=0, microsecond=0)
+
     async with ProjectX.from_env() as client:
         await client.authenticate()
         accounts = await client.list_accounts()
 
-    if account_name:
-        match = next((a for a in accounts if a.name == account_name), None)
-        if match:
-            return Decimal(str(match.balance)), match.name
+        if account_name:
+            account = next((a for a in accounts if a.name == account_name), None)
+        else:
+            account = next((a for a in accounts if a.canTrade), None)
 
-    # Fall back to first tradeable account.
-    tradeable = [a for a in accounts if a.canTrade]
-    if tradeable:
-        a = tradeable[0]
-        return Decimal(str(a.balance)), a.name
+        if account is None:
+            return Decimal("50000"), "", Decimal("0")
 
-    return Decimal("50000"), ""
+        balance = Decimal(str(account.balance))
+        name    = account.name
+
+        # Bootstrap daily P&L from today's session trades.
+        daily_pnl = Decimal("0")
+        try:
+            trades = await client.search_trades(
+                start_date=session_start,
+                end_date=now_utc,
+                account_id=account.id,
+                limit=500,
+            )
+            raw_pnl = sum(
+                t.profitAndLoss for t in trades
+                if t.profitAndLoss is not None and not t.voided
+            )
+            daily_pnl = Decimal(str(raw_pnl))
+            log.info(
+                "Session daily P&L bootstrapped from %d trades since %s: $%s",
+                len(trades), session_start.strftime("%H:%M CT"), daily_pnl,
+            )
+        except Exception:
+            log.warning(
+                "Could not fetch session trades for daily P&L bootstrap — starting at $0. "
+                "DLL gate will be correct only after the first fill this session."
+            )
+
+    return balance, name, daily_pnl
 
 
 async def _build_broker(cfg: AppConfig) -> Broker:
@@ -163,6 +216,13 @@ def _make_signal_journaler(journal: Journal, notifier: EmailNotifier | None = No
                 signal.side.upper(), outcome.allowed_size,
                 outcome.broker_order_id, signal.rationale,
             )
+            if outcome.broker_order_id:
+                _pending_signal_meta[outcome.broker_order_id] = {
+                    "stop":      str(signal.stop),
+                    "target":    str(signal.target),
+                    "killzone":  signal.killzone,
+                    "rationale": signal.rationale,
+                }
             if notifier is not None and notifier.enabled:
                 subject = (
                     f"ENTRY {signal.side.upper()} {signal.instrument} "
@@ -189,10 +249,58 @@ def _make_signal_journaler(journal: Journal, notifier: EmailNotifier | None = No
     return journal_signal
 
 
+_TRADES_CSV = Path("trades.csv")  # permanent master ledger
+_TRADES_HEADERS = [
+    "ts", "instrument", "side", "type", "fill_price", "size",
+    "realized_pnl", "broker_order_id",
+    "stop", "target", "killzone", "rationale",
+]
+
+# Keyed by broker_order_id; populated when a signal is placed, consumed
+# when the matching ENTRY fill arrives so the CSV row carries full context.
+_pending_signal_meta: dict[str, dict] = {}
+
+
+def _daily_csv_path() -> Path:
+    """Today's trading-day CSV path (CT date, matches Topstep session boundary)."""
+    ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
+    return Path(f"trades_{ct_date}.csv")
+
+
+def _append_fill_csv(fill: Fill) -> None:
+    """Append one fill row to master trades.csv and today's daily CSV."""
+    meta = _pending_signal_meta.pop(fill.broker_order_id, {}) if fill.is_entry else {}
+    row = [
+        fill.ts.isoformat(),
+        fill.instrument,
+        fill.side,
+        "ENTRY" if fill.is_entry else "EXIT",
+        fill.fill_price,
+        fill.size,
+        fill.realized_pnl_delta,
+        fill.broker_order_id,
+        meta.get("stop", ""),
+        meta.get("target", ""),
+        meta.get("killzone", ""),
+        meta.get("rationale", ""),
+    ]
+    for path in (_TRADES_CSV, _daily_csv_path()):
+        try:
+            write_header = not path.exists()
+            with path.open("a", newline="") as f:
+                w = csv.writer(f)
+                if write_header:
+                    w.writerow(_TRADES_HEADERS)
+                w.writerow(row)
+        except Exception:
+            log.exception("_append_fill_csv failed for %s — fill not logged", path)
+
+
 def _make_fill_journaler(journal: Journal, notifier: EmailNotifier | None = None):
     """Build the on_fill broker subscriber bound to a specific Journal."""
 
     async def on_fill(fill: Fill) -> None:
+        _append_fill_csv(fill)
         await journal.record_fill(fill)
         # Notify on EXIT fills only — entry confirmation is covered by the
         # signal-placed email already.
@@ -324,6 +432,7 @@ async def _run_paper(
             new_cfg = load_bot_config(cfg.bot_config_path)
             new_runner = _build_runner(cfg.instrument, new_cfg.strategy, new_cfg.enabled_killzones)
             engine.runners = {cfg.instrument: new_runner}
+            engine.strategy_cfg = new_cfg.strategy  # keep VP cfg in sync on restart
         broker.reset()
         first_run = False
 
@@ -364,9 +473,65 @@ def _install_signal_handlers(shutdown: asyncio.Event) -> None:
             pass
 
 
+_PID_FILE = Path("topstep-bot.pid")
+
+
+def _acquire_pid_lock() -> bool:
+    """
+    Write our PID to topstep-bot.pid. Returns True if we are the sole
+    owner; False if another live process already holds the lock.
+
+    We always overwrite the file — if the previous holder is dead
+    (stale PID), we take over cleanly.
+    """
+    if _PID_FILE.exists():
+        try:
+            old_pid = int(_PID_FILE.read_text().strip())
+            # Check if that process is still alive.
+            try:
+                os.kill(old_pid, 0)  # signal 0 = existence check
+                return False  # process alive → we don't own the lock
+            except OSError:
+                pass  # process dead → stale lock, overwrite below
+        except (ValueError, OSError):
+            pass  # unreadable file → overwrite
+    _PID_FILE.write_text(str(os.getpid()))
+    return True
+
+
+def _release_pid_lock() -> None:
+    try:
+        if _PID_FILE.exists():
+            pid = int(_PID_FILE.read_text().strip())
+            if pid == os.getpid():
+                _PID_FILE.unlink()
+    except OSError:
+        pass
+
+
 async def _async_main() -> int:
     cfg = load_config()
     _setup_logging(cfg.log_level)
+
+    if not _acquire_pid_lock():
+        try:
+            other_pid = int(_PID_FILE.read_text().strip())
+        except Exception:
+            other_pid = 0
+        logging.getLogger("topstep_bot").error(
+            "Another bot instance is already running (PID %d). "
+            "Stop it first. Exiting.", other_pid,
+        )
+        return 1
+
+    # Capture log records for hourly health emails.
+    _tail_handler = TailHandler(capacity=50)
+    _tail_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-7s %(name)s | %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    logging.getLogger().addHandler(_tail_handler)
+
     log.info(
         "Starting topstep-bot. mode=%s instrument=%s tfs=%s",
         cfg.mode, cfg.instrument, cfg.timeframes,
@@ -377,12 +542,13 @@ async def _async_main() -> int:
     bot_cfg = load_bot_config(cfg.bot_config_path)
 
     if cfg.mode == "live":
-        log.info("Fetching live account balance...")
-        live_balance, live_account = await _fetch_live_balance(bot_cfg.account_name)
+        log.info("Fetching live account state...")
+        live_balance, live_account, live_daily_pnl = await _fetch_live_state(bot_cfg.account_name)
         risk_cfg = config_for_account(live_account, live_balance, soft_buffer=cfg.soft_buffer)
         log.info(
-            "Account: %s  balance=$%s  type=%s  starting=$%s",
+            "Account: %s  balance=$%s  type=%s  starting=$%s  session_pnl=$%s",
             live_account, live_balance, risk_cfg.account_type, risk_cfg.starting_balance,
+            live_daily_pnl,
         )
     else:
         risk_cfg = fifty_k_combine(soft_buffer=cfg.soft_buffer)
@@ -394,6 +560,8 @@ async def _async_main() -> int:
         risk_state.realized_balance = live_balance
         risk_state.equity_high_water = live_balance
         risk_state._current_equity = live_balance
+        # Bootstrap daily P&L so a mid-session restart doesn't reset the DLL gate.
+        risk_state.daily_pnl = live_daily_pnl
     runner = _build_runner(cfg.instrument, bot_cfg.strategy, bot_cfg.enabled_killzones)
 
     # Sync: enable only if both endpoint and secret are set. Outbox is
@@ -432,7 +600,9 @@ async def _async_main() -> int:
             interval_seconds=cfg.reconcile_interval_seconds,
             balance_tolerance=Decimal("50"),
             grace_first_tick=True,
+            grace_period_after_order_seconds=60.0,
         ),
+        notifier=notifier,
     )
 
     engine = ExecutionEngine(
@@ -441,6 +611,8 @@ async def _async_main() -> int:
         runners=[runner],
         on_signal=_make_signal_journaler(journal, notifier),
         on_order_placed=reconciler.notify_order_placed,
+        contracts=bot_cfg.contracts,
+        strategy_cfg=bot_cfg.strategy,
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier))
@@ -450,6 +622,13 @@ async def _async_main() -> int:
         journal=journal,
         risk_state=risk_state,
         notifier=notifier,
+        trades_csv_path=_TRADES_CSV,
+        daily_csv_fn=_daily_csv_path,
+    )
+    health_scheduler = HourlyHealthScheduler(
+        notifier=notifier,
+        risk_state=risk_state,
+        tail_handler=_tail_handler,
     )
     # Wrap the reconciler's tick to feed reports into the journal.
     # We patch tick() in place — the original returns the report, our
@@ -507,6 +686,7 @@ async def _async_main() -> int:
         await reconciler.start()
         if notifier.enabled:
             await eod_scheduler.start()
+            await health_scheduler.start()
         if sender is not None:
             await sender.start()
             log.info("Sync enabled: %s", cfg.sync_endpoint_url)
@@ -517,6 +697,23 @@ async def _async_main() -> int:
             "Dashboard at http://127.0.0.1:%s",
             api_config.port,
         )
+
+        if notifier.enabled and cfg.mode == "live":
+            started_at = datetime.now(_CT).strftime("%Y-%m-%d %H:%M:%S CT")
+            account_line = f"  Account:    {live_account}\n" if live_account else ""
+            await notifier.send(
+                subject=f"Bot started — {started_at}",
+                body=(
+                    f"TopstepX bot is connected and ready to trade.\n\n"
+                    f"  Started:    {started_at}\n"
+                    f"{account_line}"
+                    f"  Balance:    ${live_balance}\n"
+                    f"  Daily P&L:  ${live_daily_pnl}\n"
+                    f"  Instrument: {cfg.instrument}\n"
+                    f"  Killzones:  {', '.join(bot_cfg.enabled_killzones or []) or 'all'}\n"
+                    f"  Dashboard:  http://127.0.0.1:{api_config.port}"
+                ),
+            )
 
         if cfg.mode == "paper":
             await _run_paper(  # type: ignore[arg-type]
@@ -530,8 +727,26 @@ async def _async_main() -> int:
             await _run_live(broker, cfg, shutdown)
 
         return 0
-    except Exception:
+    except Exception as exc:
         log.exception("Fatal error in main loop")
+        if isinstance(exc, ProjectXConnectionError):
+            subject = "Connection error — bot stopped"
+            body = (
+                f"The bot crashed with a ProjectXConnectionError.\n\n"
+                f"{type(exc).__name__}: {exc}\n\n"
+                f"The process has exited. Restart the bot to reconnect."
+            )
+        else:
+            subject = "Fatal error — bot stopped"
+            body = (
+                f"The bot crashed with an unhandled exception.\n\n"
+                f"{type(exc).__name__}: {exc}\n\n"
+                f"The process has exited. Check the logs for the full traceback."
+            )
+        try:
+            await notifier.send(subject, body)
+        except Exception:
+            pass
         return 1
     finally:
         log.info("Stopping EOD scheduler...")
@@ -539,6 +754,10 @@ async def _async_main() -> int:
             await eod_scheduler.stop()
         except Exception:
             log.exception("EOD scheduler stop failed")
+        try:
+            await health_scheduler.stop()
+        except Exception:
+            log.exception("Health scheduler stop failed")
         log.info("Stopping reconciler...")
         try:
             await reconciler.stop()
@@ -575,6 +794,7 @@ async def _async_main() -> int:
             await broker.disconnect()
         except Exception:
             log.exception("Broker disconnect failed")
+        _release_pid_lock()
         log.info("Shutdown complete.")
 
 

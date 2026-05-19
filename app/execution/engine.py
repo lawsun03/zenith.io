@@ -43,11 +43,13 @@ from typing import Awaitable, Callable, Optional
 
 from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
+from app.bot_config import StrategyParams
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.state import RiskState
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector
 from app.strategy.liquidity import LiquidityTracker
+from app.strategy.volume_profile import VolumeProfileTracker
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +95,7 @@ class StrategyRunner:
     liquidity: LiquidityTracker
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
+    vp: VolumeProfileTracker | None = None
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
@@ -126,11 +129,15 @@ class ExecutionEngine:
         on_signal: SignalEmitted | None = None,
         on_order_placed: Callable[[], None] | None = None,
         replay_mode: bool = False,
+        contracts: int = 1,
+        strategy_cfg: "StrategyParams | None" = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
         self.runners = {r.instrument: r for r in runners}
         self.on_signal = on_signal
+        self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
+        self.strategy_cfg = strategy_cfg
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
@@ -216,6 +223,12 @@ class ExecutionEngine:
             age_secs = (datetime.now(timezone.utc) - bar.ts).total_seconds()
             is_stale = age_secs > 2 * tf_secs
 
+        # Feed bar into VP tracker — must happen before strategy evaluation
+        # so the profile is current when apply() is called this same bar.
+        # VP accumulates even for stale/warmup bars.
+        if runner.vp is not None and self.strategy_cfg is not None:
+            runner.vp.on_bar(bar, self.strategy_cfg)
+
         try:
             signal = runner.on_bar(bar)
         except Exception:
@@ -229,6 +242,17 @@ class ExecutionEngine:
                     bar.ts, (datetime.now(timezone.utc) - bar.ts).total_seconds(),
                 )
             return
+
+        # VP gate: filter + target override. Runs before pretrade risk check.
+        if (
+            runner.vp is not None
+            and self.strategy_cfg is not None
+            and self.strategy_cfg.vp_enabled
+            and runner.vp.has_prior_profile()
+        ):
+            signal = runner.vp.apply(signal, self.strategy_cfg)
+            if signal is None:
+                return  # VP filter rejected — already logged in apply()
 
         outcome = await self._act_on_signal(signal)
         if self.on_signal is not None:
@@ -273,7 +297,7 @@ class ExecutionEngine:
         order = ProposedOrder(
             instrument=signal.instrument,
             side=signal.side,
-            size=1,  # default size; sizing-up logic would go here
+            size=self.contracts,
             entry=signal.entry,
             stop=signal.stop,
             target=signal.target,
@@ -287,6 +311,16 @@ class ExecutionEngine:
                 signal.rationale, decision.reason_code, decision.message,
             )
             return OrderOutcome(placed=False, reason=decision.reason_code)
+
+        # Prime the reconciler grace window BEFORE sending to exchange.
+        # Market orders fill in microseconds; the reconciler can tick during
+        # the HTTP round-trip and see broker=N, internal=0 before we call
+        # notify_order_placed() — triggering a false-positive drift. Starting
+        # the grace window here ensures it is active before the order hits the
+        # exchange. If the broker rejects, the grace runs harmlessly (no
+        # position opened, so no contract drift to alarm on).
+        if self._on_order_placed is not None:
+            self._on_order_placed()
 
         # Allowed — place the bracket. Note: the gate may have sized down,
         # which is reflected in decision.allowed_size.
@@ -309,12 +343,6 @@ class ExecutionEngine:
                 reason=f"broker rejected: {result.error}",
                 allowed_size=decision.allowed_size,
             )
-
-        # Notify the reconciler that an order is in flight so it suppresses
-        # contract-count alarms during fill-event latency. Must be called
-        # after a confirmed successful placement, never before.
-        if self._on_order_placed is not None:
-            self._on_order_placed()
 
         log.info(
             "Bracket placed: %s size=%d entry=%s stop=%s target=%s",
