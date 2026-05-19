@@ -509,6 +509,41 @@ def _release_pid_lock() -> None:
         pass
 
 
+async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotConfig) -> None:
+    """
+    Fetch 2 days of historical bars and feed them into the VP tracker.
+
+    This ensures the prior session profile is ready before the first live
+    bar arrives. Called once at startup in live mode, after broker connect.
+    If the fetch fails (network, SDK), the tracker starts without a prior
+    profile and filters are bypassed (has_prior_profile() returns False).
+    """
+    from app.broker.topstepx import TopstepXBroker
+    if not isinstance(broker, TopstepXBroker):
+        return
+
+    timeframe = (bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min")
+    try:
+        bars = await broker.get_historical_bars(timeframe=timeframe, days=2)
+    except Exception:
+        log.warning("VP warm-up: historical bar fetch failed — VP filter inactive today")
+        return
+
+    if not bars:
+        log.warning("VP warm-up: no historical bars returned — VP filter inactive today")
+        return
+
+    assert runner.vp is not None
+    for bar in bars:
+        runner.vp.on_bar(bar, bot_cfg.strategy)
+
+    log.info(
+        "VP warm-up complete: %d bars fed, prior profile=%s",
+        len(bars),
+        runner.vp.has_prior_profile(),
+    )
+
+
 async def _async_main() -> int:
     cfg = load_config()
     _setup_logging(cfg.log_level)
@@ -714,6 +749,11 @@ async def _async_main() -> int:
                     f"  Dashboard:  http://127.0.0.1:{api_config.port}"
                 ),
             )
+
+        # VP warm-up: feed prior session bars before live stream begins.
+        # Paper mode warms up naturally via CSV replay spanning multiple dates.
+        if cfg.mode == "live" and runner.vp is not None:
+            await _warm_up_vp(broker, runner, bot_cfg)
 
         if cfg.mode == "paper":
             await _run_paper(  # type: ignore[arg-type]
