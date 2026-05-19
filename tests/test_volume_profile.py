@@ -114,3 +114,79 @@ def test_compute_profile_session_date_preserved():
     profile = _compute_profile(bins, d, 0.70, 1.5)
     assert profile is not None
     assert profile.session_date == d
+
+
+# ── Task 3: Session management ────────────────────────────────────────────────
+
+from datetime import datetime, timezone
+
+
+def _bar(ts_utc: datetime, high: float, low: float, close: float, volume: int) -> "Bar":
+    from app.broker.events import Bar
+    return Bar(
+        instrument="MGC", timeframe="1min", ts=ts_utc,
+        open=Decimal(str(close)), high=Decimal(str(high)),
+        low=Decimal(str(low)), close=Decimal(str(close)),
+        volume=volume,
+    )
+
+
+def test_no_prior_profile_on_first_day():
+    """Tracker must not have a prior profile until a UTC date boundary is crossed."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams()
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1902, 1899, 1901, 100), cfg)
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 11, 0, tzinfo=timezone.utc), 1903, 1900, 1902, 80), cfg)
+
+    assert not tracker.has_prior_profile()
+
+
+def test_prior_profile_set_after_date_boundary():
+    """Feeding a bar with a new UTC date must finalize the prior session."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams()
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1902, 1899, 1901, 100), cfg)
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 11, 0, tzinfo=timezone.utc), 1903, 1900, 1902, 80), cfg)
+    assert not tracker.has_prior_profile()
+
+    # Day 2 bar triggers finalization of day 1.
+    tracker.on_bar(_bar(datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc), 1904, 1901, 1903, 60), cfg)
+    assert tracker.has_prior_profile()
+
+
+def test_bins_accumulate_volume_for_current_session():
+    """After feeding bars on the same day, bins must contain nonzero volume."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams()
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1902, 1900, 1901, 200), cfg)
+    assert sum(tracker._bins.values()) > 0
+
+
+def test_bins_reset_after_session_boundary():
+    """Current session bins must reset when a new UTC date is seen."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams()
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1902, 1900, 1901, 200), cfg)
+    old_vol = sum(tracker._bins.values())
+
+    # New day — bins should reset, then accumulate only the new bar's volume.
+    tracker.on_bar(_bar(datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc), 1905, 1903, 1904, 50), cfg)
+    new_vol = sum(tracker._bins.values())
+
+    assert new_vol < old_vol  # new session has only one bar's volume
