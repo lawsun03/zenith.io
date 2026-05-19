@@ -296,3 +296,115 @@ def test_short_below_val_minus_tolerance_rejected():
     """Entry 2.1 below VAL — shorting into clear support below value."""
     from app.strategy.volume_profile import _filter
     assert _filter(_signal("short", 1892.9, 1896), _profile(1900, 1905, 1895), Decimal("2.0")) is False
+
+
+# ── Task 5: Target selection + apply ─────────────────────────────────────────
+
+def test_long_target_picks_nearest_vp_level_above_entry():
+    """
+    For a long, the nearest VP level above entry that clears min_r must win.
+    POC at 1900 is only 2/3 R away (< 1.0R), so it's skipped.
+    HVN at 1905 is 7/3 R — picked.
+    """
+    from app.strategy.volume_profile import _pick_target
+    from app.bot_config import StrategyParams
+
+    # entry=1898, stop=1895 → R=3
+    prof = _profile(poc=1900, vah=1910, val=1890, hvns=[1905, 1915])
+    cfg = StrategyParams(vp_min_target_r=Decimal("1.0"), r_multiple=Decimal("2.5"))
+    sig = _signal("long", 1898, 1895)
+
+    target, label = _pick_target(sig, prof, cfg)
+    assert target == Decimal("1905")
+    assert "HVN" in label
+
+
+def test_long_target_fallback_when_no_level_clears_min_r():
+    """
+    If no VP level above entry delivers >= min_r, fall back to r_multiple.
+    entry=1898, stop=1895, R=3, vah=1899 delivers only 1/3R < 1.0R → fallback.
+    """
+    from app.strategy.volume_profile import _pick_target
+    from app.bot_config import StrategyParams
+
+    prof = _profile(poc=1892, vah=1899, val=1888)
+    cfg = StrategyParams(vp_min_target_r=Decimal("1.0"), r_multiple=Decimal("2.5"))
+    sig = _signal("long", 1898, 1895)
+
+    target, label = _pick_target(sig, prof, cfg)
+    assert target == Decimal("1898") + Decimal("3") * Decimal("2.5")
+    assert "no VP level" in label
+
+
+def test_short_target_picks_nearest_vp_level_below_entry():
+    """
+    For a short, nearest level below entry that clears min_r.
+    entry=1902, stop=1905, R=3. VAL=1895 is 7/3R ≥ 1.0R → picked.
+    """
+    from app.strategy.volume_profile import _pick_target
+    from app.bot_config import StrategyParams
+
+    prof = _profile(poc=1908, vah=1912, val=1895)
+    cfg = StrategyParams(vp_min_target_r=Decimal("1.0"), r_multiple=Decimal("2.5"))
+    sig = _signal("short", 1902, 1905)
+
+    target, label = _pick_target(sig, prof, cfg)
+    assert target == Decimal("1895")
+    assert "VAL" in label
+
+
+def test_apply_returns_none_when_filtered():
+    """apply() must return None when the filter rejects the signal."""
+    from app.strategy.volume_profile import VolumeProfileTracker, VolumeProfile
+
+    tracker = VolumeProfileTracker()
+    from app.bot_config import StrategyParams
+    cfg = StrategyParams()
+
+    # Inject a prior profile directly.
+    tracker._prior = VolumeProfile(
+        session_date=date(2026, 5, 18),
+        poc=Decimal("1900"), vah=Decimal("1905"), val=Decimal("1895"),
+        hvns=[], total_volume=1000,
+    )
+
+    # Long entry at 1910 — 5 above VAH (1905), tolerance 2.0 → rejected.
+    sig = _signal("long", 1910, 1907)
+    result = tracker.apply(sig, cfg)
+    assert result is None
+
+
+def test_apply_replaces_target_and_appends_rationale():
+    """apply() must return a new Signal with VP-derived target and updated rationale."""
+    from app.strategy.volume_profile import VolumeProfileTracker, VolumeProfile
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams(vp_min_target_r=Decimal("1.0"), r_multiple=Decimal("2.5"))
+    tracker._prior = VolumeProfile(
+        session_date=date(2026, 5, 18),
+        poc=Decimal("1900"), vah=Decimal("1910"), val=Decimal("1890"),
+        hvns=[Decimal("1905")], total_volume=1000,
+    )
+
+    # entry=1898, stop=1895, R=3. HVN=1905 is 7/3R ≥ 1.0 → target=1905.
+    sig = _signal("long", 1898, 1895)
+    result = tracker.apply(sig, cfg)
+
+    assert result is not None
+    assert result.target == Decimal("1905")
+    assert "VP" in result.rationale
+    assert result.rationale != sig.rationale  # rationale was updated
+
+
+def test_apply_passthrough_when_no_prior_profile():
+    """apply() must return the signal unchanged when no prior profile exists."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    assert not tracker.has_prior_profile()
+
+    sig = _signal("long", 1900, 1897)
+    result = tracker.apply(sig, StrategyParams())
+    assert result is sig  # exact same object, untouched
