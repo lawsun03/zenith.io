@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.bot_config import StrategyParams
 from app.config import load_config
 from app.main import _async_main, _build_runner
 from app.replay import load_bars_csv
@@ -101,7 +102,7 @@ def test_runner_factory_produces_valid_runner():
     function main() actually calls; if it ever silently returns a
     half-built object, signals would just stop firing.
     """
-    runner = _build_runner("MGC")
+    runner = _build_runner("MGC", StrategyParams())
     assert runner.instrument == "MGC"
     assert runner.liquidity is not None
     assert runner.displacement is not None
