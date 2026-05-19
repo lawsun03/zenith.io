@@ -525,8 +525,8 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
     timeframe = (bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min")
     try:
         bars = await broker.get_historical_bars(timeframe=timeframe, days=2)
-    except Exception:
-        log.warning("VP warm-up: historical bar fetch failed — VP filter inactive today")
+    except Exception as exc:
+        log.warning("VP warm-up: historical bar fetch failed — VP filter inactive today: %s", exc)
         return
 
     if not bars:
@@ -537,11 +537,14 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
     for bar in bars:
         runner.vp.on_bar(bar, bot_cfg.strategy)
 
-    log.info(
-        "VP warm-up complete: %d bars fed, prior profile=%s",
-        len(bars),
-        runner.vp.has_prior_profile(),
-    )
+    if runner.vp.has_prior_profile():
+        log.info("VP warm-up complete: %d bars fed (prior profile ready)", len(bars))
+    else:
+        log.warning(
+            "VP warm-up: %d bars fed but no session boundary crossed — "
+            "VP filter inactive today",
+            len(bars),
+        )
 
 
 async def _async_main() -> int:
