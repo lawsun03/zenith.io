@@ -190,3 +190,41 @@ def test_bins_reset_after_session_boundary():
     new_vol = sum(tracker._bins.values())
 
     assert new_vol < old_vol  # new session has only one bar's volume
+
+
+def test_accumulate_distributes_volume_to_correct_bins():
+    """
+    _accumulate must place volume at the correct tick-quantized price bins.
+    Bar: high=1902.0, low=1900.0, close=1901.0, volume=30, tick_size=1.0
+    → 3 bins: 1900, 1901, 1902. 10 volume each.
+    """
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams(vp_tick_size=Decimal("1.0"))
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1902, 1900, 1901, 30), cfg)
+
+    assert tracker._bins.get(Decimal("1900"), 0) == 10
+    assert tracker._bins.get(Decimal("1901"), 0) == 10
+    assert tracker._bins.get(Decimal("1902"), 0) == 10
+
+
+def test_accumulate_low_volume_bar_goes_to_close_bin():
+    """
+    When vol_per_bin == 0 (volume < n_bins), all volume must go to the close bin.
+    Bar: high=1905.0, low=1900.0, volume=3, tick_size=1.0 → 6 bins → vol_per_bin=0 → close bin.
+    """
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams(vp_tick_size=Decimal("1.0"))
+
+    tracker.on_bar(_bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc), 1905, 1900, 1902, 3), cfg)
+
+    # 6 bins (1900-1905), vol_per_bin = 3//6 = 0 → all 3 go to close bin (1902)
+    assert tracker._bins.get(Decimal("1902"), 0) == 3
+    # Other bins should have 0 volume
+    assert tracker._bins.get(Decimal("1900"), 0) == 0

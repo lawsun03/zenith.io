@@ -153,6 +153,8 @@ class VolumeProfileTracker:
             return
 
         # Quantize low and high to nearest tick boundary.
+        # ROUND_FLOOR for low: include the tick the bar's low touches.
+        # ROUND_HALF_UP for high: include the tick the bar's high touches.
         low_bin = (bar.low / tick_size).to_integral_value(rounding=ROUND_FLOOR) * tick_size
         high_bin = (bar.high / tick_size).to_integral_value(rounding=ROUND_HALF_UP) * tick_size
 
@@ -165,7 +167,13 @@ class VolumeProfileTracker:
         if not bins_in_range:
             return
 
-        vol_per_bin = max(1, bar.volume // len(bins_in_range))
+        vol_per_bin = bar.volume // len(bins_in_range)
+        if vol_per_bin == 0:
+            # Volume too small to distribute across this range — assign all to the close bin.
+            close_bin = (bar.close / tick_size).to_integral_value(rounding=ROUND_HALF_UP) * tick_size
+            self._bins[close_bin] = self._bins.get(close_bin, 0) + bar.volume
+            return
+
         for p in bins_in_range:
             self._bins[p] = self._bins.get(p, 0) + vol_per_bin
 
