@@ -250,6 +250,12 @@ class VolumeProfileTracker:
         for p in bins_in_range:
             self._bins[p] = self._bins.get(p, 0) + vol_per_bin
 
+        # Assign remainder to close-price bin to ensure total volume is conserved.
+        remainder = bar.volume - vol_per_bin * len(bins_in_range)
+        if remainder:
+            close_bin = (bar.close / tick_size).to_integral_value(rounding=ROUND_HALF_UP) * tick_size
+            self._bins[close_bin] = self._bins.get(close_bin, 0) + remainder
+
     # ------------------------------------------------------------------
     # Read-only
     # ------------------------------------------------------------------
