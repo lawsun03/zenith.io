@@ -154,7 +154,7 @@ async def test_full_replay_short_signal_to_target_hit():
         captured_signals.append(sig)
         captured_outcomes.append(out)
 
-    engine = ExecutionEngine(broker, state, [make_runner()], on_signal=journal)
+    engine = ExecutionEngine(broker, state, [make_runner()], on_signal=journal, replay_mode=True)
     await broker.connect()
     await engine.start()
 
@@ -203,7 +203,7 @@ async def test_full_replay_losing_trade_does_not_lock_account():
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())
-    engine = ExecutionEngine(broker, state, [make_runner()])
+    engine = ExecutionEngine(broker, state, [make_runner()], replay_mode=True)
     await broker.connect()
     await engine.start()
 
@@ -250,7 +250,7 @@ async def test_lockout_mid_position_triggers_flatten():
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine(soft_buffer=Decimal("500")))
-    engine = ExecutionEngine(broker, state, [make_runner()])
+    engine = ExecutionEngine(broker, state, [make_runner()], replay_mode=True)
     await broker.connect()
     await engine.start()
 
@@ -297,16 +297,16 @@ async def test_signal_denied_when_already_at_max_contracts():
     and is denied — the broker is NEVER asked to place.
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
-    state = RiskState(config=fifty_k_combine())  # max=5
+    state = RiskState(config=fifty_k_combine())  # max=30
     runner = make_runner()
-    engine = ExecutionEngine(broker, state, [runner])
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
     await broker.connect()
     await engine.start()
 
-    # Pre-fill state to 5 open contracts (max for $50K Combine).
+    # Pre-fill state to 30 open contracts (max for $50K Combine).
     state.record_fill(
         realized_pnl_delta=Decimal("0"),
-        contracts_delta=5,
+        contracts_delta=30,
         ts=in_ny_am(0),
     )
 

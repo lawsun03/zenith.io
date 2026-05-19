@@ -316,8 +316,6 @@ def build_app(
             _broker.entry_mode = body.entry_mode
         if _engine is not None:
             _engine.contracts = body.contracts
-        # VP config hot-apply: apply() reads strategy_cfg at call time.
-        if _engine is not None:
             _engine.strategy_cfg = body.strategy
         return JSONResponse({
             "instrument": body.instrument,
@@ -572,6 +570,7 @@ def build_app(
                 instrument, new_cfg.strategy, new_cfg.enabled_killzones,
             )
             _engine.runners = {instrument: new_runner}
+            _engine.strategy_cfg = new_cfg.strategy
             if _broker is not None and hasattr(_broker, "entry_mode"):
                 _broker.entry_mode = new_cfg.entry_mode
             log.info(
