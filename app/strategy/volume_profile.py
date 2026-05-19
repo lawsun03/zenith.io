@@ -117,6 +117,63 @@ def _filter(signal: Signal, profile: VolumeProfile, tolerance: Decimal) -> bool:
     return True
 
 
+def _pick_target(
+    signal: Signal,
+    profile: VolumeProfile,
+    cfg: StrategyParams,
+) -> tuple[Decimal, str]:
+    """
+    Return (target_price, label) for the signal.
+
+    Scans VP levels on the correct side of entry, sorted nearest-first.
+    Picks the first one that delivers >= vp_min_target_r of R.
+    Falls back to cfg.r_multiple if no level qualifies.
+    """
+    entry = signal.entry
+    stop = signal.stop
+    min_r = cfg.vp_min_target_r
+
+    if signal.side == "long":
+        r = entry - stop
+        candidates: list[tuple[Decimal, str]] = []
+        if profile.poc > entry:
+            candidates.append((profile.poc, f"POC @ {profile.poc}"))
+        if profile.vah > entry:
+            candidates.append((profile.vah, f"VAH @ {profile.vah}"))
+        for hvn in profile.hvns:
+            if hvn > entry:
+                candidates.append((hvn, f"HVN @ {hvn}"))
+        candidates.sort(key=lambda x: x[0])  # nearest first
+
+        for level, label in candidates:
+            if r > 0 and (level - entry) >= r * min_r:
+                actual_r = (level - entry) / r
+                return level, f"{label} ({actual_r:.1f}R)"
+
+        fallback = entry + r * cfg.r_multiple
+        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R multiple"
+
+    else:  # short
+        r = stop - entry
+        candidates = []
+        if profile.poc < entry:
+            candidates.append((profile.poc, f"POC @ {profile.poc}"))
+        if profile.val < entry:
+            candidates.append((profile.val, f"VAL @ {profile.val}"))
+        for hvn in profile.hvns:
+            if hvn < entry:
+                candidates.append((hvn, f"HVN @ {hvn}"))
+        candidates.sort(key=lambda x: x[0], reverse=True)  # nearest first
+
+        for level, label in candidates:
+            if r > 0 and (entry - level) >= r * min_r:
+                actual_r = (entry - level) / r
+                return level, f"{label} ({actual_r:.1f}R)"
+
+        fallback = entry - r * cfg.r_multiple
+        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R multiple"
+
+
 class VolumeProfileTracker:
     """
     Per-instrument session tracker. Feed every bar via on_bar(); call
@@ -199,3 +256,29 @@ class VolumeProfileTracker:
 
     def has_prior_profile(self) -> bool:
         return self._prior is not None
+
+    def apply(self, signal: Signal, cfg: StrategyParams) -> Signal | None:
+        """
+        Apply VP filter and target override to a signal.
+
+        Returns None if the filter rejects the signal (logged at INFO).
+        Returns a new Signal (dataclasses.replace) with VP-derived target
+        and updated rationale. Returns the original signal unchanged if no
+        prior profile is available (first day / historical fetch failed).
+        """
+        if not self._prior:
+            return signal
+
+        if not _filter(signal, self._prior, cfg.vp_filter_tolerance):
+            log.info(
+                "VP filter: rejected %s entry=%.2f outside value area "
+                "(VAL=%.2f VAH=%.2f tol=%.2f)",
+                signal.side, float(signal.entry),
+                float(self._prior.val), float(self._prior.vah),
+                float(cfg.vp_filter_tolerance),
+            )
+            return None
+
+        new_target, target_label = _pick_target(signal, self._prior, cfg)
+        new_rationale = signal.rationale + f" | VP: {target_label}"
+        return dataclasses.replace(signal, target=new_target, rationale=new_rationale)
