@@ -105,6 +105,36 @@ const FIELDS: FieldDef[] = [
     min: 0.5, max: 10, step: 0.1,
     hint: 'Reward-to-risk ratio: target distance ÷ stop distance. 2.0 = risk $50 to make $100. Higher targets = more profit per win but lower win rate. 2.0–3.0 is a common sweet spot.',
   },
+  {
+    key: 'trend_ema_period', label: 'Trend EMA Period', type: 'slider', section: 'strategy',
+    min: 0, max: 200, step: 1,
+    hint: '0 = disabled. When active, long signals require close > EMA, shorts require close < EMA. Warmup: filter inactive until N bars seen.',
+  },
+  {
+    key: 'vp_enabled', label: 'VP Filter Enabled', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Enable volume profile filter + target override. false = uses fixed r_multiple only, ignoring prior session value area.',
+  },
+  {
+    key: 'vp_value_area_pct', label: 'VP Value Area %', type: 'slider', section: 'strategy',
+    min: 0.5, max: 0.9, step: 0.01,
+    hint: 'Fraction of prior session volume defining the value area. 0.70 = the standard 70% rule. Higher = wider area, more signals pass.',
+  },
+  {
+    key: 'vp_filter_tolerance', label: 'VP Tolerance ($)', type: 'slider', section: 'strategy',
+    min: 0, max: 10, step: 0.1,
+    hint: 'Price units outside the value area edge that still pass the filter. 0 = strict (inside VA only). 2.0 = loose (20 ticks beyond edge accepted).',
+  },
+  {
+    key: 'vp_hvn_threshold', label: 'VP HVN Threshold', type: 'slider', section: 'strategy',
+    min: 1.0, max: 4.0, step: 0.1,
+    hint: 'A price level is a High Volume Node if its volume > mean × this value. Higher = fewer, more significant HVNs. Try 1.5–2.0.',
+  },
+  {
+    key: 'vp_min_target_r', label: 'VP Min Target R', type: 'slider', section: 'strategy',
+    min: 0.5, max: 3.0, step: 0.1,
+    hint: 'A VP level must deliver at least this many R to be used as target. Too close levels are skipped; falls back to r_multiple if none qualify.',
+  },
 ]
 
 const inputClass =
@@ -115,7 +145,7 @@ const KILLZONES: { name: string; label: string; window: string }[] = [
   { name: 'london',    label: 'London',     window: '11:00 PM – 2:00 AM PT (London open)' },
   { name: 'london_ny', label: 'London/NY',  window: '3:00 AM – 5:30 AM PT (London/NY overlap)' },
   { name: 'ny_am',     label: 'NY AM',      window: '5:30 AM – 8:00 AM PT' },
-  { name: 'ny_pm',     label: 'NY PM',      window: '10:30 AM – 12:00 PM PT' },
+  { name: 'ny_pm',     label: 'NY PM',      window: '10:00 AM – 1:00 PM PT' },
 ]
 
 export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError }: Props) {
@@ -123,6 +153,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const [saved, setSaved] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [restartMsg, setRestartMsg] = useState<string | null>(null)
+  const [reloading, setReloading] = useState(false)
+  const [reloadMsg, setReloadMsg] = useState<string | null>(null)
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [enabledKillzones, setEnabledKillzones] = useState<string[]>(['london', 'ny_am', 'ny_pm'])
 
@@ -137,6 +169,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       replay_start_delay_s: String(config.replay_start_delay_s ?? 5),
       account_name:         config.account_name ?? '',
       entry_mode:           config.entry_mode ?? 'market',
+      contracts:            String(config.contracts ?? 1),
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
       ),
@@ -166,6 +199,13 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       displacement_window_bars: parseInt(form.displacement_window_bars) || 5,
       stop_buffer:              form.stop_buffer                        || '0.30',
       r_multiple:               form.r_multiple                         || '2.5',
+      trend_ema_period:         parseInt(form.trend_ema_period)         || 0,
+      vp_enabled:               form.vp_enabled !== 'false',
+      vp_tick_size:             form.vp_tick_size                       || '0.10',
+      vp_value_area_pct:        parseFloat(form.vp_value_area_pct)      || 0.70,
+      vp_filter_tolerance:      form.vp_filter_tolerance                || '2.0',
+      vp_hvn_threshold:         parseFloat(form.vp_hvn_threshold)       || 1.5,
+      vp_min_target_r:          form.vp_min_target_r                    || '1.0',
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',
@@ -174,11 +214,32 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       replay_start_delay_s: parseInt(form.replay_start_delay_s) || 5,
       account_name:         form.account_name?.trim() || null,
       entry_mode:           form.entry_mode || 'market',
+      contracts:            parseInt(form.contracts) || 1,
       enabled_killzones:    enabledKillzones,
       strategy,
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  const handleReloadStrategy = async () => {
+    setReloading(true)
+    setReloadMsg(null)
+    try {
+      await handleSave()
+      const res = await fetch('/api/strategy/reload', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setReloadMsg(body.reason || 'Reload failed')
+      } else {
+        setReloadMsg('Strategy reloaded!')
+        setTimeout(() => setReloadMsg(null), 3000)
+      }
+    } catch (e) {
+      setReloadMsg(String(e))
+    } finally {
+      setReloading(false)
+    }
   }
 
   const handleRunBacktest = async () => {
@@ -293,32 +354,62 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
               </h3>
               <div className="space-y-4">
                 {section === 'bot' && (
-                  <div>
-                    <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
-                      Entry Mode
-                    </label>
-                    <div className="flex gap-0">
-                      {(['market', 'limit'] as const).map(mode => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => set('entry_mode', mode)}
-                          className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
-                            form.entry_mode === mode
-                              ? 'border-accent bg-accent/10 text-accent'
-                              : 'border-border text-dim hover:text-ink'
-                          } ${mode === 'market' ? 'border-r-0' : ''}`}
-                        >
-                          {mode === 'market' ? 'Market Fill' : 'Limit Entry'}
-                        </button>
-                      ))}
+                  <>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                        Entry Mode
+                      </label>
+                      <div className="flex gap-0">
+                        {(['market', 'limit'] as const).map(mode => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => set('entry_mode', mode)}
+                            className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
+                              form.entry_mode === mode
+                                ? 'border-accent bg-accent/10 text-accent'
+                                : 'border-border text-dim hover:text-ink'
+                            } ${mode === 'market' ? 'border-r-0' : ''}`}
+                          >
+                            {mode === 'market' ? 'Market Fill' : 'Limit Entry'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        {form.entry_mode === 'limit'
+                          ? 'Limit order at the FVG level. Stop + target placed after fill. Stays working until cancelled — no timeout.'
+                          : 'Market order fills immediately. Stop + target placed after fill is confirmed. No SDK bracket wrapper.'}
+                      </p>
                     </div>
-                    <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                      {form.entry_mode === 'limit'
-                        ? 'Limit order at the FVG level. Stop + target placed after fill. Stays working until cancelled — no timeout.'
-                        : 'Market order fills immediately. Stop + target placed after fill is confirmed. No SDK bracket wrapper.'}
-                    </p>
-                  </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Contracts Per Signal
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={1}
+                          max={30}
+                          step={1}
+                          value={parseInt(form.contracts ?? '1') || 1}
+                          onChange={e => set('contracts', e.target.value)}
+                          className="flex-1 slider-accent"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          step={1}
+                          value={form.contracts ?? '1'}
+                          onChange={e => set('contracts', e.target.value)}
+                          className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Number of contracts placed per signal. Hot-applied immediately — no restart needed.
+                      </p>
+                    </div>
+                  </>
                 )}
                 {FIELDS.filter(f => f.section === section).map(field => (
                   <div key={field.key}>
@@ -372,6 +463,11 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
               {restartMsg}
             </p>
           )}
+          {reloadMsg && (
+            <p className={`text-[10px] ${reloadMsg === 'Strategy reloaded!' ? 'text-accent' : 'text-danger'}`}>
+              {reloadMsg}
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               onClick={handleSave}
@@ -388,13 +484,22 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
             </button>
           </div>
           <button
+            onClick={handleReloadStrategy}
+            disabled={reloading || saving}
+            className="w-full border border-accent/50 text-accent/80 text-xs tracking-widest uppercase px-4 py-2 hover:bg-accent/10 disabled:opacity-50"
+          >
+            {reloading ? 'Reloading...' : 'Save & Reload Strategy'}
+          </button>
+          <button
             onClick={handleRunBacktest}
             disabled={restarting || saving}
-            className="w-full border border-accent/50 text-accent/80 text-xs tracking-widest uppercase px-4 py-2 hover:bg-accent/10 disabled:opacity-50"
+            className="w-full border border-border text-dim/60 text-xs tracking-widest uppercase px-4 py-2 hover:bg-bg disabled:opacity-50"
           >
             {restarting ? 'Starting...' : 'Save & Run Backtest'}
           </button>
-          <p className="text-[10px] text-dim text-center">Config changes take effect on the next restart</p>
+          <p className="text-[10px] text-dim text-center">
+            Contracts &amp; mode: instant · Strategy: Reload · Instrument/TF: restart
+          </p>
           {form.instrument && (
             <p className="text-[10px] text-dim/60 text-center font-mono">
               bars_{form.instrument.toUpperCase()}.csv
