@@ -101,6 +101,22 @@ def _compute_profile(
     )
 
 
+def _filter(signal: Signal, profile: VolumeProfile, tolerance: Decimal) -> bool:
+    """
+    Return True if the signal should proceed, False to drop it.
+
+    Rejects longs whose entry is clearly above the value area (buying
+    resistance) and shorts clearly below it (selling support). The
+    tolerance band softens the gate — "loose" by design.
+    """
+    entry = signal.entry
+    if signal.side == "long" and entry > profile.vah + tolerance:
+        return False
+    if signal.side == "short" and entry < profile.val - tolerance:
+        return False
+    return True
+
+
 class VolumeProfileTracker:
     """
     Per-instrument session tracker. Feed every bar via on_bar(); call

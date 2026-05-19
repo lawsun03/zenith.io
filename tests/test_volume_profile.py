@@ -228,3 +228,71 @@ def test_accumulate_low_volume_bar_goes_to_close_bin():
     assert tracker._bins.get(Decimal("1902"), 0) == 3
     # Other bins should have 0 volume
     assert tracker._bins.get(Decimal("1900"), 0) == 0
+
+
+# ── Task 4: Filter ────────────────────────────────────────────────────────────
+
+def _signal(side: str, entry: float, stop: float) -> "Signal":
+    from app.strategy.composer import Signal
+    return Signal(
+        instrument="MGC", side=side,  # type: ignore[arg-type]
+        entry=Decimal(str(entry)), stop=Decimal(str(stop)),
+        target=Decimal("0"),
+        created_at=datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc),
+        killzone="ny_am", sweep_pattern="B_one_bar",
+        sweep_extreme=Decimal(str(stop)),
+        fvg_low=None, fvg_high=None,
+        rationale="test signal",
+    )
+
+
+def _profile(poc: float, vah: float, val: float, hvns: list[float] | None = None) -> "VolumeProfile":
+    from app.strategy.volume_profile import VolumeProfile
+    return VolumeProfile(
+        session_date=date(2026, 5, 18),
+        poc=Decimal(str(poc)),
+        vah=Decimal(str(vah)),
+        val=Decimal(str(val)),
+        hvns=[Decimal(str(h)) for h in (hvns or [])],
+        total_volume=1000,
+    )
+
+
+def test_long_inside_value_area_passes():
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("long", 1900, 1897), _profile(1900, 1905, 1895), Decimal("2.0")) is True
+
+
+def test_long_within_tolerance_above_vah_passes():
+    """Entry 1.0 above VAH is within tolerance=2.0 — must pass."""
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("long", 1906, 1903), _profile(1900, 1905, 1895), Decimal("2.0")) is True
+
+
+def test_long_above_vah_plus_tolerance_rejected():
+    """Entry 2.1 above VAH exceeds tolerance=2.0 — buying into clear resistance."""
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("long", 1907.1, 1904), _profile(1900, 1905, 1895), Decimal("2.0")) is False
+
+
+def test_long_below_val_discount_zone_passes():
+    """Entry below VAL on a long is a discount — should never be rejected."""
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("long", 1890, 1888), _profile(1900, 1905, 1895), Decimal("2.0")) is True
+
+
+def test_short_inside_value_area_passes():
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("short", 1900, 1903), _profile(1900, 1905, 1895), Decimal("2.0")) is True
+
+
+def test_short_above_vah_premium_zone_passes():
+    """Short entry above VAH is a premium zone — should pass."""
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("short", 1910, 1913), _profile(1900, 1905, 1895), Decimal("2.0")) is True
+
+
+def test_short_below_val_minus_tolerance_rejected():
+    """Entry 2.1 below VAL — shorting into clear support below value."""
+    from app.strategy.volume_profile import _filter
+    assert _filter(_signal("short", 1892.9, 1896), _profile(1900, 1905, 1895), Decimal("2.0")) is False
