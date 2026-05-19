@@ -99,3 +99,79 @@ def _compute_profile(
         hvns=hvns,
         total_volume=total,
     )
+
+
+class VolumeProfileTracker:
+    """
+    Per-instrument session tracker. Feed every bar via on_bar(); call
+    apply() on any signal before the pretrade gate.
+
+    Session boundary is detected by UTC date change in bar timestamps.
+    On first day (no prior session yet), apply() is a no-op.
+    """
+
+    def __init__(self) -> None:
+        self._bins: dict[Decimal, int] = {}
+        self._session_date: date | None = None
+        self._prior: VolumeProfile | None = None
+
+    # ------------------------------------------------------------------
+    # Bar ingestion
+    # ------------------------------------------------------------------
+
+    def on_bar(self, bar: Bar, cfg: StrategyParams) -> None:
+        """Feed a closed bar. Detects session boundaries and accumulates volume."""
+        bar_date = bar.ts.date()
+
+        if self._session_date is None:
+            self._session_date = bar_date
+        elif bar_date != self._session_date:
+            # Session ended — finalize prior profile.
+            self._prior = _compute_profile(
+                self._bins,
+                self._session_date,
+                cfg.vp_value_area_pct,
+                cfg.vp_hvn_threshold,
+            )
+            if self._prior:
+                log.info(
+                    "VP: prior session %s — POC=%.2f VAH=%.2f VAL=%.2f HVNs=%d",
+                    self._session_date,
+                    float(self._prior.poc),
+                    float(self._prior.vah),
+                    float(self._prior.val),
+                    len(self._prior.hvns),
+                )
+            self._bins = {}
+            self._session_date = bar_date
+
+        self._accumulate(bar, cfg.vp_tick_size)
+
+    def _accumulate(self, bar: Bar, tick_size: Decimal) -> None:
+        """Distribute bar volume uniformly across the high-low price range."""
+        if bar.volume == 0:
+            return
+
+        # Quantize low and high to nearest tick boundary.
+        low_bin = (bar.low / tick_size).to_integral_value(rounding=ROUND_FLOOR) * tick_size
+        high_bin = (bar.high / tick_size).to_integral_value(rounding=ROUND_HALF_UP) * tick_size
+
+        bins_in_range: list[Decimal] = []
+        p = low_bin
+        while p <= high_bin:
+            bins_in_range.append(p)
+            p += tick_size
+
+        if not bins_in_range:
+            return
+
+        vol_per_bin = max(1, bar.volume // len(bins_in_range))
+        for p in bins_in_range:
+            self._bins[p] = self._bins.get(p, 0) + vol_per_bin
+
+    # ------------------------------------------------------------------
+    # Read-only
+    # ------------------------------------------------------------------
+
+    def has_prior_profile(self) -> bool:
+        return self._prior is not None
