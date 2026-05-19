@@ -47,6 +47,7 @@ from pydantic import BaseModel
 from app.bot_config import BotConfig, load_bot_config, save_bot_config
 from app.execution.reconciler import Reconciler
 from app.risk.state import RiskState
+from app.strategy.composer import Signal
 
 from .journal import Journal, _decimal_to_str
 
@@ -80,6 +81,13 @@ class RandomSearchRequest(BaseModel):
 
 class NoteRequest(BaseModel):
     note: str = ""
+
+
+class ForceSignalRequest(BaseModel):
+    side: str = "long"          # "long" or "short"
+    entry: str                  # price as string, e.g. "4720.0"
+    stop_distance: str = "2.0"  # points from entry
+    r_multiple: str = "2.0"
 
 
 def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
@@ -293,6 +301,7 @@ def build_app(
             "replay_start_delay_s": cfg.replay_start_delay_s,
             "account_name": cfg.account_name,
             "entry_mode": cfg.entry_mode,
+            "contracts": cfg.contracts,
             "enabled_killzones": cfg.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
@@ -305,6 +314,11 @@ def build_app(
         # uses the new mode without requiring a restart.
         if _broker is not None and hasattr(_broker, "entry_mode"):
             _broker.entry_mode = body.entry_mode
+        if _engine is not None:
+            _engine.contracts = body.contracts
+        # VP config hot-apply: apply() reads strategy_cfg at call time.
+        if _engine is not None:
+            _engine.strategy_cfg = body.strategy
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
@@ -312,6 +326,7 @@ def build_app(
             "replay_start_delay_s": body.replay_start_delay_s,
             "account_name": body.account_name,
             "entry_mode": body.entry_mode,
+            "contracts": body.contracts,
             "enabled_killzones": body.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
@@ -411,6 +426,68 @@ def build_app(
 
         asyncio.create_task(_run())
         return JSONResponse({"ok": True, "message": "1-contract long placed — will flatten in 30s"})
+
+    @app.post("/api/debug/force-signal")
+    async def force_signal(body: ForceSignalRequest) -> JSONResponse:
+        """
+        Inject a synthetic signal directly into the execution engine.
+        Tests the exact same path as a real strategy signal:
+          pretrade check → broker.place_bracket() → fill event.
+        Returns the full outcome so you can see exactly where it fails.
+        """
+        if _mode != "live":
+            return JSONResponse({"ok": False, "reason": "only available in live mode"}, status_code=400)
+        if _engine is None:
+            return JSONResponse({"ok": False, "reason": "engine not started"}, status_code=400)
+
+        try:
+            entry = Decimal(body.entry)
+            stop_dist = Decimal(body.stop_distance)
+            r = Decimal(body.r_multiple)
+        except Exception:
+            return JSONResponse({"ok": False, "reason": "invalid price values"}, status_code=400)
+
+        if body.side == "long":
+            stop = entry - stop_dist
+            target = entry + stop_dist * r
+        else:
+            stop = entry + stop_dist
+            target = entry - stop_dist * r
+
+        signal = Signal(
+            instrument=effective_instrument,
+            side=body.side,
+            entry=entry,
+            stop=stop,
+            target=target,
+            created_at=datetime.now(timezone.utc),
+            killzone="DEBUG",
+            sweep_pattern="DEBUG",
+            sweep_extreme=stop,
+            fvg_low=None,
+            fvg_high=None,
+            rationale=f"DEBUG force-signal: {body.side} entry={entry} stop={stop} target={target}",
+        )
+
+        try:
+            outcome = await _engine._act_on_signal(signal)
+        except Exception as e:
+            log.exception("force-signal failed")
+            return JSONResponse({"ok": False, "reason": f"engine error: {e}"}, status_code=500)
+
+        return JSONResponse({
+            "ok": outcome.placed,
+            "placed": outcome.placed,
+            "reason": outcome.reason,
+            "allowed_size": outcome.allowed_size,
+            "broker_order_id": outcome.broker_order_id,
+            "signal": {
+                "side": signal.side,
+                "entry": str(signal.entry),
+                "stop": str(signal.stop),
+                "target": str(signal.target),
+            },
+        })
 
     @app.post("/api/replay/restart")
     async def replay_restart() -> JSONResponse:
