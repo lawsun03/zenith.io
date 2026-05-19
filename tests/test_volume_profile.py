@@ -408,3 +408,18 @@ def test_apply_passthrough_when_no_prior_profile():
     sig = _signal("long", 1900, 1897)
     result = tracker.apply(sig, StrategyParams())
     assert result is sig  # exact same object, untouched
+
+
+def test_accumulate_conserves_total_volume():
+    """Total volume in bins must equal bar.volume after accumulate — no leakage."""
+    from app.strategy.volume_profile import VolumeProfileTracker
+    from app.bot_config import StrategyParams
+
+    tracker = VolumeProfileTracker()
+    cfg = StrategyParams(vp_tick_size=Decimal("0.10"))
+
+    # 100 volume across 8 bins (100 // 8 = 12 remainder 4 — tests remainder path)
+    b = _bar(datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc),
+             high=1900.7, low=1900.0, close=1900.3, volume=100)
+    tracker.on_bar(b, cfg)
+    assert sum(tracker._bins.values()) == 100
