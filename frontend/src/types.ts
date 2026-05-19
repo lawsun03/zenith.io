@@ -9,6 +9,14 @@ export interface StrategyConfig {
   displacement_window_bars: number
   stop_buffer: string
   r_multiple: string
+  trend_ema_period: number
+  // Volume profile
+  vp_enabled: boolean
+  vp_tick_size: string
+  vp_value_area_pct: number
+  vp_filter_tolerance: string
+  vp_hvn_threshold: number
+  vp_min_target_r: string
 }
 
 export interface BotConfig {
@@ -19,6 +27,7 @@ export interface BotConfig {
   account_name: string | null
   entry_mode: string
   enabled_killzones: string[]
+  contracts: number
   mode?: string
   strategy: StrategyConfig
 }
