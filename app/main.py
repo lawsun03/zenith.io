@@ -95,10 +95,12 @@ def _build_runner(
     instrument: str,
     s: StrategyParams,
     enabled_killzones: list[str] | None = None,
+    timeframe: str = "1min",
 ) -> StrategyRunner:
     zones = killzones_from_names(enabled_killzones) if enabled_killzones else None
     return StrategyRunner(
         instrument=instrument,
+        timeframe=timeframe,
         liquidity=LiquidityTracker(LiquidityConfig(
             swing_lookback=s.swing_lookback,
             min_penetration=s.min_penetration,
@@ -430,7 +432,10 @@ async def _run_paper(
             risk_state.reset()
         if engine is not None:
             new_cfg = load_bot_config(cfg.bot_config_path)
-            new_runner = _build_runner(cfg.instrument, new_cfg.strategy, new_cfg.enabled_killzones)
+            new_runner = _build_runner(
+                cfg.instrument, new_cfg.strategy, new_cfg.enabled_killzones,
+                timeframe=new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+            )
             engine.runners = {cfg.instrument: new_runner}
             engine.strategy_cfg = new_cfg.strategy  # keep VP cfg in sync on restart
         broker.reset()
@@ -441,9 +446,13 @@ async def _run_live(
     broker: Broker,
     cfg: AppConfig,
     shutdown: asyncio.Event,
+    runner: "StrategyRunner | None" = None,
+    bot_cfg: "BotConfig | None" = None,
 ) -> None:
-    """Live mode: subscribe, then block on shutdown."""
+    """Live mode: subscribe, warm up VP, then block on shutdown."""
     await broker.subscribe([cfg.instrument], cfg.timeframes)
+    if runner is not None and bot_cfg is not None and runner.vp is not None:
+        await _warm_up_vp(broker, runner, bot_cfg)
     log.info(
         "Live mode running. Instrument=%s timeframes=%s. Ctrl+C to stop.",
         cfg.instrument, cfg.timeframes,
@@ -524,7 +533,9 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
 
     timeframe = (bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min")
     try:
-        bars = await broker.get_historical_bars(timeframe=timeframe, days=2)
+        # Need enough bars to cross at least one UTC midnight boundary.
+        # 1-min bars: 2000 bars ≈ 33 hours, enough to span yesterday.
+        bars = await broker.get_historical_bars(timeframe=timeframe, days=3, limit=2000)
     except Exception as exc:
         log.warning("VP warm-up: historical bar fetch failed — VP filter inactive today: %s", exc)
         return
@@ -600,7 +611,10 @@ async def _async_main() -> int:
         risk_state._current_equity = live_balance
         # Bootstrap daily P&L so a mid-session restart doesn't reset the DLL gate.
         risk_state.daily_pnl = live_daily_pnl
-    runner = _build_runner(cfg.instrument, bot_cfg.strategy, bot_cfg.enabled_killzones)
+    runner = _build_runner(
+        cfg.instrument, bot_cfg.strategy, bot_cfg.enabled_killzones,
+        timeframe=bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min",
+    )
 
     # Sync: enable only if both endpoint and secret are set. Outbox is
     # always created (it's a local file, harmless when unused) — but
@@ -753,11 +767,6 @@ async def _async_main() -> int:
                 ),
             )
 
-        # VP warm-up: feed prior session bars before live stream begins.
-        # Paper mode warms up naturally via CSV replay spanning multiple dates.
-        if cfg.mode == "live" and runner.vp is not None:
-            await _warm_up_vp(broker, runner, bot_cfg)
-
         if cfg.mode == "paper":
             await _run_paper(  # type: ignore[arg-type]
                 broker, cfg, shutdown,
@@ -767,7 +776,7 @@ async def _async_main() -> int:
                 engine=engine,
             )
         else:
-            await _run_live(broker, cfg, shutdown)
+            await _run_live(broker, cfg, shutdown, runner=runner, bot_cfg=bot_cfg)
 
         return 0
     except Exception as exc:

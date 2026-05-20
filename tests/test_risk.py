@@ -289,18 +289,18 @@ class TestPretradeGate:
 
     def test_size_capped_at_max_contracts(self):
         """Asking for more than max_contracts gets sized down, not denied."""
-        state = RiskState(config=fifty_k_combine())  # max=5
-        result = check(make_long_order(size=10), state)
+        state = RiskState(config=fifty_k_combine())  # max=30
+        result = check(make_long_order(size=40), state)
         assert isinstance(result, Allow)
-        assert result.allowed_size == 5
+        assert result.allowed_size == 30
 
     def test_size_capped_at_remaining_headroom(self):
-        """If 3 contracts already open, can only add 2 more."""
+        """If 28 contracts already open, can only add 2 more."""
         state = RiskState(config=fifty_k_combine())
         ts = timestamps_in_session(1)
         state.record_fill(
             realized_pnl_delta=Decimal("0"),
-            contracts_delta=3,
+            contracts_delta=28,
             ts=ts[0],
         )
         result = check(make_long_order(size=5), state)
@@ -312,7 +312,7 @@ class TestPretradeGate:
         ts = timestamps_in_session(1)
         state.record_fill(
             realized_pnl_delta=Decimal("0"),
-            contracts_delta=5,
+            contracts_delta=30,
             ts=ts[0],
         )
         result = check(make_long_order(size=1), state)

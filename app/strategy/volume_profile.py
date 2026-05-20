@@ -36,6 +36,7 @@ class VolumeProfile:
     val: Decimal        # value area low
     hvns: list[Decimal] # sorted high-volume nodes (volume > mean × hvn_threshold)
     total_volume: int
+    bins: dict[Decimal, int] = dataclasses.field(default_factory=dict)  # price → volume
 
 
 def _compute_profile(
@@ -98,6 +99,7 @@ def _compute_profile(
         val=val,
         hvns=hvns,
         total_volume=total,
+        bins=dict(bins),
     )
 
 

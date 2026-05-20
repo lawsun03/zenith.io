@@ -108,3 +108,10 @@ class Broker(Protocol):
     async def subscribe(self, instruments: Iterable[str], timeframes: Iterable[str]) -> None:
         """Start the data feed for these instruments and timeframes."""
         ...
+
+    async def get_forming_bar(self, timeframe: str = "1min") -> "Bar | None":
+        """
+        Return the currently-forming bar (partially closed), or None if
+        not supported by this broker implementation.
+        """
+        ...

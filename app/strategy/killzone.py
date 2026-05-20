@@ -7,7 +7,7 @@ sessions Lawrence trades:
   - Asia           19:00–22:00 ET    (Tokyo morning)
   - London open    02:00–05:00 ET
   - NY AM          08:30–11:00 ET
-  - NY PM          13:30–15:00 ET
+  - NY PM          13:00–16:00 ET  (10:00–13:00 PT)
 
 ET (America/New_York) handles DST automatically — we never want to
 chase a session because daylight saving moved. Storing windows in
@@ -52,7 +52,7 @@ def ny_am() -> Killzone:
 
 
 def ny_pm() -> Killzone:
-    return Killzone(name="NY PM", start=time(13, 30), end=time(15, 0))
+    return Killzone(name="NY PM", start=time(13, 0), end=time(16, 0))
 
 
 def london_ny() -> Killzone:

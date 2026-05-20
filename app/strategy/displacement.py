@@ -214,6 +214,39 @@ class DisplacementDetector:
             fvg=fvg,
         )
 
+    def peek_displacement(self) -> "tuple[DisplacementSide, Bar, Bar] | None":
+        """
+        Non-mutating: return (side, b1, b2) if the most recently processed bar
+        qualifies as a displacement. b2 = window[-1], b1 = window[-2].
+        The caller can then test FVG by passing a forming bar as b3 to
+        DisplacementDetector._compute_fvg(b1, forming_bar, side).
+        Returns None if ATR not warmed up or window too small.
+        """
+        if len(self._window) < 2 or self._atr is None:
+            return None
+        b1 = self._window[-2]
+        b2 = self._window[-1]
+        cfg = self.config
+        atr = self._atr
+
+        body = abs(b2.close - b2.open)
+        bar_range = b2.high - b2.low
+
+        if body < cfg.min_absolute_body:
+            return None
+        if bar_range == 0:
+            return None
+        if body / bar_range < cfg.min_body_to_range_ratio:
+            return None
+        if body < atr * cfg.body_atr_multiple:
+            return None
+
+        if b2.close > b2.open:
+            return "bullish", b1, b2
+        if b2.close < b2.open:
+            return "bearish", b1, b2
+        return None
+
     @staticmethod
     def _compute_fvg(
         b1: Bar,

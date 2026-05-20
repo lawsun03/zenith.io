@@ -83,9 +83,9 @@ cd /d "%REPO_ROOT%"
 
 echo [start.bat] config: mode=%TOPSTEP_BOT_MODE% inst=%TOPSTEP_BOT_INSTRUMENT% port=%TOPSTEP_BOT_PORT% >> "%LOG_FILE%"
 
-REM Use python -u for unbuffered output so logs flush in real time.
-REM Append-redirect both stdout and stderr to the daily log.
-python -u -m app.main >> "%LOG_FILE%" 2>&1
+REM Use venv python explicitly — don't rely on PATH activation which
+REM can resolve to system Python on some Windows setups.
+"%REPO_ROOT%\.venv\Scripts\python.exe" -u -m app.main >> "%LOG_FILE%" 2>&1
 set EXIT_CODE=%ERRORLEVEL%
 
 echo [start.bat] exit code: %EXIT_CODE% at %DATE% %TIME% >> "%LOG_FILE%"

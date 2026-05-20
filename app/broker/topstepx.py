@@ -38,6 +38,32 @@ log = logging.getLogger(__name__)
 SIDE_BUY = 0
 SIDE_SELL = 1
 
+# Dollar P&L per 1-point (1 dollar) price move per contract.
+# Used to convert (exit_price - entry_price) → realized dollars.
+_POINT_VALUE: dict[str, Decimal] = {
+    "MGC":  Decimal("10"),    # Micro Gold: 10 oz
+    "GC":   Decimal("100"),   # Gold: 100 oz
+    "MNQ":  Decimal("2"),     # Micro Nasdaq-100
+    "NQ":   Decimal("20"),    # Nasdaq-100
+    "MES":  Decimal("5"),     # Micro E-mini S&P 500
+    "ES":   Decimal("50"),    # E-mini S&P 500
+    "MCL":  Decimal("100"),   # Micro WTI Crude Oil
+    "CL":   Decimal("1000"),  # WTI Crude Oil
+    "M2K":  Decimal("5"),     # Micro Russell 2000
+    "RTY":  Decimal("50"),    # Russell 2000
+}
+
+
+def _point_value(instrument: str) -> Decimal:
+    """Return the dollar value of a 1-point price move for this instrument."""
+    # Strip SDK contract suffix: "CON.F.US.MGC.M26" → "MGC"
+    sym = instrument.split(".")[-2] if "." in instrument else instrument.upper()
+    val = _POINT_VALUE.get(sym)
+    if val is None:
+        log.warning("Unknown instrument %r — P&L will be in price units, not dollars", sym)
+        return Decimal("1")
+    return val
+
 
 def _to_internal_side(sdk_side: int) -> Side:
     return "long" if sdk_side == SIDE_BUY else "short"
@@ -89,6 +115,21 @@ class TopstepXBroker:
         self._known_order_ids: set[str] = set()  # for fill dedup
         # Pending limit entries awaiting fill → then place stop + target
         self._pending_brackets: dict[str, dict] = {}
+        # OCO pairs: stop_id ↔ target_id. When either fills, the other is cancelled.
+        self._exit_pairs: dict[str, str] = {}
+        # Market orders fill in microseconds — the ORDER_FILLED event can arrive via
+        # WebSocket before the HTTP response returns and we store the order_id in
+        # _pending_brackets. Buffer those early fills here and replay them once the
+        # bracket is registered.
+        self._early_fills: dict[str, "Fill"] = {}
+        # Dedup: ORDER_FILLED, FILL, and POSITION_CHANGED can all fire for the same
+        # order. Track which order IDs we have already processed so duplicates are
+        # silently dropped instead of double-counting open_contracts in RiskState.
+        self._processed_fill_ids: set[str] = set()
+        # Tick-aggregated forming bar: accumulates quote mid-prices within the current
+        # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
+        self._forming_bar: Bar | None = None
+        self._forming_bar_minute: datetime | None = None
 
     # ------------------------------------------------------------------
     # Connection
@@ -205,13 +246,14 @@ class TopstepXBroker:
         if mode.lower() == "limit":
             return await self.place_limit_bracket(instrument, side, size, entry, stop, target)
         # Default: market fill + stop/target placed after fill confirmed.
-        return await self.place_market_bracket(instrument, side, size, stop, target)
+        return await self.place_market_bracket(instrument, side, size, entry, stop, target)
 
     async def place_market_bracket(
         self,
         instrument: str,
         side: Side,
         size: int,
+        entry: Decimal,
         stop: Decimal,
         target: Decimal,
     ) -> BracketResult:
@@ -264,19 +306,34 @@ class TopstepXBroker:
                 error="no order ID in market entry response",
             )
 
-        # Register bracket data — placed when fill event arrives for this order ID.
+        # Store stop/target as offsets from signal entry so they anchor to the
+        # actual fill price, not the signal price. Market orders fill at the
+        # current market price, which may differ from the signal's entry price.
+        # Using offsets keeps stop/target the correct distance from where we filled.
         self._pending_brackets[entry_order_id] = {
-            "stop": stop,
-            "target": target,
+            "stop_offset": stop - entry,
+            "target_offset": target - entry,
             "close_sdk_side": close_sdk_side,
             "size": size,
             "account_id": account_id,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
-            "Market entry placed: order=%s stop=%s target=%s — watching for fill",
-            entry_order_id, stop, target,
+            "Market entry placed: order=%s stop_offset=%s target_offset=%s — watching for fill",
+            entry_order_id, stop - entry, target - entry,
         )
+
+        # Market orders can fill before the HTTP response returns. If the fill event
+        # already arrived and was buffered, replay it now that we're registered.
+        early = self._early_fills.pop(entry_order_id, None)
+        if early is not None:
+            bracket_data = self._pending_brackets.pop(entry_order_id)
+            bracket_data["fill_price"] = early.fill_price
+            log.info(
+                "Replaying early fill order=%s @ %s — placing stop+target",
+                entry_order_id, early.fill_price,
+            )
+            asyncio.create_task(self._place_bracket_after_fill(bracket_data))
 
         return BracketResult(
             success=True,
@@ -344,18 +401,18 @@ class TopstepXBroker:
                 error="no order ID in limit entry response",
             )
 
-        # Register bracket data so the fill watcher can place stop+target.
+        # Store offsets so the fill handler can anchor stop/target to actual fill price.
         self._pending_brackets[entry_order_id] = {
-            "stop": stop,
-            "target": target,
+            "stop_offset": stop - entry,
+            "target_offset": target - entry,
             "close_sdk_side": close_sdk_side,
             "size": size,
             "account_id": account_id,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
-            "Limit entry placed: order=%s entry=%s stop=%s target=%s — watching for fill",
-            entry_order_id, entry, stop, target,
+            "Limit entry placed: order=%s entry=%s stop_offset=%s target_offset=%s — watching for fill",
+            entry_order_id, entry, stop - entry, target - entry,
         )
 
         return BracketResult(
@@ -367,42 +424,107 @@ class TopstepXBroker:
         )
 
     async def _place_bracket_after_fill(self, bracket: dict) -> None:
-        """Invoked via create_task when a pending limit entry fills."""
-        stop = bracket["stop"]
-        target = bracket["target"]
+        """Invoked via create_task when a pending entry fills."""
+        fill_price = bracket["fill_price"]
+
+        if not fill_price or fill_price == Decimal("0"):
+            # filledPrice wasn't in the ORDER_FILLED event (common for market orders).
+            # Fall back to the open position's averagePrice — reliable here because
+            # this task is created after the fill event fires, so the position exists.
+            log.warning(
+                "_place_bracket_after_fill: fill_price is zero — querying position for averagePrice"
+            )
+            try:
+                positions = await self.get_positions()
+                if positions:
+                    fill_price = positions[0].average_price
+                    log.info(
+                        "_place_bracket_after_fill: using position averagePrice=%s as fill_price",
+                        fill_price,
+                    )
+            except Exception:
+                log.exception("_place_bracket_after_fill: could not get position averagePrice")
+
+            if not fill_price or fill_price == Decimal("0"):
+                log.error(
+                    "_place_bracket_after_fill: fill_price still zero after position query — "
+                    "cannot place bracket, position is unprotected"
+                )
+                return
+
+        stop = fill_price + bracket["stop_offset"]
+        target = fill_price + bracket["target_offset"]
         close_sdk_side = bracket["close_sdk_side"]
         size = bracket["size"]
         account_id = bracket["account_id"]
+        log.info(
+            "_place_bracket_after_fill: fill=%s stop=%s target=%s",
+            fill_price, stop, target,
+        )
 
-        try:
-            stop_resp = await self._suite.orders.place_stop_order(
-                self._suite.instrument_id,
-                close_sdk_side,
-                size,
-                float(stop),
-                account_id,
-            )
-            if getattr(stop_resp, "success", False):
-                log.info("Stop placed after fill: order=%s stop=%s", stop_resp.orderId, stop)
-            else:
-                log.error("Stop order rejected after fill: stop=%s", stop)
-        except Exception:
-            log.exception("_place_bracket_after_fill: stop order failed")
+        async def _place_stop() -> str | None:
+            try:
+                resp = await self._suite.orders.place_stop_order(
+                    self._suite.instrument_id,
+                    close_sdk_side,
+                    size,
+                    float(stop),
+                    account_id,
+                )
+                if getattr(resp, "success", False):
+                    oid = str(resp.orderId)
+                    log.info("Stop placed: order=%s @ %s", oid, stop)
+                    return oid
+                log.error("Stop order rejected: stop=%s resp=%s", stop, resp)
+            except Exception:
+                log.exception("_place_bracket_after_fill: stop order failed")
+            return None
 
+        async def _place_target() -> str | None:
+            try:
+                resp = await self._suite.orders.place_limit_order(
+                    self._suite.instrument_id,
+                    close_sdk_side,
+                    size,
+                    float(target),
+                    account_id,
+                )
+                if getattr(resp, "success", False):
+                    oid = str(resp.orderId)
+                    log.info("Target placed: order=%s @ %s", oid, target)
+                    return oid
+                log.error("Target order rejected: target=%s resp=%s", target, resp)
+            except Exception:
+                log.exception("_place_bracket_after_fill: target order failed")
+            return None
+
+        # Place stop and target simultaneously — no window where one exists without the other.
+        stop_id, target_id = await asyncio.gather(_place_stop(), _place_target())
+
+        # Register as OCO pair. Store entry context so whichever leg fills
+        # can compute realized P&L from the price difference.
+        if stop_id and target_id:
+            entry_side = "long" if close_sdk_side == SIDE_SELL else "short"
+            ctx = {
+                "entry_price": fill_price,
+                "entry_side": entry_side,
+                "size": size,
+            }
+            self._exit_pairs[stop_id]   = {**ctx, "paired_id": target_id}
+            self._exit_pairs[target_id] = {**ctx, "paired_id": stop_id}
+            log.info("OCO pair registered: stop=%s target=%s entry=%s side=%s",
+                     stop_id, target_id, fill_price, entry_side)
+
+    async def _cancel_order(self, order_id: str) -> None:
+        """Cancel a single order by ID. Used for OCO cancellation."""
         try:
-            target_resp = await self._suite.orders.place_limit_order(
-                self._suite.instrument_id,
-                close_sdk_side,
-                size,
-                float(target),
-                account_id,
-            )
-            if getattr(target_resp, "success", False):
-                log.info("Target placed after fill: order=%s target=%s", target_resp.orderId, target)
+            resp = await self._suite.orders.cancel_order(int(order_id))
+            if getattr(resp, "success", False):
+                log.info("OCO cancel confirmed: order=%s", order_id)
             else:
-                log.error("Target order rejected after fill: target=%s", target)
+                log.error("OCO cancel rejected: order=%s resp=%s", order_id, resp)
         except Exception:
-            log.exception("_place_bracket_after_fill: target order failed")
+            log.exception("_cancel_order: failed to cancel order=%s", order_id)
 
     async def get_data_availability(self, timeframe: str = "5min") -> dict:
         """
@@ -520,6 +642,14 @@ class TopstepXBroker:
                 volume=int(v or 0),
             ))
         return bars
+
+    async def get_forming_bar(self, timeframe: str = "1min") -> Bar | None:
+        """
+        Return the current forming bar, built by aggregating live quote mid-prices
+        tick-by-tick within the current minute. Returns None until the first quote
+        arrives after subscribe() completes.
+        """
+        return self._forming_bar
 
     async def place_market_order(self, side: Side, size: int = 1) -> bool:
         """Place a market order. Used for test trades and emergency entries."""
@@ -700,6 +830,45 @@ class TopstepXBroker:
 
         await self._suite.events.on(EventType.NEW_BAR, _on_new_bar)
 
+        async def _on_quote_update(event):
+            data = event.data
+            bid = data.get("bid")
+            ask = data.get("ask")
+            if bid is None or ask is None:
+                return
+            try:
+                price = Decimal(str((float(bid) + float(ask)) / 2))
+            except (ValueError, TypeError):
+                return
+            now = _utcnow()
+            minute_start = now.replace(second=0, microsecond=0)
+            if self._forming_bar_minute != minute_start:
+                self._forming_bar = Bar(
+                    instrument=primary,
+                    timeframe=tf_list[0],
+                    ts=minute_start,
+                    open=price,
+                    high=price,
+                    low=price,
+                    close=price,
+                    volume=1,
+                )
+                self._forming_bar_minute = minute_start
+            elif self._forming_bar is not None:
+                fb = self._forming_bar
+                self._forming_bar = Bar(
+                    instrument=fb.instrument,
+                    timeframe=fb.timeframe,
+                    ts=fb.ts,
+                    open=fb.open,
+                    high=max(fb.high, price),
+                    low=min(fb.low, price),
+                    close=price,
+                    volume=fb.volume + 1,
+                )
+
+        await self._suite.events.on(EventType.QUOTE_UPDATE, _on_quote_update)
+
         # SDK exposes fill events under different names depending on version.
         for event_name in ("ORDER_FILLED", "FILL", "POSITION_CHANGED"):
             try:
@@ -708,19 +877,85 @@ class TopstepXBroker:
                 continue
 
             async def _on_fill_event(event, _en=event_name):
+                log.debug("_on_fill_event [%s]: raw data keys=%s", _en,
+                          list(event.data.keys()) if isinstance(event.data, dict) else type(event.data).__name__)
                 fill = self._build_fill(event.data)
                 if fill is None:
+                    log.warning("_on_fill_event [%s]: _build_fill returned None — open_contracts NOT updated. Raw: %s",
+                                _en, event.data)
                     return
-                # If this fill is for a pending limit bracket entry, kick off
-                # the stop+target placement in the background.
                 order_id = fill.broker_order_id
-                if order_id and order_id in self._pending_brackets and fill.is_entry:
+
+                # Dedup: ORDER_FILLED, FILL, and POSITION_CHANGED can all fire for
+                # the same order. Only process each order_id once — duplicates would
+                # double-count contracts_delta and trigger a false reconciler drift.
+                if order_id:
+                    if order_id in self._processed_fill_ids:
+                        log.debug(
+                            "_on_fill_event [%s]: duplicate fill order=%s — skipping",
+                            _en, order_id,
+                        )
+                        return
+                    self._processed_fill_ids.add(order_id)
+
+                # Route by dict lookup first — these are definitive.
+                # is_entry is unreliable because the SDK ORDER_FILLED event
+                # never carries realized P&L, so realized==0 always, making
+                # is_entry True for both entry and exit fills.
+                if order_id and order_id in self._pending_brackets:
+                    # Definitive entry fill — bracket registered, place stop+target.
                     bracket_data = self._pending_brackets.pop(order_id)
+                    bracket_data["fill_price"] = fill.fill_price
                     log.info(
                         "Entry fill confirmed order=%s @ %s — placing stop+target",
                         order_id, fill.fill_price,
                     )
                     asyncio.create_task(self._place_bracket_after_fill(bracket_data))
+
+                elif order_id and order_id in self._exit_pairs:
+                    # Definitive exit fill — stop or target hit, cancel the other.
+                    pair_info = self._exit_pairs.pop(order_id)
+                    paired_id = pair_info["paired_id"]
+                    self._exit_pairs.pop(paired_id, None)
+                    log.info(
+                        "Exit order %s filled — cancelling paired order %s (OCO)",
+                        order_id, paired_id,
+                    )
+                    asyncio.create_task(self._cancel_order(paired_id))
+
+                    # Compute realized P&L from price delta × contract multiplier.
+                    entry_price = pair_info["entry_price"]
+                    entry_side  = pair_info["entry_side"]
+                    ex_size     = pair_info["size"]
+                    pv = _point_value(fill.instrument)
+                    if entry_side == "long":
+                        pnl = (fill.fill_price - entry_price) * ex_size * pv
+                    else:
+                        pnl = (entry_price - fill.fill_price) * ex_size * pv
+                    fill = Fill(
+                        ts=fill.ts,
+                        instrument=fill.instrument,
+                        side=fill.side,
+                        fill_price=fill.fill_price,
+                        size=fill.size,
+                        is_entry=False,
+                        realized_pnl_delta=pnl,
+                        contracts_delta=fill.contracts_delta,
+                        broker_order_id=fill.broker_order_id,
+                    )
+                    log.info("Exit P&L: order=%s pnl=%s (entry=%s exit=%s %s x%d)",
+                             order_id, pnl, entry_price, fill.fill_price, entry_side, ex_size)
+
+                elif order_id and fill.is_entry:
+                    # Not in either dict yet — likely a market entry fill that
+                    # arrived before place_market_bracket registered the order_id
+                    # (race condition). Buffer it; place_market_bracket replays it.
+                    self._early_fills[order_id] = fill
+                    log.info(
+                        "Early fill buffered order=%s @ %s (bracket not yet registered)",
+                        order_id, fill.fill_price,
+                    )
+
                 await self._fanout(self._fill_handlers, fill)
                 await self._emit_equity_snapshot(fill.ts)
 
@@ -776,34 +1011,58 @@ class TopstepXBroker:
         """
         Translate an SDK fill payload into our Fill event.
 
-        Field names are version-dependent; this is the common shape
-        with defensive `.get()`s. If the payload is missing core fields
-        we drop the event rather than guess.
+        The SDK ORDER_FILLED event carries a nested structure:
+            {"order": Order(...), "order_id": int, "old_status": int, "new_status": int}
+        All trade fields (contractId, side, size, filledPrice) live on the Order
+        dataclass, not at the top level. The flat-dict path is kept for any
+        legacy event shapes that may arrive.
         """
         try:
-            order_id = str(data.get("order_id") or data.get("orderId") or "")
-            instrument = str(data.get("contract_id") or data.get("symbol") or "")
-            sdk_side = int(data.get("side", -1))
-            size = int(data.get("size", 0))
-            fill_price = Decimal(str(data.get("fill_price") or data.get("price") or 0))
-            realized = Decimal(str(data.get("realized_pnl_delta", 0)))
-            contracts_delta_raw = data.get("contracts_delta")
+            order_obj = data.get("order") if isinstance(data, dict) else None
+            if order_obj is not None and hasattr(order_obj, "contractId"):
+                # SDK ORDER_FILLED: extract all fields from the nested Order object.
+                order_id = str(data.get("order_id") or getattr(order_obj, "id", None) or "")
+                instrument = str(getattr(order_obj, "contractId", None) or "")
+                sdk_side = int(getattr(order_obj, "side", -1))
+                size = int(getattr(order_obj, "size", 0) or 0)
+                # filledPrice is set by the exchange when the order is filled.
+                # For market orders limitPrice is None; filledPrice is the actual fill.
+                fill_price = Decimal(str(
+                    getattr(order_obj, "filledPrice", None)
+                    or getattr(order_obj, "limitPrice", None)
+                    or 0
+                ))
+                ts = self._coerce_ts(getattr(order_obj, "updateTimestamp", None))
+                realized = Decimal("0")
+            else:
+                # Flat payload (legacy / other event types).
+                order_id = str(data.get("order_id") or data.get("orderId") or "")
+                instrument = str(data.get("contract_id") or data.get("symbol") or "")
+                sdk_side = int(data.get("side", -1))
+                size = int(data.get("size", 0))
+                fill_price = Decimal(str(data.get("fill_price") or data.get("price") or 0))
+                ts = self._coerce_ts(data.get("timestamp"))
+                realized = Decimal(str(data.get("realized_pnl_delta", 0)))
+
+            contracts_delta_raw = data.get("contracts_delta") if isinstance(data, dict) else None
             if contracts_delta_raw is None:
-                # Reconstruct from side + size if delta isn't on the event.
-                # +size for buy (long), -size for sell (short closing).
-                # This is best-effort; the reconciler is the authority.
+                # +size for buy (entry long / exit short), -size for sell.
                 contracts_delta_raw = size if sdk_side == SIDE_BUY else -size
             contracts_delta = int(contracts_delta_raw)
-            is_entry = bool(data.get("is_entry", realized == 0))
-        except (KeyError, TypeError, ValueError) as e:
+            is_entry = bool(data.get("is_entry", realized == 0) if isinstance(data, dict) else realized == 0)
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
             log.warning("Unparseable fill event: %s (%s)", data, e)
             return None
 
         if size == 0 or sdk_side < 0 or not instrument:
+            log.debug(
+                "_build_fill: dropping fill — size=%s sdk_side=%s instrument=%r",
+                size, sdk_side, instrument,
+            )
             return None
 
         return Fill(
-            ts=self._coerce_ts(data.get("timestamp")),
+            ts=ts,
             instrument=instrument,
             side=_to_internal_side(sdk_side),
             fill_price=fill_price,

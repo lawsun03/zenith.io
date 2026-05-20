@@ -9,7 +9,7 @@ export default {
       },
       colors: {
         bg:     '#000000',
-        panel:  '#040604',
+        panel:  'rgba(2, 5, 2, 0.75)',
         border: '#003a00',
         ink:    '#00ff41',
         dim:    '#00aa22',

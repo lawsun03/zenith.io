@@ -5,12 +5,15 @@
   ],
   "replay_delay_ms": 0,
   "replay_start_delay_s": 5,
-  "account_name": "PRAC-V2-248764-39258280",
+  "account_name": "50KTC-V2-248764-93974638",
+  "entry_mode": "market",
+  "contracts": 4,
   "enabled_killzones": [
     "asia",
     "london",
     "ny_am",
-    "ny_pm"
+    "ny_pm",
+    "london_ny"
   ],
   "strategy": {
     "swing_lookback": 2,
@@ -22,6 +25,13 @@
     "min_absolute_body": "1.0",
     "displacement_window_bars": 5,
     "stop_buffer": "0.30",
-    "r_multiple": "2.5"
+    "r_multiple": "2.5",
+    "trend_ema_period": 0,
+    "vp_enabled": true,
+    "vp_tick_size": "0.10",
+    "vp_value_area_pct": 0.70,
+    "vp_filter_tolerance": "20.0",
+    "vp_hvn_threshold": 1.5,
+    "vp_min_target_r": "2.0"
   }
 }

@@ -47,7 +47,7 @@ from app.bot_config import StrategyParams
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.state import RiskState
 from app.strategy.composer import Signal, SweepDisplacementComposer
-from app.strategy.displacement import DisplacementDetector
+from app.strategy.displacement import DisplacementDetector, DisplacementEvent
 from app.strategy.liquidity import LiquidityTracker
 from app.strategy.volume_profile import VolumeProfileTracker
 
@@ -92,6 +92,7 @@ class StrategyRunner:
     """
 
     instrument: str
+    timeframe: str
     liquidity: LiquidityTracker
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
@@ -111,6 +112,32 @@ class StrategyRunner:
         # Bookkeeping AFTER signal evaluation — see composer docstring.
         self.composer.on_bar_close(bar)
         return signal
+
+    def try_signal_from_forming(self, forming_bar: Bar) -> Optional[Signal]:
+        """
+        Check if the forming bar (as b3) already satisfies the FVG condition
+        for the most recently processed displacement candidate (b2 = window[-1]).
+        If so, emit a signal via the normal composer path (which clears _awaiting).
+        Returns None if no pending sweep, no displacement, or no FVG yet.
+        """
+        peek = self.displacement.peek_displacement()
+        if peek is None:
+            return None
+        side, b1, b2 = peek
+        fvg = DisplacementDetector._compute_fvg(b1, forming_bar, side)
+        if fvg is None:
+            return None
+        body = abs(b2.close - b2.open)
+        atr = self.displacement.atr or body
+        event = DisplacementEvent(
+            side=side,
+            displacement_bar=b2,
+            body_size=body,
+            atr_at_event=atr,
+            body_to_atr=body / atr if atr else Decimal("0"),
+            fvg=fvg,
+        )
+        return self.composer.on_displacement(forming_bar, event)
 
 
 class ExecutionEngine:
@@ -158,6 +185,11 @@ class ExecutionEngine:
         # try to flatten the same position multiple times concurrently.
         self._flattening: bool = False
 
+        # Forming bar polling — records the ts of b2 (displacement bar) for
+        # which we already fired a mid-bar signal, per instrument.
+        self._forming_signal_fired: dict[str, datetime] = {}
+        self._poll_task: "asyncio.Task | None" = None
+
         self._started = False
 
     # ------------------------------------------------------------------
@@ -171,6 +203,8 @@ class ExecutionEngine:
         self.broker.on_fill(self._handle_fill)
         self.broker.on_equity(self._handle_equity)
         self._started = True
+        if not self._replay_mode:
+            self._poll_task = asyncio.create_task(self._poll_forming_bars())
         log.info(
             "ExecutionEngine started: %d instruments tracked",
             len(self.runners),
@@ -180,6 +214,13 @@ class ExecutionEngine:
         """Graceful shutdown: cancel all working orders, do not flatten."""
         if not self._started:
             return
+        if self._poll_task is not None:
+            self._poll_task.cancel()
+            try:
+                await self._poll_task
+            except asyncio.CancelledError:
+                pass
+            self._poll_task = None
         # Cancel only — we do NOT flatten on stop. The operator may be
         # restarting the bot mid-position; auto-flattening would be
         # surprising. The kill-switch endpoint is for that.
@@ -250,9 +291,17 @@ class ExecutionEngine:
             and self.strategy_cfg.vp_enabled
             and runner.vp.has_prior_profile()
         ):
-            signal = runner.vp.apply(signal, self.strategy_cfg)
-            if signal is None:
-                return  # VP filter rejected — already logged in apply()
+            filtered = runner.vp.apply(signal, self.strategy_cfg)
+            if filtered is None:
+                # Surface VP rejections in the journal so they're visible on the dashboard.
+                vp_denied = OrderOutcome(placed=False, reason="vp_filter")
+                if self.on_signal is not None:
+                    try:
+                        await self.on_signal(signal, vp_denied)
+                    except Exception:
+                        log.exception("on_signal callback raised (vp_filter)")
+                return
+            signal = filtered
 
         outcome = await self._act_on_signal(signal)
         if self.on_signal is not None:
@@ -356,6 +405,65 @@ class ExecutionEngine:
             allowed_size=decision.allowed_size,
             broker_order_id=result.entry_order_id,
         )
+
+    async def _poll_forming_bars(self) -> None:
+        """
+        Background task: poll every 1s for the current forming bar.
+        If the forming bar already satisfies the FVG condition for the last
+        displacement, fire a signal immediately (market entry mid-bar).
+        Deduped per displacement bar so we only fire once per setup.
+        """
+        while True:
+            await asyncio.sleep(1)
+            for instrument, runner in self.runners.items():
+                try:
+                    get_fb = getattr(self.broker, "get_forming_bar", None)
+                    if get_fb is None:
+                        continue
+                    forming_bar = await get_fb(runner.timeframe)
+                    if forming_bar is None:
+                        continue
+
+                    peek = runner.displacement.peek_displacement()
+                    if peek is None:
+                        continue
+                    side, _b1, b2 = peek
+                    if self._forming_signal_fired.get(instrument) == b2.ts:
+                        continue
+
+                    # Pending sweep + displacement candidate — check FVG
+                    awaiting_count = len(runner.composer.awaiting)
+                    log.debug(
+                        "Forming bar poll: %s %s disp_bar=%s forming_close=%s awaiting=%d",
+                        instrument, side, b2.ts.strftime("%H:%M"),
+                        forming_bar.close, awaiting_count,
+                    )
+
+                    signal = runner.try_signal_from_forming(forming_bar)
+                    if signal is None:
+                        continue
+
+                    self._forming_signal_fired[instrument] = b2.ts
+
+                    if (
+                        runner.vp is not None
+                        and self.strategy_cfg is not None
+                        and self.strategy_cfg.vp_enabled
+                        and runner.vp.has_prior_profile()
+                    ):
+                        signal = runner.vp.apply(signal, self.strategy_cfg)
+                        if signal is None:
+                            continue
+
+                    log.info("Forming bar signal: %s", signal.rationale)
+                    outcome = await self._act_on_signal(signal)
+                    if self.on_signal is not None:
+                        try:
+                            await self.on_signal(signal, outcome)
+                        except Exception:
+                            log.exception("on_signal callback raised (forming bar)")
+                except Exception:
+                    log.exception("_poll_forming_bars failed for %s", instrument)
 
     async def _check_lockout_transition(self) -> None:
         """
