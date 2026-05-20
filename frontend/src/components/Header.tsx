@@ -84,7 +84,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
   }
 
   return (
-    <header className="border-b border-border px-6 py-4 flex items-center justify-between">
+    <header className="border-b border-border px-6 py-4 flex items-center justify-between bg-bg">
       <div className="flex items-baseline gap-4">
         <span className="text-xs tracking-[0.4em] text-dim">TOPSTEP-BOT</span>
         <span className="text-xs text-dim">
@@ -179,6 +179,15 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
             </button>
           </div>
         )}
+        <a
+          href="/analytics"
+          target="_blank"
+          rel="noreferrer"
+          className="text-dim hover:text-ink text-xs tracking-widest uppercase ml-2"
+          title="Open analytics and Claude advisor"
+        >
+          Analytics &#x29C9;
+        </a>
         <a
           href="/backtests"
           target="_blank"
