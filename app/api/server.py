@@ -90,6 +90,10 @@ class ForceSignalRequest(BaseModel):
     r_multiple: str = "2.0"
 
 
+class AskClaudeRequest(BaseModel):
+    question: str | None = None
+
+
 def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
     """
     Sample a strategy param set from sensible-but-wide ranges. These
@@ -400,6 +404,91 @@ def build_app(
             log.exception("get_bars failed")
             return JSONResponse({"bars": [], "error": str(e)})
 
+    @app.get("/api/vp/profile")
+    async def get_vp_profile() -> JSONResponse:
+        """Current prior-session volume profile for chart overlay."""
+        if _engine is None:
+            return JSONResponse(None)
+        for runner in _engine.runners.values():
+            if runner.vp is not None and runner.vp._prior is not None:
+                p = runner.vp._prior
+                return JSONResponse({
+                    "session_date": p.session_date.isoformat(),
+                    "poc": str(p.poc),
+                    "vah": str(p.vah),
+                    "val": str(p.val),
+                    "hvns": [str(h) for h in p.hvns],
+                    "total_volume": p.total_volume,
+                    "bins": [[str(k), v] for k, v in sorted(p.bins.items())],
+                })
+        return JSONResponse(None)
+
+    @app.get("/api/forming/status")
+    async def get_forming_status() -> JSONResponse:
+        """Forming-bar poll state: what the 5-second poll is currently seeing."""
+        if _engine is None:
+            return JSONResponse(None)
+        result = {}
+        for instrument, runner in _engine.runners.items():
+            peek = runner.displacement.peek_displacement()
+            fired_ts = _engine._forming_signal_fired.get(instrument)
+            result[instrument] = {
+                "has_displacement_candidate": peek is not None,
+                "awaiting_sweeps": len(runner.composer.awaiting),
+                "last_fired_b2_ts": fired_ts.isoformat() if fired_ts else None,
+            }
+        return JSONResponse(result)
+
+    @app.get("/api/forming-bar")
+    async def get_forming_bar() -> JSONResponse:
+        """Return the current partially-closed bar for chart display."""
+        if _broker is None:
+            return JSONResponse(None)
+        get_fb = getattr(_broker, "get_forming_bar", None)
+        if get_fb is None:
+            return JSONResponse(None)
+        cfg = _bot_cfg
+        tf = cfg.timeframes[0] if cfg and cfg.timeframes else "1min"
+        bar = await get_fb(tf)
+        if bar is None:
+            return JSONResponse(None)
+        return JSONResponse({
+            "time": int(bar.ts.timestamp()),
+            "open": float(bar.open),
+            "high": float(bar.high),
+            "low": float(bar.low),
+            "close": float(bar.close),
+        })
+
+    @app.get("/api/analytics/stats")
+    async def get_analytics_stats() -> JSONResponse:
+        """Pre-computed stats for the analytics dashboard. No Claude involved."""
+        from app.analytics.tools import (
+            get_killzone_breakdown,
+            get_performance_summary,
+            get_recent_trades,
+        )
+        return JSONResponse({
+            "performance": get_performance_summary(),
+            "killzones": get_killzone_breakdown(),
+            "recent_trades": get_recent_trades(limit=50),
+        })
+
+    @app.post("/api/analytics/ask-claude")
+    async def ask_claude(req: AskClaudeRequest) -> StreamingResponse:
+        """SSE stream of the agentic Claude advisor session."""
+        from app.analytics.advisor import run_advisor
+
+        async def stream():
+            async for chunk in run_advisor(req.question):
+                yield chunk
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @app.post("/api/test-trade")
     async def test_trade() -> JSONResponse:
         """
@@ -568,6 +657,7 @@ def build_app(
             instrument = (new_cfg.instrument or effective_instrument).upper()
             new_runner = _runner_factory(
                 instrument, new_cfg.strategy, new_cfg.enabled_killzones,
+                new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
             )
             _engine.runners = {instrument: new_runner}
             _engine.strategy_cfg = new_cfg.strategy
