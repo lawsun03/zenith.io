@@ -13,7 +13,10 @@ import { FillRow } from './components/FillRow'
 import { ReconcileRow } from './components/ReconcileRow'
 import { ConfigPanel } from './components/ConfigPanel'
 import { BacktestsPage } from './components/BacktestsPage'
+import { AnalyticsPage } from './pages/Analytics'
+import { ForceSignalPanel } from './components/ForceSignalPanel'
 import { MatrixRain } from './components/MatrixRain'
+import { GlowOverlay } from './components/GlowOverlay'
 import type { JournalItem } from './types'
 
 export default function App() {
@@ -21,6 +24,7 @@ export default function App() {
   // anything else is the live dashboard. Open in a new tab to compare.
   const path = window.location.pathname
   if (path.startsWith('/backtests')) return <BacktestsPage />
+  if (path.startsWith('/analytics')) return <AnalyticsPage />
 
   const chartCbRef = useRef<ChartCallbacks>({})
   const { status, signals, fills, reconciles, connState } = useStream(chartCbRef)
@@ -28,9 +32,15 @@ export default function App() {
   const [configOpen, setConfigOpen] = useState(false)
   const activeKillzone = useKillzone(config?.enabled_killzones)
 
+  const isActive =
+    connState === 'connected' &&
+    !!activeKillzone &&
+    !status?.lockout
+
   return (
     <div className="min-h-screen scanlines">
-      <MatrixRain />
+      <MatrixRain active={isActive} />
+      <GlowOverlay active={isActive} />
       {activeKillzone && <div className="h-[2px] bg-accent/50" />}
       <Header status={status} connState={connState} onConfigOpen={() => setConfigOpen(true)} mode={config?.mode} activeKillzone={activeKillzone} />
       <LockoutBanner lockout={status?.lockout ?? null} />
@@ -57,6 +67,7 @@ export default function App() {
             empty="Waiting for first reconcile"
           />
         </div>
+        {config?.mode === 'live' && <ForceSignalPanel />}
         <footer className="pt-4 text-[10px] text-dim/60 tracking-widest text-center">
           READ-ONLY · LOCAL · NO-VPS COMPLIANT
         </footer>
