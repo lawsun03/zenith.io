@@ -58,6 +58,7 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
     """Default-config runner matching the strategy test settings."""
     return StrategyRunner(
         instrument=instrument,
+        timeframe="1min",
         liquidity=LiquidityTracker(LiquidityConfig(
             swing_lookback=2, min_penetration=Decimal("0.20"),
         )),

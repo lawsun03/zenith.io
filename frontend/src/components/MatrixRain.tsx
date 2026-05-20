@@ -1,14 +1,19 @@
 import { useEffect, useRef } from 'react'
 
-// Hex digits + scattered punctuation keeps it "trading terminal" rather than
-// pure sci-fi. The mix of 0-9 and A-F reads as raw hex data.
-const CHARS = '0123456789ABCDEF0123456789ABCDEF<>[]{}=+-|$@!?#%^&*01'
+const POOL = '0123456789ABCDEF<>[]{}=+-|$#%^&*@!'
 
-const FS = 13       // font size px
-const SPEED = 0.6   // rows per frame — lower = slower fall
-const FADE = 0.055  // opacity of black overlay per frame — controls trail length
+const FS    = 14
+const COL_W = 16
 
-export function MatrixRain() {
+type Cell = { ch: string; alpha: number; target: number; ttl: number }
+
+const rch = () => POOL[Math.floor(Math.random() * POOL.length)]
+
+interface Props {
+  active?: boolean
+}
+
+export function MatrixRain({ active = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -17,23 +22,26 @@ export function MatrixRain() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    let drops: number[]
-    let cols: number
-    let W: number, H: number
+    let grid: Cell[][]
+    let W: number, H: number, cols: number, rows: number
 
     const setup = () => {
-      W = window.innerWidth
-      H = window.innerHeight
-      canvas.width = W
+      W    = window.innerWidth
+      H    = window.innerHeight
+      cols = Math.floor(W / COL_W)
+      rows = Math.ceil(H / FS) + 1
+
+      canvas.width  = W
       canvas.height = H
-      cols = Math.floor(W / FS)
-      // Stagger starting positions so all columns don't fall in sync
-      drops = Array.from({ length: cols }, () =>
-        Math.floor(Math.random() * -(H / FS))
+
+      grid = Array.from({ length: cols }, () =>
+        Array.from({ length: rows }, () => ({
+          ch:     rch(),
+          alpha:  0,
+          target: Math.random() < 0.12 ? 0.08 + Math.random() * 0.18 : 0,
+          ttl:    Math.floor(Math.random() * 300),
+        }))
       )
-      // Clear to solid black on resize so old content doesn't ghost
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(0, 0, W, H)
     }
 
     setup()
@@ -42,40 +50,36 @@ export function MatrixRain() {
     let frameId: number
 
     const draw = () => {
-      // Semi-transparent black overlay fades old characters → trail effect
-      ctx.fillStyle = `rgba(0,0,0,${FADE})`
+      ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, W, H)
 
-      ctx.font = `${FS}px "JetBrains Mono",monospace`
+      ctx.font         = `bold ${FS}px "JetBrains Mono",monospace`
+      ctx.textBaseline = 'top'
+      ctx.fillStyle    = '#00ff41'
 
       for (let c = 0; c < cols; c++) {
-        const row = Math.floor(drops[c])
-        const x = c * FS
-        const y = row * FS
+        const x = c * COL_W
+        for (let r = 0; r < rows; r++) {
+          const cell = grid[c][r]
 
-        if (y >= 0 && y <= H + FS) {
-          const ch = CHARS[Math.floor(Math.random() * CHARS.length)]
+          cell.alpha += (cell.target - cell.alpha) * 0.04
 
-          // Leading character: near-white green glow
-          ctx.fillStyle = '#ccffdd'
-          ctx.fillText(ch, x, y)
+          if (--cell.ttl <= 0) {
+            cell.ch     = rch()
+            cell.target = Math.random() < 0.12
+              ? 0.08 + Math.random() * 0.18
+              : 0
+            cell.ttl    = 80 + Math.floor(Math.random() * 300)
+          }
 
-          // One step behind: full bright green
-          if (row > 0) {
-            const prevCh = CHARS[Math.floor(Math.random() * CHARS.length)]
-            ctx.fillStyle = '#00ff41'
-            ctx.fillText(prevCh, x, (row - 1) * FS)
+          if (cell.alpha > 0.005) {
+            ctx.globalAlpha = cell.alpha
+            ctx.fillText(cell.ch, x, r * FS)
           }
         }
-
-        // Reset column randomly after it passes the bottom
-        if (drops[c] * FS > H && Math.random() > 0.975) {
-          drops[c] = Math.floor(Math.random() * -(H / FS / 3))
-        }
-
-        drops[c] += SPEED
       }
 
+      ctx.globalAlpha = 1
       frameId = requestAnimationFrame(draw)
     }
 
@@ -95,6 +99,8 @@ export function MatrixRain() {
         inset: 0,
         zIndex: -1,
         pointerEvents: 'none',
+        filter: active ? 'brightness(1)' : 'brightness(0.12) saturate(0.3)',
+        transition: 'filter 2.5s ease-in-out',
       }}
     />
   )

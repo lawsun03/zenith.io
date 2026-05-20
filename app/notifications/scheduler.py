@@ -12,7 +12,8 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable
 from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
@@ -34,12 +35,16 @@ class EndOfDayScheduler:
         notifier: "EmailNotifier",
         close_hour_ct: int = 15,
         close_minute_ct: int = 10,
+        trades_csv_path: Path | None = None,
+        daily_csv_fn: Callable[[], Path] | None = None,
     ) -> None:
         self.journal = journal
         self.risk_state = risk_state
         self.notifier = notifier
         self.close_hour_ct = close_hour_ct
         self.close_minute_ct = close_minute_ct
+        self.trades_csv_path = trades_csv_path
+        self.daily_csv_fn = daily_csv_fn
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
@@ -107,10 +112,29 @@ class EndOfDayScheduler:
         stats = compute_stats(today_fills, today_signals)
         body = format_summary(stats, self.risk_state)
 
-        await self.notifier.send(
+        attachments = []
+        daily_path = self.daily_csv_fn() if self.daily_csv_fn else None
+        if daily_path and daily_path.exists():
+            try:
+                csv_bytes = daily_path.read_bytes()
+                attachments.append((daily_path.name, csv_bytes))
+            except Exception:
+                log.warning("Could not read daily CSV for attachment", exc_info=True)
+
+        sent = await self.notifier.send(
             subject=f"EOD summary  {stats['date']}  net=${stats['net_pnl']}",
             body=body,
+            attachments=attachments or None,
         )
+
+        # Delete the daily CSV after a successful send so it starts fresh tomorrow.
+        if sent and daily_path and daily_path.exists():
+            try:
+                daily_path.unlink()
+                log.info("Deleted daily CSV %s after EOD email", daily_path)
+            except Exception:
+                log.warning("Could not delete daily CSV %s", daily_path, exc_info=True)
+
 
 
 def _parse_ts(ts: str) -> datetime:

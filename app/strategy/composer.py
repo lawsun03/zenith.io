@@ -97,6 +97,11 @@ class ComposerConfig:
     # Killzones to honor. None = use default (London/NY AM/NY PM).
     killzones: list[Killzone] | None = None
 
+    # Trend EMA filter. N-period EMA on bar closes; only long signals
+    # emit when close > EMA, only short when close < EMA. 0 = disabled.
+    # Warmup: filter is inactive until N bars have been seen.
+    trend_ema_period: int = 50
+
 
 @dataclass
 class _Awaiting:
@@ -137,6 +142,8 @@ class SweepDisplacementComposer:
         self.config = config
         self._zones = config.killzones or default_killzones()
         self._awaiting: list[_Awaiting] = []
+        self._ema: Decimal | None = None
+        self._ema_bars: int = 0
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -188,15 +195,41 @@ class SweepDisplacementComposer:
         #   low sweep  → bullish displacement → LONG
         wanted: dict[str, str] = {"high": "bearish", "low": "bullish"}
 
+        # Trend filter: block counter-trend signals once the EMA has warmed up.
+        period = self.config.trend_ema_period
+        trend_active = (
+            period > 0
+            and self._ema is not None
+            and self._ema_bars >= period
+        )
+
         for awaiting in reversed(self._awaiting):
             if wanted[awaiting.sweep.side] != event.side:
                 continue
 
-            signal = self._build_signal(bar, awaiting, event)
+            if trend_active:
+                assert self._ema is not None
+                is_long = event.side == "bullish"
+                if is_long and bar.close < self._ema:
+                    log.info(
+                        "Trend filter: long signal blocked "
+                        "(close=%s < EMA%d=%s) — skipping",
+                        bar.close, period,
+                        self._ema.quantize(Decimal("0.01")),
+                    )
+                    self._awaiting = []
+                    return None
+                if not is_long and bar.close > self._ema:
+                    log.info(
+                        "Trend filter: short signal blocked "
+                        "(close=%s > EMA%d=%s) — skipping",
+                        bar.close, period,
+                        self._ema.quantize(Decimal("0.01")),
+                    )
+                    self._awaiting = []
+                    return None
 
-            # Drop ALL awaiting states once one fires. We're in a
-            # position; the engine takes over. New sweeps after this
-            # bar register fresh.
+            signal = self._build_signal(bar, awaiting, event)
             self._awaiting = []
             return signal
 
@@ -204,7 +237,7 @@ class SweepDisplacementComposer:
 
     def on_bar_close(self, bar: Bar) -> None:
         """
-        Bookkeeping: increment bar counters, expire old sweeps.
+        Bookkeeping: increment bar counters, expire old sweeps, update EMA.
 
         Call this AFTER on_sweep/on_displacement for the bar — otherwise
         a sweep that fires on bar N would be aged by 1 immediately.
@@ -220,6 +253,15 @@ class SweepDisplacementComposer:
             if a_aged.bars_since_sweep < window:
                 kept.append(a_aged)
         self._awaiting = kept
+
+        period = self.config.trend_ema_period
+        if period > 0:
+            self._ema_bars += 1
+            if self._ema is None:
+                self._ema = bar.close
+            else:
+                alpha = Decimal(2) / (Decimal(period) + 1)
+                self._ema = alpha * bar.close + (1 - alpha) * self._ema
 
     # ------------------------------------------------------------------
     # Signal construction

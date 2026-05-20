@@ -5,7 +5,7 @@ const KZ_WINDOWS: Record<string, { start: number; end: number; label: string }> 
   london:    { start: 2 * 60,       end: 5 * 60,       label: 'London' },
   london_ny: { start: 6 * 60,       end: 8 * 60 + 30,  label: 'London/NY' },
   ny_am:     { start: 8 * 60 + 30,  end: 11 * 60,      label: 'NY AM' },
-  ny_pm:     { start: 13 * 60 + 30, end: 15 * 60,      label: 'NY PM' },
+  ny_pm:     { start: 13 * 60,      end: 16 * 60,      label: 'NY PM' },
 }
 
 function compute(enabledKillzones: string[]): string | null {

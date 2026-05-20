@@ -215,6 +215,7 @@ class RiskState:
         if self.locked_out and self.locked_out.code in {
             "DLL_HIT",
             "DLL_SOFT_BUFFER",
+            "DPL_HIT",
         }:
             self.locked_out = None
         self.last_event_ts = ts
@@ -267,6 +268,20 @@ class RiskState:
                 code="DLL_SOFT_BUFFER",
                 message=(
                     f"Soft DLL buffer hit: {self.buffer_to_dll} room remaining."
+                ),
+            )
+            return
+
+        # Daily profit limit — lock in gains, stop entering for the day.
+        if (
+            self.config.daily_profit_limit is not None
+            and self.daily_pnl >= self.config.daily_profit_limit
+        ):
+            self.locked_out = LockoutReason(
+                code="DPL_HIT",
+                message=(
+                    f"Daily profit limit hit: +{self.daily_pnl} "
+                    f"≥ ${self.config.daily_profit_limit}. Done for the day."
                 ),
             )
             return

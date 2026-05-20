@@ -50,10 +50,13 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from app.broker.protocol import Broker
 from app.risk.state import LockoutReason, RiskState
+
+if TYPE_CHECKING:
+    from app.notifications.email import EmailNotifier
 
 log = logging.getLogger(__name__)
 
@@ -128,10 +131,12 @@ class Reconciler:
         broker: Broker,
         risk_state: RiskState,
         config: Optional[ReconcilerConfig] = None,
+        notifier: Optional["EmailNotifier"] = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
         self.config = config or ReconcilerConfig()
+        self.notifier = notifier
 
         self._task: Optional[asyncio.Task[None]] = None
         self._stop_event = asyncio.Event()
@@ -427,6 +432,18 @@ class Reconciler:
                 ),
             )
 
+        if self.notifier is not None and self.notifier.enabled:
+            asyncio.create_task(self.notifier.send(
+                subject="RECONCILE DRIFT — bot locked out",
+                body=(
+                    f"Contract count mismatch detected by reconciler.\n\n"
+                    f"  Internal contracts: {internal_contracts}\n"
+                    f"  Broker contracts:   {broker_contracts}\n\n"
+                    f"All positions have been flattened and the bot is locked out.\n"
+                    f"Manual review required before trading can resume."
+                ),
+            ))
+
         return ReconcileReport(
             ts=ts,
             broker_open_contracts=broker_contracts,
@@ -449,36 +466,39 @@ class Reconciler:
         delta: Decimal,
     ) -> ReconcileReport:
         """
-        Balance discrepancy beyond tolerance — likely a missed fill.
-        We adopt broker truth and lock out. Same rationale as contract
-        drift: gate decisions based on stale balance are unsafe.
+        Balance discrepancy beyond tolerance.
+
+        We adopt broker truth and notify, but do NOT lock out or flatten.
+        Rationale: after every exit fill the broker REST balance lags
+        by ~30s while the bot's internal balance updates instantly —
+        triggering a false-positive lockout on every losing trade. The
+        contract-count check already covers the dangerous case (missed
+        fill = contracts mismatch). A balance-only discrepancy is always
+        a timing artifact and self-corrects on the next tick.
         """
-        log.error(
-            "RECONCILE DRIFT: balance internal=%s vs broker=%s (delta=%s). "
-            "Adopting broker truth and locking out.",
+        log.warning(
+            "Balance drift: internal=%s vs broker=%s (delta=%s). "
+            "Adopting broker truth — no lockout.",
             internal_balance, broker_balance, delta,
         )
 
-        # Adopt broker balance as truth. We don't synthesize a fill
-        # because we don't know what the missed fill was; the journal
-        # will need a manual reconciliation entry.
+        # Adopt broker balance as truth.
         self.risk_state.realized_balance = broker_balance
 
-        if self.risk_state.locked_out is None:
-            self.risk_state.locked_out = LockoutReason(
-                code="RECONCILE_DRIFT",
-                message=(
-                    f"Balance drift {delta} exceeds tolerance "
-                    f"{self.config.balance_tolerance}. Manual review required."
+        if self.notifier is not None and self.notifier.enabled:
+            asyncio.create_task(self.notifier.send(
+                subject="Balance drift detected (no lockout)",
+                body=(
+                    f"Balance discrepancy detected by reconciler.\n\n"
+                    f"  Internal balance: ${internal_balance}\n"
+                    f"  Broker balance:   ${broker_balance}\n"
+                    f"  Delta:            ${delta}\n"
+                    f"  Tolerance:        ${self.config.balance_tolerance}\n\n"
+                    f"Broker balance adopted. Bot continues trading.\n"
+                    f"This is usually a timing lag after an exit fill — "
+                    f"no action required."
                 ),
-            )
-
-        # If positions are open, flatten too. Continuing to hold while
-        # locked out is fine on the gate side, but with unexplained
-        # balance drift we want flat.
-        flattened = False
-        if broker_contracts > 0:
-            flattened = await self._emergency_flatten()
+            ))
 
         return ReconcileReport(
             ts=ts,
@@ -488,8 +508,8 @@ class Reconciler:
             internal_balance=internal_balance,
             drift_detected=True,
             drift_kind="balance",
-            flattened=flattened,
-            notes=f"balance delta {delta}, adopted broker truth",
+            flattened=False,
+            notes=f"balance delta {delta}, adopted broker truth (no lockout)",
         )
 
     async def _emergency_flatten(self) -> bool:

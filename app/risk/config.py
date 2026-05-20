@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Optional
 
 # Use Decimal for money. Floats accumulate rounding error and equality
 # checks against thresholds become unreliable. Every dollar amount in the
@@ -55,12 +55,17 @@ class TopstepAccountConfig:
     # Profit target to pass the Combine ($3K / $6K / $9K).
     profit_target: Money
 
-    # Max contracts open at any time (in mini-equivalents). 50 micros = 5 minis.
+    # Max contracts open at any time. Unit matches the instrument (micros for MGC).
     max_contracts: int
 
     # Soft buffer — bot stops *before* hitting the official limit.
     # Lawrence chose $500.
     soft_buffer: Money
+
+    # Optional daily profit cap — bot stops entering once daily P&L hits this.
+    # Combine accounts use this to lock in gains and avoid giving them back.
+    # None means no cap (practice/express).
+    daily_profit_limit: Optional[Money] = None
 
     # Trading day boundary. Topstep resets at 5:00 PM CT (America/Chicago).
     # We store the timezone name; conversion to UTC happens in state.py.
@@ -78,8 +83,9 @@ def fifty_k_combine(soft_buffer: Money = Decimal("500")) -> TopstepAccountConfig
         mll_initial_offset=Decimal("2000"),
         daily_loss_limit=Decimal("1000"),
         profit_target=Decimal("3000"),
-        max_contracts=5,  # mini-equivalent; 50 micros also OK
+        max_contracts=30,  # micro contracts (MGC)
         soft_buffer=soft_buffer,
+        daily_profit_limit=Decimal("1500"),
     )
 
 

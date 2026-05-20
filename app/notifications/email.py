@@ -49,24 +49,45 @@ class EmailNotifier:
     def enabled(self) -> bool:
         return all([self.host, self.user, self.password, self.recipient])
 
-    async def send(self, subject: str, body: str) -> bool:
-        """Send an email. Returns True on success, False otherwise."""
+    async def send(
+        self,
+        subject: str,
+        body: str,
+        attachments: list[tuple[str, bytes]] | None = None,
+    ) -> bool:
+        """Send an email. Returns True on success, False otherwise.
+
+        attachments: list of (filename, raw_bytes) pairs.
+        """
         if not self.enabled:
             return False
         try:
-            await asyncio.to_thread(self._send_sync, subject, body)
+            await asyncio.to_thread(self._send_sync, subject, body, attachments)
             log.info("Email sent: %s", subject)
             return True
         except Exception as e:
             log.warning("Email send failed (%s): %s", subject, e)
             return False
 
-    def _send_sync(self, subject: str, body: str) -> None:
+    def _send_sync(
+        self,
+        subject: str,
+        body: str,
+        attachments: list[tuple[str, bytes]] | None = None,
+    ) -> None:
         msg = EmailMessage()
         msg["From"] = self.user
         msg["To"] = self.recipient
         msg["Subject"] = f"[topstep-bot] {subject}"
         msg.set_content(body)
+
+        for filename, data in (attachments or []):
+            msg.add_attachment(
+                data,
+                maintype="text",
+                subtype="csv",
+                filename=filename,
+            )
 
         if self.port == 465:
             with smtplib.SMTP_SSL(self.host, self.port, timeout=10) as s:

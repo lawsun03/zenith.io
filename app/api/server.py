@@ -447,8 +447,8 @@ def build_app(
         get_fb = getattr(_broker, "get_forming_bar", None)
         if get_fb is None:
             return JSONResponse(None)
-        cfg = _bot_cfg
-        tf = cfg.timeframes[0] if cfg and cfg.timeframes else "1min"
+        cfg = load_bot_config(_bot_config_path)
+        tf = (cfg.timeframes or _effective_timeframes)[0]
         bar = await get_fb(tf)
         if bar is None:
             return JSONResponse(None)

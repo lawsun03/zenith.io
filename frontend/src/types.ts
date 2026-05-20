@@ -100,3 +100,13 @@ export interface BarEvent {
   low: number
   close: number
 }
+
+export interface VpProfile {
+  session_date: string
+  poc: string
+  vah: string
+  val: string
+  hvns: string[]
+  total_volume: number
+  bins: [string, number][]  // [price, volume] pairs sorted ascending
+}
