@@ -36,7 +36,10 @@ def load_backtest_summaries() -> list[dict]:
     """Parse all summary_run*.txt from backtest_results/."""
     results = []
     for path in sorted((_ROOT / "backtest_results").glob("summary_run*.txt")):
-        parsed = _parse_summary_file(path)
+        try:
+            parsed = _parse_summary_file(path)
+        except Exception:
+            continue
         if parsed:
             results.append(parsed)
     return results

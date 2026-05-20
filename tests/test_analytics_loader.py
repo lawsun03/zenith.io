@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import pytest
@@ -26,10 +25,20 @@ def test_trade_has_required_fields():
         assert field in trades[0]
 
 
-def test_old_trade_file_missing_cols_handled():
-    """trades.csv has no killzone/stop/target — must not raise, must include key."""
-    for t in load_all_trades():
-        assert "killzone" in t  # key present even if value is None
+def test_old_trade_file_missing_cols_handled(tmp_path, monkeypatch):
+    """trades.csv (no killzone/stop/target) must not raise and must include key."""
+    csv_content = (
+        "ts,instrument,side,type,fill_price,size,realized_pnl,broker_order_id\n"
+        "2026-01-01T00:00:00+00:00,MES,long,EXIT,5000.0,1,25.0,abc123\n"
+    )
+    (tmp_path / "trades_old.csv").write_text(csv_content, encoding="utf-8")
+    import app.analytics.loader as loader_mod
+    monkeypatch.setattr(loader_mod, "_ROOT", tmp_path)
+    trades = loader_mod.load_all_trades()
+    assert len(trades) == 1
+    assert "killzone" in trades[0]
+    assert trades[0]["killzone"] is None
+    assert trades[0]["stop"] is None
 
 
 def test_parse_summary_file(tmp_path: Path):
