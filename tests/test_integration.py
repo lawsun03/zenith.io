@@ -54,7 +54,11 @@ async def test_winning_trade_flows_through_full_loop():
       - MLL floor trails accordingly
       - Account is NOT locked
     """
-    broker = PaperBroker(starting_balance=Decimal("50000"))
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=0,
+        commission_per_side=Decimal("0"),
+    )
     state = RiskState(config=fifty_k_combine())
 
     # Wire broker events to risk state.
