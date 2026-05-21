@@ -6,39 +6,53 @@ import pytest
 from app.optimizer.walkforward import (
     CombineOutcome,
     WindowResult,
-    _classify_outcome,
+    _classify_outcome_from_stats,
     _rolling_windows,
     _score_config,
 )
-from app.risk.config import fifty_k_combine
-from app.risk.state import RiskState
+from app.backtest.runner import BacktestStats
+from datetime import datetime, timezone
 
 
-def _risk(net_pnl: Decimal, mll_breached: bool = False) -> RiskState:
-    state = RiskState(config=fifty_k_combine())
-    if mll_breached:
-        from app.risk.state import LockoutReason
-        state.locked_out = LockoutReason(code="MLL_BREACH", message="test")
-    state.realized_balance = state.config.starting_balance + net_pnl
-    return state
+def _make_stats(net_pnl: Decimal, passed_combine: bool, mll_breached: bool) -> BacktestStats:
+    """Helper to build a minimal BacktestStats for classification tests."""
+    return BacktestStats(
+        trades=1,
+        wins=1 if net_pnl > 0 else 0,
+        losses=0 if net_pnl > 0 else 1,
+        win_rate=100.0 if net_pnl > 0 else 0.0,
+        net_pnl=net_pnl,
+        gross_win=net_pnl if net_pnl > 0 else Decimal("0"),
+        gross_loss=Decimal("0") if net_pnl > 0 else abs(net_pnl),
+        avg_win=net_pnl if net_pnl > 0 else Decimal("0"),
+        avg_loss=Decimal("0") if net_pnl > 0 else abs(net_pnl),
+        profit_factor=None,
+        max_drawdown=Decimal("0"),
+        expectancy=net_pnl,
+        is_profitable=net_pnl > 0,
+        passed_combine=passed_combine,
+        mll_breached=mll_breached,
+        equity_curve=[],
+        by_killzone={},
+    )
 
 
 def test_classify_pass():
-    """Net P&L >= $3000 with no MLL breach is PASS."""
-    risk = _risk(Decimal("3100"))
-    assert _classify_outcome(risk, Decimal("3100")) == CombineOutcome.PASS
+    """passed_combine=True → PASS."""
+    stats = _make_stats(Decimal("3100"), passed_combine=True, mll_breached=False)
+    assert _classify_outcome_from_stats(stats) == CombineOutcome.PASS
 
 
 def test_classify_fail():
-    """MLL breach is FAIL regardless of P&L."""
-    risk = _risk(Decimal("100"), mll_breached=True)
-    assert _classify_outcome(risk, Decimal("100")) == CombineOutcome.FAIL
+    """mll_breached=True → FAIL regardless of P&L."""
+    stats = _make_stats(Decimal("100"), passed_combine=False, mll_breached=True)
+    assert _classify_outcome_from_stats(stats) == CombineOutcome.FAIL
 
 
 def test_classify_incomplete():
-    """Profitable but below target, no breach, is INCOMPLETE."""
-    risk = _risk(Decimal("1500"))
-    assert _classify_outcome(risk, Decimal("1500")) == CombineOutcome.INCOMPLETE
+    """Profitable but below target, no breach → INCOMPLETE."""
+    stats = _make_stats(Decimal("1500"), passed_combine=False, mll_breached=False)
+    assert _classify_outcome_from_stats(stats) == CombineOutcome.INCOMPLETE
 
 
 def test_rolling_windows_count():
@@ -46,7 +60,7 @@ def test_rolling_windows_count():
     base = date(2025, 6, 1)
     all_dates = [base + timedelta(days=i) for i in range(365) if (base + timedelta(days=i)).weekday() < 5]
     windows = list(_rolling_windows(all_dates, train_days=30, test_days=10, step_days=5))
-    assert 35 <= len(windows) <= 50
+    assert 40 <= len(windows) <= 46
 
 
 def test_score_config():

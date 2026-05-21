@@ -21,7 +21,6 @@ from app.backtest.runner import (
     run_backtest,
 )
 from app.broker.events import Bar
-from app.risk.state import RiskState
 
 log = logging.getLogger(__name__)
 
@@ -54,15 +53,6 @@ class ConfigScore:
     config: BacktestConfig
 
 
-def _classify_outcome(risk_state: RiskState, net_pnl: Decimal) -> CombineOutcome:
-    """Classify a completed backtest window as PASS, FAIL, or INCOMPLETE."""
-    if risk_state.locked_out is not None:
-        return CombineOutcome.FAIL
-    if net_pnl >= risk_state.config.profit_target:
-        return CombineOutcome.PASS
-    return CombineOutcome.INCOMPLETE
-
-
 def _rolling_windows(
     trading_dates: list[date],
     train_days: int,
@@ -90,11 +80,9 @@ def _score_config(windows: list[WindowResult]) -> float:
 
 
 def _classify_outcome_from_stats(stats) -> CombineOutcome:
-    """Classify from BacktestStats. passed_combine is the primary signal;
-    max_drawdown >= 2000 is a conservative heuristic for MLL breach detection."""
     if stats.passed_combine:
         return CombineOutcome.PASS
-    if stats.max_drawdown >= Decimal("2000"):
+    if stats.mll_breached:
         return CombineOutcome.FAIL
     return CombineOutcome.INCOMPLETE
 
@@ -181,11 +169,11 @@ async def run_walk_forward(
     for label, cfg in configs:
         wrs = scores_map[label]
         score = _score_config(wrs)
-        n = len(wrs) or 1
+        n = len(wrs) if wrs else 1
         passes = sum(1 for w in wrs if w.outcome == CombineOutcome.PASS)
         fails = sum(1 for w in wrs if w.outcome == CombineOutcome.FAIL)
         incompletes = sum(1 for w in wrs if w.outcome == CombineOutcome.INCOMPLETE)
-        avg_pnl = sum((w.net_pnl for w in wrs), Decimal("0")) / n
+        avg_pnl = sum((w.net_pnl for w in wrs), Decimal("0")) / n if wrs else Decimal("0")
         results.append(ConfigScore(
             label=label,
             score=score,
