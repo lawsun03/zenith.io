@@ -40,27 +40,59 @@ def _load_dotenv(env_path: Path) -> None:
 
 async def _fetch_one(client, symbol: str, days: int, interval: int, out: Path) -> int:
     import polars as pl  # type: ignore
+    from datetime import datetime, timedelta, timezone
 
-    print(f"Fetching {days}d of {interval}-min {symbol} bars...", flush=True)
-    df = await client.get_bars(symbol, days=days, interval=interval, unit=2)
+    print(f"Fetching {days}d of {interval}-min {symbol} bars (paginating)...", flush=True)
 
-    if df is None or len(df) == 0:
+    all_rows: list[dict] = []
+    end_time = datetime.now(timezone.utc)
+    chunk_days = 13  # stay under the ~20K bar cap per call
+
+    target_start = end_time - timedelta(days=days)
+
+    while end_time > target_start:
+        start_time = max(end_time - timedelta(days=chunk_days), target_start)
+        df = await client.get_bars(
+            symbol,
+            interval=interval,
+            unit=2,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        if df is None or len(df) == 0:
+            break
+
+        df = df.with_columns(
+            pl.col("timestamp")
+            .dt.convert_time_zone("UTC")
+            .dt.to_string("%Y-%m-%dT%H:%M:%S+00:00")
+        )
+        rows = df.select(["timestamp", "open", "high", "low", "close", "volume"]).to_dicts()
+        all_rows.extend(rows)
+        print(f"  chunk {start_time.date()} -> {end_time.date()}: {len(rows)} bars", flush=True)
+        end_time = start_time
+
+    if not all_rows:
         print(f"ERROR: no bars returned for {symbol}", file=sys.stderr)
         return 0
 
-    df = df.with_columns(
-        pl.col("timestamp").dt.convert_time_zone("UTC").dt.to_string("%Y-%m-%dT%H:%M:%S+00:00")
-    )
-    rows = df.select(["timestamp", "open", "high", "low", "close", "volume"]).to_dicts()
+    # Dedupe and sort ascending by timestamp string (ISO 8601 sorts correctly).
+    seen: set[str] = set()
+    deduped = []
+    for r in all_rows:
+        if r["timestamp"] not in seen:
+            seen.add(r["timestamp"])
+            deduped.append(r)
+    deduped.sort(key=lambda r: r["timestamp"])
 
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["timestamp", "open", "high", "low", "close", "volume"])
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(deduped)
 
-    print(f"  -> {len(rows)} bars -> {out}")
-    return len(rows)
+    print(f"  -> {len(deduped)} bars total -> {out}")
+    return len(deduped)
 
 
 async def _run(symbols: list[str], days: int, interval: int, out: Path | None) -> None:
