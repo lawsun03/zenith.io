@@ -54,6 +54,12 @@ from app.strategy.volume_profile import VolumeProfileTracker
 log = logging.getLogger(__name__)
 
 
+def _is_opposite_side(signal_side: str, open_contracts: int) -> bool:
+    """True when the signal direction conflicts with the current open position."""
+    return (signal_side == "long" and open_contracts < 0) or \
+           (signal_side == "short" and open_contracts > 0)
+
+
 def _tf_seconds(timeframe: str) -> int:
     """Parse a timeframe string like '1min', '5min', '1h' → seconds."""
     tf = timeframe.strip().lower()
@@ -189,6 +195,11 @@ class ExecutionEngine:
         # which we already fired a mid-bar signal, per instrument.
         self._forming_signal_fired: dict[str, datetime] = {}
         self._poll_task: "asyncio.Task | None" = None
+
+        # When a signal is opposite to the current open position, we flatten
+        # first and store the signal here. Executed once the flatten fill
+        # confirms we're flat (open_contracts == 0).
+        self._pending_reversal: dict[str, Signal] = {}
 
         self._started = False
 
@@ -327,6 +338,14 @@ class ExecutionEngine:
             fill.realized_pnl_delta,
             self.risk_state.open_contracts,
         )
+        # If a reversal was pending and this fill just brought us flat, execute it.
+        if self.risk_state.open_contracts == 0:
+            pending = self._pending_reversal.pop(fill.instrument, None)
+            if pending is not None:
+                log.info(
+                    "Flat after reversal flatten — entering: %s", pending.rationale,
+                )
+                asyncio.create_task(self._execute_reversal(pending))
 
     async def _handle_equity(self, mtm: MarkToMarket) -> None:
         """
@@ -355,6 +374,17 @@ class ExecutionEngine:
         decision = check(order, self.risk_state)
 
         if isinstance(decision, Deny):
+            if (
+                decision.reason_code == "MAX_CONTRACTS"
+                and _is_opposite_side(signal.side, self.risk_state.open_contracts)
+            ):
+                log.info(
+                    "Opposite-side signal while in position — flattening for reversal: %s",
+                    signal.rationale,
+                )
+                self._pending_reversal[signal.instrument] = signal
+                asyncio.create_task(self._flatten_for_reversal(signal.instrument))
+                return OrderOutcome(placed=False, reason="reversal_pending")
             log.info(
                 "Signal denied: %s — %s (%s)",
                 signal.rationale, decision.reason_code, decision.message,
@@ -505,3 +535,24 @@ class ExecutionEngine:
                     self._flattening = False
 
         self._was_locked = is_locked
+
+    async def _flatten_for_reversal(self, instrument: str) -> None:
+        """Cancel open brackets and flatten the position before a reversal entry."""
+        try:
+            await self.broker.cancel_all(instrument)
+        except Exception:
+            log.exception("cancel_all during reversal failed for %s", instrument)
+        try:
+            await self.broker.flatten(instrument)
+        except Exception:
+            log.exception("flatten during reversal failed for %s — dropping pending reversal", instrument)
+            self._pending_reversal.pop(instrument, None)
+
+    async def _execute_reversal(self, signal: Signal) -> None:
+        """Place the deferred reversal entry after the flatten fill confirmed flat."""
+        outcome = await self._act_on_signal(signal)
+        if self.on_signal is not None:
+            try:
+                await self.on_signal(signal, outcome)
+            except Exception:
+                log.exception("on_signal callback raised (reversal)")
