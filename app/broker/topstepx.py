@@ -126,6 +126,9 @@ class TopstepXBroker:
         # order. Track which order IDs we have already processed so duplicates are
         # silently dropped instead of double-counting open_contracts in RiskState.
         self._processed_fill_ids: set[str] = set()
+        # Flatten orders placed by flatten() — maps order_id to entry context so
+        # the fill handler can compute realized P&L the same way stop/target exits do.
+        self._flatten_order_ids: dict[str, dict] = {}
         # Tick-aggregated forming bar: accumulates quote mid-prices within the current
         # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
         self._forming_bar: Bar | None = None
@@ -679,6 +682,19 @@ class TopstepXBroker:
         if not open_positions:
             return True
 
+        # Snapshot entry context from OCO pairs before they go stale.
+        # _exit_pairs is still in memory after cancel_all() (cancel doesn't emit fills).
+        # Clear it now so stale entries don't contaminate the next position's context.
+        entry_ctx: dict | None = None
+        if self._exit_pairs:
+            sample = next(iter(self._exit_pairs.values()))
+            entry_ctx = {
+                "entry_price": sample["entry_price"],
+                "entry_side": sample["entry_side"],
+                "size": sample["size"],
+            }
+            self._exit_pairs.clear()
+
         success = True
         for pos in open_positions:
             ptype = int(pos.get("type", 0))
@@ -696,6 +712,11 @@ class TopstepXBroker:
                 if not bool(getattr(response, "success", False)):
                     log.error("flatten market order rejected for %s", instrument)
                     success = False
+                    continue
+                # Register the flatten order so its fill handler can compute P&L.
+                flatten_id = self._safe_str(getattr(response, "orderId", None))
+                if flatten_id and entry_ctx:
+                    self._flatten_order_ids[flatten_id] = entry_ctx
             except Exception:
                 log.exception("flatten market order failed for %s", instrument)
                 success = False
@@ -945,6 +966,32 @@ class TopstepXBroker:
                     )
                     log.info("Exit P&L: order=%s pnl=%s (entry=%s exit=%s %s x%d)",
                              order_id, pnl, entry_price, fill.fill_price, entry_side, ex_size)
+
+                elif order_id and order_id in self._flatten_order_ids:
+                    # Manual flatten fill (reversal or lockout) — compute P&L from
+                    # the entry context captured at flatten() time.
+                    ctx = self._flatten_order_ids.pop(order_id)
+                    pv = _point_value(fill.instrument)
+                    if ctx["entry_side"] == "long":
+                        pnl = (fill.fill_price - ctx["entry_price"]) * ctx["size"] * pv
+                    else:
+                        pnl = (ctx["entry_price"] - fill.fill_price) * ctx["size"] * pv
+                    fill = Fill(
+                        ts=fill.ts,
+                        instrument=fill.instrument,
+                        side=fill.side,
+                        fill_price=fill.fill_price,
+                        size=fill.size,
+                        is_entry=False,
+                        realized_pnl_delta=pnl,
+                        contracts_delta=fill.contracts_delta,
+                        broker_order_id=fill.broker_order_id,
+                    )
+                    log.info(
+                        "Flatten P&L: order=%s pnl=%s (entry=%s exit=%s %s x%d)",
+                        order_id, pnl, ctx["entry_price"], fill.fill_price,
+                        ctx["entry_side"], ctx["size"],
+                    )
 
                 elif order_id and fill.is_entry:
                     # Not in either dict yet — likely a market entry fill that
