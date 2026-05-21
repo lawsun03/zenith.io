@@ -39,6 +39,7 @@ class BacktestStats:
     expectancy: Decimal
     is_profitable: bool
     passed_combine: bool
+    mll_breached: bool
     equity_curve: list[tuple[datetime, Decimal]]
     by_killzone: dict[str, dict]
 
@@ -145,6 +146,7 @@ def _compute_stats(
             net >= profit_target
             and risk_state.locked_out is None
         ),
+        mll_breached=risk_state.locked_out is not None,
         equity_curve=eq_curve,
         by_killzone={},
     )
