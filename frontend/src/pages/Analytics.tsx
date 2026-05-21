@@ -67,10 +67,10 @@ export function AnalyticsPage() {
           </div>
         )}
 
+        <ClaudeAdvisor />
         <StatsRow perf={stats?.performance ?? null} />
         <KillzoneTable killzones={stats?.killzones ?? null} />
         <TradesTable trades={stats?.recent_trades ?? []} />
-        <ClaudeAdvisor />
       </main>
     </div>
   )
