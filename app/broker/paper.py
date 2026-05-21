@@ -6,14 +6,15 @@ What it's for:
   - Dry-run mode against a recorded bar stream
   - Smoke-testing the engine + risk wiring before live demo
 
-What it deliberately does NOT model:
-  - Slippage, partial fills, order book depth → assume mid-fills
-  - Latency → fills are instantaneous when triggered
-  - Margin or exchange fees → P&L is gross only
+What it models:
+  - Market-order slippage on entries (configurable ticks, default 1)
+  - Adverse slippage on stop-loss exits
+  - Commission per side per contract (configurable, defaults from DEFAULT_COMMISSION table)
 
-These simplifications are fine because the paper broker exists to test
-*the bot's logic*, not to predict trading outcomes. Realistic execution
-modeling lives in the backtester on DigitalOcean.
+What it does NOT model:
+  - Partial fills or order book depth
+  - Latency → fills are near-instantaneous when triggered
+  - Limit order slippage (limit targets fill at exact price)
 
 Behavior:
   - place_bracket() opens a tracked bracket position immediately at
@@ -179,11 +180,7 @@ class PaperBroker:
         slip = tick * self._slippage_ticks_market
         slipped_entry = entry + slip if side == "long" else entry - slip
 
-        commission = (
-            self._commission_per_side
-            if self._commission_per_side is not None
-            else DEFAULT_COMMISSION.get(instrument, Decimal("0.74"))
-        )
+        commission = self._commission_for(instrument)
 
         bracket = _OpenBracket(
             order_id=order_id,
@@ -211,6 +208,7 @@ class PaperBroker:
                 broker_order_id=order_id,
             ),
         )
+        self._balance -= commission * size  # deduct entry commission from balance
 
         return BracketResult(
             success=True,
@@ -234,7 +232,7 @@ class PaperBroker:
         ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
         to_close = [b for b in self._open.values() if b.instrument == instrument]
         for b in to_close:
-            await self._close_bracket(b, last, reason="flatten", ts=ts)
+            await self._close_bracket(b, last, reason="flatten", ts=ts, is_stop=True)
         return True
 
     async def cancel_all(self, instrument: str | None = None) -> int:
@@ -316,7 +314,8 @@ class PaperBroker:
             else:
                 continue
 
-            await self._close_bracket(bracket, exit_price, reason=reason, ts=bar.ts)
+            is_stop_exit = "stop" in reason  # covers "stop" and "stop (whipsaw)"
+            await self._close_bracket(bracket, exit_price, reason=reason, ts=bar.ts, is_stop=is_stop_exit)
 
         # Bar fans out AFTER fills resolve, so strategy sees fresh
         # post-fill state when it gets the bar.
@@ -335,9 +334,15 @@ class PaperBroker:
         exit_price: Decimal,
         reason: str,
         ts: datetime | None = None,
+        is_stop: bool = False,
     ) -> None:
         """Close a bracket, realize P&L, emit a fill, drop from open set."""
         ts = ts or datetime.now(timezone.utc).replace(microsecond=0)
+        if is_stop:
+            tick = TICK_SIZE.get(bracket.instrument, Decimal("0.10"))
+            slip = tick * self._slippage_ticks_market
+            # Long stop: price slips DOWN (worse). Short stop: slips UP (worse).
+            exit_price = exit_price - slip if bracket.side == "long" else exit_price + slip
         ticks_per_point = self._ticks_per_point(bracket.instrument)
         if bracket.side == "long":
             points = exit_price - bracket.entry
@@ -346,11 +351,7 @@ class PaperBroker:
 
         # P&L = points × ticks_per_point × tick_value × size
         pnl = points * ticks_per_point * _tick_value(bracket.instrument) * bracket.size
-        commission = (
-            self._commission_per_side
-            if self._commission_per_side is not None
-            else DEFAULT_COMMISSION.get(bracket.instrument, Decimal("0.74"))
-        )
+        commission = self._commission_for(bracket.instrument)
         pnl -= commission * bracket.size
         self._balance += pnl
 
@@ -374,6 +375,12 @@ class PaperBroker:
             "Bracket %s closed at %s (%s); P&L=%s",
             bracket.order_id, exit_price, reason, pnl,
         )
+
+    def _commission_for(self, instrument: str) -> Decimal:
+        """Look up commission per side per contract."""
+        if self._commission_per_side is not None:
+            return self._commission_per_side
+        return DEFAULT_COMMISSION.get(instrument, Decimal("0.74"))
 
     @staticmethod
     def _ticks_per_point(instrument: str) -> Decimal:

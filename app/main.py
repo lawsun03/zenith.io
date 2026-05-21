@@ -208,6 +208,39 @@ async def _build_broker(cfg: AppConfig) -> Broker:
     return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode)
 
 
+def _make_pre_place(config_path: Path | None = None):
+    """
+    Build the on_pre_place callback.
+
+    Called BEFORE await broker.place_bracket() so signal meta is written
+    before a market-order fill can race in via WebSocket during the HTTP
+    round-trip. Keyed by instrument (safe: pretrade gate ensures at most
+    one open position per instrument at a time).
+    """
+
+    async def pre_place(signal: Signal, size: int) -> None:
+        cfg_snap = load_bot_config(config_path) if config_path else BotConfig()
+        _pending_signal_meta[signal.instrument] = {
+            "signal_entry":      str(signal.entry),
+            "stop":              str(signal.stop),
+            "target":            str(signal.target),
+            "killzone":          signal.killzone,
+            "sweep_pattern":     signal.sweep_pattern,
+            "sweep_extreme":     str(signal.sweep_extreme),
+            "fvg_low":           str(signal.fvg_low) if signal.fvg_low else "",
+            "fvg_high":          str(signal.fvg_high) if signal.fvg_high else "",
+            "rationale":         signal.rationale,
+            "contracts":         str(size),
+            "entry_mode":        cfg_snap.entry_mode,
+            "r_multiple":        str(cfg_snap.strategy.r_multiple),
+            "stop_buffer":       str(cfg_snap.strategy.stop_buffer),
+            "body_atr_multiple": str(cfg_snap.strategy.body_atr_multiple),
+            "vp_enabled":        str(cfg_snap.strategy.vp_enabled),
+        }
+
+    return pre_place
+
+
 def _make_signal_journaler(
     journal: Journal,
     notifier: EmailNotifier | None = None,
@@ -223,27 +256,13 @@ def _make_signal_journaler(
                 outcome.broker_order_id, signal.rationale,
             )
             if outcome.broker_order_id:
-                cfg_snap = load_bot_config(config_path) if config_path else BotConfig()
-                _pending_signal_meta[outcome.broker_order_id] = {
-                    # Signal prices
-                    "signal_entry":      str(signal.entry),
-                    "stop":              str(signal.stop),
-                    "target":            str(signal.target),
-                    # Setup context
-                    "killzone":          signal.killzone,
-                    "sweep_pattern":     signal.sweep_pattern,
-                    "sweep_extreme":     str(signal.sweep_extreme),
-                    "fvg_low":           str(signal.fvg_low) if signal.fvg_low else "",
-                    "fvg_high":          str(signal.fvg_high) if signal.fvg_high else "",
-                    "rationale":         signal.rationale,
-                    # Config snapshot at signal time
-                    "contracts":         str(outcome.allowed_size),
-                    "entry_mode":        cfg_snap.entry_mode,
-                    "r_multiple":        str(cfg_snap.strategy.r_multiple),
-                    "stop_buffer":       str(cfg_snap.strategy.stop_buffer),
-                    "body_atr_multiple": str(cfg_snap.strategy.body_atr_multiple),
-                    "vp_enabled":        str(cfg_snap.strategy.vp_enabled),
-                }
+                # on_pre_place already wrote meta keyed by instrument.
+                # Re-key to broker_order_id so the fill lookup hits reliably.
+                # If a racing fill already consumed the instrument key,
+                # pop returns None and we leave the meta where it was used.
+                existing = _pending_signal_meta.pop(signal.instrument, None)
+                if existing is not None:
+                    _pending_signal_meta[outcome.broker_order_id] = existing
             if notifier is not None and notifier.enabled:
                 subject = (
                     f"ENTRY {signal.side.upper()} {signal.instrument} "
@@ -285,8 +304,10 @@ _TRADES_HEADERS = [
     "body_atr_multiple", "vp_enabled",
 ]
 
-# Keyed by broker_order_id; populated when a signal is placed, consumed
-# when the matching ENTRY fill arrives so the CSV row carries full context.
+# Keyed by instrument (written in on_pre_place, before HTTP round-trip) then
+# re-keyed to broker_order_id in journal_signal once the order ID is known.
+# Falls back to instrument key in _append_fill_csv for market orders that fill
+# during the HTTP await before journal_signal can re-key.
 _pending_signal_meta: dict[str, dict] = {}
 
 
@@ -298,7 +319,17 @@ def _daily_csv_path() -> Path:
 
 def _append_fill_csv(fill: Fill) -> None:
     """Append one fill row to master trades.csv and today's daily CSV."""
-    meta = _pending_signal_meta.pop(fill.broker_order_id, {}) if fill.is_entry else {}
+    if fill.is_entry:
+        # Try broker_order_id first (normal path: journal_signal re-keyed it).
+        # Fall back to instrument key for market orders that fill during the
+        # HTTP round-trip before journal_signal can re-key.
+        meta = (
+            _pending_signal_meta.pop(fill.broker_order_id, None)
+            or _pending_signal_meta.pop(fill.instrument, None)
+            or {}
+        )
+    else:
+        meta = {}
     row = [
         fill.ts.isoformat(),
         fill.instrument,
@@ -704,6 +735,7 @@ async def _async_main() -> int:
         runners=[runner],
         on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path),
         on_order_placed=reconciler.notify_order_placed,
+        on_pre_place=_make_pre_place(config_path=cfg.bot_config_path),
         contracts=bot_cfg.contracts,
         strategy_cfg=bot_cfg.strategy,
     )

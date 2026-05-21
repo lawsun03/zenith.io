@@ -1,7 +1,6 @@
 """Tests for PaperBroker slippage and commission modeling."""
 import asyncio
 from decimal import Decimal
-import pytest
 from app.broker.paper import PaperBroker
 from app.broker.events import Bar, Fill
 from datetime import datetime, timezone
@@ -91,3 +90,41 @@ def test_commission_deducted_from_pnl():
     assert entry_fill.realized_pnl_delta == Decimal("-0.74")
     # Exit fill: gross $100 minus $0.74 commission
     assert exit_fill.realized_pnl_delta == Decimal("99.26")
+
+
+def test_balance_reflects_entry_commission():
+    """account_balance() must reflect entry commission deducted."""
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=0,
+        commission_per_side=Decimal("1.00"),
+    )
+
+    async def go():
+        await broker.connect()
+        await broker.place_bracket("MGC", "long", 1,
+                                   Decimal("100.0"), Decimal("95.0"), Decimal("110.0"))
+        return await broker.account_balance()
+
+    balance = asyncio.run(go())
+    # Entry commission of $1 should be reflected
+    assert balance == Decimal("49999.00"), f"Got {balance}"
+
+
+def test_stop_slippage_worsens_exit():
+    """Stop-loss fills should slip adversely (long stop slips down)."""
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=1,
+        commission_per_side=Decimal("0"),
+    )
+    ts = _now()
+    # Entry at 100 (no slippage set for clarity), stop at 95
+    # Bar: low=93 hits stop. With 1-tick slippage, long stop fills at 94.9 (95 - 0.10)
+    bars = [_bar(ts, 100, 101, 93, 94)]  # low hits stop
+    fills = asyncio.run(_run(broker, bars, entry=100, stop=95, target=110,
+                              side="long"))
+    # Note: entry slips to 100.1 due to slippage_ticks_market=1
+    exit_fill = next(f for f in fills if not f.is_entry)
+    # Stop should fill at 95 - 0.10 = 94.90 (slipped down)
+    assert exit_fill.fill_price == Decimal("94.90"), f"Got {exit_fill.fill_price}"
