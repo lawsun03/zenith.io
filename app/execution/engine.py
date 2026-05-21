@@ -107,10 +107,11 @@ class StrategyRunner:
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
     vp: VolumeProfileTracker | None = None
+    _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
-        sweeps = self.liquidity.on_bar(bar)
+        sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
         for s in sweeps:
             self.composer.on_sweep(bar, s)
 
@@ -118,6 +119,10 @@ class StrategyRunner:
         disp = self.displacement.on_bar(bar)
         if disp is not None:
             signal = self.composer.on_displacement(bar, disp)
+
+        # Cache ATR for the NEXT bar's liquidity call (one-bar lag is acceptable;
+        # ATR doesn't change sharply bar-to-bar and liquidity runs before displacement).
+        self._prev_atr = self.displacement.atr
 
         # Bookkeeping AFTER signal evaluation — see composer docstring.
         self.composer.on_bar_close(bar)
