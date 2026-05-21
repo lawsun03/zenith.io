@@ -93,7 +93,9 @@ def check(order: ProposedOrder, state: RiskState) -> Decision:
     # ------------------------------------------------------------
     if order.is_entry:
         max_contracts = state.config.max_contracts
-        headroom = max_contracts - state.open_contracts
+        # open_contracts is signed (negative = short); use abs so short
+        # positions consume headroom the same way longs do.
+        headroom = max_contracts - abs(state.open_contracts)
         if headroom <= 0:
             return Deny(
                 reason_code="MAX_CONTRACTS",
