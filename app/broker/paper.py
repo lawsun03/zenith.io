@@ -66,9 +66,27 @@ class _OpenBracket:
 TICK_VALUE = {
     "MGC": Decimal("1"),     # micro gold
     "MNQ": Decimal("0.5"),   # micro Nasdaq
+    "MES": Decimal("1.25"),  # micro S&P 500
     "MCL": Decimal("1"),     # micro crude
     "MBT": Decimal("0.10"),  # micro Bitcoin
     "GC":  Decimal("10"),    # full gold contract
+}
+
+# Tick size per instrument (price units). Used for slippage calculation.
+TICK_SIZE = {
+    "MGC": Decimal("0.10"),
+    "MNQ": Decimal("0.25"),
+    "MES": Decimal("0.25"),
+    "MCL": Decimal("0.01"),
+    "GC":  Decimal("0.10"),
+    "MBT": Decimal("5"),
+}
+
+# Default commission per side per contract (round-trip = 2×).
+DEFAULT_COMMISSION = {
+    "MGC": Decimal("0.74"),
+    "MNQ": Decimal("0.57"),
+    "MES": Decimal("0.57"),
 }
 
 
@@ -89,10 +107,14 @@ class PaperBroker:
         self,
         starting_balance: Decimal = Decimal("50000"),
         pessimistic_whipsaw: bool = True,
+        slippage_ticks_market: int = 1,
+        commission_per_side: Decimal | None = None,  # None = use DEFAULT_COMMISSION table
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
         self._pessimistic = pessimistic_whipsaw
+        self._slippage_ticks_market = slippage_ticks_market
+        self._commission_per_side = commission_per_side
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -152,19 +174,28 @@ class PaperBroker:
         order_id = f"PAPER-{self._next_order_id}"
         self._next_order_id += 1
 
+        # Apply market-order slippage: shift entry price against the trader.
+        tick = TICK_SIZE.get(instrument, Decimal("0.10"))
+        slip = tick * self._slippage_ticks_market
+        slipped_entry = entry + slip if side == "long" else entry - slip
+
+        commission = (
+            self._commission_per_side
+            if self._commission_per_side is not None
+            else DEFAULT_COMMISSION.get(instrument, Decimal("0.74"))
+        )
+
         bracket = _OpenBracket(
             order_id=order_id,
             instrument=instrument,
             side=side,
             size=size,
-            entry=entry,
+            entry=slipped_entry,  # record slipped price as the true entry for P&L
             stop=stop,
             target=target,
         )
         self._open[order_id] = bracket
 
-        # Emit the entry fill immediately. Strategy treats this as the
-        # confirmation that the position is live.
         fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
         await self._fanout(
             self._fill_handlers,
@@ -172,10 +203,10 @@ class PaperBroker:
                 ts=fill_ts,
                 instrument=instrument,
                 side=side,
-                fill_price=entry,
+                fill_price=slipped_entry,
                 size=size,
                 is_entry=True,
-                realized_pnl_delta=Decimal("0"),
+                realized_pnl_delta=-commission * size,  # cost of entry fill
                 contracts_delta=size if side == "long" else -size,
                 broker_order_id=order_id,
             ),
@@ -315,6 +346,12 @@ class PaperBroker:
 
         # P&L = points × ticks_per_point × tick_value × size
         pnl = points * ticks_per_point * _tick_value(bracket.instrument) * bracket.size
+        commission = (
+            self._commission_per_side
+            if self._commission_per_side is not None
+            else DEFAULT_COMMISSION.get(bracket.instrument, Decimal("0.74"))
+        )
+        pnl -= commission * bracket.size
         self._balance += pnl
 
         del self._open[bracket.order_id]
@@ -346,6 +383,7 @@ class PaperBroker:
         return {
             "MGC": Decimal("10"),
             "MNQ": Decimal("4"),
+            "MES": Decimal("4"),    # tick = 0.25
             "MCL": Decimal("100"),  # tick = 0.01
             "MBT": Decimal("20"),   # tick = 5 on a $100k+ contract
         }.get(instrument, Decimal("1"))
