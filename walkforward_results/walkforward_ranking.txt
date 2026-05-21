@@ -1,0 +1,119 @@
+====================================================================================================
+WALK-FORWARD RANKING (sorted by combine-pass score)
+====================================================================================================
+label                                                         score  pass%  fail%   inc%    avg_pnl
+----------------------------------------------------------------------------------------------------
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    97.73
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    58.57
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    58.67
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   127.48
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   160.55
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   120.77
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    71.52
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   144.83
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    76.30
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   126.33
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    64.41
+body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   122.49
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    61.03
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    87.73
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    82.37
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    93.04
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   155.51
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   126.85
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   113.24
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    97.98
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   118.71
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    19.36
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   184.78
+body_atr_multiple=0.8 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    56.94
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    46.21
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    80.92
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    81.83
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    94.60
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   123.54
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   105.83
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    88.33
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   108.15
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   118.36
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    90.46
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   126.28
+body_atr_multiple=0.8 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   106.92
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    47.41
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    44.08
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    47.38
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    51.21
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    59.03
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    52.89
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    47.55
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +   114.71
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    45.05
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    51.53
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    49.60
+body_atr_multiple=1.0 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    81.99
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    75.43
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    68.79
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    64.48
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   106.24
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    67.92
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    99.24
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   123.05
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    66.31
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    51.74
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +   150.80
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    77.66
+body_atr_multiple=1.0 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   134.84
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    50.02
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    57.03
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    57.45
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    22.24
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    68.97
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    92.98
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    88.12
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    88.24
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +   123.40
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    20.72
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +     9.20
+body_atr_multiple=1.0 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    19.81
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    20.68
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    30.57
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    22.57
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0%     -8.96
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%    -10.75
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +     9.29
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +     3.73
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    15.99
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    23.69
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    30.36
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +     8.95
+body_atr_multiple=1.2 | swing_lookback=2 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    52.62
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    59.10
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    42.35
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    21.17
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    49.73
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%     -0.88
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    34.03
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    19.18
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +     1.05
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +     5.50
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    33.31
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%    -11.80
+body_atr_multiple=1.2 | swing_lookback=3 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0%     -0.78
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    22.50
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0% +    50.19
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=1.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    34.00
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    26.41
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%     -2.50
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +     7.54
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0%    -26.57
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%    -15.50
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=2.5 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +     6.23
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.20  0.000   0.0%   0.0% 100.0% +    36.54
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.30  0.000   0.0%   0.0% 100.0%     -9.01
+body_atr_multiple=1.2 | swing_lookback=4 | r_multiple=3.0 | stop_buffer=0.40  0.000   0.0%   0.0% 100.0% +    10.80
+====================================================================================================
+
+RECOMMENDED CONFIG: body_atr_multiple=0.8 | swing_lookback=2 | r_multiple=1.5 | stop_buffer=0.20
+  Pass rate:  0.0%
+  Fail rate:  0.0%
+  Score:      0.000
