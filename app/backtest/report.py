@@ -17,17 +17,17 @@ def format_summary(stats: BacktestStats, label: str = "") -> str:
         f"Verdict:           {'PROFITABLE' if stats.is_profitable else 'UNPROFITABLE'}",
         f"Combine target:    {'PASSED' if stats.passed_combine else 'DID NOT PASS'}",
         "",
-        f"Net P&L:           {'+' if stats.net_pnl >= 0 else ''}{float(stats.net_pnl):.2f}",
-        f"  Gross profit:    +{float(stats.gross_win):.2f}",
-        f"  Gross loss:      -{float(stats.gross_loss):.2f}",
+        f"Net P&L:           {'+' if stats.net_pnl >= 0 else ''}{stats.net_pnl:.2f}",
+        f"  Gross profit:    +{stats.gross_win:.2f}",
+        f"  Gross loss:      -{stats.gross_loss:.2f}",
         "",
         f"Total trades:      {stats.trades}",
         f"  Winners:         {stats.wins}  ({stats.win_rate:.1f}%)",
         f"  Losers:          {stats.losses}",
         "",
-        f"  Expectancy:      {'+' if stats.expectancy >= 0 else ''}{float(stats.expectancy):.2f} per trade",
+        f"  Expectancy:      {'+' if stats.expectancy >= 0 else ''}{stats.expectancy:.2f} per trade",
         (f"  Profit factor:   {stats.profit_factor:.2f}" if stats.profit_factor else "  Profit factor:   N/A"),
-        f"  Max drawdown:    -{float(stats.max_drawdown):.2f}",
+        f"  Max drawdown:    -{stats.max_drawdown:.2f}",
         sep,
     ]
     return "\n".join(lines)
@@ -45,9 +45,9 @@ def format_sweep_table(results: list[BacktestResult]) -> str:
         esign = "+" if s.expectancy >= 0 else ""
         rows.append(
             f"{r.label:<50} {s.trades:>7} {s.win_rate:>5.1f}%"
-            f" {sign}{float(s.net_pnl):>10.2f}"
-            f"  {float(s.max_drawdown):>9.2f}"
-            f" {esign}{float(s.expectancy):>7.2f}"
+            f" {sign}{s.net_pnl:>10.2f}"
+            f"  {s.max_drawdown:>9.2f}"
+            f" {esign}{s.expectancy:>7.2f}"
             f" {pf:>6}"
         )
     rows.append(sep)

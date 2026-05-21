@@ -4,10 +4,13 @@ Backtest runner — reusable core used by scripts/backtest.py and the walk-forwa
 from __future__ import annotations
 
 import dataclasses
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Iterator
+
+log = logging.getLogger(__name__)
 
 from app.broker.events import Bar, Fill
 from app.broker.paper import PaperBroker
@@ -44,11 +47,11 @@ class BacktestStats:
 class BacktestConfig:
     instrument: str
     bars: Iterator[Bar]
+    composer_config: ComposerConfig
     starting_balance: Decimal = field(default_factory=lambda: Decimal("50000"))
     soft_buffer: Decimal = field(default_factory=lambda: Decimal("500"))
     liquidity_config: LiquidityConfig = field(default_factory=LiquidityConfig)
     displacement_config: DisplacementConfig = field(default_factory=DisplacementConfig)
-    composer_config: ComposerConfig = field(default_factory=lambda: ComposerConfig(instrument="MGC"))
     enabled_killzones: list[str] | None = None
     timeframe: str = "1min"
     contracts: int = 1
@@ -103,12 +106,16 @@ def _compute_stats(
     gross_win = sum(wins, Decimal("0"))
     gross_loss = abs(sum(losses, Decimal("0")))
 
+    # equity curve: accumulate ALL fills (entry commission + exit P&L)
     equity = Decimal("0")
     peak = Decimal("0")
     max_dd = Decimal("0")
     eq_curve: list[tuple[datetime, Decimal]] = []
-    for f in exits:
-        equity += Decimal(f["realized_pnl_delta"])
+    for f in fills:  # ALL fills, not just exits
+        pnl_delta = Decimal(f["realized_pnl_delta"])
+        if pnl_delta == Decimal("0"):
+            continue  # skip zero-delta fills (no change to equity or curve)
+        equity += pnl_delta
         ts = datetime.fromisoformat(f["ts"])
         eq_curve.append((ts, starting_balance + equity))
         if equity > peak:
@@ -117,14 +124,14 @@ def _compute_stats(
         if dd > max_dd:
             max_dd = dd
 
-    n = len(exits) or 1
+    n = len(exits)
     profit_target = risk_state.config.profit_target
 
     return BacktestStats(
         trades=len(exits),
         wins=len(wins),
         losses=len(losses),
-        win_rate=round(len(wins) / n * 100, 1),
+        win_rate=round(len(wins) / n * 100, 1) if n > 0 else 0.0,
         net_pnl=net,
         gross_win=gross_win,
         gross_loss=gross_loss,
@@ -132,7 +139,7 @@ def _compute_stats(
         avg_loss=gross_loss / len(losses) if losses else Decimal("0"),
         profit_factor=float(gross_win / gross_loss) if gross_loss > 0 else None,
         max_drawdown=max_dd,
-        expectancy=net / n,
+        expectancy=net / n if n > 0 else Decimal("0"),
         is_profitable=net > 0,
         passed_combine=(
             net >= profit_target
@@ -145,6 +152,8 @@ def _compute_stats(
 
 def _reconstruct_trades(fills: list[dict]) -> list[dict]:
     """Pair entry fills with exit fills. hold_seconds uses fill timestamps (bar time)."""
+    # Assumes strict alternation: entry fill followed by exit fill.
+    # A trade still open at backtest end produces a warning and is not counted.
     trades: list[dict] = []
     open_entry: dict | None = None
     for f in fills:
@@ -166,6 +175,11 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 "hold_seconds": hold,
             })
             open_entry = None
+    if open_entry is not None:
+        log.warning(
+            "_reconstruct_trades: unclosed entry at bar end (entry_ts=%s)",
+            open_entry["ts"],
+        )
     return trades
 
 
