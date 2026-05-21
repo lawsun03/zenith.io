@@ -23,6 +23,7 @@ import asyncio
 import csv
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -40,7 +41,6 @@ def _load_dotenv(env_path: Path) -> None:
 
 async def _fetch_one(client, symbol: str, days: int, interval: int, out: Path) -> int:
     import polars as pl  # type: ignore
-    from datetime import datetime, timedelta, timezone
 
     print(f"Fetching {days}d of {interval}-min {symbol} bars (paginating)...", flush=True)
 
@@ -60,7 +60,9 @@ async def _fetch_one(client, symbol: str, days: int, interval: int, out: Path) -
             end_time=end_time,
         )
         if df is None or len(df) == 0:
-            break
+            print(f"  WARNING: empty chunk {start_time.date()} -> {end_time.date()}, skipping", flush=True)
+            end_time = start_time  # advance the window past the empty chunk
+            continue
 
         df = df.with_columns(
             pl.col("timestamp")
