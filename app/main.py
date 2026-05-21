@@ -208,7 +208,11 @@ async def _build_broker(cfg: AppConfig) -> Broker:
     return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode)
 
 
-def _make_signal_journaler(journal: Journal, notifier: EmailNotifier | None = None):
+def _make_signal_journaler(
+    journal: Journal,
+    notifier: EmailNotifier | None = None,
+    config_path: Path | None = None,
+):
     """Build the on_signal callback bound to a specific Journal."""
 
     async def journal_signal(signal: Signal, outcome: OrderOutcome) -> None:
@@ -219,11 +223,26 @@ def _make_signal_journaler(journal: Journal, notifier: EmailNotifier | None = No
                 outcome.broker_order_id, signal.rationale,
             )
             if outcome.broker_order_id:
+                cfg_snap = load_bot_config(config_path) if config_path else BotConfig()
                 _pending_signal_meta[outcome.broker_order_id] = {
-                    "stop":      str(signal.stop),
-                    "target":    str(signal.target),
-                    "killzone":  signal.killzone,
-                    "rationale": signal.rationale,
+                    # Signal prices
+                    "signal_entry":      str(signal.entry),
+                    "stop":              str(signal.stop),
+                    "target":            str(signal.target),
+                    # Setup context
+                    "killzone":          signal.killzone,
+                    "sweep_pattern":     signal.sweep_pattern,
+                    "sweep_extreme":     str(signal.sweep_extreme),
+                    "fvg_low":           str(signal.fvg_low) if signal.fvg_low else "",
+                    "fvg_high":          str(signal.fvg_high) if signal.fvg_high else "",
+                    "rationale":         signal.rationale,
+                    # Config snapshot at signal time
+                    "contracts":         str(outcome.allowed_size),
+                    "entry_mode":        cfg_snap.entry_mode,
+                    "r_multiple":        str(cfg_snap.strategy.r_multiple),
+                    "stop_buffer":       str(cfg_snap.strategy.stop_buffer),
+                    "body_atr_multiple": str(cfg_snap.strategy.body_atr_multiple),
+                    "vp_enabled":        str(cfg_snap.strategy.vp_enabled),
                 }
             if notifier is not None and notifier.enabled:
                 subject = (
@@ -253,9 +272,17 @@ def _make_signal_journaler(journal: Journal, notifier: EmailNotifier | None = No
 
 _TRADES_CSV = Path("trades.csv")  # permanent master ledger
 _TRADES_HEADERS = [
-    "ts", "instrument", "side", "type", "fill_price", "size",
-    "realized_pnl", "broker_order_id",
-    "stop", "target", "killzone", "rationale",
+    # Fill fields
+    "ts", "instrument", "side", "type", "fill_price", "size", "realized_pnl",
+    "broker_order_id",
+    # Signal prices (ENTRY rows only)
+    "signal_entry", "stop", "target",
+    # Setup context
+    "killzone", "sweep_pattern", "sweep_extreme", "fvg_low", "fvg_high",
+    "rationale",
+    # Config snapshot at signal time (ENTRY rows only)
+    "contracts", "entry_mode", "r_multiple", "stop_buffer",
+    "body_atr_multiple", "vp_enabled",
 ]
 
 # Keyed by broker_order_id; populated when a signal is placed, consumed
@@ -281,10 +308,24 @@ def _append_fill_csv(fill: Fill) -> None:
         fill.size,
         fill.realized_pnl_delta,
         fill.broker_order_id,
+        # Signal prices
+        meta.get("signal_entry", ""),
         meta.get("stop", ""),
         meta.get("target", ""),
+        # Setup context
         meta.get("killzone", ""),
+        meta.get("sweep_pattern", ""),
+        meta.get("sweep_extreme", ""),
+        meta.get("fvg_low", ""),
+        meta.get("fvg_high", ""),
         meta.get("rationale", ""),
+        # Config snapshot
+        meta.get("contracts", ""),
+        meta.get("entry_mode", ""),
+        meta.get("r_multiple", ""),
+        meta.get("stop_buffer", ""),
+        meta.get("body_atr_multiple", ""),
+        meta.get("vp_enabled", ""),
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:
@@ -661,7 +702,7 @@ async def _async_main() -> int:
         broker=broker,
         risk_state=risk_state,
         runners=[runner],
-        on_signal=_make_signal_journaler(journal, notifier),
+        on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path),
         on_order_placed=reconciler.notify_order_placed,
         contracts=bot_cfg.contracts,
         strategy_cfg=bot_cfg.strategy,
