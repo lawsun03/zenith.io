@@ -88,3 +88,31 @@ def test_fill_is_stop_can_be_set():
         is_stop=True,
     )
     assert f.is_stop is True
+
+
+# ── ATR penetration scaling tests ──────────────────────────────────────────
+
+from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
+
+
+def test_effective_pen_fixed_when_no_factor():
+    """Without min_penetration_atr_factor, fixed min_penetration is used."""
+    cfg = LiquidityConfig(min_penetration=Decimal("0.20"))
+    tracker = LiquidityTracker(cfg)
+    assert tracker._effective_pen(atr=Decimal("2.0")) == Decimal("0.20")
+    assert tracker._effective_pen(atr=None) == Decimal("0.20")
+
+
+def test_effective_pen_scales_with_atr():
+    """With factor=0.25, effective pen = 0.25 × ATR."""
+    cfg = LiquidityConfig(min_penetration=Decimal("0.20"), min_penetration_atr_factor=Decimal("0.25"))
+    tracker = LiquidityTracker(cfg)
+    assert tracker._effective_pen(atr=Decimal("2.0")) == Decimal("0.50")
+    assert tracker._effective_pen(atr=Decimal("0.4")) == Decimal("0.10")
+
+
+def test_effective_pen_falls_back_to_fixed_when_atr_none():
+    """If factor is set but ATR is None (not yet warmed up), use fixed min_penetration."""
+    cfg = LiquidityConfig(min_penetration=Decimal("0.20"), min_penetration_atr_factor=Decimal("0.25"))
+    tracker = LiquidityTracker(cfg)
+    assert tracker._effective_pen(atr=None) == Decimal("0.20")

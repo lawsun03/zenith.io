@@ -96,6 +96,9 @@ class LiquidityConfig:
     # 0.20 = 2 ticks of penetration.
     min_penetration: Decimal = Decimal("0.20")
 
+    # If set, effective pen = factor × ATR; falls back to min_penetration if ATR is None.
+    min_penetration_atr_factor: Decimal | None = None
+
     # For Pattern A: how many bars after the tag we still consider for
     # the close-back. 3 = the tagging bar plus 2 more.
     multi_bar_window: int = 3
@@ -149,6 +152,9 @@ class LiquidityTracker:
         # Monotonic bar counter for windowing.
         self._bar_idx = 0
 
+        # Effective penetration threshold — updated each bar via _effective_pen.
+        self._pen: Decimal = self.config.min_penetration
+
     # ------------------------------------------------------------------
     # Read-only views — useful for tests, the dashboard, and the composer.
     # ------------------------------------------------------------------
@@ -165,11 +171,17 @@ class LiquidityTracker:
     def recent_low_swings(self) -> list[Swing]:
         return [s for s in self._swings if s.kind == "low"]
 
+    def _effective_pen(self, atr: Decimal | None) -> Decimal:
+        """Compute effective min_penetration. Scales with ATR when factor is configured."""
+        if self.config.min_penetration_atr_factor is not None and atr is not None:
+            return atr * self.config.min_penetration_atr_factor
+        return self.config.min_penetration
+
     # ------------------------------------------------------------------
     # Bar ingestion — the only state-changing entry point.
     # ------------------------------------------------------------------
 
-    def on_bar(self, bar: Bar) -> list[SweepEvent]:
+    def on_bar(self, bar: Bar, atr: Decimal | None = None) -> list[SweepEvent]:
         """
         Process a closed bar. Returns any sweep events that completed
         on this bar.
@@ -182,6 +194,7 @@ class LiquidityTracker:
              expire any that ran past the window.
           5. Check for new Pattern A tags on existing swings.
         """
+        self._pen = self._effective_pen(atr)
         self._bar_idx += 1
         self._bars.append(bar)
         events: list[SweepEvent] = []
@@ -273,7 +286,7 @@ class LiquidityTracker:
         list — that's fine; sweeping it again is unusual but valid.)
         """
         events: list[SweepEvent] = []
-        pen = self.config.min_penetration
+        pen = self._pen
 
         # Check high sweeps — each unswept swing high above bar.close.
         for swing in reversed(list(self._swings)):
@@ -326,7 +339,7 @@ class LiquidityTracker:
         We also exclude swings that have already been used (either
         emitted a sweep or had their pending tag expire).
         """
-        pen = self.config.min_penetration
+        pen = self._pen
 
         # High tags: bar pierced a swing high but closed at/above it.
         for swing in reversed(list(self._swings)):
