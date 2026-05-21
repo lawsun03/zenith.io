@@ -76,6 +76,10 @@ def _tf_seconds(timeframe: str) -> int:
 # engine so adding a journal later doesn't change the engine API.
 SignalEmitted = Callable[[Signal, "OrderOutcome"], Awaitable[None]]
 
+# Called BEFORE await broker.place_bracket() so signal meta is available
+# even if the market-order fill races in during the HTTP round-trip.
+PrePlaceCallback = Callable[[Signal, int], Awaitable[None]]
+
 
 @dataclass(frozen=True)
 class OrderOutcome:
@@ -161,6 +165,7 @@ class ExecutionEngine:
         runners: list[StrategyRunner],
         on_signal: SignalEmitted | None = None,
         on_order_placed: Callable[[], None] | None = None,
+        on_pre_place: PrePlaceCallback | None = None,
         replay_mode: bool = False,
         contracts: int = 1,
         strategy_cfg: "StrategyParams | None" = None,
@@ -174,6 +179,9 @@ class ExecutionEngine:
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
+        # Called BEFORE await broker.place_bracket() so signal meta is written
+        # before the market-order fill can race in during the HTTP round-trip.
+        self._on_pre_place = on_pre_place
 
         # When True, the wall-clock staleness check is skipped so historical
         # bars are processed the same way regardless of when the run happens.
@@ -400,6 +408,14 @@ class ExecutionEngine:
         # position opened, so no contract drift to alarm on).
         if self._on_order_placed is not None:
             self._on_order_placed()
+
+        # Write signal meta before the HTTP call so it's available if the
+        # market-order fill arrives via WebSocket during the await below.
+        if self._on_pre_place is not None:
+            try:
+                await self._on_pre_place(signal, decision.allowed_size)
+            except Exception:
+                log.exception("on_pre_place callback raised")
 
         # Allowed — place the bracket. Note: the gate may have sized down,
         # which is reflected in decision.allowed_size.
