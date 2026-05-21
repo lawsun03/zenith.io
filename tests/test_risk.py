@@ -319,6 +319,23 @@ class TestPretradeGate:
         assert isinstance(result, Deny)
         assert result.reason_code == "MAX_CONTRACTS"
 
+    def test_short_entry_at_max_contracts_denies(self):
+        """Short entries produce negative contracts_delta; pretrade must use abs()."""
+        state = RiskState(config=fifty_k_combine())
+        ts = timestamps_in_session(1)
+        # Simulate a short entry of 30 contracts (broker uses -size for sells).
+        state.record_fill(
+            realized_pnl_delta=Decimal("0"),
+            contracts_delta=-30,
+            ts=ts[0],
+        )
+        result = check(make_short_order(size=1), state)
+        assert isinstance(result, Deny), (
+            "short entry while at max short contracts should be denied; "
+            "open_contracts is negative for shorts so pretrade must abs() it"
+        )
+        assert result.reason_code == "MAX_CONTRACTS"
+
 
 # ---------------------------------------------------------------------
 # End-to-end fuzz: random fill sequences must never breach invariants.

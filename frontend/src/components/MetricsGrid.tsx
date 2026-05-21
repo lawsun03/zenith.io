@@ -44,9 +44,9 @@ export function MetricsGrid({ status }: Props) {
       />
       <MetricCard
         label="Open"
-        primary={`${limits.open_contracts}/${account.max_contracts}`}
+        primary={`${Math.abs(limits.open_contracts)}/${account.max_contracts}`}
         secondary={`Equity ${fmtMoney(equity.current)} · HW ${fmtMoney(equity.high_water)}`}
-        tone={limits.open_contracts === account.max_contracts ? 'warn' : 'neutral'}
+        tone={Math.abs(limits.open_contracts) === account.max_contracts ? 'warn' : 'neutral'}
         pulse={false}
       />
     </div>
