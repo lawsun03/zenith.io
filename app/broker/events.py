@@ -80,6 +80,7 @@ class Fill:
     realized_pnl_delta: Decimal
     contracts_delta: int
     broker_order_id: str
+    is_stop: bool = False
 
 
 @dataclass(frozen=True)

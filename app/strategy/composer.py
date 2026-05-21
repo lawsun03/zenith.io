@@ -102,6 +102,9 @@ class ComposerConfig:
     # Warmup: filter is inactive until N bars have been seen.
     trend_ema_period: int = 50
 
+    # Bars to suppress new signals after a stop fill. 0 = disabled.
+    cooldown_bars_after_stop: int = 0
+
 
 @dataclass
 class _Awaiting:
@@ -144,6 +147,7 @@ class SweepDisplacementComposer:
         self._awaiting: list[_Awaiting] = []
         self._ema: Decimal | None = None
         self._ema_bars: int = 0
+        self._cooldown_remaining: int = 0
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -175,6 +179,11 @@ class SweepDisplacementComposer:
             killzone_name=zone.name,
         ))
 
+    def on_stop_loss(self) -> None:
+        """Called by the engine when a stop fill is confirmed for this instrument."""
+        if self.config.cooldown_bars_after_stop > 0:
+            self._cooldown_remaining = self.config.cooldown_bars_after_stop
+
     def on_displacement(
         self,
         bar: Bar,
@@ -189,6 +198,10 @@ class SweepDisplacementComposer:
         """
         if event.fvg is None:
             return None  # no entry zone, no trade
+
+        if self._cooldown_remaining > 0:
+            log.info("Cooldown active (%d bars remaining) — signal suppressed", self._cooldown_remaining)
+            return None
 
         # Required reversal direction for each sweep side:
         #   high sweep → bearish displacement → SHORT
@@ -242,6 +255,9 @@ class SweepDisplacementComposer:
         Call this AFTER on_sweep/on_displacement for the bar — otherwise
         a sweep that fires on bar N would be aged by 1 immediately.
         """
+        if self._cooldown_remaining > 0:
+            self._cooldown_remaining -= 1
+
         window = self.config.displacement_window_bars
         kept: list[_Awaiting] = []
         for a in self._awaiting:

@@ -346,6 +346,12 @@ class ExecutionEngine:
             fill.realized_pnl_delta,
             self.risk_state.open_contracts,
         )
+        # Notify the matching runner's composer when a stop fill lands.
+        if not fill.is_entry and fill.is_stop:
+            runner = self.runners.get(fill.instrument)
+            if runner is not None:
+                runner.composer.on_stop_loss()
+
         # If a reversal was pending and this fill just brought us flat, execute it.
         if self.risk_state.open_contracts == 0:
             pending = self._pending_reversal.pop(fill.instrument, None)

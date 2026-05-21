@@ -369,6 +369,7 @@ class PaperBroker:
                 realized_pnl_delta=pnl,
                 contracts_delta=-bracket.size if bracket.side == "long" else bracket.size,
                 broker_order_id=f"{bracket.order_id}-X",
+                is_stop=is_stop,
             ),
         )
         log.info(
