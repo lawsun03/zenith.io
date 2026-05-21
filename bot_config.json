@@ -30,7 +30,7 @@
     "vp_enabled": true,
     "vp_tick_size": "0.10",
     "vp_value_area_pct": 0.70,
-    "vp_filter_tolerance": "20.0",
+    "vp_filter_tolerance": "2.0",
     "vp_hvn_threshold": 1.5,
     "vp_min_target_r": "2.0"
   }
