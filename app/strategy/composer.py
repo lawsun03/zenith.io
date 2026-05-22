@@ -105,6 +105,12 @@ class ComposerConfig:
     # Bars to suppress new signals after a stop fill. 0 = disabled.
     cooldown_bars_after_stop: int = 0
 
+    # ATR volatility gates. 0 = disabled (same convention as trend_ema_period).
+    # min_atr_filter: skip entries when ATR is too low (dead market, no momentum).
+    # max_atr_filter: skip entries when ATR is too high (whipsaw / news spike).
+    min_atr_filter: Decimal = Decimal("0")
+    max_atr_filter: Decimal = Decimal("0")
+
 
 @dataclass
 class _Awaiting:
@@ -201,6 +207,20 @@ class SweepDisplacementComposer:
 
         if self._cooldown_remaining > 0:
             log.info("Cooldown active (%d bars remaining) — signal suppressed", self._cooldown_remaining)
+            return None
+
+        # Volatility regime filter: skip entries outside the configured ATR range.
+        if self.config.min_atr_filter > 0 and event.atr_at_event < self.config.min_atr_filter:
+            log.info(
+                "Signal blocked: ATR %s below min_atr_filter %s (low-vol regime)",
+                event.atr_at_event, self.config.min_atr_filter,
+            )
+            return None
+        if self.config.max_atr_filter > 0 and event.atr_at_event > self.config.max_atr_filter:
+            log.info(
+                "Signal blocked: ATR %s above max_atr_filter %s (high-vol regime)",
+                event.atr_at_event, self.config.max_atr_filter,
+            )
             return None
 
         # Required reversal direction for each sweep side:
