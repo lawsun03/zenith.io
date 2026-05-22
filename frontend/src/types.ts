@@ -12,6 +12,8 @@ export interface StrategyConfig {
   trend_ema_period: number
   min_atr_filter: string   // "0" = disabled
   max_atr_filter: string   // "0" = disabled
+  cooldown_bars_after_stop: number
+  min_penetration_atr_factor: string  // "0" = disabled; >0 = factor × ATR
   // Volume profile
   vp_enabled: boolean
   vp_tick_size: string

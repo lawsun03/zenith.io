@@ -121,6 +121,16 @@ const FIELDS: FieldDef[] = [
     hint: '0 = disabled. Maximum ATR allowed before blocking a trade. Lower to skip high-volatility whipsaw sessions (try 3.0–4.0 on MGC).',
   },
   {
+    key: 'cooldown_bars_after_stop', label: 'Post-Stop Cooldown (bars)', type: 'slider', section: 'strategy',
+    min: 0, max: 20, step: 1,
+    hint: '0 = disabled. Bars to wait before taking another trade after a stop-loss. Prevents re-entering immediately into the same losing move.',
+  },
+  {
+    key: 'min_penetration_atr_factor', label: 'Penetration ATR Factor', type: 'slider', section: 'strategy',
+    min: 0, max: 0.5, step: 0.01,
+    hint: '0 = disabled (uses fixed Min Penetration $). When active, required sweep penetration = this factor × current ATR — automatically scales with volatility.',
+  },
+  {
     key: 'vp_enabled', label: 'VP Filter Enabled', type: 'select', section: 'strategy',
     options: ['true', 'false'],
     hint: 'Enable volume profile filter + target override. false = uses fixed r_multiple only, ignoring prior session value area.',
@@ -212,6 +222,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       trend_ema_period:         parseInt(form.trend_ema_period)         || 0,
       min_atr_filter:           form.min_atr_filter                     || '0',
       max_atr_filter:           form.max_atr_filter                     || '0',
+      cooldown_bars_after_stop:    parseInt(form.cooldown_bars_after_stop)    || 0,
+      min_penetration_atr_factor:  form.min_penetration_atr_factor            || '0',
       vp_enabled:               form.vp_enabled !== 'false',
       vp_tick_size:             form.vp_tick_size                       || '0.10',
       vp_value_area_pct:        parseFloat(form.vp_value_area_pct)      || 0.70,
