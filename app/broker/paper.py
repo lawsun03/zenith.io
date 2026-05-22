@@ -56,6 +56,10 @@ class _OpenBracket:
     entry: Decimal
     stop: Decimal
     target: Decimal
+    # Partial profit state (all 0/None/False = disabled)
+    partial_target: Decimal | None = None  # price to take partial profit
+    partial_size: int = 0                  # contracts to exit at partial_target
+    partial_filled: bool = False           # True once the partial fill has been emitted
 
 
 # Per-instrument tick value. Verified against CME contract specs:
@@ -110,12 +114,14 @@ class PaperBroker:
         pessimistic_whipsaw: bool = True,
         slippage_ticks_market: int = 1,
         commission_per_side: Decimal | None = None,  # None = use DEFAULT_COMMISSION table
+        partial_profit_r: Decimal = Decimal("0"),    # 0 = disabled; 1.0 = take half at 1R
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
         self._pessimistic = pessimistic_whipsaw
         self._slippage_ticks_market = slippage_ticks_market
         self._commission_per_side = commission_per_side
+        self._partial_profit_r = partial_profit_r
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -191,6 +197,16 @@ class PaperBroker:
             stop=stop,
             target=target,
         )
+
+        if self._partial_profit_r > 0 and size >= 2:
+            r = abs(slipped_entry - stop)
+            if side == "long":
+                pt = slipped_entry + r * self._partial_profit_r
+            else:
+                pt = slipped_entry - r * self._partial_profit_r
+            bracket.partial_target = pt
+            bracket.partial_size = size // 2
+
         self._open[order_id] = bracket
 
         fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
@@ -291,6 +307,23 @@ class PaperBroker:
             if bracket is None or bracket.instrument != bar.instrument:
                 continue
 
+            # Partial profit: if partial_target touched and not yet filled,
+            # close partial_size contracts and move the stop to break-even.
+            if (
+                not bracket.partial_filled
+                and bracket.partial_target is not None
+                and bracket.partial_size > 0
+            ):
+                partial_hit = (
+                    (bracket.side == "long" and bar.high >= bracket.partial_target)
+                    or (bracket.side == "short" and bar.low <= bracket.partial_target)
+                )
+                if partial_hit:
+                    await self._close_partial(bracket, bracket.partial_target, bar.ts)
+                    bracket.size -= bracket.partial_size
+                    bracket.stop = bracket.entry  # move stop to break-even
+                    bracket.partial_filled = True
+
             # Check stop and target. Both could be hit in the same bar
             # (whipsaw); pessimistic default fills the stop.
             stop_hit = (
@@ -327,6 +360,36 @@ class PaperBroker:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def _close_partial(self, bracket: _OpenBracket, exit_price: Decimal, ts: datetime) -> None:
+        """Emit a partial fill for bracket.partial_size contracts. Does NOT remove bracket."""
+        size = bracket.partial_size
+        ticks_per_point = self._ticks_per_point(bracket.instrument)
+        points = (exit_price - bracket.entry) if bracket.side == "long" else (bracket.entry - exit_price)
+        pnl = points * ticks_per_point * _tick_value(bracket.instrument) * size
+        commission = self._commission_for(bracket.instrument)
+        pnl -= commission * size
+        self._balance += pnl
+
+        await self._fanout(
+            self._fill_handlers,
+            Fill(
+                ts=ts,
+                instrument=bracket.instrument,
+                side="short" if bracket.side == "long" else "long",
+                fill_price=exit_price,
+                size=size,
+                is_entry=False,
+                realized_pnl_delta=pnl,
+                contracts_delta=-size if bracket.side == "long" else size,
+                broker_order_id=f"{bracket.order_id}-P",
+                is_stop=False,
+            ),
+        )
+        log.info(
+            "Partial fill: %s %d @ %s P&L=%s; stop moved to BE=%s",
+            bracket.instrument, size, exit_price, pnl, bracket.entry,
+        )
 
     async def _close_bracket(
         self,
