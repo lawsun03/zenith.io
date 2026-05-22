@@ -58,6 +58,7 @@ class BacktestConfig:
     contracts: int = 1
     slippage_ticks_market: int = 1
     commission_per_side: Decimal = field(default_factory=lambda: Decimal("0.74"))
+    partial_profit_r: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled
     label: str = ""
 
 
@@ -191,6 +192,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         starting_balance=cfg.starting_balance,
         slippage_ticks_market=cfg.slippage_ticks_market,
         commission_per_side=cfg.commission_per_side,
+        partial_profit_r=cfg.partial_profit_r,
     )
     risk_state = RiskState(config=fifty_k_combine(soft_buffer=cfg.soft_buffer))
     runner = _build_runner(cfg)

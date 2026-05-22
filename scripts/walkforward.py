@@ -110,6 +110,7 @@ async def _run(args: argparse.Namespace) -> None:
         composer_config=ComposerConfig(instrument=instrument),
         slippage_ticks_market=1,
         commission_per_side=Decimal("0.74"),
+        partial_profit_r=args.partial_profit_r,
     )
 
     grid = _build_grid(GRID_DIMS)
@@ -140,6 +141,10 @@ def main() -> None:
     parser.add_argument("--train-days", type=int, default=30)
     parser.add_argument("--test-days", type=int, default=10)
     parser.add_argument("--step-days", type=int, default=5)
+    parser.add_argument(
+        "--partial-profit-r", type=Decimal, default=Decimal("0"),
+        help="Partial-profit R-multiple (0 = disabled, 1.0 = take half at 1R then BE-trail)",
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
