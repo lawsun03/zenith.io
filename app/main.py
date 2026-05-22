@@ -120,6 +120,8 @@ def _build_runner(
             r_multiple=s.r_multiple,
             killzones=zones,  # None falls back to default in the composer
             trend_ema_period=s.trend_ema_period,
+            min_atr_filter=s.min_atr_filter,
+            max_atr_filter=s.max_atr_filter,
         )),
         vp=VolumeProfileTracker(),
     )
