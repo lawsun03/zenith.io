@@ -106,6 +106,7 @@ def _build_runner(
             min_penetration=s.min_penetration,
             multi_bar_window=s.multi_bar_window,
             max_swings=50,
+            min_penetration_atr_factor=s.min_penetration_atr_factor if s.min_penetration_atr_factor > 0 else None,
         )),
         displacement=DisplacementDetector(DisplacementConfig(
             atr_period=s.atr_period,
@@ -120,6 +121,7 @@ def _build_runner(
             r_multiple=s.r_multiple,
             killzones=zones,  # None falls back to default in the composer
             trend_ema_period=s.trend_ema_period,
+            cooldown_bars_after_stop=s.cooldown_bars_after_stop,
             min_atr_filter=s.min_atr_filter,
             max_atr_filter=s.max_atr_filter,
         )),

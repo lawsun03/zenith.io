@@ -31,6 +31,8 @@ class StrategyParams(BaseModel):
     trend_ema_period: int = 50  # 0 = disabled; N = only take signals with the N-bar EMA trend
     min_atr_filter: Decimal = Decimal("0")  # 0 = no floor; N = require ATR >= N before entering
     max_atr_filter: Decimal = Decimal("0")  # 0 = no ceiling; N = require ATR <= N before entering
+    cooldown_bars_after_stop: int = 0       # 0 = disabled; N = bars to suppress signals after a stop
+    min_penetration_atr_factor: Decimal = Decimal("0")  # 0 = use fixed min_penetration; >0 = factor × ATR
 
     # Volume profile filter + target
     vp_enabled: bool = True
