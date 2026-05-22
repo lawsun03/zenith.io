@@ -68,6 +68,16 @@ def _write_results(scores: list[ConfigScore], out_dir: Path) -> None:
             f"  Fail rate:  {best.fail_rate*100:.1f}%",
             f"  Score:      {best.score:.3f}",
         ]
+        if best.by_killzone:
+            lines.append("  Per-killzone (aggregated across all test windows):")
+            for kz in sorted(best.by_killzone):
+                st = best.by_killzone[kz]
+                pnl_sign = "+" if st["net_pnl"] >= 0 else ""
+                lines.append(
+                    f"    {kz:<10}  {st['trades']:>3} trades  "
+                    f"{st['win_rate']:>5.1f}% WR  "
+                    f"net {pnl_sign}{st['net_pnl']:>8.2f}"
+                )
     ranking_path = out_dir / "walkforward_ranking.txt"
     ranking_path.write_text("\n".join(lines))
     print(f"Ranking saved to {ranking_path}")

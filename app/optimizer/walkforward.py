@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -38,7 +38,8 @@ class WindowResult:
     max_drawdown: Decimal
     trades: int
     win_rate: float
-    profit_factor: float | None
+    profit_factor: float | None = None
+    by_killzone: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,6 +52,7 @@ class ConfigScore:
     avg_net_pnl: Decimal
     windows: list[WindowResult]
     config: BacktestConfig
+    by_killzone: dict[str, dict] = field(default_factory=dict)  # aggregated across all windows
 
 
 def _rolling_windows(
@@ -163,6 +165,7 @@ async def run_walk_forward(
                 trades=s.trades,
                 win_rate=s.win_rate,
                 profit_factor=s.profit_factor,
+                by_killzone=s.by_killzone,
             ))
 
     results: list[ConfigScore] = []
@@ -174,6 +177,21 @@ async def run_walk_forward(
         fails = sum(1 for w in wrs if w.outcome == CombineOutcome.FAIL)
         incompletes = sum(1 for w in wrs if w.outcome == CombineOutcome.INCOMPLETE)
         avg_pnl = sum((w.net_pnl for w in wrs), Decimal("0")) / n if wrs else Decimal("0")
+
+        # Aggregate by_killzone across all windows for this config.
+        kz_agg: dict[str, dict] = {}
+        for wr in wrs:
+            for kz, st in wr.by_killzone.items():
+                if kz not in kz_agg:
+                    kz_agg[kz] = {"trades": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+                kz_agg[kz]["trades"] += st["trades"]
+                kz_agg[kz]["wins"] += st["wins"]
+                kz_agg[kz]["losses"] += st["losses"]
+                kz_agg[kz]["net_pnl"] += st["net_pnl"]
+        for kz in kz_agg:
+            t = kz_agg[kz]["trades"]
+            kz_agg[kz]["win_rate"] = round(kz_agg[kz]["wins"] / t * 100, 1) if t > 0 else 0.0
+
         results.append(ConfigScore(
             label=label,
             score=score,
@@ -183,6 +201,7 @@ async def run_walk_forward(
             avg_net_pnl=avg_pnl,
             windows=wrs,
             config=cfg,
+            by_killzone=kz_agg,
         ))
 
     results.sort(key=lambda r: r.score, reverse=True)

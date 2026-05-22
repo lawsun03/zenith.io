@@ -126,6 +126,23 @@ def _compute_stats(
         if dd > max_dd:
             max_dd = dd
 
+    # Per-killzone breakdown: group exit fills by killzone tag.
+    kz_exits: dict[str, list[Decimal]] = {}
+    for f in exits:
+        kz = f.get("killzone", "unknown")
+        kz_exits.setdefault(kz, []).append(Decimal(f["realized_pnl_delta"]))
+    by_killzone: dict[str, dict] = {}
+    for kz, pnls in kz_exits.items():
+        w = [p for p in pnls if p > 0]
+        lo = [p for p in pnls if p < 0]
+        by_killzone[kz] = {
+            "trades": len(pnls),
+            "wins": len(w),
+            "losses": len(lo),
+            "win_rate": round(len(w) / len(pnls) * 100, 1) if pnls else 0.0,
+            "net_pnl": float(sum(pnls, Decimal("0"))),
+        }
+
     n = len(exits)
     profit_target = risk_state.config.profit_target
 
@@ -149,7 +166,7 @@ def _compute_stats(
         ),
         mll_breached=risk_state.locked_out is not None,
         equity_curve=eq_curve,
-        by_killzone={},
+        by_killzone=by_killzone,
     )
 
 
@@ -199,11 +216,27 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
 
     fills_captured: list[dict] = []
     rejected_signals = 0
+    # Maps entry order_id → killzone name so exit fills can be tagged.
+    # on_signal fires after place_bracket (entry fill already emitted), so
+    # entry fills get "unknown"; exit fills always get the correct killzone.
+    _order_killzones: dict[str, str] = {}
+
+    def _kz_for_fill(broker_order_id: str | None) -> str:
+        if not broker_order_id:
+            return "unknown"
+        # Exit fills end with -X / -P / -S / -T; strip to recover entry order_id.
+        bid = broker_order_id
+        if len(bid) > 2 and bid[-2] == "-" and bid[-1] in "XPST":
+            bid = bid[:-2]
+        return _order_killzones.get(bid, "unknown")
 
     async def on_signal(signal: Signal, outcome: OrderOutcome) -> None:
         nonlocal rejected_signals
         if not outcome.placed:
             rejected_signals += 1
+            return
+        if outcome.broker_order_id:
+            _order_killzones[outcome.broker_order_id] = signal.killzone
 
     async def on_fill(fill: Fill) -> None:
         fills_captured.append({
@@ -214,6 +247,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             "size": fill.size,
             "is_entry": fill.is_entry,
             "realized_pnl_delta": str(fill.realized_pnl_delta),
+            "killzone": _kz_for_fill(fill.broker_order_id),
         })
 
     engine = ExecutionEngine(
