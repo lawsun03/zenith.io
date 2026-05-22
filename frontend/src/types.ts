@@ -10,6 +10,8 @@ export interface StrategyConfig {
   stop_buffer: string
   r_multiple: string
   trend_ema_period: number
+  min_atr_filter: string   // "0" = disabled
+  max_atr_filter: string   // "0" = disabled
   // Volume profile
   vp_enabled: boolean
   vp_tick_size: string

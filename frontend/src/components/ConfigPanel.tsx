@@ -111,6 +111,16 @@ const FIELDS: FieldDef[] = [
     hint: '0 = disabled. When active, long signals require close > EMA, shorts require close < EMA. Warmup: filter inactive until N bars seen.',
   },
   {
+    key: 'min_atr_filter', label: 'Min ATR Filter', type: 'slider', section: 'strategy',
+    min: 0, max: 3.0, step: 0.1,
+    hint: '0 = disabled. Minimum ATR required to take a trade. Raise to skip low-volatility dead markets (try 0.5–1.0 on MGC).',
+  },
+  {
+    key: 'max_atr_filter', label: 'Max ATR Filter', type: 'slider', section: 'strategy',
+    min: 0, max: 6.0, step: 0.1,
+    hint: '0 = disabled. Maximum ATR allowed before blocking a trade. Lower to skip high-volatility whipsaw sessions (try 3.0–4.0 on MGC).',
+  },
+  {
     key: 'vp_enabled', label: 'VP Filter Enabled', type: 'select', section: 'strategy',
     options: ['true', 'false'],
     hint: 'Enable volume profile filter + target override. false = uses fixed r_multiple only, ignoring prior session value area.',
@@ -200,6 +210,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       stop_buffer:              form.stop_buffer                        || '0.30',
       r_multiple:               form.r_multiple                         || '2.5',
       trend_ema_period:         parseInt(form.trend_ema_period)         || 0,
+      min_atr_filter:           form.min_atr_filter                     || '0',
+      max_atr_filter:           form.max_atr_filter                     || '0',
       vp_enabled:               form.vp_enabled !== 'false',
       vp_tick_size:             form.vp_tick_size                       || '0.10',
       vp_value_area_pct:        parseFloat(form.vp_value_area_pct)      || 0.70,

@@ -29,6 +29,8 @@ class StrategyParams(BaseModel):
     stop_buffer: Decimal = Decimal("0.30")
     r_multiple: Decimal = Decimal("2.5")
     trend_ema_period: int = 50  # 0 = disabled; N = only take signals with the N-bar EMA trend
+    min_atr_filter: Decimal = Decimal("0")  # 0 = no floor; N = require ATR >= N before entering
+    max_atr_filter: Decimal = Decimal("0")  # 0 = no ceiling; N = require ATR <= N before entering
 
     # Volume profile filter + target
     vp_enabled: bool = True
