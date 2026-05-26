@@ -383,3 +383,52 @@ async def test_vp_disabled_bypasses_gate():
     # it just returns None from apply()). The broker either placed or denied for risk.
     # The key assertion: if VP were active, apply() returns None and on_signal is never called.
     # Since vp_enabled=False, on_signal WAS called, which is what we verify above.
+
+
+def _signal(entry: str, stop: str, target: str, side: str = "long") -> Signal:
+    return Signal(
+        instrument="MGC", side=side,
+        entry=Decimal(entry), stop=Decimal(stop), target=Decimal(target),
+        created_at=in_ny_am(0), killzone="NY AM", sweep_pattern="B_one_bar",
+        sweep_extreme=Decimal(stop), fvg_low=None, fvg_high=None, rationale="test",
+    )
+
+
+def _engine_with_pct(pct: str) -> tuple[ExecutionEngine, RiskState]:
+    rs = RiskState(config=fifty_k_combine())  # starting_balance 50000, max_contracts 30
+    eng = ExecutionEngine(
+        broker=PaperBroker(),
+        risk_state=rs,
+        runners=[make_runner()],
+        contracts=4,
+        risk_per_trade_pct=Decimal(pct),
+    )
+    return eng, rs
+
+
+def test_entry_size_wide_stop_caps_at_one():
+    """10.8pt stop at $50k / 0.25% ($125 budget, $108/contract) -> 1 contract."""
+    eng, rs = _engine_with_pct("0.25")
+    rs.mark_equity(Decimal("50000"), in_ny_am(0))
+    assert eng._entry_size(_signal("4514.8", "4504.0", "4541.8")) == 1
+
+
+def test_entry_size_normal_stop():
+    """3.0pt stop -> $30/contract; floor(125/30)=4 contracts."""
+    eng, rs = _engine_with_pct("0.25")
+    rs.mark_equity(Decimal("50000"), in_ny_am(0))
+    assert eng._entry_size(_signal("4500.0", "4497.0", "4509.0")) == 4
+
+
+def test_entry_size_disabled_uses_fixed_contracts():
+    """risk_per_trade_pct=0 -> fall back to fixed contracts (4)."""
+    eng, rs = _engine_with_pct("0")
+    rs.mark_equity(Decimal("50000"), in_ny_am(0))
+    assert eng._entry_size(_signal("4514.8", "4504.0", "4541.8")) == 4
+
+
+def test_entry_size_equity_fallback_before_first_tick():
+    """Before any mark_equity tick, current_equity is 0; fall back to realized_balance."""
+    eng, rs = _engine_with_pct("0.25")
+    # no mark_equity call -> _current_equity == 0, realized_balance == 50000
+    assert eng._entry_size(_signal("4500.0", "4497.0", "4509.0")) == 4
