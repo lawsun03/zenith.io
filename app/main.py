@@ -735,6 +735,9 @@ async def _async_main() -> int:
         ))
 
     journal = Journal(outbox=outbox)
+    # Load any fills already written to today's CSV so a mid-session restart
+    # doesn't blank out the EOD summary.
+    journal.bootstrap_fills_from_csv(_daily_csv_path())
 
     # Email notifier — no-ops if SMTP env vars are missing.
     notifier = EmailNotifier()

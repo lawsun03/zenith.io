@@ -19,11 +19,16 @@ and a tear during read could yield half-formed dicts.
 from __future__ import annotations
 
 import asyncio
+import csv
+import logging
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Deque, TYPE_CHECKING
+
+log = logging.getLogger(__name__)
 
 from app.broker.events import Bar, Fill
 from app.execution.engine import OrderOutcome
@@ -121,6 +126,15 @@ class Journal:
 
     async def record_fill(self, fill: Fill) -> None:
         """Subscribe to broker.on_fill in main."""
+        # Provisional fills are the early-arrival fanout used to keep risk
+        # state's open_contracts in sync before the broker knows whether the
+        # fill is an entry or an exit. A corrected fanout (with the real
+        # is_entry/realized_pnl) follows from entry-replay or
+        # _reprocess_early_exit. Skip the provisional one so it doesn't
+        # appear as a phantom ENTRY row in the dashboard or get shipped to
+        # the durable outbox.
+        if getattr(fill, "is_provisional", False):
+            return
         entry = JournalEntry(
             ts=fill.ts,
             kind="fill",
@@ -180,6 +194,48 @@ class Journal:
     # ------------------------------------------------------------------
     # Reads — called from HTTP/WebSocket handlers
     # ------------------------------------------------------------------
+
+    def bootstrap_fills_from_csv(self, path: Path) -> None:
+        """
+        Load today's persisted fills from the daily CSV into _fills at startup.
+
+        Called once after a restart so the EOD summary covers fills from before
+        the restart. Does not publish to SSE subscribers (none exist yet at
+        startup) or enqueue to outbox (already durable in the CSV).
+        """
+        if not path.exists():
+            return
+        loaded = 0
+        try:
+            with path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        ts = datetime.fromisoformat(row["ts"].replace("Z", "+00:00"))
+                        entry = JournalEntry(
+                            ts=ts,
+                            kind="fill",
+                            payload={
+                                "instrument": row["instrument"],
+                                "side": row["side"],
+                                "fill_price": row["fill_price"],
+                                "size": int(row["size"]),
+                                "is_entry": row["type"] == "ENTRY",
+                                "realized_pnl_delta": row["realized_pnl"],
+                                "broker_order_id": row["broker_order_id"],
+                            },
+                        )
+                        self._fills.append(entry)
+                        loaded += 1
+                    except Exception:
+                        log.warning(
+                            "bootstrap_fills_from_csv: skipped malformed row in %s",
+                            path, exc_info=True,
+                        )
+        except Exception:
+            log.warning("bootstrap_fills_from_csv: could not read %s", path, exc_info=True)
+        if loaded:
+            log.info("Bootstrapped %d fill(s) from %s into journal", loaded, path)
 
     def reset(self) -> None:
         """Clear all journal entries and notify WebSocket clients."""
