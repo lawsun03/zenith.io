@@ -32,6 +32,7 @@ export interface BotConfig {
   entry_mode: string
   enabled_killzones: string[]
   contracts: number
+  risk_per_trade_pct: number
   mode?: string
   strategy: StrategyConfig
 }
