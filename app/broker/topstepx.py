@@ -172,6 +172,9 @@ class TopstepXBroker:
         # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
         self._forming_bar: Bar | None = None
         self._forming_bar_minute: datetime | None = None
+        # Background task that snapshots the forming bar to intrabar_<instr>.csv.
+        # Started at the end of subscribe(), cancelled in disconnect().
+        self._intrabar_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Connection
@@ -194,12 +197,37 @@ class TopstepXBroker:
         log.info("TopstepXBroker.connect() — SDK loaded, awaiting subscribe()")
 
     async def disconnect(self) -> None:
+        if self._intrabar_task is not None:
+            self._intrabar_task.cancel()
+            try:
+                await self._intrabar_task
+            except asyncio.CancelledError:
+                pass
+            self._intrabar_task = None
         if self._suite is not None:
             try:
                 await self._suite.disconnect()
             except Exception as e:
                 log.warning("Error during disconnect: %s", e)
             self._suite = None
+
+    async def _intrabar_sampler_loop(self) -> None:
+        """Every _INTRABAR_SAMPLE_SECONDS, snapshot the forming bar to CSV.
+
+        Pure observer: reads self._forming_bar only. A disk/serialization error
+        is logged at ERROR and the loop continues — it never crashes the broker
+        and never dies silently (Rule 12). CancelledError exits cleanly.
+        """
+        while True:
+            try:
+                await asyncio.sleep(_INTRABAR_SAMPLE_SECONDS)
+                bar = self._forming_bar
+                if bar is not None:
+                    _append_intrabar_csv(bar, _utcnow())
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("intrabar sampler: failed to record snapshot")
 
     # ------------------------------------------------------------------
     # Account info
@@ -1005,6 +1033,13 @@ class TopstepXBroker:
                 )
 
         await self._suite.events.on(EventType.QUOTE_UPDATE, _on_quote_update)
+
+        # Start the intrabar recorder now that _forming_bar can populate.
+        self._intrabar_task = asyncio.create_task(self._intrabar_sampler_loop())
+        log.info(
+            "Intrabar recorder started: %ds interval -> intrabar_%s.csv",
+            _INTRABAR_SAMPLE_SECONDS, primary,
+        )
 
         # SDK exposes fill events under different names depending on version.
         for event_name in ("ORDER_FILLED", "FILL", "POSITION_CHANGED"):
