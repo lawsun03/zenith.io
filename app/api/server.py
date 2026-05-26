@@ -48,6 +48,7 @@ from app.bot_config import BotConfig, load_bot_config, save_bot_config
 from app.execution.reconciler import Reconciler
 from app.risk.state import RiskState
 from app.strategy.composer import Signal
+from app.strategy.killzone import in_killzone, killzones_from_names
 
 from .journal import Journal, _decimal_to_str
 
@@ -123,6 +124,33 @@ def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
 _active_searches: dict[str, dict[str, Any]] = {}
 
 log = logging.getLogger(__name__)
+
+
+def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
+    """Serialize VP filter state for the setup checklist."""
+    enabled = cfg.strategy.vp_enabled
+    if vp is None or not enabled:
+        return {"enabled": enabled, "profile_available": False}
+
+    prior = vp._prior
+    if prior is None:
+        return {
+            "enabled": True,
+            "profile_available": False,
+            "tolerance": str(cfg.strategy.vp_filter_tolerance),
+        }
+
+    return {
+        "enabled": True,
+        "profile_available": True,
+        "poc":  str(prior.poc),
+        "vah":  str(prior.vah),
+        "val":  str(prior.val),
+        "hvns": [str(h) for h in prior.hvns],
+        "tolerance": str(cfg.strategy.vp_filter_tolerance),
+        "min_target_r": str(cfg.strategy.vp_min_target_r),
+        "session_date": str(prior.session_date),
+    }
 
 
 def build_app(
@@ -230,6 +258,56 @@ def build_app(
     async def reconciles(limit: int = 20) -> JSONResponse:
         return JSONResponse({"items": await journal.recent_reconciles(limit)})
 
+    @app.get("/api/setup_state")
+    async def setup_state() -> JSONResponse:
+        """
+        Live snapshot of signal-formation conditions for the dashboard checklist.
+        Shows killzone, pending sweeps, displacement candidate, cooldown, and ATR.
+        """
+        if _engine is None:
+            return JSONResponse({"available": False, "instruments": []})
+
+        cfg = load_bot_config(_bot_config_path)
+        kz_list = killzones_from_names(cfg.enabled_killzones)
+        now = datetime.now(timezone.utc)
+        active_kz = in_killzone(now, kz_list)
+
+        instruments: list[dict] = []
+        for instrument, runner in _engine.runners.items():
+            awaiting = runner.composer.awaiting  # list[SweepEvent]
+            disp_candidate = runner.displacement.peek_displacement()
+            atr = runner.displacement.atr
+            cooldown = runner.composer._cooldown_remaining
+
+            instruments.append({
+                "instrument": instrument,
+                "killzone": {
+                    "active": active_kz is not None,
+                    "name": active_kz.name if active_kz else None,
+                },
+                "sweeps_pending": [
+                    {
+                        "side": s.side,
+                        "pattern": s.pattern,
+                        "swept_price": str(s.swept_swing.price),
+                        "sweep_extreme": str(s.sweep_extreme),
+                    }
+                    for s in awaiting
+                ],
+                "displacement_candidate": (
+                    {
+                        "side": disp_candidate[0],
+                        "bar_ts": disp_candidate[2].ts.isoformat(),
+                    }
+                    if disp_candidate is not None else None
+                ),
+                "cooldown_bars_remaining": cooldown,
+                "atr": str(atr) if atr is not None else None,
+                "vp": _build_vp_state(runner.vp, cfg),
+            })
+
+        return JSONResponse({"available": True, "instruments": instruments})
+
     @app.get("/api/export/trades.csv")
     async def export_trades() -> StreamingResponse:
         signals = await journal.recent_signals(10_000)
@@ -306,6 +384,7 @@ def build_app(
             "account_name": cfg.account_name,
             "entry_mode": cfg.entry_mode,
             "contracts": cfg.contracts,
+            "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "enabled_killzones": cfg.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
@@ -320,6 +399,7 @@ def build_app(
             _broker.entry_mode = body.entry_mode
         if _engine is not None:
             _engine.contracts = body.contracts
+            _engine.risk_per_trade_pct = body.risk_per_trade_pct
             _engine.strategy_cfg = body.strategy
         return JSONResponse({
             "instrument": body.instrument,
@@ -329,6 +409,7 @@ def build_app(
             "account_name": body.account_name,
             "entry_mode": body.entry_mode,
             "contracts": body.contracts,
+            "risk_per_trade_pct": float(body.risk_per_trade_pct),
             "enabled_killzones": body.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
