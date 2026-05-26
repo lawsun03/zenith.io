@@ -268,27 +268,30 @@ class TopstepXBroker:
         return positions
 
     async def _raw_positions(self) -> list[dict]:
-        """Call the positions API directly, tolerating extra fields the SDK rejects."""
-        try:
-            account_info = self._suite.client.account_info
-            account_id = account_info.id if account_info else None
-            payload = {"accountId": account_id} if account_id else {}
-            resp = await self._suite.client._make_request(
-                "POST", "/Position/searchOpen", data=payload
-            )
-            if resp is None:
-                return []
-            positions: list[dict] = []
-            if isinstance(resp, list):
-                positions = resp
-            elif isinstance(resp, dict):
-                if not resp.get("success", False):
-                    return []
-                positions = resp.get("positions") or []
-            return positions
-        except Exception as e:
-            log.warning("_raw_positions failed: %s", e)
-            return []
+        """Call the positions API directly, tolerating extra fields the SDK rejects.
+
+        Raises on any failure so the reconciler's outer try/except can abort
+        the tick safely instead of misreading an API failure as "no positions".
+        Silently returning [] would make broker_contracts=0 and trigger a false
+        drift alarm + emergency flatten even when a position is genuinely open.
+        """
+        account_info = self._suite.client.account_info
+        account_id = account_info.id if account_info else None
+        payload = {"accountId": account_id} if account_id else {}
+        resp = await self._suite.client._make_request(
+            "POST", "/Position/searchOpen", data=payload
+        )
+        if resp is None:
+            raise RuntimeError("_raw_positions: null response from /Position/searchOpen")
+        if isinstance(resp, dict):
+            if not resp.get("success", False):
+                raise RuntimeError(
+                    f"_raw_positions: API returned success=false: {resp}"
+                )
+            return resp.get("positions") or []
+        if isinstance(resp, list):
+            return resp
+        raise RuntimeError(f"_raw_positions: unexpected response type {type(resp)}: {resp}")
 
     # ------------------------------------------------------------------
     # Order placement
