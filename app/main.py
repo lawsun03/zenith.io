@@ -60,7 +60,7 @@ from app.execution.engine import (
     StrategyRunner,
 )
 from app.execution.reconciler import Reconciler, ReconcilerConfig
-from app.notifications import EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
+from app.notifications import DiscordNotifier, EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
 from project_x_py.exceptions import ProjectXConnectionError
 from app.replay import load_bars_csv
 from app.risk.config import config_for_account, fifty_k_combine
@@ -249,6 +249,7 @@ def _make_signal_journaler(
     journal: Journal,
     notifier: EmailNotifier | None = None,
     config_path: Path | None = None,
+    discord: DiscordNotifier | None = None,
 ):
     """Build the on_signal callback bound to a specific Journal."""
 
@@ -288,6 +289,8 @@ def _make_signal_journaler(
                 "SIGNAL DENIED  %s  reason=%s | %s",
                 signal.side.upper(), outcome.reason, signal.rationale,
             )
+        if discord is not None and discord.enabled:
+            await discord.send_signal(signal, outcome)
         await journal.record_signal(signal, outcome)
 
     return journal_signal
@@ -325,13 +328,19 @@ def _append_fill_csv(fill: Fill) -> None:
     """Append one fill row to master trades.csv and today's daily CSV."""
     if fill.is_entry:
         # Try broker_order_id first (normal path: journal_signal re-keyed it).
-        # Fall back to instrument key for market orders that fill during the
-        # HTTP round-trip before journal_signal can re-key.
-        meta = (
-            _pending_signal_meta.pop(fill.broker_order_id, None)
-            or _pending_signal_meta.pop(fill.instrument, None)
-            or {}
-        )
+        # Fall back to fill.instrument (same as signal.instrument in paper mode).
+        # Last resort: pop whatever single key is left — on_pre_place writes under
+        # the strategy instrument name ("MGC") but fills arrive with the full
+        # contract symbol ("CON.F.US.MGC.M26"), so the instrument fallback misses.
+        # MAX_CONTRACTS gate ensures at most one signal is in flight, so if one
+        # key remains after both lookups fail it must be ours.
+        meta = _pending_signal_meta.pop(fill.broker_order_id, None)
+        if meta is None:
+            meta = _pending_signal_meta.pop(fill.instrument, None)
+        if meta is None and len(_pending_signal_meta) == 1:
+            _, meta = _pending_signal_meta.popitem()
+        if meta is None:
+            meta = {}
     else:
         meta = {}
     row = [
@@ -374,12 +383,24 @@ def _append_fill_csv(fill: Fill) -> None:
             log.exception("_append_fill_csv failed for %s — fill not logged", path)
 
 
-def _make_fill_journaler(journal: Journal, notifier: EmailNotifier | None = None):
+def _make_fill_journaler(
+    journal: Journal,
+    notifier: EmailNotifier | None = None,
+    discord: DiscordNotifier | None = None,
+):
     """Build the on_fill broker subscriber bound to a specific Journal."""
 
     async def on_fill(fill: Fill) -> None:
+        # Provisional fills are the early-arrival fanout used to keep risk
+        # state in sync; a corrected fanout follows. Skip CSV and notifier
+        # work — only the corrected version should be logged or shipped.
+        if getattr(fill, "is_provisional", False):
+            await journal.record_fill(fill)  # journal also skips internally
+            return
         _append_fill_csv(fill)
         await journal.record_fill(fill)
+        if discord is not None and discord.enabled:
+            await discord.send_fill(fill)
         # Notify on EXIT fills only — entry confirmation is covered by the
         # signal-placed email already.
         if (
@@ -677,6 +698,11 @@ async def _async_main() -> int:
         )
     else:
         risk_cfg = fifty_k_combine(soft_buffer=cfg.soft_buffer)
+        # Paper mode doesn't fetch a real account; mirror the same names so
+        # downstream startup notifications can read them uniformly.
+        live_balance = risk_cfg.starting_balance
+        live_account = ""
+        live_daily_pnl = Decimal("0")
 
     risk_state = RiskState(config=risk_cfg)
 
@@ -717,6 +743,13 @@ async def _async_main() -> int:
     else:
         log.info("Email notifications disabled (no SMTP env vars)")
 
+    # Discord notifier — no-ops if webhook URL env var is missing.
+    discord = DiscordNotifier()
+    if discord.enabled:
+        log.info("Discord notifications enabled (webhook posts on signals + fills)")
+    else:
+        log.info("Discord notifications disabled (TOPSTEP_BOT_DISCORD_WEBHOOK_URL unset)")
+
     # Reconciler is constructed before the engine so we can pass
     # reconciler.notify_order_placed as the on_order_placed callback.
     # The reconciler does not call back into the engine, so there is
@@ -737,14 +770,15 @@ async def _async_main() -> int:
         broker=broker,
         risk_state=risk_state,
         runners=[runner],
-        on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path),
+        on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path, discord=discord),
         on_order_placed=reconciler.notify_order_placed,
         on_pre_place=_make_pre_place(config_path=cfg.bot_config_path),
         contracts=bot_cfg.contracts,
+        risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         strategy_cfg=bot_cfg.strategy,
     )
     # Subscribe the journal to broker fills and bars.
-    broker.on_fill(_make_fill_journaler(journal, notifier))
+    broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord))
     broker.on_bar(_make_bar_journaler(journal))
 
     eod_scheduler = EndOfDayScheduler(
@@ -753,6 +787,7 @@ async def _async_main() -> int:
         notifier=notifier,
         trades_csv_path=_TRADES_CSV,
         daily_csv_fn=_daily_csv_path,
+        discord=discord,
     )
     health_scheduler = HourlyHealthScheduler(
         notifier=notifier,
@@ -813,8 +848,9 @@ async def _async_main() -> int:
         await broker.connect()
         await engine.start()
         await reconciler.start()
-        if notifier.enabled:
+        if notifier.enabled or discord.enabled:
             await eod_scheduler.start()
+        if notifier.enabled:
             await health_scheduler.start()
         if sender is not None:
             await sender.start()
@@ -827,8 +863,10 @@ async def _async_main() -> int:
             api_config.port,
         )
 
+        started_at = datetime.now(_CT).strftime("%Y-%m-%d %H:%M:%S CT")
+        killzones_str = ", ".join(bot_cfg.enabled_killzones or []) or "all"
+
         if notifier.enabled and cfg.mode == "live":
-            started_at = datetime.now(_CT).strftime("%Y-%m-%d %H:%M:%S CT")
             account_line = f"  Account:    {live_account}\n" if live_account else ""
             await notifier.send(
                 subject=f"Bot started — {started_at}",
@@ -839,9 +877,21 @@ async def _async_main() -> int:
                     f"  Balance:    ${live_balance}\n"
                     f"  Daily P&L:  ${live_daily_pnl}\n"
                     f"  Instrument: {cfg.instrument}\n"
-                    f"  Killzones:  {', '.join(bot_cfg.enabled_killzones or []) or 'all'}\n"
+                    f"  Killzones:  {killzones_str}\n"
                     f"  Dashboard:  http://127.0.0.1:{api_config.port}"
                 ),
+            )
+
+        if discord.enabled:
+            await discord.send_startup(
+                mode=cfg.mode,
+                instrument=cfg.instrument,
+                balance=str(live_balance),
+                daily_pnl=str(live_daily_pnl),
+                killzones=killzones_str,
+                dashboard_url=f"http://127.0.0.1:{api_config.port}",
+                started_at=started_at,
+                account=live_account or None,
             )
 
         if cfg.mode == "paper":
