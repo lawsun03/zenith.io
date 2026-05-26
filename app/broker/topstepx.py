@@ -22,10 +22,12 @@ Notes / SDK quirks isolated here:
 from __future__ import annotations
 
 import asyncio
+import csv
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Iterable
 
 from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
@@ -75,6 +77,43 @@ def _to_sdk_side(side: Side) -> int:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Intrabar recorder: snapshot the forming bar this often (seconds) and append
+# to a single rolling CSV per instrument. Pure observer — off the order path.
+_INTRABAR_SAMPLE_SECONDS = 5
+_INTRABAR_HEADERS = [
+    "sample_ts", "instrument", "bar_minute",
+    "open", "high", "low", "close", "volume",
+]
+
+
+def _intrabar_row(bar: Bar, sample_ts: datetime) -> list[str]:
+    """Build one intrabar CSV row from a forming-bar snapshot, in header order."""
+    return [
+        sample_ts.isoformat(),
+        bar.instrument,
+        bar.ts.isoformat(),
+        str(bar.open),
+        str(bar.high),
+        str(bar.low),
+        str(bar.close),
+        str(bar.volume),
+    ]
+
+
+def _append_intrabar_csv(
+    bar: Bar, sample_ts: datetime, path: Path | None = None
+) -> None:
+    """Append one snapshot row to intrabar_<instrument>.csv, writing the header
+    once if the file does not yet exist (single rolling file, append-forever)."""
+    p = path or Path(f"intrabar_{bar.instrument}.csv")
+    new_file = not p.exists()
+    with p.open("a", newline="") as f:
+        writer = csv.writer(f)
+        if new_file:
+            writer.writerow(_INTRABAR_HEADERS)
+        writer.writerow(_intrabar_row(bar, sample_ts))
 
 
 def _tf_seconds_local(tf: str) -> int:
@@ -333,10 +372,28 @@ class TopstepXBroker:
             bracket_data = self._pending_brackets.pop(entry_order_id)
             bracket_data["fill_price"] = early.fill_price
             log.info(
-                "Replaying early fill order=%s @ %s — placing stop+target",
+                "Replaying early entry fill order=%s @ %s — placing stop+target",
                 entry_order_id, early.fill_price,
             )
             asyncio.create_task(self._place_bracket_after_fill(bracket_data))
+            # Re-fan a non-provisional copy so the journal/UI record the entry.
+            # The provisional fanout in _on_fill_event already updated risk
+            # state's open_contracts; this copy uses contracts_delta=0 to avoid
+            # double-counting while still letting the journal see is_provisional=False.
+            confirmed = Fill(
+                ts=early.ts,
+                instrument=early.instrument,
+                side=early.side,
+                fill_price=early.fill_price,
+                size=early.size,
+                is_entry=True,
+                realized_pnl_delta=early.realized_pnl_delta,
+                contracts_delta=0,
+                broker_order_id=early.broker_order_id,
+                is_stop=early.is_stop,
+                is_provisional=False,
+            )
+            asyncio.create_task(self._fanout(self._fill_handlers, confirmed))
 
         return BracketResult(
             success=True,
@@ -517,6 +574,65 @@ class TopstepXBroker:
             self._exit_pairs[target_id] = {**ctx, "paired_id": stop_id}
             log.info("OCO pair registered: stop=%s target=%s entry=%s side=%s",
                      stop_id, target_id, fill_price, entry_side)
+
+            # Stop or target may have filled before this registration completed
+            # (SDK fires ORDER_FILLED while we were awaiting asyncio.gather above).
+            # Those fills were buffered in _early_fills as apparent ENTRY fills.
+            # Re-process them now with the correct EXIT classification and P&L.
+            for oid in (stop_id, target_id):
+                early_exit = self._early_fills.pop(oid, None)
+                if early_exit is not None:
+                    log.info(
+                        "Replaying early exit fill: order=%s @ %s (arrived before OCO registered)",
+                        oid, early_exit.fill_price,
+                    )
+                    asyncio.create_task(self._reprocess_early_exit(early_exit))
+
+    async def _reprocess_early_exit(self, fill: Fill) -> None:
+        """
+        Re-process a stop/target fill that arrived before its OCO pair was
+        registered. Computes realized P&L from the entry context and fans
+        out a corrected EXIT fill to all handlers.
+        """
+        order_id = fill.broker_order_id
+        pair_info = self._exit_pairs.pop(order_id, None)
+        if pair_info is None:
+            # Already consumed (e.g. duplicate event). The initial fanout already
+            # updated risk state, so don't re-fan — that would double-count P&L.
+            log.warning("_reprocess_early_exit: %s not in _exit_pairs — already processed", order_id)
+            return
+
+        paired_id = pair_info["paired_id"]
+        self._exit_pairs.pop(paired_id, None)
+        asyncio.create_task(self._cancel_order(paired_id))
+
+        pv = _point_value(fill.instrument)
+        if pair_info["entry_side"] == "long":
+            pnl = (fill.fill_price - pair_info["entry_price"]) * pair_info["size"] * pv
+        else:
+            pnl = (pair_info["entry_price"] - fill.fill_price) * pair_info["size"] * pv
+
+        corrected = Fill(
+            ts=fill.ts,
+            instrument=fill.instrument,
+            side=fill.side,
+            fill_price=fill.fill_price,
+            size=fill.size,
+            is_entry=False,
+            realized_pnl_delta=pnl,
+            # contracts_delta=0: the initial fanout (when we buffered the early fill)
+            # already updated risk_state.open_contracts via _handle_fill. Setting 0
+            # here prevents the reconciler and risk state from double-counting.
+            contracts_delta=0,
+            broker_order_id=order_id,
+        )
+        log.info(
+            "Early exit P&L corrected: order=%s pnl=%s (entry=%s exit=%s %s x%d)",
+            order_id, pnl, pair_info["entry_price"], fill.fill_price,
+            pair_info["entry_side"], pair_info["size"],
+        )
+        await self._fanout(self._fill_handlers, corrected)
+        await self._emit_equity_snapshot(corrected.ts)
 
     async def _cancel_order(self, order_id: str) -> None:
         """Cancel a single order by ID. Used for OCO cancellation."""
@@ -994,13 +1110,37 @@ class TopstepXBroker:
                     )
 
                 elif order_id and fill.is_entry:
-                    # Not in either dict yet — likely a market entry fill that
-                    # arrived before place_market_bracket registered the order_id
-                    # (race condition). Buffer it; place_market_bracket replays it.
+                    # Not in any known dict yet. Two cases:
+                    #   (a) Market entry fill before place_market_bracket registered
+                    #       the order_id — replayed by place_market_bracket.
+                    #   (b) Stop/target fill before _place_bracket_after_fill registered
+                    #       the OCO pair — replayed by _reprocess_early_exit.
+                    # Fan out NOW so the engine's _handle_fill updates risk state
+                    # immediately (contracts_delta is correct regardless of is_entry).
+                    # Skipping fanout here leaves open_contracts stale and causes the
+                    # reconciler to fire false drift alerts and lockout emails.
+                    # _reprocess_early_exit will re-fan with correct EXIT classification
+                    # and P&L, using contracts_delta=0 to avoid double-counting.
                     self._early_fills[order_id] = fill
                     log.info(
-                        "Early fill buffered order=%s @ %s (bracket not yet registered)",
+                        "Early fill buffered order=%s @ %s (risk state updated, routing pending)",
                         order_id, fill.fill_price,
+                    )
+                    # Mark provisional so the journal/UI skip this row. The
+                    # corrected fanout will follow (from entry-replay or
+                    # _reprocess_early_exit) and is the one that gets logged.
+                    fill = Fill(
+                        ts=fill.ts,
+                        instrument=fill.instrument,
+                        side=fill.side,
+                        fill_price=fill.fill_price,
+                        size=fill.size,
+                        is_entry=fill.is_entry,
+                        realized_pnl_delta=fill.realized_pnl_delta,
+                        contracts_delta=fill.contracts_delta,
+                        broker_order_id=fill.broker_order_id,
+                        is_stop=fill.is_stop,
+                        is_provisional=True,
                     )
 
                 await self._fanout(self._fill_handlers, fill)
