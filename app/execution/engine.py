@@ -43,8 +43,10 @@ from typing import Awaitable, Callable, Optional
 
 from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
+from app.broker.topstepx import _point_value
 from app.bot_config import StrategyParams
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
+from app.risk.sizing import risk_based_size
 from app.risk.state import RiskState
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
@@ -173,6 +175,7 @@ class ExecutionEngine:
         on_pre_place: PrePlaceCallback | None = None,
         replay_mode: bool = False,
         contracts: int = 1,
+        risk_per_trade_pct: Decimal = Decimal("0"),
         strategy_cfg: "StrategyParams | None" = None,
     ) -> None:
         self.broker = broker
@@ -180,6 +183,7 @@ class ExecutionEngine:
         self.runners = {r.instrument: r for r in runners}
         self.on_signal = on_signal
         self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
+        self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
         self.strategy_cfg = strategy_cfg
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
@@ -213,6 +217,12 @@ class ExecutionEngine:
         # first and store the signal here. Executed once the flatten fill
         # confirms we're flat (open_contracts == 0).
         self._pending_reversal: dict[str, Signal] = {}
+
+        # Instruments for which _flatten_for_reversal has been deliberately
+        # initiated. _handle_fill only triggers _execute_reversal when the
+        # instrument is in this set — preventing natural stop/target fills from
+        # triggering a stale pending reversal.
+        self._reversal_flatten_active: set[str] = set()
 
         self._started = False
 
@@ -357,8 +367,11 @@ class ExecutionEngine:
             if runner is not None:
                 runner.composer.on_stop_loss()
 
-        # If a reversal was pending and this fill just brought us flat, execute it.
-        if self.risk_state.open_contracts == 0:
+        # Only trigger reversal when we deliberately initiated a flatten for
+        # reversal purposes. Natural stop/target fills that happen to bring
+        # open_contracts to 0 must NOT consume a stale _pending_reversal.
+        if self.risk_state.open_contracts == 0 and fill.instrument in self._reversal_flatten_active:
+            self._reversal_flatten_active.discard(fill.instrument)
             pending = self._pending_reversal.pop(fill.instrument, None)
             if pending is not None:
                 log.info(
@@ -379,12 +392,39 @@ class ExecutionEngine:
     # Internals
     # ------------------------------------------------------------------
 
+    def _entry_size(self, signal: Signal) -> int:
+        """Contracts for this entry. Risk-based when risk_per_trade_pct > 0,
+        else the fixed `contracts` count. Logs the decision (Rule 12)."""
+        if not self.risk_per_trade_pct or self.risk_per_trade_pct <= 0:
+            return self.contracts
+
+        equity = self.risk_state.current_equity
+        if equity <= 0:  # before the first mark-to-market tick of the session
+            equity = self.risk_state.realized_balance
+        stop_distance = abs(signal.entry - signal.stop)
+        if stop_distance <= 0:
+            return self.contracts  # degenerate signal; fall back rather than divide by zero
+
+        pv = _point_value(signal.instrument)
+        size = risk_based_size(
+            equity, self.risk_per_trade_pct, stop_distance, pv,
+            max_size=self.risk_state.config.max_contracts,
+        )
+        budget = equity * (self.risk_per_trade_pct / Decimal("100"))
+        risk_per_contract = stop_distance * pv
+        over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
+        log.info(
+            "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s",
+            equity, budget, stop_distance, risk_per_contract, size, over,
+        )
+        return size
+
     async def _act_on_signal(self, signal: Signal) -> OrderOutcome:
         """Run the pretrade gate and place if allowed. Caller holds the lock."""
         order = ProposedOrder(
             instrument=signal.instrument,
             side=signal.side,
-            size=self.contracts,
+            size=self._entry_size(signal),
             entry=signal.entry,
             stop=signal.stop,
             target=signal.target,
@@ -565,6 +605,7 @@ class ExecutionEngine:
 
     async def _flatten_for_reversal(self, instrument: str) -> None:
         """Cancel open brackets and flatten the position before a reversal entry."""
+        self._reversal_flatten_active.add(instrument)
         try:
             await self.broker.cancel_all(instrument)
         except Exception:
@@ -573,7 +614,23 @@ class ExecutionEngine:
             await self.broker.flatten(instrument)
         except Exception:
             log.exception("flatten during reversal failed for %s — dropping pending reversal", instrument)
+            self._reversal_flatten_active.discard(instrument)
             self._pending_reversal.pop(instrument, None)
+            return
+
+        # Edge case: position was already flat when flatten() was called (e.g.
+        # the position closed naturally just before the reversal flatten ran).
+        # No fill event will arrive, so _handle_fill never fires — execute the
+        # reversal directly here instead.
+        if self.risk_state.open_contracts == 0 and instrument in self._reversal_flatten_active:
+            self._reversal_flatten_active.discard(instrument)
+            pending = self._pending_reversal.pop(instrument, None)
+            if pending is not None:
+                log.info(
+                    "Already flat when reversal flatten ran — entering immediately: %s",
+                    pending.rationale,
+                )
+                asyncio.create_task(self._execute_reversal(pending))
 
     async def _execute_reversal(self, signal: Signal) -> None:
         """Place the deferred reversal entry after the flatten fill confirmed flat."""
