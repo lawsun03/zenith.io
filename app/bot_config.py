@@ -51,6 +51,7 @@ class BotConfig(BaseModel):
     account_name: str | None = None  # live mode: TopstepX account name to trade on
     entry_mode: str = "market"      # "market" or "limit" (custom limit+bracket-after-fill)
     contracts: int = 1              # number of contracts per signal
+    risk_per_trade_pct: Decimal = Decimal("0.25")  # 0 = disabled (use fixed contracts); else % of equity risked per trade
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
@@ -78,6 +79,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "account_name": config.account_name,
         "entry_mode": config.entry_mode,
         "contracts": config.contracts,
+        "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
     }
