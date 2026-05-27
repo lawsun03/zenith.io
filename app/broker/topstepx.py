@@ -883,6 +883,29 @@ class TopstepXBroker:
             order_id=group["stop_id"], stop_price=float(group["be_price"]),
             size=group["remaining_size"])
 
+    async def _maybe_move_stop_to_be(self, instrument: str, price: Decimal) -> None:
+        """1-lot BE move: when price crosses the trigger, modify the stop to BE.
+        Called from the quote handler. Cheap no-op when no armed watch exists."""
+        watch = self._be_watches.get(instrument)
+        if watch is None or not watch["armed"]:
+            return
+        crossed = (
+            (watch["side"] == "long" and price >= watch["trigger_price"])
+            or (watch["side"] == "short" and price <= watch["trigger_price"])
+        )
+        if not crossed:
+            return
+        watch["armed"] = False
+        try:
+            ok = await self._suite.orders.modify_order(
+                order_id=watch["stop_id"], stop_price=float(watch["be_price"]))
+            if ok:
+                log.info("BE move (1-lot): stop=%s -> %s", watch["stop_id"], watch["be_price"])
+            else:
+                log.error("BE move (1-lot) modify returned falsy for stop=%s — original stop still active", watch["stop_id"])
+        except Exception:
+            log.exception("BE move (1-lot) failed for %s — original stop still active", instrument)
+
     async def _reprocess_early_exit(self, fill: Fill) -> None:
         """
         Re-process a stop/target fill that arrived before its OCO pair was
@@ -1272,6 +1295,8 @@ class TopstepXBroker:
                 price = Decimal(str((float(bid) + float(ask)) / 2))
             except (ValueError, TypeError):
                 return
+            # 1-lot break-even move: arm-and-fire when price crosses the trigger.
+            await self._maybe_move_stop_to_be(primary, price)
             now = _utcnow()
             minute_start = now.replace(second=0, microsecond=0)
             if self._forming_bar_minute != minute_start:

@@ -195,3 +195,40 @@ def test_stop_before_partial_cancels_both_targets():
     cancels = [c for c in b._suite.orders.calls if c[0] == "cancel"]
     assert len(cancels) == 2   # partial + final both cancelled
     assert b._exit_groups == {}
+
+
+def _register_1lot(b, side="long"):
+    stop_off = Decimal("-1") if side == "long" else Decimal("1")
+    tgt_off = Decimal("5") if side == "long" else Decimal("-5")
+    bracket = {
+        "fill_price": Decimal("100"), "stop_offset": stop_off,
+        "target_offset": tgt_off, "close_sdk_side": 1 if side == "long" else 0,
+        "size": 1, "account_id": 1, "partial_r": Decimal("1.5"),
+        "entry_side": side, "instrument": "MGC",
+    }
+    asyncio.run(b._place_partial_bracket_after_fill(bracket))
+    return b
+
+
+def test_1lot_arms_be_watch_no_partial_leg():
+    b = _register_1lot(_broker_with_stub())
+    methods = [c[0] for c in b._suite.orders.calls]
+    assert methods.count("limit") == 1   # only the final target, no partial leg
+    assert "MGC" in b._be_watches
+    assert b._be_watches["MGC"]["trigger_price"] == Decimal("101.5")
+
+
+def test_1lot_be_watch_moves_stop_when_price_crosses():
+    b = _register_1lot(_broker_with_stub())
+    b._suite.orders.calls.clear()
+    # Price below trigger → no move.
+    asyncio.run(b._maybe_move_stop_to_be("MGC", Decimal("101.0")))
+    assert not any(c[0] == "modify" for c in b._suite.orders.calls)
+    # Price crosses 101.5 → modify stop to BE, disarm.
+    asyncio.run(b._maybe_move_stop_to_be("MGC", Decimal("101.5")))
+    modifies = [c for c in b._suite.orders.calls if c[0] == "modify"]
+    assert len(modifies) == 1 and modifies[0][1]["stop_price"] == 100.0
+    assert b._be_watches["MGC"]["armed"] is False
+    # Further crossings do nothing.
+    asyncio.run(b._maybe_move_stop_to_be("MGC", Decimal("102")))
+    assert len([c for c in b._suite.orders.calls if c[0] == "modify"]) == 1
