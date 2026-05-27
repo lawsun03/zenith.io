@@ -25,18 +25,20 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from app.backtest.runner import BacktestConfig, SweepDimension
+from app.bot_config import load_bot_config
 from app.optimizer.walkforward import ConfigScore, run_walk_forward
 from app.replay import load_bars_csv
-from app.strategy.composer import ComposerConfig
-from app.strategy.displacement import DisplacementConfig
-from app.strategy.liquidity import LiquidityConfig
 
 # --- Edit this to change what's swept ---
+# Faithful mode: the base config is seeded from bot_config.json (VP enabled,
+# live params). All sweep dims must use the "strategy" container — it's the only
+# one _build_runner honors when strategy_params is set. Every field below is a
+# StrategyParams field.
 GRID_DIMS = [
-    SweepDimension("body_atr_multiple", [Decimal("0.8"), Decimal("1.0"), Decimal("1.2")], "displacement"),
-    SweepDimension("swing_lookback",    [2, 3, 4],                                         "liquidity"),
-    SweepDimension("r_multiple",        [Decimal("1.5"), Decimal("2.0"), Decimal("2.5"), Decimal("3.0")], "composer"),
-    SweepDimension("stop_buffer",       [Decimal("0.20"), Decimal("0.30"), Decimal("0.40")], "composer"),
+    SweepDimension("trend_ema_period",  [0, 50],                                          "strategy"),
+    SweepDimension("body_atr_multiple", [Decimal("0.8"), Decimal("1.0"), Decimal("1.2")], "strategy"),
+    SweepDimension("r_multiple",        [Decimal("2.0"), Decimal("2.5"), Decimal("3.0")], "strategy"),
+    SweepDimension("stop_buffer",       [Decimal("0.20"), Decimal("0.30"), Decimal("0.40")], "strategy"),
 ]
 # --- End edit ---
 
@@ -110,14 +112,16 @@ async def _run(args: argparse.Namespace) -> None:
     all_bars = list(load_bars_csv(args.bars, instrument))
     print(f"  {len(all_bars)} bars loaded.", flush=True)
 
+    bot_cfg = load_bot_config(Path(args.config))
     base = BacktestConfig(
         instrument=instrument,
         bars=iter([]),
         starting_balance=Decimal("50000"),
         soft_buffer=Decimal("500"),
-        liquidity_config=LiquidityConfig(),
-        displacement_config=DisplacementConfig(),
-        composer_config=ComposerConfig(instrument=instrument),
+        strategy_params=bot_cfg.strategy,
+        enabled_killzones=bot_cfg.enabled_killzones,
+        contracts=bot_cfg.contracts,
+        risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         slippage_ticks_market=1,
         commission_per_side=Decimal("0.74"),
         partial_profit_r=args.partial_profit_r,
@@ -147,6 +151,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Walk-forward optimizer for combine-pass-rate scoring.")
     parser.add_argument("--bars", default="bars_MGC.csv", help="Path to bars CSV")
     parser.add_argument("--instrument", default="MGC")
+    parser.add_argument("--config", default="bot_config.json",
+                        help="Live config to seed the faithful base config from")
     parser.add_argument("--out-dir", default="walkforward_results")
     parser.add_argument("--train-days", type=int, default=30)
     parser.add_argument("--test-days", type=int, default=10)

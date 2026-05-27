@@ -56,13 +56,37 @@ from app.backtest.runner import (
     run_backtest,
     run_sweep,
 )
+from app.bot_config import load_bot_config
 from app.replay import load_bars_csv
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
 from app.strategy.liquidity import LiquidityConfig
 
-# Map parameter name → (container, type). Determines how --sweep
-# arguments get parsed and which sub-config they apply to.
+# Faithful mode (default): the backtest is seeded from bot_config.json and runs
+# with VP enabled, exactly like live. Every sweepable parameter is a field on
+# StrategyParams, so all sweeps target the "strategy" container (the only one
+# _build_runner honors when strategy_params is set). name → value type.
+STRATEGY_PARAM_TYPES: dict[str, type] = {
+    "swing_lookback":             int,
+    "min_penetration":            Decimal,
+    "multi_bar_window":           int,
+    "atr_period":                 int,
+    "body_atr_multiple":          Decimal,
+    "min_body_to_range_ratio":    Decimal,
+    "min_absolute_body":          Decimal,
+    "displacement_window_bars":   int,
+    "stop_buffer":                Decimal,
+    "r_multiple":                 Decimal,
+    "trend_ema_period":           int,
+    "min_atr_filter":             Decimal,
+    "max_atr_filter":             Decimal,
+    "cooldown_bars_after_stop":   int,
+    "min_penetration_atr_factor": Decimal,
+    "vp_min_target_r":            Decimal,
+    "vp_filter_tolerance":        Decimal,
+}
+
+# Legacy mode (--legacy): no VP, bare sub-configs. name → (container, type).
 PARAM_REGISTRY = {
     # composer
     "r_multiple":              ("composer",     Decimal),
@@ -80,18 +104,26 @@ PARAM_REGISTRY = {
 }
 
 
-def parse_sweep_arg(arg: str) -> SweepDimension:
+def parse_sweep_arg(arg: str, faithful: bool = True) -> SweepDimension:
     """Parse 'r_multiple=1.5,2.0,2.5'."""
     if "=" not in arg:
         raise SystemExit(f"--sweep needs key=v1,v2,...  got {arg!r}")
     name, vals = arg.split("=", 1)
     name = name.strip()
-    if name not in PARAM_REGISTRY:
-        raise SystemExit(
-            f"Unknown sweep parameter {name!r}. "
-            f"Available: {', '.join(sorted(PARAM_REGISTRY))}"
-        )
-    container, kind = PARAM_REGISTRY[name]
+    if faithful:
+        if name not in STRATEGY_PARAM_TYPES:
+            raise SystemExit(
+                f"Unknown sweep parameter {name!r}. "
+                f"Available: {', '.join(sorted(STRATEGY_PARAM_TYPES))}"
+            )
+        container, kind = "strategy", STRATEGY_PARAM_TYPES[name]
+    else:
+        if name not in PARAM_REGISTRY:
+            raise SystemExit(
+                f"Unknown sweep parameter {name!r}. "
+                f"Available: {', '.join(sorted(PARAM_REGISTRY))}"
+            )
+        container, kind = PARAM_REGISTRY[name]
     values = [kind(v.strip()) for v in vals.split(",") if v.strip()]
     if not values:
         raise SystemExit(f"--sweep {name} has no values")
@@ -101,9 +133,25 @@ def parse_sweep_arg(arg: str) -> SweepDimension:
 def build_base_config(args: argparse.Namespace) -> BacktestConfig:
     """
     Build the BacktestConfig that all runs (single or sweep) start from.
-    Defaults match _build_runner in main.py.
+
+    Faithful mode (default): seed StrategyParams, killzones, contracts, and
+    risk_per_trade_pct from bot_config.json so the backtest matches live —
+    including the VP gate. Legacy mode (--legacy): bare sub-configs, no VP.
     """
     instrument = args.instrument.upper()
+    if not getattr(args, "legacy", False):
+        bot_cfg = load_bot_config(Path(args.config))
+        return BacktestConfig(
+            instrument=instrument,
+            bars=iter([]),  # filled in per-run
+            starting_balance=Decimal(args.starting_balance),
+            soft_buffer=Decimal(args.soft_buffer),
+            strategy_params=bot_cfg.strategy,
+            enabled_killzones=bot_cfg.enabled_killzones,
+            contracts=bot_cfg.contracts,
+            risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
+        )
+    # Legacy bare-config path (no VP).
     return BacktestConfig(
         instrument=instrument,
         bars=iter([]),  # filled in per-run
@@ -210,7 +258,7 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
         args_copy.bars = bars_path
 
         if args.sweep:
-            dims = [parse_sweep_arg(s) for s in args.sweep]
+            dims = [parse_sweep_arg(s, faithful=not args.legacy) for s in args.sweep]
             base = build_base_config(args_copy)
             def bars_factory(p=bars_path, sym=symbol):
                 return load_bars_csv(p, sym)
@@ -262,6 +310,15 @@ def main() -> int:
         help="Soft buffer above MLL/DLL (default: 500)",
     )
     parser.add_argument(
+        "--config", default="bot_config.json",
+        help="Live config to seed faithful runs from (default: bot_config.json)",
+    )
+    parser.add_argument(
+        "--legacy", action="store_true",
+        help="Use bare sub-configs with NO VP filter (old behavior). "
+             "Default is faithful: seed from --config and run VP like live.",
+    )
+    parser.add_argument(
         "--sweep", action="append", default=[],
         help="Sweep dimension: key=v1,v2,v3 (repeatable)",
     )
@@ -296,7 +353,7 @@ def main() -> int:
         return 1
 
     if args.sweep:
-        dims = [parse_sweep_arg(s) for s in args.sweep]
+        dims = [parse_sweep_arg(s, faithful=not args.legacy) for s in args.sweep]
         return asyncio.run(run_sweep_cmd(args, dims))
     return asyncio.run(run_single(args))
 
