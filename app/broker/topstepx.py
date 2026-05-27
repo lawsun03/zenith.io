@@ -878,10 +878,53 @@ class TopstepXBroker:
         self._be_watches.pop(group["instrument"], None)
 
     async def _modify_stop_to_be(self, group: dict) -> None:
-        # Temporary minimal version — replaced by the failure ladder in Task 8.
-        await self._suite.orders.modify_order(
-            order_id=group["stop_id"], stop_price=float(group["be_price"]),
-            size=group["remaining_size"])
+        """Move the stop to break-even and resize to remaining. The invariant
+        (stop size == position size) must hold or we flatten. Ladder:
+        modify -> retry once -> cancel+replace -> flatten the remainder.
+
+        Note: the SDK's modify_order raises ProjectXOrderError on failure (it only
+        returns True/no-op-True), so the try/except handles production failures;
+        the explicit `if ok` handles the test-stub falsy-return path. Both fall
+        through to cancel+replace."""
+        stop_id = group["stop_id"]
+        be = float(group["be_price"])
+        remaining = group["remaining_size"]
+
+        for attempt in (1, 2):
+            try:
+                ok = await self._suite.orders.modify_order(
+                    order_id=stop_id, stop_price=be, size=remaining)
+                if ok:
+                    log.info("Stop moved to BE: order=%s be=%s size=%d", stop_id, be, remaining)
+                    return
+                log.error("modify_order returned falsy (attempt %d) for stop=%s", attempt, stop_id)
+            except Exception:
+                log.exception("modify_order raised (attempt %d) for stop=%s", attempt, stop_id)
+
+        # Cancel + replace: the old stop is oversized for the now-smaller position.
+        log.error("BE modify failed twice — cancel+replace stop=%s", stop_id)
+        try:
+            await self._cancel_order(stop_id)
+        except Exception:
+            log.exception("cancel of oversized stop failed: %s", stop_id)
+
+        new_id = await self._place_stop(
+            group["close_sdk_side"], remaining, group["be_price"], group["account_id"])
+        if new_id is not None:
+            # Re-register: drop old stop id, add the new one to the group.
+            self._exit_groups.pop(stop_id, None)
+            group["stop_id"] = new_id
+            self._exit_groups[new_id] = group
+            log.info("Replacement BE stop placed: order=%s size=%d", new_id, remaining)
+            return
+
+        # Last resort: flatten the remaining position so it is never naked/oversized.
+        log.error("Replacement stop failed — flattening remainder of %s", group["instrument"])
+        try:
+            await self.flatten(group["instrument"])
+        except Exception:
+            log.exception("emergency flatten of remainder failed for %s", group["instrument"])
+        self._clear_group(group)
 
     async def _maybe_move_stop_to_be(self, instrument: str, price: Decimal) -> None:
         """1-lot BE move: when price crosses the trigger, modify the stop to BE.

@@ -232,3 +232,30 @@ def test_1lot_be_watch_moves_stop_when_price_crosses():
     # Further crossings do nothing.
     asyncio.run(b._maybe_move_stop_to_be("MGC", Decimal("102")))
     assert len([c for c in b._suite.orders.calls if c[0] == "modify"]) == 1
+
+
+def test_modify_retries_then_cancel_replaces_on_failure():
+    b = _register_group(_broker_with_stub())
+    b._suite.orders.next_modify_returns = [False, False]  # initial + retry both fail
+    b._suite.orders.calls.clear()
+    _run(b._handle_group_fill(_exit_fill("9102", "101.5", size=2)))
+    methods = [c[0] for c in b._suite.orders.calls]
+    assert methods.count("modify") == 2          # initial + 1 retry
+    assert "cancel" in methods                   # old (oversized) stop cancelled
+    assert methods.count("stop") == 1            # fresh BE stop placed
+    assert any(v["stop_id"] == "9002" for v in b._exit_groups.values())  # re-registered
+
+
+def test_modify_and_replace_fail_triggers_flatten():
+    b = _broker_with_stub()
+    b._suite.orders.stop_seq = iter(["9001", None])  # replacement stop placement fails
+    _register_group(b)
+    b._suite.orders.next_modify_returns = [False, False]
+    async def fake_flatten(instr):
+        b._suite.orders.calls.append(("market", {"instr": instr}))
+        return True
+    b.flatten = fake_flatten
+    b._suite.orders.calls.clear()
+    _run(b._handle_group_fill(_exit_fill("9102", "101.5", size=2)))
+    methods = [c[0] for c in b._suite.orders.calls]
+    assert "market" in methods   # flatten the remainder
