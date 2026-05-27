@@ -39,9 +39,9 @@ Run: `sed -n '/async def modify_order/,/return /p' .venv/Lib/site-packages/proje
 
 Confirm: parameters are `order_id, limit_price, stop_price, size`; it issues a modify request (not cancel+replace); returns `bool`. Note whether it re-aligns price to tick size (it may call `align_price_to_tick_size`).
 
-- [ ] **Step 2: Record the finding inline in the plan**
+- [x] **Step 2: Record the finding inline in the plan**
 
-Append a short note to this task: whether modify is in-place and tick-aligned. If `modify_order` turns out to cancel+replace (new order_id), then the cancel-replace fallback in Task 8 becomes the PRIMARY path — flag this for the implementer and adjust Task 6 to re-register the new stop id.
+FINDING (2026-05-26, verified against `order_manager/core.py`): `modify_order` is an **in-place modify** — single `POST /Order/modify` keyed by the same `order_id`, which is preserved. Accepts `stop_price` and `size` independently; auto-aligns prices to tick size. **Raises `ProjectXOrderError` on failure** (only returns `True`/no-op-True). The Task 8 ladder wraps it in try/except AND checks the return, so both the exception (production) and falsy-return (test) paths fall through to cancel-replace → flatten. No change needed to Tasks 6/8; the in-place assumption holds.
 
 - [ ] **Step 3: Commit (plan note only, if edited)**
 
