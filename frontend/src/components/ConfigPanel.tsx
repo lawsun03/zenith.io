@@ -191,6 +191,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       entry_mode:           config.entry_mode ?? 'market',
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
+      partial_profit_r:     String(config.partial_profit_r ?? 0),
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
       ),
@@ -241,6 +242,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       entry_mode:           form.entry_mode || 'market',
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
+      partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
       enabled_killzones:    enabledKillzones,
       strategy,
     })
@@ -450,6 +452,23 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                       />
                       <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Percent of account equity risked per trade. Size = budget ÷ stop distance, capped at max contracts. 0 disables (uses fixed contracts). Hot-applied — no restart.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Partial Profit (R, 0 = off)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={5}
+                        step={0.25}
+                        value={form.partial_profit_r ?? '0'}
+                        onChange={e => set('partial_profit_r', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Take half off at this R-multiple then move the stop to break-even. For 1-contract entries, the scale-out is skipped but the stop still moves to break-even at this level. 0 disables. Hot-applied — affects the next entry.
                       </p>
                     </div>
                   </>
