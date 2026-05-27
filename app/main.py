@@ -832,6 +832,9 @@ async def _async_main() -> int:
         broker=broker,
         engine=engine,
         runner_factory=_build_runner,
+        # Re-warm VP after a /api/strategy/reload rebuilds the runner, so the
+        # filter/target don't silently drop their prior-session profile.
+        vp_warmup=lambda runner, bot_cfg_: _warm_up_vp(broker, runner, bot_cfg_),
     )
 
     shutdown = asyncio.Event()
