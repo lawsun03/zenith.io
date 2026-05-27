@@ -52,6 +52,7 @@ class BotConfig(BaseModel):
     entry_mode: str = "market"      # "market" or "limit" (custom limit+bracket-after-fill)
     contracts: int = 1              # number of contracts per signal
     risk_per_trade_pct: Decimal = Decimal("0.25")  # 0 = disabled (use fixed contracts); else % of equity risked per trade
+    partial_profit_r: Decimal = Decimal("0")  # 0 = disabled; e.g. 1.5 = take half at 1.5R then move stop to break-even (BE-only for 1-lots)
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
@@ -80,6 +81,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "entry_mode": config.entry_mode,
         "contracts": config.contracts,
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
+        "partial_profit_r": _conv(config.partial_profit_r),
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
     }
