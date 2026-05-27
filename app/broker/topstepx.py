@@ -25,6 +25,7 @@ import asyncio
 import csv
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -65,6 +66,41 @@ def _point_value(instrument: str) -> Decimal:
         log.warning("Unknown instrument %r — P&L will be in price units, not dollars", sym)
         return Decimal("1")
     return val
+
+
+@dataclass(frozen=True)
+class PartialPlan:
+    """How a partial-profit / BE entry is split. Pure data, no SDK."""
+    partial_price: Decimal   # the R-multiple level (scale-out price; also the BE trigger for 1-lots)
+    partial_size: int        # contracts to scale out (0 when entry size == 1)
+    remaining_size: int      # contracts left after the partial
+    be_price: Decimal        # break-even = the actual entry fill price
+
+
+def _partial_plan(
+    entry_price: Decimal,
+    stop: Decimal,
+    size: int,
+    partial_r: Decimal,
+) -> "PartialPlan | None":
+    """Compute the partial/BE plan, or None when partials are disabled.
+
+    partial_price = entry ± R*partial_r (R = |entry-stop|); + for long, - for short.
+    Long vs short is inferred from stop position: stop below entry → long.
+    partial_size = size // 2 (0 for a 1-lot). be_price = entry_price.
+    """
+    if partial_r <= 0:
+        return None
+    r = abs(entry_price - stop)
+    is_long = stop < entry_price
+    partial_price = entry_price + r * partial_r if is_long else entry_price - r * partial_r
+    partial_size = size // 2
+    return PartialPlan(
+        partial_price=partial_price,
+        partial_size=partial_size,
+        remaining_size=size - partial_size,
+        be_price=entry_price,
+    )
 
 
 def _to_internal_side(sdk_side: int) -> Side:
