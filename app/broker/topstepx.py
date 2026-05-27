@@ -669,6 +669,133 @@ class TopstepXBroker:
                     )
                     asyncio.create_task(self._reprocess_early_exit(early_exit))
 
+    async def _place_partial_bracket_after_fill(self, bracket: dict) -> None:
+        """Partials path: place stop + partial-target + final-target (size>=2),
+        or stop + target + arm a BE-watch (size==1). Registers an exit group so
+        _handle_group_fill can drive the partial->BE transition.
+
+        Stop is placed FIRST so the whole position is protected before anything
+        else. Mirrors _place_bracket_after_fill's fill-price fallback.
+        """
+        fill_price = bracket["fill_price"]
+        if not fill_price or fill_price == Decimal("0"):
+            try:
+                positions = await self.get_positions()
+                if positions:
+                    fill_price = positions[0].average_price
+            except Exception:
+                log.exception("_place_partial_bracket_after_fill: could not get averagePrice")
+            if not fill_price or fill_price == Decimal("0"):
+                log.error("_place_partial_bracket_after_fill: fill_price still zero — falling back to plain bracket")
+                await self._place_bracket_after_fill(bracket)
+                return
+
+        stop = fill_price + bracket["stop_offset"]
+        target = fill_price + bracket["target_offset"]
+        close_sdk_side = bracket["close_sdk_side"]
+        size = bracket["size"]
+        account_id = bracket["account_id"]
+        instrument = bracket["instrument"]
+        entry_side = bracket["entry_side"]
+
+        plan = _partial_plan(fill_price, stop, size, bracket["partial_r"])
+        if plan is None:
+            await self._place_bracket_after_fill(bracket)
+            return
+
+        # 1) Stop (full size) FIRST.
+        stop_id = await self._place_stop(close_sdk_side, size, stop, account_id)
+        if stop_id is None:
+            log.error("_place_partial_bracket_after_fill: stop placement failed — position UNPROTECTED")
+            return
+
+        # 2) Final target at remaining size.
+        target_id = await self._place_limit(close_sdk_side, plan.remaining_size, target, account_id)
+
+        # 3) Partial-target leg (size>=2 only).
+        partial_id = None
+        if plan.partial_size > 0:
+            partial_id = await self._place_limit(close_sdk_side, plan.partial_size, plan.partial_price, account_id)
+            if partial_id is None:
+                # Degrade to a full-size 2-leg bracket: bump target back to full size.
+                log.error("partial-target placement failed — degrading to plain bracket")
+                if target_id is not None:
+                    await self._cancel_order(target_id)
+                target_id = await self._place_limit(close_sdk_side, size, target, account_id)
+                plan = None  # signal: no partial this trade
+
+        if target_id is None:
+            log.error("_place_partial_bracket_after_fill: target placement failed")
+            return
+
+        group = {
+            "instrument": instrument,
+            "entry_price": fill_price,
+            "entry_side": entry_side,
+            "stop_id": stop_id,
+            "partial_id": partial_id,
+            "target_id": target_id,
+            "be_price": fill_price,
+            "partial_size": plan.partial_size if plan else 0,
+            "remaining_size": plan.remaining_size if plan else size,
+            "partial_filled": False,
+            "close_sdk_side": close_sdk_side,
+            "account_id": account_id,
+        }
+        for oid in (stop_id, partial_id, target_id):
+            if oid is not None:
+                self._exit_groups[oid] = group
+        log.info(
+            "Partial group registered: stop=%s partial=%s target=%s entry=%s side=%s",
+            stop_id, partial_id, target_id, fill_price, entry_side,
+        )
+
+        # size==1: no partial leg — arm a BE-watch on the quote stream.
+        if plan and plan.partial_size == 0:
+            self._be_watches[instrument] = {
+                "instrument": instrument,
+                "side": entry_side,
+                "trigger_price": plan.partial_price,
+                "be_price": plan.be_price,
+                "stop_id": stop_id,
+                "armed": True,
+            }
+
+        # Re-process any leg fill that arrived before the group was registered.
+        for oid in (stop_id, partial_id, target_id):
+            if oid is None:
+                continue
+            early = self._early_fills.pop(oid, None)
+            if early is not None:
+                log.info("Replaying early group-leg fill: order=%s", oid)
+                asyncio.create_task(self._handle_group_fill(early))
+
+    async def _place_stop(self, close_sdk_side, size, price, account_id) -> "str | None":
+        try:
+            resp = await self._suite.orders.place_stop_order(
+                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            if getattr(resp, "success", False):
+                oid = str(resp.orderId)
+                log.info("Stop placed: order=%s @ %s size=%d", oid, price, size)
+                return oid
+            log.error("Stop order rejected: price=%s resp=%s", price, resp)
+        except Exception:
+            log.exception("_place_stop failed")
+        return None
+
+    async def _place_limit(self, close_sdk_side, size, price, account_id) -> "str | None":
+        try:
+            resp = await self._suite.orders.place_limit_order(
+                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            if getattr(resp, "success", False):
+                oid = str(resp.orderId)
+                log.info("Limit (exit) placed: order=%s @ %s size=%d", oid, price, size)
+                return oid
+            log.error("Limit (exit) rejected: price=%s resp=%s", price, resp)
+        except Exception:
+            log.exception("_place_limit failed")
+        return None
+
     async def _reprocess_early_exit(self, fill: Fill) -> None:
         """
         Re-process a stop/target fill that arrived before its OCO pair was
