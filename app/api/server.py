@@ -167,6 +167,7 @@ def build_app(
     broker: Any = None,
     engine: Any = None,
     runner_factory: Any = None,
+    vp_warmup: Any = None,
 ) -> FastAPI:
     """
     Construct the FastAPI app. Dependencies are passed in (not module
@@ -189,6 +190,7 @@ def build_app(
     _broker = broker
     _engine = engine
     _runner_factory = runner_factory
+    _vp_warmup = vp_warmup  # async callable(runner, bot_cfg) — re-warms VP after a reload
 
     # ------------------------------------------------------------------
     # /api/status — the four numbers that matter, plus context
@@ -748,16 +750,28 @@ def build_app(
             _engine.strategy_cfg = new_cfg.strategy
             if _broker is not None and hasattr(_broker, "entry_mode"):
                 _broker.entry_mode = new_cfg.entry_mode
+            # Rebuilding the runner created a fresh, empty VolumeProfileTracker.
+            # Re-warm it from historical bars so the VP filter/target stay active —
+            # otherwise a reload silently disables VP until the next session boundary.
+            vp_warmed = None
+            if _vp_warmup is not None and new_cfg.strategy.vp_enabled:
+                try:
+                    await _vp_warmup(new_runner, new_cfg)
+                    vp_warmed = bool(new_runner.vp and new_runner.vp.has_prior_profile())
+                except Exception:
+                    log.exception("strategy/reload: VP re-warm failed — filter inactive until session boundary")
+                    vp_warmed = False
             log.info(
-                "Strategy reloaded: instrument=%s killzones=%s entry_mode=%s params=%s",
+                "Strategy reloaded: instrument=%s killzones=%s entry_mode=%s vp_warmed=%s params=%s",
                 instrument, new_cfg.enabled_killzones, new_cfg.entry_mode,
-                new_cfg.strategy.model_dump(),
+                vp_warmed, new_cfg.strategy.model_dump(),
             )
             return JSONResponse({
                 "ok": True,
                 "instrument": instrument,
                 "enabled_killzones": new_cfg.enabled_killzones,
                 "entry_mode": new_cfg.entry_mode,
+                "vp_warmed": vp_warmed,
                 "strategy": _decimal_to_str(new_cfg.strategy.model_dump()),
             })
         except Exception as e:
