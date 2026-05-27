@@ -453,7 +453,10 @@ class TopstepXBroker:
                 "Replaying early entry fill order=%s @ %s — placing stop+target",
                 entry_order_id, early.fill_price,
             )
-            asyncio.create_task(self._place_bracket_after_fill(bracket_data))
+            if bracket_data.get("partial_r", Decimal("0")) > 0:
+                asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
+            else:
+                asyncio.create_task(self._place_bracket_after_fill(bracket_data))
             # Re-fan a non-provisional copy so the journal/UI record the entry.
             # The provisional fanout in _on_fill_event already updated risk
             # state's open_contracts; this copy uses contracts_delta=0 to avoid
@@ -795,6 +798,90 @@ class TopstepXBroker:
         except Exception:
             log.exception("_place_limit failed")
         return None
+
+    async def _handle_group_fill(self, fill: Fill) -> None:
+        """Drive the partial/BE state machine when an exit-group leg fills.
+
+        Emits a corrected EXIT Fill (is_entry=False, real P&L) to all handlers so
+        the engine/journal/CSV record it, then performs the OCO/modify actions.
+        """
+        order_id = fill.broker_order_id
+        group = self._exit_groups.get(order_id)
+        if group is None:
+            log.warning("_handle_group_fill: %s not in any group — ignoring", order_id)
+            return
+
+        pv = _point_value(fill.instrument)
+        entry_price = group["entry_price"]
+        entry_side = group["entry_side"]
+
+        def _pnl(exit_price: Decimal, qty: int) -> Decimal:
+            if entry_side == "long":
+                return (exit_price - entry_price) * qty * pv
+            return (entry_price - exit_price) * qty * pv
+
+        is_partial = (order_id == group["partial_id"])
+        is_stop = (order_id == group["stop_id"])
+        is_target = (order_id == group["target_id"])
+
+        if is_partial:
+            # Scale-out filled → move stop to BE + resize to remaining.
+            qty = group["partial_size"]
+            await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
+            group["partial_filled"] = True
+            del self._exit_groups[order_id]   # partial leg is one-shot
+            group["partial_id"] = None
+            await self._modify_stop_to_be(group)
+            return
+
+        if is_stop:
+            qty = group["remaining_size"] if group["partial_filled"] else (
+                group["partial_size"] + group["remaining_size"])
+            await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=True)
+            await self._cancel_group_siblings(group, filled_id=order_id)
+            self._clear_group(group)
+            return
+
+        if is_target:
+            qty = group["remaining_size"]
+            await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
+            await self._cancel_group_siblings(group, filled_id=order_id)
+            self._clear_group(group)
+            return
+
+    async def _emit_group_exit(self, fill: Fill, pnl: Decimal, qty: int, is_stop: bool) -> None:
+        """Fan out a corrected EXIT fill for a group leg."""
+        corrected = Fill(
+            ts=fill.ts, instrument=fill.instrument, side=fill.side,
+            fill_price=fill.fill_price, size=qty, is_entry=False,
+            realized_pnl_delta=pnl,
+            contracts_delta=(-qty if fill.side == "short" else qty),
+            broker_order_id=fill.broker_order_id, is_stop=is_stop,
+        )
+        log.info("Group exit: order=%s pnl=%s qty=%d is_stop=%s",
+                 fill.broker_order_id, pnl, qty, is_stop)
+        await self._fanout(self._fill_handlers, corrected)
+        await self._emit_equity_snapshot(corrected.ts)
+
+    async def _cancel_group_siblings(self, group: dict, filled_id: str) -> None:
+        """Cancel every still-live leg in the group except the one that filled."""
+        for key in ("stop_id", "partial_id", "target_id"):
+            oid = group.get(key)
+            if oid is not None and oid != filled_id and oid in self._exit_groups:
+                asyncio.create_task(self._cancel_order(oid))
+
+    def _clear_group(self, group: dict) -> None:
+        for key in ("stop_id", "partial_id", "target_id"):
+            oid = group.get(key)
+            if oid is not None:
+                self._exit_groups.pop(oid, None)
+        self._be_watches.pop(group["instrument"], None)
+
+    async def _modify_stop_to_be(self, group: dict) -> None:
+        # Temporary minimal version — replaced by the failure ladder in Task 8.
+        await self._suite.orders.modify_order(
+            order_id=group["stop_id"], stop_price=float(group["be_price"]),
+            size=group["remaining_size"])
 
     async def _reprocess_early_exit(self, fill: Fill) -> None:
         """
@@ -1262,7 +1349,10 @@ class TopstepXBroker:
                         "Entry fill confirmed order=%s @ %s — placing stop+target",
                         order_id, fill.fill_price,
                     )
-                    asyncio.create_task(self._place_bracket_after_fill(bracket_data))
+                    if bracket_data.get("partial_r", Decimal("0")) > 0:
+                        asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
+                    else:
+                        asyncio.create_task(self._place_bracket_after_fill(bracket_data))
 
                 elif order_id and order_id in self._exit_pairs:
                     # Definitive exit fill — stop or target hit, cancel the other.
@@ -1297,6 +1387,11 @@ class TopstepXBroker:
                     )
                     log.info("Exit P&L: order=%s pnl=%s (entry=%s exit=%s %s x%d)",
                              order_id, pnl, entry_price, fill.fill_price, entry_side, ex_size)
+
+                elif order_id and order_id in self._exit_groups:
+                    # Partials path: a stop / partial-target / final-target leg filled.
+                    await self._handle_group_fill(fill)
+                    return
 
                 elif order_id and order_id in self._flatten_order_ids:
                     # Manual flatten fill (reversal or lockout) — compute P&L from
