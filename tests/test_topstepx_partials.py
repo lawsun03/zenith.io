@@ -41,3 +41,15 @@ def test_partial_plan_odd_size_floors_half():
     plan = _partial_plan(Decimal("100"), Decimal("99"), 3, Decimal("1.5"))
     assert plan.partial_size == 1
     assert plan.remaining_size == 2
+
+
+from app.broker.topstepx import TopstepXBroker
+
+
+def test_broker_stores_partial_profit_r():
+    b = TopstepXBroker(partial_profit_r=Decimal("1.5"))
+    assert b.partial_profit_r == Decimal("1.5")
+
+
+def test_broker_default_partial_disabled():
+    assert TopstepXBroker().partial_profit_r == Decimal("0")

@@ -179,10 +179,11 @@ class TopstepXBroker:
         await broker.disconnect()
     """
 
-    def __init__(self, account_name: str | None = None, entry_mode: str = "market") -> None:
+    def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0")) -> None:
         self._suite = None  # project_x_py.TradingSuite, lazily imported
         self._account_name = account_name
         self.entry_mode = entry_mode  # "market" or "limit"
+        self.partial_profit_r = partial_profit_r  # 0 = disabled; >0 = take half at NxR then BE (hot-applied via PATCH /api/config)
         self._bar_handlers: list[BarHandler] = []
         self._fill_handlers: list[FillHandler] = []
         self._equity_handlers: list[EquityHandler] = []
@@ -192,6 +193,13 @@ class TopstepXBroker:
         self._pending_brackets: dict[str, dict] = {}
         # OCO pairs: stop_id ↔ target_id. When either fills, the other is cancelled.
         self._exit_pairs: dict[str, str] = {}
+        # Partials path (only used when partial_profit_r > 0). Each leg order_id
+        # maps to the same shared group dict. Kept separate from _exit_pairs so the
+        # disabled path is byte-for-byte unchanged.
+        self._exit_groups: dict[str, dict] = {}
+        # Break-even watches for 1-lot entries, keyed by instrument. The quote
+        # handler moves the stop to BE once price crosses trigger_price.
+        self._be_watches: dict[str, dict] = {}
         # Market orders fill in microseconds — the ORDER_FILLED event can arrive via
         # WebSocket before the HTTP response returns and we store the order_id in
         # _pending_brackets. Buffer those early fills here and replay them once the
@@ -425,6 +433,9 @@ class TopstepXBroker:
             "close_sdk_side": close_sdk_side,
             "size": size,
             "account_id": account_id,
+            "partial_r": self.partial_profit_r,
+            "entry_side": side,
+            "instrument": instrument,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -535,6 +546,9 @@ class TopstepXBroker:
             "close_sdk_side": close_sdk_side,
             "size": size,
             "account_id": account_id,
+            "partial_r": self.partial_profit_r,
+            "entry_side": side,
+            "instrument": instrument,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(

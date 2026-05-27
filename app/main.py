@@ -209,7 +209,7 @@ async def _build_broker(cfg: AppConfig) -> Broker:
 
     from app.broker.topstepx import TopstepXBroker
     bot_cfg = load_bot_config(Path(os.environ.get("BOT_CONFIG_PATH", "bot_config.json")))
-    return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode)
+    return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode, partial_profit_r=bot_cfg.partial_profit_r)
 
 
 def _make_pre_place(config_path: Path | None = None):
