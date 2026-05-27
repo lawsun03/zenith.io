@@ -4,7 +4,16 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import pytest
 
-from app.backtest.runner import BacktestConfig, BacktestResult, run_backtest, _reconstruct_trades
+from app.backtest.runner import (
+    BacktestConfig,
+    BacktestResult,
+    SweepDimension,
+    _apply_sweep_dim,
+    _build_runner,
+    run_backtest,
+    _reconstruct_trades,
+)
+from app.bot_config import StrategyParams
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
 from app.strategy.liquidity import LiquidityConfig
@@ -92,6 +101,37 @@ def test_stats_passed_combine():
     result = asyncio.run(run_backtest(cfg))
     # No trades on flat bars → not passed
     assert result.stats.passed_combine is False
+
+
+def test_faithful_path_attaches_vp_legacy_does_not():
+    """strategy_params set → runner has a VP tracker (faithful to live, which
+    runs vp_enabled). strategy_params None → legacy path, no VP. Without this,
+    the backtest silently skips the VP gate that live applies on every signal."""
+    faithful = BacktestConfig(
+        instrument="MGC", bars=iter([]),
+        strategy_params=StrategyParams(),
+    )
+    assert _build_runner(faithful).vp is not None
+
+    legacy = BacktestConfig(
+        instrument="MGC", bars=iter([]),
+        composer_config=ComposerConfig(instrument="MGC"),
+    )
+    assert _build_runner(legacy).vp is None
+
+
+def test_strategy_sweep_dim_updates_strategy_params():
+    """A 'strategy'-container sweep overrides a StrategyParams field and is the
+    only container that takes effect on the faithful path (the runner is rebuilt
+    from strategy_params, so composer/liquidity/displacement overrides are inert)."""
+    base = BacktestConfig(
+        instrument="MGC", bars=iter([]),
+        strategy_params=StrategyParams(trend_ema_period=0),
+    )
+    dim = SweepDimension(target="trend_ema_period", values=[50], container="strategy")
+    out = _apply_sweep_dim(base, dim, 50)
+    assert out.strategy_params.trend_ema_period == 50
+    assert base.strategy_params.trend_ema_period == 0  # original untouched
 
 
 def test_backtest_config_defaults():

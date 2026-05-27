@@ -12,6 +12,7 @@ from typing import Any, Callable, Iterator
 
 log = logging.getLogger(__name__)
 
+from app.bot_config import StrategyParams
 from app.broker.events import Bar, Fill
 from app.broker.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
@@ -21,6 +22,7 @@ from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementCompo
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.killzone import default_killzones, killzones_from_names
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
+from app.strategy.volume_profile import VolumeProfileTracker
 
 
 @dataclass
@@ -48,7 +50,12 @@ class BacktestStats:
 class BacktestConfig:
     instrument: str
     bars: Iterator[Bar]
-    composer_config: ComposerConfig
+    # Optional: only used on the legacy (no-VP) path. On the faithful path
+    # (strategy_params set) the composer is rebuilt from StrategyParams and this
+    # placeholder is ignored.
+    composer_config: ComposerConfig = field(
+        default_factory=lambda: ComposerConfig(instrument="MGC")
+    )
     starting_balance: Decimal = field(default_factory=lambda: Decimal("50000"))
     soft_buffer: Decimal = field(default_factory=lambda: Decimal("500"))
     liquidity_config: LiquidityConfig = field(default_factory=LiquidityConfig)
@@ -56,9 +63,16 @@ class BacktestConfig:
     enabled_killzones: list[str] | None = None
     timeframe: str = "1min"
     contracts: int = 1
+    risk_per_trade_pct: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = fixed contracts
     slippage_ticks_market: int = 1
     commission_per_side: Decimal = field(default_factory=lambda: Decimal("0.74"))
     partial_profit_r: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled
+    # When set, the runner is built faithfully from this live StrategyParams —
+    # including the VolumeProfileTracker and the VP gate (vp_enabled, target
+    # override). This is the only way the backtest matches live behavior. When
+    # None, the legacy sub-config path is used (no VP) for back-compat with
+    # older tests/scripts. Sweeps target this object via the "strategy" container.
+    strategy_params: StrategyParams | None = None
     label: str = ""
 
 
@@ -85,6 +99,46 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
         if cfg.enabled_killzones
         else default_killzones()
     )
+
+    # Faithful path: derive every sub-config from the live StrategyParams,
+    # mirroring main._build_runner exactly, and attach a VolumeProfileTracker.
+    # This keeps r_multiple/stop_buffer/etc. single-sourced — VP.apply() reads
+    # r_multiple from the same StrategyParams the composer was built from.
+    if cfg.strategy_params is not None:
+        s = cfg.strategy_params
+        return StrategyRunner(
+            instrument=cfg.instrument,
+            timeframe=cfg.timeframe,
+            liquidity=LiquidityTracker(LiquidityConfig(
+                swing_lookback=s.swing_lookback,
+                min_penetration=s.min_penetration,
+                multi_bar_window=s.multi_bar_window,
+                max_swings=50,
+                min_penetration_atr_factor=(
+                    s.min_penetration_atr_factor if s.min_penetration_atr_factor > 0 else None
+                ),
+            )),
+            displacement=DisplacementDetector(DisplacementConfig(
+                atr_period=s.atr_period,
+                body_atr_multiple=s.body_atr_multiple,
+                min_body_to_range_ratio=s.min_body_to_range_ratio,
+                min_absolute_body=s.min_absolute_body,
+            )),
+            composer=SweepDisplacementComposer(ComposerConfig(
+                instrument=cfg.instrument,
+                displacement_window_bars=s.displacement_window_bars,
+                stop_buffer=s.stop_buffer,
+                r_multiple=s.r_multiple,
+                killzones=zones,
+                trend_ema_period=s.trend_ema_period,
+                cooldown_bars_after_stop=s.cooldown_bars_after_stop,
+                min_atr_filter=s.min_atr_filter,
+                max_atr_filter=s.max_atr_filter,
+            )),
+            vp=VolumeProfileTracker(),
+        )
+
+    # Legacy path (no VP): explicit sub-configs. Kept for back-compat.
     composer_cfg = dataclasses.replace(cfg.composer_config, killzones=zones)
     return StrategyRunner(
         instrument=cfg.instrument,
@@ -257,6 +311,11 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         on_signal=on_signal,
         replay_mode=True,
         contracts=cfg.contracts,
+        risk_per_trade_pct=cfg.risk_per_trade_pct,
+        # strategy_cfg drives the engine's VP gate + target override and VP.on_bar
+        # accumulation. Without it the VP filter never runs (matches legacy path
+        # when strategy_params is None → strategy_cfg None → gate skipped).
+        strategy_cfg=cfg.strategy_params,
     )
     broker.on_fill(on_fill)
     await broker.connect()
@@ -285,6 +344,14 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
 
 def _apply_sweep_dim(cfg: BacktestConfig, dim: SweepDimension, value: Any) -> BacktestConfig:
     """Return a new BacktestConfig with one param overridden."""
+    if dim.container == "strategy":
+        # Faithful path: vary a live StrategyParams field. _build_runner derives
+        # all sub-configs (and VP) from this, so this is the only container that
+        # has any effect when strategy_params is set.
+        if cfg.strategy_params is None:
+            raise ValueError("'strategy' sweep container requires cfg.strategy_params to be set")
+        new_sp = cfg.strategy_params.model_copy(update={dim.target: value})
+        return dataclasses.replace(cfg, strategy_params=new_sp)
     if dim.container == "composer":
         new_sub = dataclasses.replace(cfg.composer_config, **{dim.target: value})
         return dataclasses.replace(cfg, composer_config=new_sub)
