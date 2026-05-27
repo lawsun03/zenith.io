@@ -53,3 +53,78 @@ def test_broker_stores_partial_profit_r():
 
 def test_broker_default_partial_disabled():
     assert TopstepXBroker().partial_profit_r == Decimal("0")
+
+
+import asyncio
+from app.broker.events import Fill
+
+
+class FakeResp:
+    def __init__(self, order_id, success=True):
+        self.orderId = order_id
+        self.success = success
+
+
+class FakeOrders:
+    """Records SDK order calls and returns deterministic ids."""
+    def __init__(self):
+        self.calls = []          # list of (method, kwargs)
+        self.stop_seq = iter(["STOP1", "STOP2"])
+        self.limit_seq = iter(["PART1", "TGT1", "TGT2"])
+        self.modify_ok = True
+        self.next_modify_returns = None  # override list for failure tests
+
+    async def place_stop_order(self, instrument_id, side, size, price, account_id):
+        oid = next(self.stop_seq)
+        self.calls.append(("stop", {"oid": oid, "size": size, "price": price}))
+        return FakeResp(oid, success=oid is not None)
+
+    async def place_limit_order(self, instrument_id, side, size, price, account_id):
+        oid = next(self.limit_seq)
+        self.calls.append(("limit", {"oid": oid, "size": size, "price": price}))
+        return FakeResp(oid)
+
+    async def modify_order(self, order_id, limit_price=None, stop_price=None, size=None):
+        self.calls.append(("modify", {"order_id": order_id, "stop_price": stop_price, "size": size}))
+        if self.next_modify_returns is not None:
+            return self.next_modify_returns.pop(0)
+        return self.modify_ok
+
+    async def cancel_order(self, order_id):
+        self.calls.append(("cancel", {"order_id": order_id}))
+        return FakeResp(order_id)
+
+    async def place_market_order(self, contract_id, side, size):
+        self.calls.append(("market", {"size": size, "side": side}))
+        return FakeResp("FLAT1")
+
+
+class FakeSuite:
+    def __init__(self):
+        self.orders = FakeOrders()
+        self.instrument_id = "CON.F.US.MGC.M26"
+
+
+def _broker_with_stub(partial_r="1.5"):
+    b = TopstepXBroker(partial_profit_r=Decimal(partial_r))
+    b._suite = FakeSuite()
+    b._instruments = ["MGC"]
+    return b
+
+
+def test_place_partial_legs_size4_places_three_orders():
+    b = _broker_with_stub()
+    bracket = {
+        "fill_price": Decimal("100"), "stop_offset": Decimal("-1"),
+        "target_offset": Decimal("5"), "close_sdk_side": 1, "size": 4,
+        "account_id": 1, "partial_r": Decimal("1.5"), "entry_side": "long",
+        "instrument": "MGC",
+    }
+    asyncio.run(b._place_partial_bracket_after_fill(bracket))
+    methods = [c[0] for c in b._suite.orders.calls]
+    assert methods.count("stop") == 1
+    assert methods.count("limit") == 2  # partial + final target
+    assert "STOP1" in b._exit_groups and "PART1" in b._exit_groups and "TGT1" in b._exit_groups
+    g = b._exit_groups["STOP1"]
+    assert g["partial_size"] == 2 and g["remaining_size"] == 2
+    assert g["be_price"] == Decimal("100")
