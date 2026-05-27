@@ -385,6 +385,7 @@ def build_app(
             "entry_mode": cfg.entry_mode,
             "contracts": cfg.contracts,
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
+            "partial_profit_r": float(cfg.partial_profit_r),
             "enabled_killzones": cfg.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
@@ -397,6 +398,8 @@ def build_app(
         # uses the new mode without requiring a restart.
         if _broker is not None and hasattr(_broker, "entry_mode"):
             _broker.entry_mode = body.entry_mode
+        if _broker is not None and hasattr(_broker, "partial_profit_r"):
+            _broker.partial_profit_r = body.partial_profit_r
         if _engine is not None:
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
@@ -410,6 +413,7 @@ def build_app(
             "entry_mode": body.entry_mode,
             "contracts": body.contracts,
             "risk_per_trade_pct": float(body.risk_per_trade_pct),
+            "partial_profit_r": float(body.partial_profit_r),
             "enabled_killzones": body.enabled_killzones,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
