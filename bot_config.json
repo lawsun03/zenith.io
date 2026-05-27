@@ -26,7 +26,7 @@
     "displacement_window_bars": 5,
     "stop_buffer": "0.30",
     "r_multiple": "2.5",
-    "trend_ema_period": 0,
+    "trend_ema_period": 50,
     "vp_enabled": true,
     "vp_tick_size": "0.10",
     "vp_value_area_pct": 0.70,
