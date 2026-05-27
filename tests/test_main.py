@@ -19,8 +19,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.bot_config import StrategyParams
+from app.broker.events import Fill
 from app.config import load_config
-from app.main import _async_main, _build_runner
+from app.main import _async_main, _append_fill_csv, _build_runner
 from app.replay import load_bars_csv
 
 ET = ZoneInfo("America/New_York")
@@ -75,6 +76,54 @@ def test_replay_loader_reads_bars(tmp_path: Path):
     assert bars[0].timeframe == "1min"
     assert bars[0].open == Decimal("2400")
     assert bars[0].ts.tzinfo is not None
+
+
+def test_append_fill_csv_logs_entry_with_unicode_rationale(tmp_path: Path, monkeypatch):
+    """An ENTRY whose signal rationale contains a non-cp1252 char (≥, U+2265)
+    must still be written to the trades CSV.
+
+    Regression: _append_fill_csv opened the file with the platform-default
+    encoding. On Windows that is cp1252, which cannot encode "≥" (present in
+    "no VP level ≥2.0R, using 2.5R multiple"). writerow() raised
+    UnicodeEncodeError, the exception was swallowed, and the ENTRY row was
+    silently dropped — while the EXIT row (empty rationale) logged fine. Three
+    of five entries on 2026-05-26 vanished this way. The fix writes utf-8 to
+    match the analytics loader, which already reads utf-8.
+
+    Platform note: this asserts the row round-trips as utf-8. It is a true
+    fail-before-fix regression test only where the OS default encoding is not
+    utf-8 (i.e. the Windows deployment target). On a utf-8-default system the
+    pre-fix code happens to pass, so this can't catch the bug there.
+    """
+    master = tmp_path / "trades.csv"
+    daily = tmp_path / "trades_today.csv"
+    monkeypatch.setattr("app.main._TRADES_CSV", master)
+    monkeypatch.setattr("app.main._daily_csv_path", lambda: daily)
+
+    rationale = "London: bullish displacement | VP: no VP level ≥2.0R, using 2.5R multiple"
+    oid = "3027017076"
+    monkeypatch.setattr("app.main._pending_signal_meta", {oid: {"rationale": rationale}})
+
+    fill = Fill(
+        ts=datetime(2026, 5, 26, 7, 20, tzinfo=timezone.utc),
+        instrument="CON.F.US.MGC.M26",
+        side="long",
+        fill_price=Decimal("4527.1"),
+        size=4,
+        is_entry=True,
+        realized_pnl_delta=Decimal("0"),
+        contracts_delta=4,
+        broker_order_id=oid,
+    )
+
+    _append_fill_csv(fill)
+
+    for path in (master, daily):
+        with path.open(newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        assert len(rows) == 1, f"ENTRY row was dropped from {path.name}"
+        assert rows[0]["type"] == "ENTRY"
+        assert rows[0]["rationale"] == rationale  # ≥ preserved
 
 
 def test_config_loader_validates_mode(monkeypatch):

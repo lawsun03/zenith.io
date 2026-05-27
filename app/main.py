@@ -374,7 +374,11 @@ def _append_fill_csv(fill: Fill) -> None:
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:
             write_header = not path.exists()
-            with path.open("a", newline="") as f:
+            # encoding="utf-8" is load-bearing: signal rationales contain non-cp1252
+            # characters (e.g. "≥" U+2265 in "no VP level ≥2.0R"). Without it, Windows
+            # defaults to cp1252 and writerow() raises UnicodeEncodeError, silently
+            # dropping the ENTRY row. The analytics loader reads these files as utf-8.
+            with path.open("a", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
                 if write_header:
                     w.writerow(_TRADES_HEADERS)
