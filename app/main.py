@@ -165,6 +165,24 @@ async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Dec
 
         if account_name:
             account = next((a for a in accounts if a.name == account_name), None)
+            if account is None:
+                tradeable = [a for a in accounts if a.canTrade]
+                available_names = [a.name for a in tradeable]
+                if tradeable:
+                    account = tradeable[0]
+                    log.warning(
+                        "Configured account %r not found; falling back to %r. "
+                        "Update account_name in bot_config.json to silence this. "
+                        "Available accounts: %s",
+                        account_name, account.name, available_names,
+                    )
+                else:
+                    log.error(
+                        "Configured account %r not found and no tradeable accounts available. "
+                        "Available accounts: %s",
+                        account_name, [a.name for a in accounts],
+                    )
+                    return Decimal("50000"), "", Decimal("0")
         else:
             account = next((a for a in accounts if a.canTrade), None)
 
@@ -798,6 +816,11 @@ async def _async_main() -> int:
     if cfg.mode == "live":
         log.info("Fetching live account state...")
         live_balance, live_account, live_daily_pnl = await _fetch_live_state(bot_cfg.account_name)
+        # If _fetch_live_state fell back to a different account (stale config),
+        # push the resolved name into the broker so subscribe() authenticates correctly.
+        if live_account and hasattr(broker, '_account_name') and broker._account_name != live_account:
+            log.info("Updating broker account from %r → %r", broker._account_name, live_account)
+            broker._account_name = live_account
         risk_cfg = config_for_account(live_account, live_balance, soft_buffer=cfg.soft_buffer)
         log.info(
             "Account: %s  balance=$%s  type=%s  starting=$%s  session_pnl=$%s",
