@@ -71,6 +71,7 @@ from app.strategy.killzone import killzones_from_names
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
 from app.strategy.volume_profile import VolumeProfileTracker
+from app.strategy.kz_levels import KillzoneLevelTracker
 from app.sync.outbox import Outbox
 from app.sync.sender import Sender, SenderConfig
 
@@ -127,6 +128,7 @@ def _build_runner(
             max_atr_filter=s.max_atr_filter,
         )),
         vp=VolumeProfileTracker(),
+        kz_levels=KillzoneLevelTracker() if s.kz_levels_enabled else None,
     )
 
 

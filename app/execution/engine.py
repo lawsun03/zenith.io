@@ -53,6 +53,7 @@ from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
 from app.strategy.liquidity import LiquidityTracker
 from app.strategy.volume_profile import VolumeProfileTracker
+from app.strategy.kz_levels import KillzoneLevelTracker
 
 log = logging.getLogger(__name__)
 
@@ -110,13 +111,14 @@ class StrategyRunner:
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
     vp: VolumeProfileTracker | None = None
+    kz_levels: "KillzoneLevelTracker | None" = None
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
         sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
         for s in sweeps:
-            self.composer.on_sweep(bar, s)
+            self.composer.on_sweep(bar, s, source="swing")
 
         signal: Optional[Signal] = None
         disp = self.displacement.on_bar(bar)
@@ -314,6 +316,14 @@ class ExecutionEngine:
         # VP accumulates even for stale/warmup bars.
         if runner.vp is not None and self.strategy_cfg is not None:
             runner.vp.on_bar(bar, self.strategy_cfg)
+
+        # KZ level sweeps fire before runner.on_bar() so both sources feed the
+        # composer in the same bar, and the composer picks up whichever is freshest.
+        if runner.kz_levels is not None and self.strategy_cfg is not None:
+            for s in runner.kz_levels.on_bar(
+                bar, runner.composer._zones, self.strategy_cfg
+            ):
+                runner.composer.on_sweep(bar, s, source="kz_level")
 
         try:
             signal = runner.on_bar(bar)

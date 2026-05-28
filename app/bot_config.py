@@ -49,6 +49,7 @@ class StrategyParams(BaseModel):
     htf_target_enabled: bool = False        # Part B: HTF target selection
     htf_target_min_r: Decimal = Decimal("2.0")  # min R an HTF level must deliver
     htf_swing_timeframe: str = "30min"      # fallback swing-target timeframe
+    kz_levels_enabled: bool = True          # sweep KZ session H/L levels in parallel with swing sweeps
 
 
 class BotConfig(BaseModel):
