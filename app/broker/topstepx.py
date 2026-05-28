@@ -212,6 +212,11 @@ class TopstepXBroker:
         # Flatten orders placed by flatten() — maps order_id to entry context so
         # the fill handler can compute realized P&L the same way stop/target exits do.
         self._flatten_order_ids: dict[str, dict] = {}
+        # True while the SDK's real-time event feed (SignalR) is connected.
+        # Set to True when CONNECTED fires or subscribe() completes; False on DISCONNECTED.
+        # The engine checks this before placing orders — a disconnected feed means fill
+        # events won't arrive, which causes reconcile drift on every entry.
+        self._feed_connected: bool = False
         # Tick-aggregated forming bar: accumulates quote mid-prices within the current
         # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
         self._forming_bar: Bar | None = None
@@ -1369,6 +1374,30 @@ class TopstepXBroker:
 
         await self._suite.events.on(EventType.QUOTE_UPDATE, _on_quote_update)
 
+        # Track real-time feed connectivity so the engine can gate orders.
+        async def _on_feed_connected(event):
+            if not self._feed_connected:
+                log.info("Feed connected — real-time events active")
+            self._feed_connected = True
+
+        async def _on_feed_disconnected(event):
+            self._feed_connected = False
+            log.warning(
+                "Feed disconnected — real-time events paused. "
+                "Orders blocked until reconnect."
+            )
+
+        for _conn_event in ("CONNECTED", "DISCONNECTED"):
+            try:
+                _conn_type = getattr(EventType, _conn_event)
+                _handler = _on_feed_connected if _conn_event == "CONNECTED" else _on_feed_disconnected
+                await self._suite.events.on(_conn_type, _handler)
+            except AttributeError:
+                pass
+
+        # subscribe() completing means the initial connection succeeded.
+        self._feed_connected = True
+
         # Start the intrabar recorder now that _forming_bar can populate.
         self._intrabar_task = asyncio.create_task(self._intrabar_sampler_loop())
         log.info(
@@ -1531,6 +1560,10 @@ class TopstepXBroker:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def feed_is_healthy(self) -> bool:
+        """True while the SDK's SignalR feed is connected and delivering events."""
+        return self._feed_connected
 
     def _require_connected(self) -> None:
         if self._suite is None:
