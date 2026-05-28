@@ -191,3 +191,37 @@ def test_strategy_params_htf_defaults_inert():
     assert s.htf_target_enabled is False
     assert s.htf_target_min_r == Decimal("2.0")
     assert s.htf_swing_timeframe == "30min"
+
+
+def test_bias_tracker_diagnostics_exposes_recent_swings():
+    """Diagnostics must return the swing prices the bias logic actually compared,
+    so the operator can verify a neutral verdict against the chart."""
+    t = HTFBiasTracker(lookback=2)
+    # Bearish structure: LH + LL.
+    t.rebuild(_swing_sequence([(14, 10), (12, 8)]))
+
+    d = t.diagnostics()
+    assert d["bias"] == "bearish"
+    assert d["lookback"] == 2
+    assert d["high_count"] >= 2
+    assert d["low_count"] >= 2
+    # Last two highs descending (LH).
+    high_prices = [Decimal(h["price"]) for h in d["recent_high_swings"]]
+    assert high_prices[-1] < high_prices[-2]
+    # Last two lows descending (LL).
+    low_prices = [Decimal(l["price"]) for l in d["recent_low_swings"]]
+    assert low_prices[-1] < low_prices[-2]
+    # ts is ISO-format string.
+    assert "T" in d["recent_high_swings"][-1]["ts"]
+
+
+def test_bias_tracker_diagnostics_empty_before_rebuild():
+    """Before any rebuild, diagnostics returns neutral with empty swing lists
+    (so the API doesn't crash on a freshly-constructed tracker)."""
+    t = HTFBiasTracker(lookback=2)
+    d = t.diagnostics()
+    assert d["bias"] == "neutral"
+    assert d["high_count"] == 0
+    assert d["low_count"] == 0
+    assert d["recent_high_swings"] == []
+    assert d["recent_low_swings"] == []
