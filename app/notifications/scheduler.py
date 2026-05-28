@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 if TYPE_CHECKING:
     from app.api.journal import Journal
     from app.risk.state import RiskState
+    from .discord import DiscordNotifier
     from .email import EmailNotifier
 
 CT = ZoneInfo("America/Chicago")
@@ -37,10 +38,12 @@ class EndOfDayScheduler:
         close_minute_ct: int = 10,
         trades_csv_path: Path | None = None,
         daily_csv_fn: Callable[[], Path] | None = None,
+        discord: "DiscordNotifier | None" = None,
     ) -> None:
         self.journal = journal
         self.risk_state = risk_state
         self.notifier = notifier
+        self.discord = discord
         self.close_hour_ct = close_hour_ct
         self.close_minute_ct = close_minute_ct
         self.trades_csv_path = trades_csv_path
@@ -96,9 +99,11 @@ class EndOfDayScheduler:
         return (close_today - now_ct).total_seconds()
 
     async def _send_summary(self) -> None:
-        """Pull stats from the journal and send the daily email."""
-        if not self.notifier.enabled:
-            log.info("EOD: email notifier not configured, skipping")
+        """Pull stats from the journal and send the daily email + Discord post."""
+        email_on = self.notifier.enabled
+        discord_on = self.discord is not None and self.discord.enabled
+        if not email_on and not discord_on:
+            log.info("EOD: no notifier configured (email + Discord both off), skipping")
             return
 
         fills = await self.journal.recent_fills(1000)
@@ -110,7 +115,7 @@ class EndOfDayScheduler:
         today_signals = [s for s in signals if _parse_ts(s["ts"]) >= cutoff]
 
         stats = compute_stats(today_fills, today_signals)
-        body = format_summary(stats, self.risk_state)
+        trades = pair_trades(today_fills)
 
         attachments = []
         daily_path = self.daily_csv_fn() if self.daily_csv_fn else None
@@ -121,14 +126,30 @@ class EndOfDayScheduler:
             except Exception:
                 log.warning("Could not read daily CSV for attachment", exc_info=True)
 
-        sent = await self.notifier.send(
-            subject=f"EOD summary  {stats['date']}  net=${stats['net_pnl']}",
-            body=body,
-            attachments=attachments or None,
-        )
+        email_sent = False
+        if email_on:
+            body = format_summary(stats, self.risk_state)
+            email_sent = await self.notifier.send(
+                subject=f"EOD summary  {stats['date']}  net=${stats['net_pnl']}",
+                body=body,
+                attachments=attachments or None,
+            )
 
-        # Delete the daily CSV after a successful send so it starts fresh tomorrow.
-        if sent and daily_path and daily_path.exists():
+        if discord_on:
+            try:
+                await self.discord.send_eod_summary(  # type: ignore[union-attr]
+                    stats=stats,
+                    trades=trades,
+                    equity=str(self.risk_state.current_equity),
+                    high_water=str(self.risk_state.equity_high_water),
+                    locked_out=self.risk_state.locked_out,
+                )
+            except Exception:
+                log.exception("Discord EOD post failed")
+
+        # Delete the daily CSV after a successful email send so tomorrow starts fresh.
+        # Don't delete on Discord-only path — the file isn't shipped anywhere durable.
+        if email_sent and daily_path and daily_path.exists():
             try:
                 daily_path.unlink()
                 log.info("Deleted daily CSV %s after EOD email", daily_path)
@@ -140,6 +161,48 @@ class EndOfDayScheduler:
 def _parse_ts(ts: str) -> datetime:
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     return dt.astimezone(CT)
+
+
+def pair_trades(fills: list[dict]) -> list[dict]:
+    """
+    Pair entry fills with their matching exits into round-trip trades.
+
+    The bot is one-position-at-a-time (MAX_CONTRACTS gate), so fills in
+    chronological order alternate ENTRY → EXIT → ENTRY → EXIT. We walk
+    them and emit one trade dict per pair. Unmatched leading exits
+    (positions opened before the window) and a trailing unmatched entry
+    (position still open) are skipped.
+
+    Each trade dict:
+        {ts: str (entry time, CT, HH:MM), side: str (position side),
+         entry: str, exit: str, size: int, pnl: str}
+
+    `side` reflects the position direction (the entry side), not the
+    closing-order side — that's what a trader expects to read.
+    """
+    # Sort by timestamp ascending so pairing is robust against caller order.
+    ordered = sorted(fills, key=lambda f: _parse_ts(f["ts"]))
+    trades: list[dict] = []
+    pending_entry: dict | None = None
+    for f in ordered:
+        p = f["payload"]
+        if p.get("is_entry"):
+            pending_entry = f
+        else:
+            if pending_entry is None:
+                continue  # exit with no matching entry in this window — skip
+            ep = pending_entry["payload"]
+            pnl_dec = Decimal(str(p.get("realized_pnl_delta", 0)))
+            trades.append({
+                "ts":    _parse_ts(pending_entry["ts"]).strftime("%H:%M"),
+                "side":  str(ep.get("side", "")),
+                "entry": str(ep.get("fill_price", "")),
+                "exit":  str(p.get("fill_price", "")),
+                "size":  int(ep.get("size", 0) or 0),
+                "pnl":   str(pnl_dec.quantize(Decimal("0.01"))),
+            })
+            pending_entry = None
+    return trades
 
 
 def compute_stats(fills: list[dict], signals: list[dict]) -> dict:
