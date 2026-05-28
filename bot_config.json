@@ -34,7 +34,7 @@
     "vp_hvn_threshold": 1.5,
     "vp_min_target_r": "2.0",
     "htf_bias_enabled": true,
-    "htf_bias_timeframe": "1d",
+    "htf_bias_timeframe": "4h",
     "htf_target_enabled": true
   }
 }

@@ -225,3 +225,51 @@ def test_bias_tracker_diagnostics_empty_before_rebuild():
     assert d["low_count"] == 0
     assert d["recent_high_swings"] == []
     assert d["recent_low_swings"] == []
+
+
+def test_bias_tracker_swings_persist_across_rebuilds():
+    """Two rebuilds with disjoint bars must produce a tracker that has seen
+    swings from BOTH halves — proving persistence across refreshes."""
+    t = HTFBiasTracker(lookback=2)
+    # First half: a bullish swing sequence.
+    first_bars = _swing_sequence([(14, 10), (16, 12)])  # HH + HL
+    t.rebuild(first_bars)
+    first_high_count = len(t.diagnostics()["recent_high_swings"])
+    assert first_high_count >= 2  # we expect at least the 2 high pivots
+
+    # Second half: bars with strictly LATER timestamps continuing the trend.
+    # Build a second sequence and shift its timestamps so they come AFTER first.
+    second_bars = _swing_sequence([(18, 14), (20, 16)])
+    # Shift each second bar's timestamp past the last first-bar timestamp.
+    last_first_ts = max(b.ts for b in first_bars)
+    shifted = [
+        Bar(
+            instrument=b.instrument, timeframe=b.timeframe,
+            ts=last_first_ts + timedelta(hours=4 * (i + 1)),
+            open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume,
+        )
+        for i, b in enumerate(second_bars)
+    ]
+    t.rebuild(shifted)
+
+    final_high_count = len(t.diagnostics()["recent_high_swings"])
+    assert final_high_count > first_high_count, (
+        f"swings did not grow after second rebuild: {first_high_count} -> {final_high_count}"
+    )
+
+
+def test_bias_tracker_dedupes_overlapping_bars():
+    """If two consecutive rebuilds include the same bars (broker returns
+    overlapping windows), bars seen before must NOT be re-fed."""
+    t = HTFBiasTracker(lookback=2)
+    bars = _swing_sequence([(14, 10), (16, 12)])
+    t.rebuild(bars)
+    count_after_first = len(t.diagnostics()["recent_high_swings"])
+
+    # Same bars again — no new ts, no progress.
+    t.rebuild(bars)
+    count_after_second = len(t.diagnostics()["recent_high_swings"])
+
+    assert count_after_second == count_after_first, (
+        "re-feeding identical bars duplicated swings"
+    )
