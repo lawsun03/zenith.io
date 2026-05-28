@@ -700,6 +700,56 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
         )
 
 
+def _tf_to_seconds(tf: str) -> int:
+    """Parse '4h' → 14400, '30min' → 1800, '1d' → 86400, '1min' → 60."""
+    tf = tf.strip().lower()
+    if tf.endswith("min"):
+        return int(tf[:-3]) * 60
+    if tf.endswith("h"):
+        return int(tf[:-1]) * 3600
+    if tf.endswith("d"):
+        return int(tf[:-1]) * 86400
+    return 60
+
+
+def _aggregate_bars(
+    bars: list,  # list[Bar] — import-loop avoidance
+    target_seconds: int,
+    target_label: str,
+) -> list:
+    """Group bars into time buckets and compute OHLCV per bucket.
+
+    Buckets align to UTC-epoch multiples of target_seconds. Used to fold
+    1min data into 4h / 30min / 1d HTF bars when the broker doesn't return
+    enough native HTF bars for the current contract (e.g. after a roll).
+    """
+    if not bars:
+        return []
+    from datetime import datetime, timezone
+    from app.broker.events import Bar  # local import to avoid module-level cycle
+
+    buckets: dict[int, list] = {}
+    for b in bars:
+        epoch = int(b.ts.timestamp())
+        bucket_epoch = (epoch // target_seconds) * target_seconds
+        buckets.setdefault(bucket_epoch, []).append(b)
+
+    out: list = []
+    for bucket_epoch in sorted(buckets):
+        group = sorted(buckets[bucket_epoch], key=lambda b: b.ts)
+        out.append(Bar(
+            instrument=group[0].instrument,
+            timeframe=target_label,
+            ts=datetime.fromtimestamp(bucket_epoch, tz=timezone.utc),
+            open=group[0].open,
+            high=max(b.high for b in group),
+            low=min(b.low for b in group),
+            close=group[-1].close,
+            volume=sum(b.volume for b in group),
+        ))
+    return out
+
+
 async def _build_htf_trackers(
     broker: "Broker", s: "StrategyParams",
 ) -> tuple[HTFBiasTracker | None, HTFLevelFinder | None]:
@@ -734,27 +784,65 @@ async def _refresh_htf_once(
     if bias_tracker is None and level_finder is None:
         return
     try:
+        # Try the native HTF timeframe first — fastest and most accurate when
+        # the broker has the data. Many futures contracts return very few bars
+        # for the active contract (post-roll), so check whether the native
+        # fetch gave us enough structure to confirm swings; if not, aggregate
+        # from 1min (which always has plenty of history).
         bias_bars = await broker.get_historical_bars(
-            timeframe=s.htf_bias_timeframe, days=30, limit=500,
+            timeframe=s.htf_bias_timeframe, days=90, limit=2000,
         )
-        # A 0-bar fetch is a silent failure mode (200 OK from broker with no
-        # data, e.g. unsupported timeframe unit) — surface it loudly so we
-        # don't run with a permanently-empty bias tracker.
+        # Threshold: we want enough bars that at least a handful of swings
+        # can confirm with the configured lookback. (lookback*2 + 1) is the
+        # bare minimum to confirm ONE swing; we require 5× that for usable
+        # bias signal.
+        min_useful_bars = (s.htf_bias_lookback * 2 + 1) * 5
+        if len(bias_bars) < min_useful_bars:
+            log.info(
+                "HTF: native %s fetch gave only %d bars (< %d needed); "
+                "aggregating from 1min instead",
+                s.htf_bias_timeframe, len(bias_bars), min_useful_bars,
+            )
+            one_min = await broker.get_historical_bars(
+                timeframe="1min", days=30, limit=50000,
+            )
+            target_secs = _tf_to_seconds(s.htf_bias_timeframe)
+            bias_bars = _aggregate_bars(one_min, target_secs, s.htf_bias_timeframe)
+            log.info(
+                "HTF: aggregated %d 1min bars -> %d %s bars",
+                len(one_min), len(bias_bars), s.htf_bias_timeframe,
+            )
+
         if not bias_bars:
             log.warning(
-                "HTF: fetched 0 %s bars — bias tracker will stay empty (neutral). "
-                "Check whether timeframe is supported by the broker.",
+                "HTF: 0 %s bars after fetch+aggregate — bias tracker will "
+                "stay empty (neutral). Check broker connectivity.",
                 s.htf_bias_timeframe,
             )
         if bias_tracker is not None:
             bias_tracker.rebuild(bias_bars)
+
         if level_finder is not None:
             swing_bars = await broker.get_historical_bars(
-                timeframe=s.htf_swing_timeframe, days=10, limit=500,
+                timeframe=s.htf_swing_timeframe, days=10, limit=2000,
             )
+            min_useful_swing = (s.htf_bias_lookback * 2 + 1) * 5
+            if len(swing_bars) < min_useful_swing:
+                # Reuse the 1min fetch we just did (if available) or pull fresh
+                # if this is a level-finder-only configuration.
+                if 'one_min' not in locals():
+                    one_min = await broker.get_historical_bars(
+                        timeframe="1min", days=15, limit=25000,
+                    )
+                swing_secs = _tf_to_seconds(s.htf_swing_timeframe)
+                swing_bars = _aggregate_bars(one_min, swing_secs, s.htf_swing_timeframe)
+                log.info(
+                    "HTF: aggregated 1min -> %d %s swing bars",
+                    len(swing_bars), s.htf_swing_timeframe,
+                )
             if not swing_bars:
                 log.warning(
-                    "HTF: fetched 0 %s swing bars — target finder fallback will be empty.",
+                    "HTF: 0 %s swing bars — target finder fallback will be empty.",
                     s.htf_swing_timeframe,
                 )
             level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)

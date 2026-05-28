@@ -273,3 +273,60 @@ def test_bias_tracker_dedupes_overlapping_bars():
     assert count_after_second == count_after_first, (
         "re-feeding identical bars duplicated swings"
     )
+
+
+def test_aggregate_bars_folds_1min_into_4h():
+    """Aggregation must fold N consecutive 1-min bars into the correct 4h OHLCV.
+    O = first bar's open, H = max high, L = min low, C = last bar's close,
+    V = sum volumes. Bucket boundary at 4h-aligned UTC epoch."""
+    from app.main import _aggregate_bars, _tf_to_seconds
+    from datetime import datetime, timezone
+
+    # Eight 1-min bars all within a single 4h bucket (00:00–04:00 UTC).
+    base = datetime(2026, 5, 27, 0, 0, tzinfo=timezone.utc)
+    one_min = []
+    for i in range(8):
+        one_min.append(Bar(
+            instrument="MGC", timeframe="1min",
+            ts=base + timedelta(minutes=i),
+            open=Decimal(str(100 + i)),
+            high=Decimal(str(110 + i)),
+            low=Decimal(str(90 + i)),
+            close=Decimal(str(105 + i)),
+            volume=10,
+        ))
+
+    four_h = _aggregate_bars(one_min, _tf_to_seconds("4h"), "4h")
+    assert len(four_h) == 1
+    b = four_h[0]
+    assert b.open  == Decimal("100")   # first 1min's open
+    assert b.close == Decimal("112")   # last 1min's close (105+7)
+    assert b.high  == Decimal("117")   # max high (110+7)
+    assert b.low   == Decimal("90")    # min low (90+0)
+    assert b.volume == 80              # 8 × 10
+    assert b.timeframe == "4h"
+    assert b.ts == base                # bucket boundary
+
+
+def test_aggregate_bars_splits_across_buckets():
+    """Bars spanning multiple 4h windows must produce one bar per bucket."""
+    from app.main import _aggregate_bars, _tf_to_seconds
+    from datetime import datetime, timezone
+
+    base = datetime(2026, 5, 27, 0, 0, tzinfo=timezone.utc)
+    bars = []
+    # 5h of 1min bars → spans two 4h buckets (00–04 and 04–08).
+    for i in range(300):  # 300 minutes = 5h
+        bars.append(Bar(
+            instrument="MGC", timeframe="1min",
+            ts=base + timedelta(minutes=i),
+            open=Decimal("100"), high=Decimal("101"),
+            low=Decimal("99"), close=Decimal("100"), volume=1,
+        ))
+
+    out = _aggregate_bars(bars, _tf_to_seconds("4h"), "4h")
+    assert len(out) == 2
+    # First bucket has 240 bars (4h × 60min), second has 60 (the remaining hour).
+    assert out[0].volume == 240
+    assert out[1].volume == 60
+    assert out[1].ts == base + timedelta(hours=4)
