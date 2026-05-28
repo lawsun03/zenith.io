@@ -3,6 +3,31 @@ import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight
 import type { ChartCallbacks } from '../hooks/useStream'
 import type { VpProfile } from '../types'
 
+interface SetupInstrument {
+  instrument: string
+  killzone: { active: boolean; name: string | null }
+  sweeps_pending: { side: string; pattern: string; swept_price: string; sweep_extreme: string }[]
+  displacement_candidate: { side: string; bar_ts: string } | null
+  cooldown_bars_remaining: number
+  atr: string | null
+  vp: {
+    enabled: boolean
+    profile_available: boolean
+    poc?: string
+    vah?: string
+    val?: string
+    hvns?: string[]
+    tolerance?: string
+    min_target_r?: string
+    session_date?: string
+  }
+}
+
+interface SetupState {
+  available: boolean
+  instruments: SetupInstrument[]
+}
+
 const TF_SECONDS: Record<string, number> = {
   '1min': 60, '3min': 180, '5min': 300,
   '15min': 900, '30min': 1800, '1h': 3600,
@@ -13,28 +38,125 @@ interface Props {
   timeframe?: string
 }
 
+const CHART_HEIGHT = 320
+
+const S = {
+  row: (active: boolean, muted: boolean) => ({
+    display: 'flex' as const,
+    alignItems: 'flex-start' as const,
+    opacity: muted ? 0.28 : 1,
+    borderLeft: `3px solid ${active ? '#00ff41' : '#001f00'}`,
+    paddingLeft: 10,
+    paddingRight: 12,
+    paddingTop: 6,
+    paddingBottom: 6,
+    background: active ? 'rgba(0,255,65,0.05)' : 'transparent',
+    borderBottom: '1px solid #001200',
+  }),
+  dot: (active: boolean) => ({
+    color: active ? '#00ff41' : '#1e4d1e',
+    fontSize: 10,
+    lineHeight: '20px',
+    flexShrink: 0,
+    marginRight: 8,
+  }),
+  label: (active: boolean) => ({
+    color: active ? '#d4ffd4' : '#3d6b3d',
+    fontSize: 13,
+    lineHeight: '20px',
+    fontWeight: active ? 700 : 400,
+    fontFamily: "'Courier New', monospace",
+  }),
+  detail: {
+    color: '#4a8f4a',
+    fontSize: 11,
+    lineHeight: '16px',
+    marginTop: 2,
+    fontFamily: "'Courier New', monospace",
+  },
+  subDetail: {
+    color: '#2d6b2d',
+    fontSize: 10,
+    lineHeight: '15px',
+    marginTop: 1,
+    fontFamily: "'Courier New', monospace",
+  },
+}
+
+function CheckItem({
+  label, active, detail, muted,
+}: { label: string; active: boolean; detail?: string; muted?: boolean }) {
+  return (
+    <div style={S.row(active, !!muted)}>
+      <span style={S.dot(active)}>{active ? '▶' : '·'}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={S.label(active)}>{label}</span>
+        {detail && <span style={S.detail}>{detail}</span>}
+      </div>
+    </div>
+  )
+}
+
+function VpCheckItem({ vp }: { vp: SetupInstrument['vp'] }) {
+  if (!vp.enabled) {
+    return <CheckItem label="VP filter" active={false} detail="Disabled" muted />
+  }
+  if (!vp.profile_available) {
+    return (
+      <CheckItem
+        label="VP filter"
+        active={false}
+        detail="No prior session — bypassed"
+      />
+    )
+  }
+
+  const { val, vah, poc, hvns, tolerance, min_target_r } = vp
+  const tol = tolerance ? ` ±${tolerance}` : ''
+
+  return (
+    <div style={S.row(true, false)}>
+      <span style={S.dot(true)}>▶</span>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={S.label(true)}>VP filter</span>
+        <span style={S.detail}>
+          VA {parseFloat(val ?? '0').toFixed(1)} – {parseFloat(vah ?? '0').toFixed(1)}{tol}
+        </span>
+        <span style={S.subDetail}>
+          POC {poc ? parseFloat(poc).toFixed(1) : '—'} · tgt ≥{min_target_r}R
+        </span>
+        {hvns && hvns.length > 0 && (
+          <span style={S.subDetail}>
+            HVN {hvns.slice(0, 3).map(h => parseFloat(h).toFixed(1)).join(' · ')}{hvns.length > 3 ? '…' : ''}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function BarChart({ callbacksRef, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastBarTimeRef = useRef<number | null>(null)
   const [countdown, setCountdown] = useState<string | null>(null)
-  const [formingHot, setFormingHot] = useState(false)  // displacement + pending sweep
+  const [setupState, setSetupState] = useState<SetupState | null>(null)
 
-  const pollFormingStatus = useCallback(() => {
-    fetch('/api/forming/status')
+  const pollSetupState = useCallback(() => {
+    fetch('/api/setup_state')
       .then(r => r.json())
-      .then((d: Record<string, { has_displacement_candidate: boolean; awaiting_sweeps: number }> | null) => {
-        if (!d) { setFormingHot(false); return }
-        const hot = Object.values(d).some(v => v.has_displacement_candidate && v.awaiting_sweeps > 0)
-        setFormingHot(hot)
-      })
+      .then((d: SetupState) => setSetupState(d))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    pollFormingStatus()
-    const id = setInterval(pollFormingStatus, 5000)
+    pollSetupState()
+    const id = setInterval(pollSetupState, 3000)
     return () => clearInterval(id)
-  }, [pollFormingStatus])
+  }, [pollSetupState])
+
+  const formingHot = (setupState?.instruments ?? []).some(
+    i => i.displacement_candidate !== null && i.sweeps_pending.length > 0
+  )
 
   // Countdown ticker — time until the next bar boundary (next minute, next 5min, etc.)
   // Wall-clock based, so it's accurate even when REST bar delivery lags.
@@ -285,8 +407,11 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     }
   }, [callbacksRef])
 
+  const inst = setupState?.available ? (setupState.instruments[0] ?? null) : null
+
   return (
     <div className="bg-panel border border-border">
+      {/* Header bar */}
       <div className="px-4 py-2 border-b border-border flex items-center justify-between">
         <span className="text-[10px] tracking-[0.3em] text-dim uppercase">Price Chart</span>
         <div className="flex items-center gap-3">
@@ -306,7 +431,100 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
           )}
         </div>
       </div>
-      <div ref={containerRef} />
+
+      {/* Chart + signal panel side by side */}
+      <div style={{ display: 'flex' }}>
+        {/* Price chart — 4/5 width */}
+        <div style={{ flex: 4, position: 'relative', minWidth: 0 }}>
+          <div ref={containerRef} />
+        </div>
+
+        {/* Signal conditions — 1/5 width */}
+        <div style={{
+          flex: 1,
+          borderLeft: '1px solid #001800',
+          background: '#000',
+          height: CHART_HEIGHT,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          fontFamily: "'Courier New', monospace",
+        }}>
+          {/* Panel header */}
+          <div style={{
+            padding: '7px 12px 6px',
+            borderBottom: '1px solid #001800',
+            color: '#2d5c2d',
+            fontSize: 9,
+            letterSpacing: '0.4em',
+            textTransform: 'uppercase' as const,
+            flexShrink: 0,
+          }}>
+            Conditions
+          </div>
+
+          {/* Checklist items */}
+          <div style={{ flex: 1, overflowY: 'auto' as const }}>
+            {inst ? (
+              <>
+                <CheckItem
+                  label={inst.killzone.active ? (inst.killzone.name ?? 'Killzone') : 'Killzone'}
+                  active={inst.killzone.active}
+                  detail={inst.killzone.active ? 'Session open' : 'Outside hours'}
+                />
+                <CheckItem
+                  label="Sweep"
+                  active={inst.sweeps_pending.length > 0}
+                  detail={
+                    inst.sweeps_pending.length > 0
+                      ? `${inst.sweeps_pending[0].side === 'high' ? 'High' : 'Low'} @ ${inst.sweeps_pending[0].swept_price}`
+                      : undefined
+                  }
+                  muted={!inst.killzone.active}
+                />
+                <CheckItem
+                  label="Displ + FVG"
+                  active={inst.displacement_candidate !== null}
+                  detail={
+                    inst.displacement_candidate
+                      ? inst.displacement_candidate.side
+                      : inst.sweeps_pending.length > 0
+                      ? 'Waiting…'
+                      : undefined
+                  }
+                  muted={inst.sweeps_pending.length === 0}
+                />
+                <VpCheckItem vp={inst.vp} />
+                {inst.cooldown_bars_remaining > 0 && (
+                  <CheckItem
+                    label="Cooldown"
+                    active={false}
+                    detail={`${inst.cooldown_bars_remaining} bar${inst.cooldown_bars_remaining !== 1 ? 's' : ''} · suppressed`}
+                  />
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '12px', color: '#1a3d1a', fontSize: 11 }}>
+                Waiting…
+              </div>
+            )}
+          </div>
+
+          {/* ATR footer */}
+          {inst?.atr && (
+            <div style={{
+              padding: '5px 12px',
+              borderTop: '1px solid #001800',
+              color: '#2d5c2d',
+              fontSize: 10,
+              letterSpacing: '0.1em',
+              flexShrink: 0,
+            }}>
+              ATR {parseFloat(inst.atr).toFixed(2)}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
