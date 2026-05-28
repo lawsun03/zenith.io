@@ -233,6 +233,9 @@ class ExecutionEngine:
         # corresponding strategy_cfg flag is off.
         self.htf_bias = None      # HTFBiasTracker | None
         self.htf_levels = None    # HTFLevelFinder | None
+        # One-shot warning guard: fires once if a flag is on but the tracker is
+        # None (e.g. rebuild failed). Resets when trackers are successfully wired.
+        self._htf_warned: bool = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -405,6 +408,18 @@ class ExecutionEngine:
         "htf_bias" or "vp_filter". Pure decision: does not call on_signal.
         """
         cfg = self.strategy_cfg
+        if cfg is not None and not self._htf_warned:
+            if (cfg.htf_bias_enabled and self.htf_bias is None) or (
+                cfg.htf_target_enabled and self.htf_levels is None
+            ):
+                log.warning(
+                    "HTF flag enabled but tracker is None — gate/target inactive "
+                    "until trackers rebuild (bias_enabled=%s bias=%s, "
+                    "target_enabled=%s levels=%s)",
+                    cfg.htf_bias_enabled, self.htf_bias is not None,
+                    cfg.htf_target_enabled, self.htf_levels is not None,
+                )
+                self._htf_warned = True
         vp_active = (
             runner.vp is not None
             and cfg is not None

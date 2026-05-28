@@ -558,20 +558,19 @@ async def _run_live(
     if runner is not None and bot_cfg is not None and runner.vp is not None:
         await _warm_up_vp(broker, runner, bot_cfg)
     htf_task = None
-    if bot_cfg is not None and runner is not None and engine is not None:
+    if bot_cfg is not None and engine is not None:
         s = bot_cfg.strategy
+        # Build now so bias is ready before the first signal (only if enabled).
         if s.htf_bias_enabled or s.htf_target_enabled:
-            bias_tracker, level_finder = await _build_htf_trackers(broker, s)
-            engine.htf_bias = bias_tracker
-            engine.htf_levels = level_finder
+            await _rebuild_engine_htf(broker, engine, s)
             log.info(
                 "HTF confluence active: bias=%s target=%s (bias_tf=%s swing_tf=%s)",
                 s.htf_bias_enabled, s.htf_target_enabled,
                 s.htf_bias_timeframe, s.htf_swing_timeframe,
             )
-            htf_task = asyncio.create_task(
-                _htf_refresh_loop(broker, engine, s, shutdown)
-            )
+        # Always run the refresh loop so a later PATCH toggle is picked up and
+        # trackers stay fresh. It no-ops cheaply while both trackers are None.
+        htf_task = asyncio.create_task(_htf_refresh_loop(broker, engine, shutdown))
     log.info(
         "Live mode running. Instrument=%s timeframes=%s. Ctrl+C to stop.",
         cfg.instrument, cfg.timeframes,
@@ -732,17 +731,36 @@ async def _refresh_htf_once(
 
 
 async def _htf_refresh_loop(
-    broker: "Broker", engine: "ExecutionEngine", s: "StrategyParams",
-    shutdown: "asyncio.Event",
+    broker: "Broker", engine: "ExecutionEngine", shutdown: "asyncio.Event",
 ) -> None:
-    """Background task: periodically rebuild the engine's HTF trackers."""
+    """Background task: periodically rebuild the engine's HTF trackers from REST.
+
+    Reads engine.strategy_cfg each tick so live PATCH toggles / timeframe changes
+    are honored without restart. No-ops cheaply when both trackers are None.
+    """
     while not shutdown.is_set():
         try:
             await asyncio.wait_for(shutdown.wait(), timeout=HTF_REFRESH_SECONDS)
-            break  # shutdown fired
+            break
         except asyncio.TimeoutError:
             pass
-        await _refresh_htf_once(broker, s, engine.htf_bias, engine.htf_levels)
+        s = engine.strategy_cfg
+        if s is not None:
+            await _refresh_htf_once(broker, s, engine.htf_bias, engine.htf_levels)
+
+
+async def _rebuild_engine_htf(
+    broker: "Broker", engine: "ExecutionEngine", s: "StrategyParams",
+) -> None:
+    """(Re)build the engine's HTF trackers to match the current strategy flags.
+
+    Called at startup and on live config changes (PATCH /api/config,
+    /api/strategy/reload). _build_htf_trackers returns (None, None) when both
+    HTF features are disabled, so this also tears trackers down when toggled off.
+    """
+    bias_tracker, level_finder = await _build_htf_trackers(broker, s)
+    engine.htf_bias = bias_tracker
+    engine.htf_levels = level_finder
 
 
 async def _async_main() -> int:
@@ -921,6 +939,7 @@ async def _async_main() -> int:
         # Re-warm VP after a /api/strategy/reload rebuilds the runner, so the
         # filter/target don't silently drop their prior-session profile.
         vp_warmup=lambda runner, bot_cfg_: _warm_up_vp(broker, runner, bot_cfg_),
+        htf_rebuild=lambda body: _rebuild_engine_htf(broker, engine, body.strategy),
     )
 
     shutdown = asyncio.Event()

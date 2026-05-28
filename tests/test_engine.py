@@ -607,3 +607,76 @@ async def test_agreeing_bias_bypasses_vp_filter():
     assert len(captured) == 1
     # The VP filter must NOT have fired — bias bypass must take effect.
     assert captured[0].reason != "vp_filter"
+
+
+@pytest.mark.asyncio
+async def test_htf_warns_once_when_flag_on_but_tracker_none(caplog):
+    """Defense-in-depth: flag on but tracker is None must log a WARNING (once),
+    not silently no-op. The signal should NOT be denied for htf_bias — the
+    gate is correctly inert when the tracker is missing (fail-open)."""
+    import logging
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    cfg = StrategyParams(vp_enabled=False, htf_bias_enabled=True)
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    # htf_bias deliberately left as None — the misconfig case
+    assert engine.htf_bias is None
+    await broker.connect()
+    await engine.start()
+
+    with caplog.at_level(logging.WARNING, logger="app.execution.engine"):
+        captured = await _run_short_signal(engine, broker)
+
+    assert len(captured) == 1
+    # Gate must NOT have blocked (fail-open when tracker is None).
+    assert captured[0].reason != "htf_bias"
+    # Warning must have fired.
+    warnings = [r for r in caplog.records
+                if r.levelno == logging.WARNING and "tracker is None" in r.getMessage()]
+    assert len(warnings) >= 1, f"expected 'tracker is None' warning, got: {[r.getMessage() for r in caplog.records]}"
+
+    # Second run on the same engine must NOT re-log (one-shot guard).
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="app.execution.engine"):
+        captured2 = await _run_short_signal(engine, broker)
+    # Some signals may be captured (or none, depending on bar replay); the
+    # contract under test is that the warning is NOT repeated.
+    warnings2 = [r for r in caplog.records
+                 if "tracker is None" in r.getMessage()]
+    assert len(warnings2) == 0
+
+
+@pytest.mark.asyncio
+async def test_htf_live_toggle_takes_effect_without_restart():
+    """Simulates PATCH /api/config hot-apply: flipping strategy_cfg flags and
+    assigning trackers on a running engine must change the gate's behavior
+    immediately on the next bar — the contract PATCH relies on."""
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    # Start with HTF OFF, no trackers.
+    cfg_off = StrategyParams(vp_enabled=False)
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg_off)
+    assert engine.htf_bias is None
+    await broker.connect()
+    await engine.start()
+
+    first = await _run_short_signal(engine, broker)
+    # With HTF off, the short signal should not be htf_bias-denied.
+    assert len(first) == 1
+    assert first[0].reason != "htf_bias"
+
+    # Simulate the PATCH hot-apply: flip the flag and assign a tracker that
+    # would block this signal. Reset the warning guard so subsequent missed
+    # tracker assignments would still surface.
+    engine.strategy_cfg = StrategyParams(vp_enabled=False, htf_bias_enabled=True)
+    engine.htf_bias = _StubBias("bullish")
+    engine._htf_warned = False
+
+    second = await _run_short_signal(engine, broker)
+    assert len(second) == 1
+    assert second[0].placed is False
+    assert second[0].reason == "htf_bias"
