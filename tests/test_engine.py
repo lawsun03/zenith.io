@@ -432,3 +432,103 @@ def test_entry_size_equity_fallback_before_first_tick():
     eng, rs = _engine_with_pct("0.25")
     # no mark_equity call -> _current_equity == 0, realized_balance == 50000
     assert eng._entry_size(_signal("4500.0", "4497.0", "4509.0")) == 4
+
+
+# =====================================================================
+# HTF confluence — bias gate, VP filter bypass, target precedence
+# =====================================================================
+
+class _StubBias:
+    def __init__(self, value): self._v = value
+    def bias(self): return self._v
+
+
+class _StubLevels:
+    def __init__(self, result): self._r = result
+    def find_target(self, side, entry, stop, min_r): return self._r
+
+
+async def _run_short_signal(engine, broker):
+    captured = []
+    async def cap(_, out): captured.append(out)
+    engine.on_signal = cap
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await asyncio.sleep(0)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_htf_bias_blocks_counter_trend_short():
+    """Bullish 4h bias must block a short signal and emit reason='htf_bias'."""
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    cfg = StrategyParams(vp_enabled=False, htf_bias_enabled=True)
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    engine.htf_bias = _StubBias("bullish")   # bullish bias -> block shorts
+    await broker.connect()
+    await engine.start()
+    captured = await _run_short_signal(engine, broker)
+    assert len(captured) == 1
+    assert captured[0].placed is False
+    assert captured[0].reason == "htf_bias"
+
+
+@pytest.mark.asyncio
+async def test_htf_bias_neutral_does_not_block():
+    """Neutral 4h bias must not block any direction."""
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    cfg = StrategyParams(vp_enabled=False, htf_bias_enabled=True)
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    engine.htf_bias = _StubBias("neutral")   # neutral -> no block
+    await broker.connect()
+    await engine.start()
+    captured = await _run_short_signal(engine, broker)
+    assert len(captured) == 1
+    assert captured[0].reason != "htf_bias"
+
+
+@pytest.mark.asyncio
+async def test_htf_target_overrides_when_enabled():
+    """When htf_target_enabled, the HTF level price replaces the composer target."""
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    cfg = StrategyParams(vp_enabled=False, htf_target_enabled=True)
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    # SHORT_SIGNAL_BARS generate entry ~2401, stop ~2403.8 (above entry for short).
+    # Target 2395.0 is below entry — plausible short target.
+    engine.htf_levels = _StubLevels((Decimal("2395.0"), "HTF: 4h FVG @ 2395.0 (3.0R)"))
+    placed = []
+    async def cap(sig, out):
+        if out.placed: placed.append(sig)
+    engine.on_signal = cap
+    await broker.connect()
+    await engine.start()
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await asyncio.sleep(0)
+    assert placed and placed[0].target == Decimal("2395.0")
+
+
+@pytest.mark.asyncio
+async def test_htf_disabled_is_unchanged():
+    """When htf_bias_enabled=False, a present htf_bias stub must be ignored."""
+    from app.bot_config import StrategyParams
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    cfg = StrategyParams(vp_enabled=False)   # htf flags default False
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    engine.htf_bias = _StubBias("bullish")   # present but must be IGNORED (flag off)
+    await broker.connect()
+    await engine.start()
+    captured = await _run_short_signal(engine, broker)
+    assert len(captured) == 1
+    assert captured[0].reason != "htf_bias"   # gate not consulted when disabled
