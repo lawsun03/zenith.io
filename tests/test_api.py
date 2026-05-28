@@ -249,3 +249,24 @@ async def test_journal_subscriber_drops_old_under_backpressure():
 
     # Queue size must be capped at maxsize.
     assert q.qsize() <= 100
+
+
+# =====================================================================
+# /api/bars
+# =====================================================================
+
+async def test_bars_accepts_timeframe_param():
+    """
+    /api/bars must accept a ?timeframe= query param.
+    In paper/non-live mode the broker is None so bars is always [].
+    The test confirms the param is wired (no 422 Unprocessable Entity)
+    and the response shape is correct regardless of TF.
+    """
+    app, _, _, _, _ = await make_app_with_state()
+    client = TestClient(app)
+    for tf in ["1min", "5min", "15min", "1h"]:
+        r = client.get(f"/api/bars?timeframe={tf}&limit=10")
+        assert r.status_code == 200, f"Expected 200 for timeframe={tf}, got {r.status_code}"
+        body = r.json()
+        assert "bars" in body, f"Missing 'bars' key for timeframe={tf}"
+        assert isinstance(body["bars"], list)
