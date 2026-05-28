@@ -42,6 +42,8 @@ class HTFBiasTracker:
 
     def rebuild(self, bars: list[Bar]) -> None:
         """Recompute bias from the full bar list (called on each refresh)."""
+        old = self._bias
+
         tracker = LiquidityTracker(LiquidityConfig(
             swing_lookback=self._lookback,
             max_swings=50,
@@ -52,20 +54,23 @@ class HTFBiasTracker:
         highs = tracker.recent_high_swings
         lows = tracker.recent_low_swings
         if len(highs) < 2 or len(lows) < 2:
-            self._bias = "neutral"
-            return
-
-        hh = highs[-1].price > highs[-2].price
-        hl = lows[-1].price > lows[-2].price
-        lh = highs[-1].price < highs[-2].price
-        ll = lows[-1].price < lows[-2].price
-
-        if hh and hl:
-            self._bias = "bullish"
-        elif lh and ll:
-            self._bias = "bearish"
+            new_bias: Bias = "neutral"
         else:
-            self._bias = "neutral"
+            hh = highs[-1].price > highs[-2].price
+            hl = lows[-1].price > lows[-2].price
+            lh = highs[-1].price < highs[-2].price
+            ll = lows[-1].price < lows[-2].price
+
+            if hh and hl:
+                new_bias = "bullish"
+            elif lh and ll:
+                new_bias = "bearish"
+            else:
+                new_bias = "neutral"
+
+        if new_bias != old:
+            log.info("HTFBias: %s -> %s", old, new_bias)
+        self._bias = new_bias
 
     def bias(self) -> Bias:
         return self._bias
