@@ -265,19 +265,38 @@ class VolumeProfileTracker:
     def has_prior_profile(self) -> bool:
         return self._prior is not None
 
+    def passes_filter(self, signal: Signal, cfg: StrategyParams) -> bool:
+        """
+        True if the signal passes the VP value-area filter (or there is no
+        prior profile to filter against). Pure check — no target mutation.
+        """
+        if not self._prior:
+            return True
+        return _filter(signal, self._prior, cfg.vp_filter_tolerance)
+
+    def select_target(self, signal: Signal, cfg: StrategyParams) -> Signal | None:
+        """
+        Return a copy of `signal` with the VP-derived target and an updated
+        rationale, or None if there is no prior profile. Does NOT filter.
+        """
+        if not self._prior:
+            return None
+        new_target, target_label = _pick_target(signal, self._prior, cfg)
+        new_rationale = signal.rationale + f" | VP: {target_label}"
+        return dataclasses.replace(signal, target=new_target, rationale=new_rationale)
+
     def apply(self, signal: Signal, cfg: StrategyParams) -> Signal | None:
         """
         Apply VP filter and target override to a signal.
 
         Returns None if the filter rejects the signal (logged at INFO).
-        Returns a new Signal (dataclasses.replace) with VP-derived target
-        and updated rationale. Returns the original signal unchanged if no
-        prior profile is available (first day / historical fetch failed).
+        Returns a new Signal with VP-derived target. Returns the original
+        signal unchanged if no prior profile is available.
         """
         if not self._prior:
             return signal
 
-        if not _filter(signal, self._prior, cfg.vp_filter_tolerance):
+        if not self.passes_filter(signal, cfg):
             log.info(
                 "VP filter: rejected %s entry=%.2f outside value area "
                 "(VAL=%.2f VAH=%.2f tol=%.2f)",
@@ -287,6 +306,4 @@ class VolumeProfileTracker:
             )
             return None
 
-        new_target, target_label = _pick_target(signal, self._prior, cfg)
-        new_rationale = signal.rationale + f" | VP: {target_label}"
-        return dataclasses.replace(signal, target=new_target, rationale=new_rationale)
+        return self.select_target(signal, cfg)
