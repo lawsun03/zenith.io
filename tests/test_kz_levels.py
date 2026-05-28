@@ -124,6 +124,41 @@ def test_level_consumed_after_sweep():
     assert len(sweeps) == 0
 
 
+def test_signal_source_defaults_to_swing():
+    """Existing callers that don't pass source get 'swing' tag — no regression."""
+    from app.strategy.composer import Signal
+    from decimal import Decimal
+    from datetime import datetime, timezone
+    sig = Signal(
+        instrument="MGC", side="long",
+        entry=Decimal("100"), stop=Decimal("98"), target=Decimal("105"),
+        created_at=datetime.now(timezone.utc),
+        killzone="NY AM", sweep_pattern="B_one_bar",
+        sweep_extreme=Decimal("97.5"),
+        fvg_low=Decimal("99"), fvg_high=Decimal("100.5"),
+        rationale="test",
+    )
+    assert sig.source == "swing"
+
+
+def test_signal_source_kz_level_tag():
+    """source='kz_level' can be explicitly set."""
+    from app.strategy.composer import Signal
+    from decimal import Decimal
+    from datetime import datetime, timezone
+    sig = Signal(
+        instrument="MGC", side="short",
+        entry=Decimal("103"), stop=Decimal("105"), target=Decimal("98"),
+        created_at=datetime.now(timezone.utc),
+        killzone="London", sweep_pattern="B_one_bar",
+        sweep_extreme=Decimal("103.5"),
+        fvg_low=Decimal("102.5"), fvg_high=Decimal("103"),
+        rationale="test",
+        source="kz_level",
+    )
+    assert sig.source == "kz_level"
+
+
 def test_daily_reset_clears_all_state():
     """On a new UTC date, all ranges and pending state resets."""
     tracker = KillzoneLevelTracker()

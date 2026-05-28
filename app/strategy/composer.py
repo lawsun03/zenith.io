@@ -74,6 +74,7 @@ class Signal:
     fvg_low: Decimal | None      # for the dashboard / journal
     fvg_high: Decimal | None
     rationale: str               # human-readable, one line
+    source: str = "swing"       # "swing" | "kz_level" — for per-source analytics
 
 
 @dataclass
@@ -119,6 +120,7 @@ class _Awaiting:
     sweep: SweepEvent
     bars_since_sweep: int
     killzone_name: str
+    source: str = "swing"
 
 
 class SweepDisplacementComposer:
@@ -167,7 +169,7 @@ class SweepDisplacementComposer:
     # Event handlers
     # ------------------------------------------------------------------
 
-    def on_sweep(self, bar: Bar, sweep: SweepEvent) -> None:
+    def on_sweep(self, bar: Bar, sweep: SweepEvent, source: str = "swing") -> None:
         """
         Record a sweep. Only if we're in a killzone — sweeps outside
         trading hours are ignored at this layer (the detectors don't
@@ -183,6 +185,7 @@ class SweepDisplacementComposer:
             sweep=sweep,
             bars_since_sweep=0,
             killzone_name=zone.name,
+            source=source,
         ))
 
     def on_stop_loss(self) -> None:
@@ -285,6 +288,7 @@ class SweepDisplacementComposer:
                 sweep=a.sweep,
                 bars_since_sweep=a.bars_since_sweep + 1,
                 killzone_name=a.killzone_name,
+                source=a.source,
             )
             if a_aged.bars_since_sweep < window:
                 kept.append(a_aged)
@@ -352,4 +356,5 @@ class SweepDisplacementComposer:
             fvg_low=fvg.low,
             fvg_high=fvg.high,
             rationale=rationale,
+            source=awaiting.source,
         )
