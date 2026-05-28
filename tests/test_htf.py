@@ -180,3 +180,14 @@ def test_find_target_rejects_unknown_side():
     f.rebuild(fvg_bars=[], swing_bars=[])
     with pytest.raises(ValueError):
         f.find_target("buy", Decimal("10"), Decimal("9"), Decimal("2.0"))
+
+
+def test_strategy_params_htf_defaults_inert():
+    from app.bot_config import StrategyParams
+    s = StrategyParams()
+    assert s.htf_bias_enabled is False
+    assert s.htf_bias_timeframe == "4h"
+    assert s.htf_bias_lookback == 3
+    assert s.htf_target_enabled is False
+    assert s.htf_target_min_r == Decimal("2.0")
+    assert s.htf_swing_timeframe == "30min"

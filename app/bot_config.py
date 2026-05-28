@@ -42,6 +42,14 @@ class StrategyParams(BaseModel):
     vp_hvn_threshold: float = 1.5                 # volume × mean to qualify as HVN
     vp_min_target_r: Decimal = Decimal("1.0")     # minimum R a VP level must deliver as target
 
+    # Higher-timeframe confluence (both default off → no behavior change)
+    htf_bias_enabled: bool = False          # Part A: 4h swing-structure bias gate
+    htf_bias_timeframe: str = "4h"          # timeframe for bias (NOTE: "4h" not "4hr")
+    htf_bias_lookback: int = 3              # swing lookback on the bias timeframe
+    htf_target_enabled: bool = False        # Part B: HTF target selection
+    htf_target_min_r: Decimal = Decimal("2.0")  # min R an HTF level must deliver
+    htf_swing_timeframe: str = "30min"      # fallback swing-target timeframe
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None   # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
