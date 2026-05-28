@@ -67,6 +67,7 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
           setSignals([])
           setFills([])
           setReconciles([])
+          setStrategyState(null)
           chartCbRef?.current?.onReset?.()
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
           return

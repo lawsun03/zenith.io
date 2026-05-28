@@ -75,8 +75,8 @@ export function StrategyDebug({ state }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.awaiting_sweeps.map((s, i) => (
-                    <tr key={i}>
+                  {state.awaiting_sweeps.map((s) => (
+                    <tr key={`${s.side}-${s.price}-${s.source}`}>
                       <td className={`pr-4 py-0.5 ${s.side === 'high' ? 'text-red-400' : 'text-accent'}`}>
                         {s.side}
                       </td>
