@@ -736,3 +736,31 @@ def test_snapshot_awaiting_sweeps_serialized():
     assert s["price"] == "103"
     assert s["bars_elapsed"] == 2
     assert s["killzone"] == "London"
+
+
+# =====================================================================
+# Bar router — signal_instrument field on StrategyRunner
+# =====================================================================
+
+def test_bar_router_empty_when_no_signal_instrument():
+    """Default runner (signal_instrument empty) produces empty bar router."""
+    from app.risk.config import fifty_k_combine
+    from app.broker.paper import PaperBroker
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    # signal_instrument defaults to "" — no routing needed
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
+    assert engine._bar_router == {}
+
+
+def test_bar_router_maps_signal_to_execution_instrument():
+    """Runner with signal_instrument='GC' builds {'GC': 'MGC'} router."""
+    from app.risk.config import fifty_k_combine
+    from app.broker.paper import PaperBroker
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.signal_instrument = "GC"
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
+    assert engine._bar_router == {"GC": "MGC"}

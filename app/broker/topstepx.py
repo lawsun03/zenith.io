@@ -1078,6 +1078,7 @@ class TopstepXBroker:
         days: int = 5,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        instrument: str | None = None,
     ) -> list[Bar]:
         """
         Fetch recent historical bars for the subscribed instrument.
@@ -1088,7 +1089,7 @@ class TopstepXBroker:
         """
         self._require_connected()
         interval, unit = self._parse_timeframe(timeframe)
-        primary = self._instruments[0] if self._instruments else ""
+        primary = instrument or (self._instruments[0] if self._instruments else "")
         try:
             kwargs: dict = {
                 "symbol": primary,

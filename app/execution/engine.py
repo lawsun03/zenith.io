@@ -112,6 +112,8 @@ class StrategyRunner:
     composer: SweepDisplacementComposer
     vp: VolumeProfileTracker | None = None
     kz_levels: "KillzoneLevelTracker | None" = None
+    signal_instrument: str = ""
+    # Empty string = same as instrument. Set to "GC" when using GC bars for MGC execution.
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
@@ -218,6 +220,13 @@ class ExecutionEngine:
         self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
         self.strategy_cfg = strategy_cfg
         self.on_bar_done = on_bar_done
+        # Maps signal instrument → execution instrument (e.g. {"GC": "MGC"}).
+        # Empty when all runners use the same instrument for signal and execution.
+        self._bar_router: dict[str, str] = {
+            r.signal_instrument: r.instrument
+            for r in runners
+            if r.signal_instrument and r.signal_instrument != r.instrument
+        }
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed

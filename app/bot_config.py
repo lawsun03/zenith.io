@@ -65,6 +65,9 @@ class BotConfig(BaseModel):
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
+    signal_instrument: str | None = None
+    # None = use same instrument as execution (backward compatible).
+    # Set to "GC" to stream GC bars for signal generation while trading the configured instrument.
     strategy: StrategyParams = Field(default_factory=StrategyParams)
 
 
@@ -92,6 +95,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "partial_profit_r": _conv(config.partial_profit_r),
         "enabled_killzones": config.enabled_killzones,
+        "signal_instrument": config.signal_instrument,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
     }
     path.write_text(json.dumps(data, indent=2))
