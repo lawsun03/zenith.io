@@ -41,6 +41,11 @@ const TF_SECONDS: Record<string, number> = {
   '15min': 900, '30min': 1800, '1h': 3600,
 }
 
+const TF_LABELS: Record<string, string> = {
+  '1min': '1m', '3min': '3m', '5min': '5m',
+  '15min': '15m', '30min': '30m', '1h': '1h',
+}
+
 interface Props {
   callbacksRef: React.MutableRefObject<ChartCallbacks>
   timeframe?: string
@@ -200,6 +205,12 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
   const lastBarTimeRef = useRef<number | null>(null)
   const [countdown, setCountdown] = useState<string | null>(null)
   const [setupState, setSetupState] = useState<SetupState | null>(null)
+  const [viewTf, setViewTf] = useState<string>(timeframe ?? '1min')
+  const viewTfRef = useRef<string>(timeframe ?? '1min')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const seriesRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chartRef = useRef<any>(null)
 
   const pollSetupState = useCallback(() => {
     fetch('/api/setup_state')
@@ -214,27 +225,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     return () => clearInterval(id)
   }, [pollSetupState])
 
-  const formingHot = (setupState?.instruments ?? []).some(
-    i => i.displacement_candidate !== null && i.sweeps_pending.length > 0
-  )
-
-  // Countdown ticker — time until the next bar boundary (next minute, next 5min, etc.)
-  // Wall-clock based, so it's accurate even when REST bar delivery lags.
-  useEffect(() => {
-    const tfSecs = TF_SECONDS[timeframe ?? ''] ?? null
-    if (!tfSecs) { setCountdown(null); return }
-    const tick = () => {
-      const nowSecs = Math.floor(Date.now() / 1000)
-      const nextBoundary = (Math.floor(nowSecs / tfSecs) + 1) * tfSecs
-      const remaining = nextBoundary - nowSecs
-      const m = Math.floor(remaining / 60)
-      const s = remaining % 60
-      setCountdown(m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`)
-    }
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [timeframe])
+  // Keep viewTfRef in sync so the chart useEffect closure reads fresh values.
+  useEffect(() => { viewTfRef.current = viewTf }, [viewTf])
 
   useEffect(() => {
     const el = containerRef.current
@@ -288,6 +280,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
         tickMarkFormatter: ((time: any) => fmtChartTime(Number(time))) as any,
       },
     })
+    chartRef.current = chart
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const series = chart.addSeries(CandlestickSeries as any, {
@@ -298,6 +291,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       wickUpColor:     '#00ff41',
       wickDownColor:   '#ff3333',
     })
+    seriesRef.current = series
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const markersPlugin = createSeriesMarkers(series as any, [])
@@ -385,22 +379,12 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     const syncId = setInterval(drawHistogram, 200)
     const vpRefetchId = setInterval(fetchAndDrawVp, 60_000)
 
-    // Pre-populate the chart with historical bars so it's not empty on connect.
-    fetch('/api/bars?limit=500')
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d.bars) && d.bars.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          series.setData(d.bars as any)
-          chart.timeScale().fitContent()
-        }
-      })
-      .catch(() => {})
-
     fetchAndDrawVp()
 
     // Forming bar poll — updates the live rightmost candle every 1s.
     const fetchFormingBar = () => {
+      // Forming bar only makes sense at the bot's trading TF.
+      if (viewTfRef.current !== timeframe) return
       fetch('/api/forming-bar')
         .then(r => r.json())
         .then((b: { time: number; open: number; high: number; low: number; close: number } | null) => {
@@ -417,6 +401,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
 
     callbacksRef.current = {
       onBar(bar) {
+        // Only update chart when viewing the bot's trading TF.
+        if (viewTfRef.current !== timeframe) return
         lastBarTimeRef.current = bar.time
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         series.update({ time: bar.time as any, open: bar.open, high: bar.high, low: bar.low, close: bar.close })
@@ -463,9 +449,52 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(drawHistogram)
       if (el.contains(vpCanvas)) el.removeChild(vpCanvas)
       callbacksRef.current = {}
+      seriesRef.current = null
+      chartRef.current = null
       chart.remove()
     }
   }, [callbacksRef])
+
+  // Re-populate the chart whenever the viewed timeframe changes.
+  // This effect owns all historical bar loading (the chart useEffect no longer fetches).
+  useEffect(() => {
+    if (!seriesRef.current || !chartRef.current) return
+    fetch(`/api/bars?timeframe=${viewTf}&limit=500`)
+      .then(r => r.json())
+      .then(d => {
+        if (!seriesRef.current || !chartRef.current) return
+        if (Array.isArray(d.bars) && d.bars.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          seriesRef.current.setData(d.bars as any)
+          chartRef.current.timeScale().fitContent()
+        }
+        // Reset forming-bar anchor so off-TF bars don't show stale data.
+        lastBarTimeRef.current = null
+      })
+      .catch(() => {})
+  }, [viewTf])
+
+  const formingHot = (setupState?.instruments ?? []).some(
+    i => i.displacement_candidate !== null && i.sweeps_pending.length > 0
+  )
+
+  // Countdown ticker — time until the next bar boundary (next minute, next 5min, etc.)
+  // Wall-clock based, so it's accurate even when REST bar delivery lags.
+  useEffect(() => {
+    const tfSecs = TF_SECONDS[viewTf] ?? null
+    if (!tfSecs) { setCountdown(null); return }
+    const tick = () => {
+      const nowSecs = Math.floor(Date.now() / 1000)
+      const nextBoundary = (Math.floor(nowSecs / tfSecs) + 1) * tfSecs
+      const remaining = nextBoundary - nowSecs
+      const m = Math.floor(remaining / 60)
+      const s = remaining % 60
+      setCountdown(m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [viewTf])
 
   const inst = setupState?.available ? (setupState.instruments[0] ?? null) : null
 
@@ -473,7 +502,21 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     <div className="bg-panel border border-border">
       {/* Header bar */}
       <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-        <span className="text-[10px] tracking-[0.3em] text-dim uppercase">Price Chart</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] tracking-[0.3em] text-dim uppercase">Price Chart</span>
+          {/* TF selector — Task 6 */}
+          <div className="flex items-center gap-1">
+            {Object.entries(TF_LABELS).map(([tf, label]) => (
+              <button
+                key={tf}
+                onClick={() => setViewTf(tf)}
+                className={`text-[9px] font-mono px-1.5 py-0.5 border ${viewTf === tf ? 'border-accent text-accent' : 'border-border text-dim'}`}
+              >
+                {label}{tf === timeframe ? '·' : ''}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           {formingHot && (
             <span className="flex items-center gap-1 text-[10px] font-mono text-yellow-400 animate-pulse">
