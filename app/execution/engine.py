@@ -35,6 +35,7 @@ Lifecycle:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -226,6 +227,13 @@ class ExecutionEngine:
 
         self._started = False
 
+        # HTF confluence trackers — set externally by main.py after warm-up.
+        # Engine-owned (not per-runner) so they survive /api/strategy/reload.
+        # None until wired; the on_bar gates no-op while None or while the
+        # corresponding strategy_cfg flag is off.
+        self.htf_bias = None      # HTFBiasTracker | None
+        self.htf_levels = None    # HTFLevelFinder | None
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -318,16 +326,45 @@ class ExecutionEngine:
                 )
             return
 
-        # VP gate: filter + target override. Runs before pretrade risk check.
-        if (
+        cfg = self.strategy_cfg
+        vp_active = (
             runner.vp is not None
-            and self.strategy_cfg is not None
-            and self.strategy_cfg.vp_enabled
+            and cfg is not None
+            and cfg.vp_enabled
             and runner.vp.has_prior_profile()
-        ):
-            filtered = runner.vp.apply(signal, self.strategy_cfg)
-            if filtered is None:
-                # Surface VP rejections in the journal so they're visible on the dashboard.
+        )
+
+        # Part A — HTF bias gate. Block counter-trend signals; remember when
+        # the bias AGREES (used to bypass the VP value-area filter below).
+        bias_agrees = False
+        if cfg is not None and cfg.htf_bias_enabled and self.htf_bias is not None:
+            b = self.htf_bias.bias()
+            if (b == "bullish" and signal.side == "short") or (
+                b == "bearish" and signal.side == "long"
+            ):
+                log.info(
+                    "HTF bias gate: %s signal blocked (4h bias=%s) | %s",
+                    signal.side, b, signal.rationale,
+                )
+                htf_denied = OrderOutcome(placed=False, reason="htf_bias")
+                if self.on_signal is not None:
+                    try:
+                        await self.on_signal(signal, htf_denied)
+                    except Exception:
+                        log.exception("on_signal callback raised (htf_bias)")
+                return
+            bias_agrees = (b == "bullish" and signal.side == "long") or (
+                b == "bearish" and signal.side == "short"
+            )
+
+        # VP value-area filter — skipped when an enabled, agreeing 4h bias
+        # vouches for the direction (the 2026-05-27 below-value-area shorts).
+        if vp_active and not bias_agrees:
+            if not runner.vp.passes_filter(signal, self.strategy_cfg):
+                log.info(
+                    "VP filter: rejected %s entry=%.2f outside value area | %s",
+                    signal.side, float(signal.entry), signal.rationale,
+                )
                 vp_denied = OrderOutcome(placed=False, reason="vp_filter")
                 if self.on_signal is not None:
                     try:
@@ -335,7 +372,24 @@ class ExecutionEngine:
                     except Exception:
                         log.exception("on_signal callback raised (vp_filter)")
                 return
-            signal = filtered
+
+        # Part B — target precedence: HTF (4h FVG → 30min swing) wins,
+        # VP target is the fallback, fixed r_multiple is the final fallback.
+        target_chosen = False
+        if cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None:
+            found = self.htf_levels.find_target(
+                signal.side, signal.entry, signal.stop, cfg.htf_target_min_r,
+            )
+            if found is not None:
+                price, label = found
+                signal = dataclasses.replace(
+                    signal, target=price, rationale=signal.rationale + f" | {label}",
+                )
+                target_chosen = True
+        if not target_chosen and vp_active:
+            vp_signal = runner.vp.select_target(signal, self.strategy_cfg)
+            if vp_signal is not None:
+                signal = vp_signal
 
         outcome = await self._act_on_signal(signal)
         if self.on_signal is not None:
