@@ -737,12 +737,26 @@ async def _refresh_htf_once(
         bias_bars = await broker.get_historical_bars(
             timeframe=s.htf_bias_timeframe, days=30, limit=500,
         )
+        # A 0-bar fetch is a silent failure mode (200 OK from broker with no
+        # data, e.g. unsupported timeframe unit) — surface it loudly so we
+        # don't run with a permanently-empty bias tracker.
+        if not bias_bars:
+            log.warning(
+                "HTF: fetched 0 %s bars — bias tracker will stay empty (neutral). "
+                "Check whether timeframe is supported by the broker.",
+                s.htf_bias_timeframe,
+            )
         if bias_tracker is not None:
             bias_tracker.rebuild(bias_bars)
         if level_finder is not None:
             swing_bars = await broker.get_historical_bars(
                 timeframe=s.htf_swing_timeframe, days=10, limit=500,
             )
+            if not swing_bars:
+                log.warning(
+                    "HTF: fetched 0 %s swing bars — target finder fallback will be empty.",
+                    s.htf_swing_timeframe,
+                )
             level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
     except Exception:
         log.exception("HTF refresh failed — retaining last-known state")

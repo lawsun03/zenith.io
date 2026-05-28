@@ -44,10 +44,15 @@ class HTFBiasTracker:
         # every rebuild(). Empty until rebuild() has been called once.
         self._recent_highs: list = []   # list[Swing], avoid forward ref
         self._recent_lows: list = []
+        # Last-known bar count fed to rebuild(). 0 means the REST fetch
+        # returned nothing — distinguishes "no swings due to no data" from
+        # "no swings due to chop".
+        self._last_bar_count: int = 0
 
     def rebuild(self, bars: list[Bar]) -> None:
         """Recompute bias from the full bar list (called on each refresh)."""
         old = self._bias
+        self._last_bar_count = len(bars)
 
         tracker = LiquidityTracker(LiquidityConfig(
             swing_lookback=self._lookback,
@@ -93,6 +98,7 @@ class HTFBiasTracker:
         return {
             "bias": self._bias,
             "lookback": self._lookback,
+            "bars_fed": self._last_bar_count,
             "high_count": len(self._recent_highs),
             "low_count":  len(self._recent_lows),
             "recent_high_swings": [
