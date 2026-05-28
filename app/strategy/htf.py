@@ -81,9 +81,11 @@ class HTFBiasTracker:
         # Snapshot for /api/htf_diagnostic.
         self._recent_highs = list(highs)
         self._recent_lows = list(lows)
-        if len(highs) < 2 or len(lows) < 2:
-            new_bias: Bias = "neutral"
-        else:
+
+        new_bias: Bias = "neutral"
+
+        # Primary rule: HH+HL vs LH+LL (strict, accurate when we have ≥2 of each).
+        if len(highs) >= 2 and len(lows) >= 2:
             hh = highs[-1].price > highs[-2].price
             hl = lows[-1].price > lows[-2].price
             lh = highs[-1].price < highs[-2].price
@@ -93,8 +95,22 @@ class HTFBiasTracker:
                 new_bias = "bullish"
             elif lh and ll:
                 new_bias = "bearish"
-            else:
-                new_bias = "neutral"
+            # else neutral — already the default
+
+        # Fallback for data-limited cases (e.g. a recent futures roll where
+        # only ~3 days of bars exist on the new contract). With ≥1 of each
+        # we can still read the most-recent leg by time order: if the latest
+        # confirmed extreme is a LOW that came AFTER the latest HIGH, the
+        # market most-recently took out a low (bearish leg). Mirror for
+        # bullish. Stays neutral only when we have zero of either kind.
+        elif highs and lows:
+            most_recent_high_ts = highs[-1].bar_ts
+            most_recent_low_ts = lows[-1].bar_ts
+            if most_recent_low_ts > most_recent_high_ts:
+                new_bias = "bearish"
+            elif most_recent_high_ts > most_recent_low_ts:
+                new_bias = "bullish"
+            # equal ts (same bar somehow) → neutral
 
         if new_bias != old:
             log.info("HTFBias: %s -> %s", old, new_bias)

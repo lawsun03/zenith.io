@@ -330,3 +330,82 @@ def test_aggregate_bars_splits_across_buckets():
     assert out[0].volume == 240
     assert out[1].volume == 60
     assert out[1].ts == base + timedelta(hours=4)
+
+
+def test_bias_fallback_bearish_when_recent_low_after_recent_high():
+    """Data-limited case: only one confirmed high and one confirmed low.
+    Low came AFTER high (timestamp) → most recent leg was down → bearish."""
+    t = HTFBiasTracker(lookback=2)
+    # _swing_sequence with ONE pair produces 1 confirmed high then 1 confirmed
+    # low at later timestamps. The single (h, l) pair = (14, 10) → low confirms
+    # after high in the 8-bar layout.
+    bars = _swing_sequence([(14, 10)])
+    t.rebuild(bars)
+    d = t.diagnostics()
+    assert d["high_count"] == 1
+    assert d["low_count"] == 1
+    # Low's bar_ts > high's bar_ts in this construction → bearish.
+    high_ts = d["recent_high_swings"][0]["ts"]
+    low_ts = d["recent_low_swings"][0]["ts"]
+    assert low_ts > high_ts, "test scaffolding assumption broken"
+    assert t.bias() == "bearish"
+
+
+def test_bias_fallback_bullish_when_recent_high_after_recent_low():
+    """Mirror: low first, then high → most recent leg up → bullish.
+    We build a single low first, then a single high, by hand."""
+    t = HTFBiasTracker(lookback=2)
+    base = datetime(2026, 5, 1, tzinfo=timezone.utc)
+
+    # Pattern that confirms ONLY a swing LOW first (low at pivot index 2),
+    # then ONLY a swing HIGH later (high at later pivot index).
+    # Use 5-bar sequences with lookback=2.
+    def _bar_at(i, o, h, l, c):
+        return Bar(
+            instrument="MGC", timeframe="4h",
+            ts=base + timedelta(hours=4 * i),
+            open=Decimal(str(o)), high=Decimal(str(h)),
+            low=Decimal(str(l)), close=Decimal(str(c)), volume=100,
+        )
+
+    bars = [
+        # Pivot LOW at index 2 (low=8 strictly below 9.5 neighbors)
+        _bar_at(0, 11, 11.5, 9.5, 10),
+        _bar_at(1, 10, 10.5, 9.5, 10),
+        _bar_at(2, 10, 10.5, 8.0, 10),     # low pivot
+        _bar_at(3, 10, 10.5, 9.5, 10),
+        _bar_at(4, 10, 10.5, 9.5, 10),
+        # Pivot HIGH at index 7 (high=15 strictly above 12 neighbors)
+        _bar_at(5, 11, 12, 11, 11.5),
+        _bar_at(6, 11, 12, 11, 11.5),
+        _bar_at(7, 11, 15, 11, 14),         # high pivot
+        _bar_at(8, 13, 12, 11, 11.5),
+        _bar_at(9, 11, 12, 11, 11.5),
+    ]
+    t.rebuild(bars)
+    d = t.diagnostics()
+    assert d["high_count"] >= 1
+    assert d["low_count"] >= 1
+    # Most recent high ts should be after most recent low ts.
+    high_ts = d["recent_high_swings"][-1]["ts"]
+    low_ts = d["recent_low_swings"][-1]["ts"]
+    assert high_ts > low_ts, "test scaffolding: high should come after low"
+    assert t.bias() == "bullish"
+
+
+def test_bias_fallback_neutral_when_no_extremes():
+    """Zero of either kind → still neutral."""
+    t = HTFBiasTracker(lookback=2)
+    # Flat bars — no swings will confirm.
+    base = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    flat = [
+        Bar(instrument="MGC", timeframe="4h",
+            ts=base + timedelta(hours=4 * i),
+            open=Decimal("100"), high=Decimal("100"),
+            low=Decimal("100"), close=Decimal("100"), volume=1)
+        for i in range(10)
+    ]
+    t.rebuild(flat)
+    d = t.diagnostics()
+    assert d["high_count"] == 0 or d["low_count"] == 0
+    assert t.bias() == "neutral"
