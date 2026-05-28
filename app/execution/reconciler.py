@@ -116,6 +116,14 @@ class ReconcilerConfig:
     # notify_order_placed() is called. Set to 0 to disable.
     grace_period_after_order_seconds: float = 15.0
 
+    # After a RECONCILE_DRIFT event the emergency flatten brings both sides to 0,
+    # which would normally auto-clear the lockout immediately. But the underlying
+    # cause (dead WebSocket feed) is still present — clearing instantly lets a
+    # new signal fire and drift again. Require this many confirmed-flat seconds
+    # before unlocking. Part 2 (feed_is_healthy gate in engine.py) is the primary
+    # guard; this is the backstop when feed_is_healthy is unavailable.
+    min_flat_after_drift_seconds: float = 120.0
+
 
 class Reconciler:
     """
@@ -146,6 +154,11 @@ class Reconciler:
         # an order. Used to suppress false-positive contract-count alarms
         # during the fill-event latency window.
         self._last_order_placed_at: Optional[datetime] = None
+
+        # Timestamp of when broker and internal contracts both reached 0 after
+        # a RECONCILE_DRIFT flatten. Used to enforce min_flat_after_drift_seconds
+        # before the lockout auto-clears.
+        self._drift_flat_since: Optional[datetime] = None
 
         # Last report kept for dashboard inspection.
         self._last_report: Optional[ReconcileReport] = None
@@ -304,14 +317,34 @@ class Reconciler:
             log.info("Reconciler: first tick complete (grace)")
             return report
 
-        # If a prior drift lockout is in place and contracts now match, auto-clear.
+        # If a prior drift lockout is in place and contracts now match, auto-clear —
+        # but only after holding flat for min_flat_after_drift_seconds. Clearing
+        # immediately would allow a new signal to fire while the underlying feed
+        # problem (dead WebSocket) is still active.
         if (
             self.risk_state.locked_out is not None
             and self.risk_state.locked_out.code == "RECONCILE_DRIFT"
             and broker_contracts == internal_contracts
         ):
-            log.info("Reconciler: drift resolved — clearing RECONCILE_DRIFT lockout.")
-            self.risk_state.locked_out = None
+            if self._drift_flat_since is None:
+                self._drift_flat_since = ts
+            flat_secs = (ts - self._drift_flat_since).total_seconds()
+            if flat_secs >= self.config.min_flat_after_drift_seconds:
+                log.info(
+                    "Reconciler: drift resolved — flat for %.0fs, "
+                    "clearing RECONCILE_DRIFT lockout.",
+                    flat_secs,
+                )
+                self.risk_state.locked_out = None
+                self._drift_flat_since = None
+            else:
+                log.debug(
+                    "Reconciler: post-drift flat %.0fs/%.0fs — holding lockout.",
+                    flat_secs, self.config.min_flat_after_drift_seconds,
+                )
+        else:
+            # Not in drift lockout or contracts diverged again — reset timer.
+            self._drift_flat_since = None
 
         # ----- Contract-count drift: HARD error, flatten + lock out. -----
         if broker_contracts != internal_contracts:
@@ -419,6 +452,15 @@ class Reconciler:
         )
 
         flattened = await self._emergency_flatten()
+
+        # Sync internal open_contracts to broker truth (0 after a successful
+        # flatten). Without this, open_contracts stays at the pre-flatten value
+        # forever — the auto-clear condition (broker==internal) never fires and
+        # the RECONCILE_DRIFT lockout is permanent. This is safe: we already
+        # flattened everything, so internal state should reflect that.
+        if flattened:
+            self.risk_state.open_contracts = 0
+            log.info("Reconciler: internal open_contracts reset to 0 after emergency flatten.")
 
         # Force lockout regardless of whether flatten succeeded. We do
         # NOT want the engine to consider new entries until a human

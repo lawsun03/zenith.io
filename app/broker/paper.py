@@ -143,6 +143,9 @@ class PaperBroker:
     async def disconnect(self) -> None:
         self._connected = False
 
+    def feed_is_healthy(self) -> bool:
+        return self._connected
+
     # ------------------------------------------------------------------
     # Account
     # ------------------------------------------------------------------

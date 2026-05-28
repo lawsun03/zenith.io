@@ -532,6 +532,17 @@ class ExecutionEngine:
             )
             return OrderOutcome(placed=False, reason=decision.reason_code)
 
+        # Feed health gate: without a live WebSocket feed, fill events never
+        # arrive → open_contracts stays 0 → reconciler drift fires on every
+        # entry. Block orders until the feed reconnects.
+        if not self.broker.feed_is_healthy():
+            log.warning(
+                "Signal blocked: real-time feed disconnected — "
+                "entry would cause reconcile drift (%s @ %s)",
+                signal.side, signal.entry,
+            )
+            return OrderOutcome(placed=False, reason="feed_disconnected")
+
         # Prime the reconciler grace window BEFORE sending to exchange.
         # Market orders fill in microseconds; the reconciler can tick during
         # the HTTP round-trip and see broker=N, internal=0 before we call

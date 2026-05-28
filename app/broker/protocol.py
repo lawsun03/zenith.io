@@ -109,6 +109,10 @@ class Broker(Protocol):
         """Start the data feed for these instruments and timeframes."""
         ...
 
+    def feed_is_healthy(self) -> bool:
+        """True if the real-time event feed is connected and delivering events."""
+        ...
+
     async def get_forming_bar(self, timeframe: str = "1min") -> "Bar | None":
         """
         Return the currently-forming bar (partially closed), or None if
