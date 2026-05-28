@@ -17,6 +17,7 @@ import { AnalyticsPage } from './pages/Analytics'
 import { ForceSignalPanel } from './components/ForceSignalPanel'
 import { MatrixRain } from './components/MatrixRain'
 import { GlowOverlay } from './components/GlowOverlay'
+import { StrategyDebug } from './components/StrategyDebug'
 import type { JournalItem } from './types'
 
 export default function App() {
@@ -27,7 +28,7 @@ export default function App() {
   if (path.startsWith('/analytics')) return <AnalyticsPage />
 
   const chartCbRef = useRef<ChartCallbacks>({})
-  const { status, signals, fills, reconciles, connState } = useStream(chartCbRef)
+  const { status, signals, fills, reconciles, connState, strategyState } = useStream(chartCbRef)
   const { config, saveConfig, saving, saveError } = useConfig()
   const [configOpen, setConfigOpen] = useState(false)
   const activeKillzone = useKillzone(config?.enabled_killzones)
@@ -47,6 +48,7 @@ export default function App() {
       <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto">
         <MetricsGrid status={status} />
         <BarChart callbacksRef={chartCbRef} timeframe={config?.timeframes?.[0]} />
+        <StrategyDebug state={strategyState} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-border border border-border">
           <FeedSection
             title="Signals"

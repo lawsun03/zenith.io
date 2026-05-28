@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BarEvent, JournalItem, StatusPayload } from '../types'
+import type { BarEvent, JournalItem, StatusPayload, StrategyStatePayload } from '../types'
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
 
@@ -16,6 +16,7 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
   const [fills, setFills] = useState<JournalItem[]>([])
   const [reconciles, setReconciles] = useState<JournalItem[]>([])
   const [connState, setConnState] = useState<ConnState>('connecting')
+  const [strategyState, setStrategyState] = useState<StrategyStatePayload | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -84,6 +85,10 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
           })
           return
         }
+        if (msg.kind === 'strategy_state') {
+          setStrategyState(msg.payload as StrategyStatePayload)
+          return
+        }
         const item: JournalItem = { ts: msg.ts, kind: msg.kind, payload: msg.payload }
         if (msg.kind === 'signal') {
           setSignals(prev => [item, ...prev].slice(0, 50))
@@ -113,5 +118,5 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
     }
   }, [])
 
-  return { status, signals, fills, reconciles, connState }
+  return { status, signals, fills, reconciles, connState, strategyState }
 }

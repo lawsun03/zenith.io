@@ -124,3 +124,16 @@ export interface VpProfile {
   total_volume: number
   bins: [string, number][]  // [price, volume] pairs sorted ascending
 }
+
+export interface StrategyStatePayload {
+  instrument: string
+  kz_ranges: Record<string, { high: string; low: string }>
+  kz_pending_a: string[]
+  awaiting_sweeps: Array<{
+    side: string
+    source: string
+    price: string
+    bars_elapsed: number
+    killzone: string
+  }>
+}
