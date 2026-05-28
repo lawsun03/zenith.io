@@ -21,6 +21,14 @@ interface SetupInstrument {
     min_target_r?: string
     session_date?: string
   }
+  htf?: {
+    bias_enabled: boolean
+    bias_ready: boolean
+    bias: 'bullish' | 'bearish' | 'neutral' | null
+    target_enabled: boolean
+    target_ready: boolean
+    bias_timeframe: string
+  }
 }
 
 interface SetupState {
@@ -134,6 +142,58 @@ function VpCheckItem({ vp }: { vp: SetupInstrument['vp'] }) {
     </div>
   )
 }
+
+function HtfCheckItem({ htf }: { htf: NonNullable<SetupInstrument['htf']> }) {
+  // Both off → muted single-row note.
+  if (!htf.bias_enabled && !htf.target_enabled) {
+    return <CheckItem label="HTF" active={false} detail="Disabled" muted />
+  }
+
+  // Enabled but the REST warm-up hasn't landed (or failed).
+  const stillWarming =
+    (htf.bias_enabled && !htf.bias_ready) ||
+    (htf.target_enabled && !htf.target_ready)
+  if (stillWarming) {
+    return (
+      <CheckItem
+        label="HTF"
+        active={false}
+        detail={`Warming up (${htf.bias_timeframe}) — gate inert until ready`}
+      />
+    )
+  }
+
+  const decisive = htf.bias === 'bullish' || htf.bias === 'bearish'
+  const biasLabel = !htf.bias_enabled
+    ? 'off'
+    : htf.bias === null
+    ? '—'
+    : htf.bias.toUpperCase()
+  const biasDetail =
+    htf.bias === 'bullish'
+      ? `Blocks shorts · agrees-with-longs bypasses VP`
+      : htf.bias === 'bearish'
+      ? `Blocks longs · agrees-with-shorts bypasses VP`
+      : htf.bias_enabled
+      ? `Neutral — no block`
+      : `Bias filter off`
+
+  return (
+    <div style={S.row(decisive, false)}>
+      <span style={S.dot(decisive)}>{decisive ? '▶' : '·'}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={S.label(decisive)}>
+          HTF bias ({htf.bias_timeframe}): {biasLabel}
+        </span>
+        <span style={S.detail}>{biasDetail}</span>
+        <span style={S.subDetail}>
+          Targets: {htf.target_enabled ? (htf.target_ready ? 'on' : 'warming') : 'off'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 
 export function BarChart({ callbacksRef, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -494,6 +554,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
                   }
                   muted={inst.sweeps_pending.length === 0}
                 />
+                {inst.htf && <HtfCheckItem htf={inst.htf} />}
                 <VpCheckItem vp={inst.vp} />
                 {inst.cooldown_bars_remaining > 0 && (
                   <CheckItem
