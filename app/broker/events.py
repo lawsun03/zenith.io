@@ -81,6 +81,14 @@ class Fill:
     contracts_delta: int
     broker_order_id: str
     is_stop: bool = False
+    # Early-arrival fanout: SDK ORDER_FILLED can fire before the broker has
+    # registered the order_id in _pending_brackets/_exit_pairs. We fan out
+    # immediately so risk state's open_contracts stays in sync (preventing
+    # false reconciler drift), but the classification (is_entry) and P&L are
+    # unreliable on this first pass. The journal/UI must skip these — a
+    # corrected fanout follows from place_market_bracket's entry-replay or
+    # from _reprocess_early_exit.
+    is_provisional: bool = False
 
 
 @dataclass(frozen=True)
