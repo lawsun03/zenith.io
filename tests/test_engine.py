@@ -532,3 +532,78 @@ async def test_htf_disabled_is_unchanged():
     captured = await _run_short_signal(engine, broker)
     assert len(captured) == 1
     assert captured[0].reason != "htf_bias"   # gate not consulted when disabled
+
+
+@pytest.mark.asyncio
+async def test_vp_filter_denies_out_of_value_area_short_with_neutral_bias():
+    """
+    VP filter must deny a short whose entry is well below VAL when bias is neutral.
+
+    SHORT_SIGNAL_BARS produce a short entry near 2397–2401. We set
+    VAL=2410 so the short entry is ~10+ pts below VAL — clearly outside
+    the value area. With neutral bias (no bypass), the VP filter must fire
+    and deny with reason='vp_filter'.
+    """
+    from app.bot_config import StrategyParams
+    from app.strategy.volume_profile import VolumeProfileTracker, VolumeProfile
+    from datetime import date
+
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.vp = VolumeProfileTracker()
+    # Short entry ~2397-2401 is below VAL=2410, tolerance=2.0 → entry < VAL - tol → rejected.
+    runner.vp._prior = VolumeProfile(
+        session_date=date(2026, 5, 26),
+        poc=Decimal("2415"), vah=Decimal("2420"), val=Decimal("2410"),
+        hvns=[], total_volume=1000,
+    )
+
+    cfg = StrategyParams(vp_enabled=True, htf_bias_enabled=True, vp_filter_tolerance=Decimal("2.0"))
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    engine.htf_bias = _StubBias("neutral")   # neutral bias — no bypass
+    await broker.connect()
+    await engine.start()
+    captured = await _run_short_signal(engine, broker)
+
+    assert len(captured) == 1
+    assert captured[0].placed is False
+    assert captured[0].reason == "vp_filter"
+
+
+@pytest.mark.asyncio
+async def test_agreeing_bias_bypasses_vp_filter():
+    """
+    Agreeing 4h bias must bypass the VP value-area filter.
+
+    Same setup as test_vp_filter_denies_out_of_value_area_short_with_neutral_bias
+    but with bearish bias (agrees with the short signal). The short entry is
+    still well below VAL — but the bias bypass must suppress the VP rejection.
+    This is the 2026-05-27 regression case: real below-value-area shorts that
+    were correctly aligned with the 4h trend.
+    """
+    from app.bot_config import StrategyParams
+    from app.strategy.volume_profile import VolumeProfileTracker, VolumeProfile
+    from datetime import date
+
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.vp = VolumeProfileTracker()
+    # Same out-of-value-area profile as the neutral-bias test above.
+    runner.vp._prior = VolumeProfile(
+        session_date=date(2026, 5, 26),
+        poc=Decimal("2415"), vah=Decimal("2420"), val=Decimal("2410"),
+        hvns=[], total_volume=1000,
+    )
+
+    cfg = StrategyParams(vp_enabled=True, htf_bias_enabled=True, vp_filter_tolerance=Decimal("2.0"))
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True, strategy_cfg=cfg)
+    engine.htf_bias = _StubBias("bearish")   # agrees with short → bypass VP filter
+    await broker.connect()
+    await engine.start()
+    captured = await _run_short_signal(engine, broker)
+
+    assert len(captured) == 1
+    # The VP filter must NOT have fired — bias bypass must take effect.
+    assert captured[0].reason != "vp_filter"
