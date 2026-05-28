@@ -126,6 +126,26 @@ _active_searches: dict[str, dict[str, Any]] = {}
 log = logging.getLogger(__name__)
 
 
+def _build_htf_state(engine: Any, cfg: "BotConfig") -> dict:
+    """Serialize the engine's HTF state for the setup checklist.
+
+    Returns the flag (whether the user enabled the feature), whether the
+    tracker is wired (i.e. the REST warm-up succeeded — relevant because
+    the gate fails open while None), and the current bias if known.
+    """
+    s = cfg.strategy
+    bias_tracker = getattr(engine, "htf_bias", None) if engine is not None else None
+    levels_tracker = getattr(engine, "htf_levels", None) if engine is not None else None
+    return {
+        "bias_enabled":   s.htf_bias_enabled,
+        "bias_ready":     bias_tracker is not None,
+        "bias":           bias_tracker.bias() if bias_tracker is not None else None,
+        "target_enabled": s.htf_target_enabled,
+        "target_ready":   levels_tracker is not None,
+        "bias_timeframe": s.htf_bias_timeframe,
+    }
+
+
 def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
     """Serialize VP filter state for the setup checklist."""
     enabled = cfg.strategy.vp_enabled
@@ -308,6 +328,7 @@ def build_app(
                 "cooldown_bars_remaining": cooldown,
                 "atr": str(atr) if atr is not None else None,
                 "vp": _build_vp_state(runner.vp, cfg),
+                "htf": _build_htf_state(_engine, cfg),
             })
 
         return JSONResponse({"available": True, "instruments": instruments})
