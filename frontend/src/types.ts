@@ -21,6 +21,13 @@ export interface StrategyConfig {
   vp_filter_tolerance: string
   vp_hvn_threshold: number
   vp_min_target_r: string
+  // HTF confluence
+  htf_bias_enabled: boolean
+  htf_bias_timeframe: string
+  htf_bias_lookback: number
+  htf_target_enabled: boolean
+  htf_target_min_r: string
+  htf_swing_timeframe: string
 }
 
 export interface BotConfig {

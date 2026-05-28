@@ -155,6 +155,21 @@ const FIELDS: FieldDef[] = [
     min: 0.5, max: 3.0, step: 0.1,
     hint: 'A VP level must deliver at least this many R to be used as target. Too close levels are skipped; falls back to r_multiple if none qualify.',
   },
+  {
+    key: 'htf_bias_enabled', label: 'HTF Bias Filter', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Block signals that fight the 4h swing-structure bias. Bullish 4h blocks shorts; bearish blocks longs. When the bias agrees, the VP value-area filter is bypassed.',
+  },
+  {
+    key: 'htf_target_enabled', label: 'HTF Targets', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Use a 4h FVG (then nearest 30min swing) as the take-profit target instead of the fixed R-multiple. Falls back to VP, then r_multiple.',
+  },
+  {
+    key: 'htf_target_min_r', label: 'HTF Min Target R', type: 'slider', section: 'strategy',
+    min: 1.0, max: 5.0, step: 0.1,
+    hint: 'An HTF level must deliver at least this many R to be used as target. Below this, falls back to VP / fixed R.',
+  },
 ]
 
 const inputClass =
@@ -232,6 +247,12 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       vp_filter_tolerance:      form.vp_filter_tolerance                || '2.0',
       vp_hvn_threshold:         parseFloat(form.vp_hvn_threshold)       || 1.5,
       vp_min_target_r:          form.vp_min_target_r                    || '1.0',
+      htf_bias_enabled:         form.htf_bias_enabled === 'true',
+      htf_bias_timeframe:       form.htf_bias_timeframe                 || '4h',
+      htf_bias_lookback:        parseInt(form.htf_bias_lookback)        || 3,
+      htf_target_enabled:       form.htf_target_enabled === 'true',
+      htf_target_min_r:         form.htf_target_min_r                   || '2.0',
+      htf_swing_timeframe:      form.htf_swing_timeframe                || '30min',
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',

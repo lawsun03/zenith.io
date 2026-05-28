@@ -168,6 +168,7 @@ def build_app(
     engine: Any = None,
     runner_factory: Any = None,
     vp_warmup: Any = None,
+    htf_rebuild: Any = None,
 ) -> FastAPI:
     """
     Construct the FastAPI app. Dependencies are passed in (not module
@@ -191,6 +192,7 @@ def build_app(
     _engine = engine
     _runner_factory = runner_factory
     _vp_warmup = vp_warmup  # async callable(runner, bot_cfg) — re-warms VP after a reload
+    _htf_rebuild = htf_rebuild  # async callable(body: BotConfig) — rebuilds engine HTF trackers after a live config change
 
     # ------------------------------------------------------------------
     # /api/status — the four numbers that matter, plus context
@@ -406,6 +408,17 @@ def build_app(
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
             _engine.strategy_cfg = body.strategy
+            # Reset the fail-loud warning so a fresh enable+rebuild can re-warn
+            # if the rebuild leaves trackers None.
+            _engine._htf_warned = False
+        # Hot-apply HTF: (re)build trackers to match the new flags. Without
+        # this, toggling htf_bias_enabled / htf_target_enabled on via the
+        # dashboard would silently no-op until restart (Rule 10).
+        if _htf_rebuild is not None:
+            try:
+                await _htf_rebuild(body)
+            except Exception:
+                log.exception("PATCH /api/config: HTF tracker rebuild failed")
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
@@ -748,8 +761,16 @@ def build_app(
             )
             _engine.runners = {instrument: new_runner}
             _engine.strategy_cfg = new_cfg.strategy
+            # Reset HTF fail-loud guard so a fresh rebuild can re-warn if needed.
+            _engine._htf_warned = False
             if _broker is not None and hasattr(_broker, "entry_mode"):
                 _broker.entry_mode = new_cfg.entry_mode
+            # Hot-apply HTF trackers to match the reloaded config flags.
+            if _htf_rebuild is not None:
+                try:
+                    await _htf_rebuild(new_cfg)
+                except Exception:
+                    log.exception("strategy/reload: HTF tracker rebuild failed")
             # Rebuilding the runner created a fresh, empty VolumeProfileTracker.
             # Re-warm it from historical bars so the VP filter/target stay active —
             # otherwise a reload silently disables VP until the next session boundary.
