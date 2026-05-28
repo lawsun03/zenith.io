@@ -39,11 +39,13 @@ interface SetupState {
 const TF_SECONDS: Record<string, number> = {
   '1min': 60, '3min': 180, '5min': 300,
   '15min': 900, '30min': 1800, '1h': 3600,
+  '4h': 14400, '1d': 86400,
 }
 
 const TF_LABELS: Record<string, string> = {
   '1min': '1m', '3min': '3m', '5min': '5m',
   '15min': '15m', '30min': '30m', '1h': '1h',
+  '4h': '4h', '1d': '1D',
 }
 
 interface Props {
