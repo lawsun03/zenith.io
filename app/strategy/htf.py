@@ -136,13 +136,13 @@ class HTFLevelFinder:
 
     def find_target(
         self,
-        side: str,
+        side: Literal["long", "short"],
         entry: Decimal,
         stop: Decimal,
         min_r: Decimal,
     ) -> tuple[Decimal, str] | None:
         r = abs(entry - stop)
-        if r <= 0:
+        if r == 0:
             return None
         min_dist = r * min_r
 
@@ -163,7 +163,7 @@ class HTFLevelFinder:
                 return price, f"HTF: 30min swing @ {price} ({(price - entry) / r:.1f}R)"
             return None
 
-        else:  # short
+        elif side == "short":
             fvg_levels = [
                 g.high for g in self._gaps
                 if g.side == "bearish" and g.high < entry and (entry - g.high) >= min_dist
@@ -179,3 +179,6 @@ class HTFLevelFinder:
                 price = max(swing_levels)
                 return price, f"HTF: 30min swing @ {price} ({(entry - price) / r:.1f}R)"
             return None
+
+        else:
+            raise ValueError(f"find_target: unknown side {side!r}")
