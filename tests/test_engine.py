@@ -24,6 +24,7 @@ from app.execution.engine import (
     OrderOutcome,
     SignalEmitted,
     StrategyRunner,
+    _snapshot_strategy_state,
 )
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
@@ -680,3 +681,45 @@ async def test_htf_live_toggle_takes_effect_without_restart():
     assert len(second) == 1
     assert second[0].placed is False
     assert second[0].reason == "htf_bias"
+
+
+# =====================================================================
+# _snapshot_strategy_state
+# =====================================================================
+
+def test_snapshot_empty_when_kz_levels_none():
+    """Returns empty collections when runner has no KZ tracker."""
+    runner = make_runner()
+    state = _snapshot_strategy_state(runner)
+    assert state["instrument"] == "MGC"
+    assert state["kz_ranges"] == {}
+    assert state["kz_pending_a"] == []
+    assert state["awaiting_sweeps"] == []
+
+
+def test_snapshot_kz_ranges_serialized_as_strings():
+    """Finalized KZ ranges appear as string decimals."""
+    from app.strategy.kz_levels import KillzoneLevelTracker
+    runner = make_runner()
+    runner.kz_levels = KillzoneLevelTracker()
+    runner.kz_levels._kz_ranges["London"] = (Decimal("103"), Decimal("98"))
+    state = _snapshot_strategy_state(runner)
+    assert state["kz_ranges"] == {"London": {"high": "103", "low": "98"}}
+
+
+def test_snapshot_pending_a_keys_included():
+    """Pattern A tags in progress appear in kz_pending_a."""
+    from app.strategy.kz_levels import KillzoneLevelTracker
+    runner = make_runner()
+    runner.kz_levels = KillzoneLevelTracker()
+    runner.kz_levels._kz_ranges["London"] = (Decimal("103"), Decimal("98"))
+    runner.kz_levels._pending_a["London_high"] = Decimal("103.3")
+    state = _snapshot_strategy_state(runner)
+    assert "London_high" in state["kz_pending_a"]
+
+
+def test_snapshot_awaiting_sweeps_empty_by_default():
+    """No awaiting sweeps when composer has nothing pending."""
+    runner = make_runner()
+    state = _snapshot_strategy_state(runner)
+    assert state["awaiting_sweeps"] == []

@@ -160,6 +160,34 @@ class StrategyRunner:
         return self.composer.on_displacement(forming_bar, event)
 
 
+def _snapshot_strategy_state(runner: "StrategyRunner") -> dict:
+    """Read-only snapshot of strategy state for the debug panel. No mutation."""
+    kz_ranges: dict = {}
+    kz_pending_a: list[str] = []
+    if runner.kz_levels is not None:
+        kz_ranges = {
+            name: {"high": str(high), "low": str(low)}
+            for name, (high, low) in runner.kz_levels._kz_ranges.items()
+        }
+        kz_pending_a = list(runner.kz_levels._pending_a.keys())
+    awaiting = [
+        {
+            "side": a.sweep.side,
+            "source": a.source,
+            "price": str(a.sweep.swept_swing.price),
+            "bars_elapsed": a.bars_since_sweep,
+            "killzone": a.killzone_name,
+        }
+        for a in runner.composer._awaiting
+    ]
+    return {
+        "instrument": runner.instrument,
+        "kz_ranges": kz_ranges,
+        "kz_pending_a": kz_pending_a,
+        "awaiting_sweeps": awaiting,
+    }
+
+
 class ExecutionEngine:
     """
     The wire. Connects broker → strategy → risk → broker again.
@@ -180,6 +208,7 @@ class ExecutionEngine:
         contracts: int = 1,
         risk_per_trade_pct: Decimal = Decimal("0"),
         strategy_cfg: "StrategyParams | None" = None,
+        on_bar_done: "Callable[[str, dict], None] | None" = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -188,6 +217,7 @@ class ExecutionEngine:
         self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
         self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
         self.strategy_cfg = strategy_cfg
+        self.on_bar_done = on_bar_done
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
@@ -330,6 +360,9 @@ class ExecutionEngine:
         except Exception:
             log.exception("Strategy raised on bar %s", bar.ts)
             return
+
+        if self.on_bar_done is not None:
+            self.on_bar_done(bar.instrument, _snapshot_strategy_state(runner))
 
         if signal is None or is_stale:
             if is_stale and signal is not None:

@@ -1014,6 +1014,7 @@ async def _async_main() -> int:
         contracts=bot_cfg.contracts,
         risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         strategy_cfg=bot_cfg.strategy,
+        on_bar_done=lambda instr, state: journal.publish_strategy_state(instr, state),
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord))

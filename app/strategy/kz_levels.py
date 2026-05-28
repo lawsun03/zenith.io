@@ -106,6 +106,7 @@ class KillzoneLevelTracker:
 
             # ----- Pattern B: one-bar sweep (high side) -----
             if bar.high >= kz_high + min_pen and bar.close < kz_high:
+                log.info("KZ sweep: %s high B_one_bar (extreme: %s → level: %s)", name, bar.high, kz_high)
                 events.append(self._make_sweep(bar, "high", kz_high, bar.high, "B_one_bar"))
                 del self._kz_ranges[name]
                 self._pending_a.pop(high_key, None)
@@ -114,6 +115,7 @@ class KillzoneLevelTracker:
 
             # ----- Pattern B: one-bar sweep (low side) -----
             if bar.low <= kz_low - min_pen and bar.close > kz_low:
+                log.info("KZ sweep: %s low B_one_bar (extreme: %s → level: %s)", name, bar.low, kz_low)
                 events.append(self._make_sweep(bar, "low", kz_low, bar.low, "B_one_bar"))
                 del self._kz_ranges[name]
                 self._pending_a.pop(low_key, None)
@@ -126,6 +128,7 @@ class KillzoneLevelTracker:
                 if bar.close < kz_high:
                     extreme = self._pending_a.pop(high_key)
                     self._bars_since_tag.pop(high_key, None)
+                    log.info("KZ sweep: %s high A_multi_bar (extreme: %s → level: %s)", name, extreme, kz_high)
                     events.append(self._make_sweep(bar, "high", kz_high, extreme, "A_multi_bar"))
                     del self._kz_ranges[name]
                     continue
@@ -136,6 +139,7 @@ class KillzoneLevelTracker:
                 # Tag without close-back — start pattern A tracking.
                 self._pending_a[high_key] = bar.high
                 self._bars_since_tag[high_key] = 0
+                log.info("KZ pattern A tag: %s high @ %s (bar extreme: %s)", name, kz_high, bar.high)
 
             # ----- Pattern A: multi-bar (low side) -----
             if low_key in self._pending_a:
@@ -143,6 +147,7 @@ class KillzoneLevelTracker:
                 if bar.close > kz_low:
                     extreme = self._pending_a.pop(low_key)
                     self._bars_since_tag.pop(low_key, None)
+                    log.info("KZ sweep: %s low A_multi_bar (extreme: %s → level: %s)", name, extreme, kz_low)
                     events.append(self._make_sweep(bar, "low", kz_low, extreme, "A_multi_bar"))
                     del self._kz_ranges[name]
                     continue
@@ -152,6 +157,7 @@ class KillzoneLevelTracker:
             elif bar.low <= kz_low - min_pen and bar.close <= kz_low:
                 self._pending_a[low_key] = bar.low
                 self._bars_since_tag[low_key] = 0
+                log.info("KZ pattern A tag: %s low @ %s (bar extreme: %s)", name, kz_low, bar.low)
 
         return events
 
