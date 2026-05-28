@@ -549,7 +549,9 @@ def build_app(
         try:
             cfg = load_bot_config(_bot_config_path)
             tf = timeframe or (cfg.timeframes or _effective_timeframes)[0]
-            bars = await _broker.get_historical_bars(timeframe=tf, limit=limit)
+            # Scale lookback to timeframe so longer TFs get full TopstepX history (~43 trading days).
+            _days = {"4h": 60, "1d": 90}.get(tf, 5)
+            bars = await _broker.get_historical_bars(timeframe=tf, limit=limit, days=_days)
             return JSONResponse({"bars": [
                 {
                     "time": int(b.ts.timestamp()),
