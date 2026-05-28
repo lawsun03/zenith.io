@@ -48,22 +48,37 @@ class HTFBiasTracker:
         # returned nothing — distinguishes "no swings due to no data" from
         # "no swings due to chop".
         self._last_bar_count: int = 0
+        # PERSISTENT swing tracker — swings accumulate across rebuild() calls
+        # so a contract with short per-call history (e.g. days after a futures
+        # roll) can still build structure over a session. Without this, every
+        # refresh started from scratch and a short fetch produced zero swings.
+        self._tracker = LiquidityTracker(LiquidityConfig(
+            swing_lookback=self._lookback, max_swings=50,
+        ))
+        # Largest bar ts seen so far — used to feed only NEW bars on rebuild,
+        # avoiding double-counting when the broker returns overlapping windows.
+        self._last_seen_ts = None  # type: ignore[assignment]
 
     def rebuild(self, bars: list[Bar]) -> None:
-        """Recompute bias from the full bar list (called on each refresh)."""
+        """Feed new bars into the persistent swing tracker, recompute bias.
+
+        Idempotent on the bars already seen: bars with ts <= last_seen are
+        skipped. Safe to call on every refresh with the broker's full window.
+        """
         old = self._bias
         self._last_bar_count = len(bars)
 
-        tracker = LiquidityTracker(LiquidityConfig(
-            swing_lookback=self._lookback,
-            max_swings=50,
-        ))
-        for bar in bars:
-            tracker.on_bar(bar)
+        # Bars should arrive in chronological order from the broker; sort
+        # defensively in case the SDK ever returns them out of order.
+        for bar in sorted(bars, key=lambda b: b.ts):
+            if self._last_seen_ts is not None and bar.ts <= self._last_seen_ts:
+                continue
+            self._tracker.on_bar(bar)
+            self._last_seen_ts = bar.ts
 
-        highs = tracker.recent_high_swings
-        lows = tracker.recent_low_swings
-        # Snapshot for /api/htf_diagnostic (each rebuild creates a fresh tracker).
+        highs = self._tracker.recent_high_swings
+        lows = self._tracker.recent_low_swings
+        # Snapshot for /api/htf_diagnostic.
         self._recent_highs = list(highs)
         self._recent_lows = list(lows)
         if len(highs) < 2 or len(lows) < 2:
