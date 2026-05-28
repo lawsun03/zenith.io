@@ -40,6 +40,10 @@ class HTFBiasTracker:
     def __init__(self, lookback: int = 3) -> None:
         self._lookback = lookback
         self._bias: Bias = "neutral"
+        # Most recently computed swings, kept for diagnostics. Refreshed
+        # every rebuild(). Empty until rebuild() has been called once.
+        self._recent_highs: list = []   # list[Swing], avoid forward ref
+        self._recent_lows: list = []
 
     def rebuild(self, bars: list[Bar]) -> None:
         """Recompute bias from the full bar list (called on each refresh)."""
@@ -54,6 +58,9 @@ class HTFBiasTracker:
 
         highs = tracker.recent_high_swings
         lows = tracker.recent_low_swings
+        # Snapshot for /api/htf_diagnostic (each rebuild creates a fresh tracker).
+        self._recent_highs = list(highs)
+        self._recent_lows = list(lows)
         if len(highs) < 2 or len(lows) < 2:
             new_bias: Bias = "neutral"
         else:
@@ -75,6 +82,28 @@ class HTFBiasTracker:
 
     def bias(self) -> Bias:
         return self._bias
+
+    def diagnostics(self) -> dict:
+        """Return the swing data the last rebuild() saw — used by
+        /api/htf_diagnostic so the operator can verify the bias decision
+        against the actual chart. Returns the most recent up-to-10 swings
+        of each kind so the user can eyeball the comparison the tracker
+        used (highs[-1] vs highs[-2], lows[-1] vs lows[-2]).
+        """
+        return {
+            "bias": self._bias,
+            "lookback": self._lookback,
+            "high_count": len(self._recent_highs),
+            "low_count":  len(self._recent_lows),
+            "recent_high_swings": [
+                {"ts": s.bar_ts.isoformat(), "price": str(s.price)}
+                for s in self._recent_highs[-10:]
+            ],
+            "recent_low_swings": [
+                {"ts": s.bar_ts.isoformat(), "price": str(s.price)}
+                for s in self._recent_lows[-10:]
+            ],
+        }
 
 
 @dataclass(frozen=True)

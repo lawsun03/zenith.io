@@ -333,6 +333,36 @@ def build_app(
 
         return JSONResponse({"available": True, "instruments": instruments})
 
+    @app.get("/api/htf_diagnostic")
+    async def htf_diagnostic() -> JSONResponse:
+        """Detailed HTF tracker state — the exact swings the bias decision saw.
+
+        Use this to verify the bias verdict against the chart. The bias logic
+        compares strictly the LAST TWO confirmed swing highs and the LAST TWO
+        confirmed swing lows (see HTFBiasTracker.rebuild). If those two pairs
+        don't both rise (or both fall), the verdict is neutral — even when
+        the broader trend looks decisive by eye.
+        """
+        cfg = load_bot_config(_bot_config_path)
+        s = cfg.strategy
+        base = {
+            "bias_enabled":   s.htf_bias_enabled,
+            "bias_timeframe": s.htf_bias_timeframe,
+            "bias_lookback":  s.htf_bias_lookback,
+        }
+        if _engine is None:
+            return JSONResponse({**base, "available": False, "reason": "engine not wired"})
+        bias_tracker = getattr(_engine, "htf_bias", None)
+        if bias_tracker is None:
+            return JSONResponse({
+                **base,
+                "available": False,
+                "reason":
+                    "HTF bias tracker not active — either the flag is off in "
+                    "the running strategy_cfg, or the startup REST warm-up failed",
+            })
+        return JSONResponse({**base, "available": True, **bias_tracker.diagnostics()})
+
     @app.get("/api/export/trades.csv")
     async def export_trades() -> StreamingResponse:
         signals = await journal.recent_signals(10_000)
