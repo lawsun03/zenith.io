@@ -35,6 +35,7 @@ Lifecycle:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -226,6 +227,16 @@ class ExecutionEngine:
 
         self._started = False
 
+        # HTF confluence trackers — set externally by main.py after warm-up.
+        # Engine-owned (not per-runner) so they survive /api/strategy/reload.
+        # None until wired; the on_bar gates no-op while None or while the
+        # corresponding strategy_cfg flag is off.
+        self.htf_bias = None      # HTFBiasTracker | None
+        self.htf_levels = None    # HTFLevelFinder | None
+        # One-shot warning guard: fires once if a flag is on but the tracker is
+        # None (e.g. rebuild failed). Resets when trackers are successfully wired.
+        self._htf_warned: bool = False
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -318,24 +329,16 @@ class ExecutionEngine:
                 )
             return
 
-        # VP gate: filter + target override. Runs before pretrade risk check.
-        if (
-            runner.vp is not None
-            and self.strategy_cfg is not None
-            and self.strategy_cfg.vp_enabled
-            and runner.vp.has_prior_profile()
-        ):
-            filtered = runner.vp.apply(signal, self.strategy_cfg)
-            if filtered is None:
-                # Surface VP rejections in the journal so they're visible on the dashboard.
-                vp_denied = OrderOutcome(placed=False, reason="vp_filter")
-                if self.on_signal is not None:
-                    try:
-                        await self.on_signal(signal, vp_denied)
-                    except Exception:
-                        log.exception("on_signal callback raised (vp_filter)")
-                return
-            signal = filtered
+        original_signal = signal
+        signal, deny_reason = self._apply_confluence(signal, runner)
+        if deny_reason is not None:
+            denied = OrderOutcome(placed=False, reason=deny_reason)
+            if self.on_signal is not None:
+                try:
+                    await self.on_signal(original_signal, denied)
+                except Exception:
+                    log.exception("on_signal callback raised (%s)", deny_reason)
+            return
 
         outcome = await self._act_on_signal(signal)
         if self.on_signal is not None:
@@ -391,6 +394,85 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _apply_confluence(
+        self, signal: "Signal", runner: "StrategyRunner",
+    ) -> "tuple[Signal | None, str | None]":
+        """Run HTF bias gate + VP filter + HTF/VP target precedence on a signal.
+
+        Shared by both live entry paths (closed-bar on_bar and the forming-bar
+        poller) so they gate and re-target identically.
+
+        Returns (signal, None) if the signal passes — `signal` may carry a new
+        target. Returns (None, reason) if a gate blocks it, where reason is
+        "htf_bias" or "vp_filter". Pure decision: does not call on_signal.
+        """
+        cfg = self.strategy_cfg
+        if cfg is not None and not self._htf_warned:
+            if (cfg.htf_bias_enabled and self.htf_bias is None) or (
+                cfg.htf_target_enabled and self.htf_levels is None
+            ):
+                log.warning(
+                    "HTF flag enabled but tracker is None — gate/target inactive "
+                    "until trackers rebuild (bias_enabled=%s bias=%s, "
+                    "target_enabled=%s levels=%s)",
+                    cfg.htf_bias_enabled, self.htf_bias is not None,
+                    cfg.htf_target_enabled, self.htf_levels is not None,
+                )
+                self._htf_warned = True
+        vp_active = (
+            runner.vp is not None
+            and cfg is not None
+            and cfg.vp_enabled
+            and runner.vp.has_prior_profile()
+        )
+
+        # Part A — HTF bias gate. Block counter-trend signals; remember when
+        # the bias AGREES (used to bypass the VP value-area filter below).
+        bias_agrees = False
+        if cfg is not None and cfg.htf_bias_enabled and self.htf_bias is not None:
+            b = self.htf_bias.bias()
+            if (b == "bullish" and signal.side == "short") or (
+                b == "bearish" and signal.side == "long"
+            ):
+                log.info(
+                    "HTF bias gate: %s signal blocked (4h bias=%s) | %s",
+                    signal.side, b, signal.rationale,
+                )
+                return None, "htf_bias"
+            bias_agrees = (b == "bullish" and signal.side == "long") or (
+                b == "bearish" and signal.side == "short"
+            )
+
+        # VP value-area filter — skipped when an enabled, agreeing 4h bias
+        # vouches for the direction (the 2026-05-27 below-value-area shorts).
+        if vp_active and not bias_agrees:
+            if not runner.vp.passes_filter(signal, self.strategy_cfg):
+                log.info(
+                    "VP filter: rejected %s entry=%.2f outside value area | %s",
+                    signal.side, float(signal.entry), signal.rationale,
+                )
+                return None, "vp_filter"
+
+        # Part B — target precedence: HTF (4h FVG → 30min swing) wins,
+        # VP target is the fallback, fixed r_multiple is the final fallback.
+        target_chosen = False
+        if cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None:
+            found = self.htf_levels.find_target(
+                signal.side, signal.entry, signal.stop, cfg.htf_target_min_r,
+            )
+            if found is not None:
+                price, label = found
+                signal = dataclasses.replace(
+                    signal, target=price, rationale=signal.rationale + f" | {label}",
+                )
+                target_chosen = True
+        if not target_chosen and vp_active:
+            vp_signal = runner.vp.select_target(signal, self.strategy_cfg)
+            if vp_signal is not None:
+                signal = vp_signal
+
+        return signal, None
 
     def _entry_size(self, signal: Signal) -> int:
         """Contracts for this entry. Risk-based when risk_per_trade_pct > 0,
@@ -542,15 +624,16 @@ class ExecutionEngine:
 
                     self._forming_signal_fired[instrument] = b2.ts
 
-                    if (
-                        runner.vp is not None
-                        and self.strategy_cfg is not None
-                        and self.strategy_cfg.vp_enabled
-                        and runner.vp.has_prior_profile()
-                    ):
-                        signal = runner.vp.apply(signal, self.strategy_cfg)
-                        if signal is None:
-                            continue
+                    original_signal = signal
+                    signal, deny_reason = self._apply_confluence(signal, runner)
+                    if deny_reason is not None:
+                        denied = OrderOutcome(placed=False, reason=deny_reason)
+                        if self.on_signal is not None:
+                            try:
+                                await self.on_signal(original_signal, denied)
+                            except Exception:
+                                log.exception("on_signal callback raised (forming bar %s)", deny_reason)
+                        continue
 
                     log.info("Forming bar signal: %s", signal.rationale)
                     outcome = await self._act_on_signal(signal)

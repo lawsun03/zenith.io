@@ -69,6 +69,7 @@ from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementCompo
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.killzone import killzones_from_names
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
+from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
 from app.strategy.volume_profile import VolumeProfileTracker
 from app.sync.outbox import Outbox
 from app.sync.sender import Sender, SenderConfig
@@ -130,6 +131,7 @@ def _build_runner(
 
 
 _CT = ZoneInfo("America/Chicago")
+HTF_REFRESH_SECONDS = 60  # 4h/30min structure barely moves intraday; 60s is ample
 
 
 async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Decimal]:
@@ -549,16 +551,37 @@ async def _run_live(
     shutdown: asyncio.Event,
     runner: "StrategyRunner | None" = None,
     bot_cfg: "BotConfig | None" = None,
+    engine: "ExecutionEngine | None" = None,
 ) -> None:
-    """Live mode: subscribe, warm up VP, then block on shutdown."""
+    """Live mode: subscribe, warm up VP + HTF trackers, then block on shutdown."""
     await broker.subscribe([cfg.instrument], cfg.timeframes)
     if runner is not None and bot_cfg is not None and runner.vp is not None:
         await _warm_up_vp(broker, runner, bot_cfg)
+    htf_task = None
+    if bot_cfg is not None and engine is not None:
+        s = bot_cfg.strategy
+        # Build now so bias is ready before the first signal (only if enabled).
+        if s.htf_bias_enabled or s.htf_target_enabled:
+            await _rebuild_engine_htf(broker, engine, s)
+            log.info(
+                "HTF confluence active: bias=%s target=%s (bias_tf=%s swing_tf=%s)",
+                s.htf_bias_enabled, s.htf_target_enabled,
+                s.htf_bias_timeframe, s.htf_swing_timeframe,
+            )
+        # Always run the refresh loop so a later PATCH toggle is picked up and
+        # trackers stay fresh. It no-ops cheaply while both trackers are None.
+        htf_task = asyncio.create_task(_htf_refresh_loop(broker, engine, shutdown))
     log.info(
         "Live mode running. Instrument=%s timeframes=%s. Ctrl+C to stop.",
         cfg.instrument, cfg.timeframes,
     )
     await shutdown.wait()
+    if htf_task is not None:
+        htf_task.cancel()
+        try:
+            await htf_task
+        except asyncio.CancelledError:
+            pass
 
 
 def _install_signal_handlers(shutdown: asyncio.Event) -> None:
@@ -657,6 +680,87 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
             "VP filter inactive today",
             len(bars),
         )
+
+
+async def _build_htf_trackers(
+    broker: "Broker", s: "StrategyParams",
+) -> tuple[HTFBiasTracker | None, HTFLevelFinder | None]:
+    """Construct + warm HTF trackers from REST history. Returns (bias, levels).
+
+    Either may be None if its feature is disabled. On fetch failure the tracker
+    is returned empty (bias → neutral, find_target → None): fail-open.
+    """
+    from app.broker.topstepx import TopstepXBroker
+    if not isinstance(broker, TopstepXBroker):
+        return None, None
+
+    bias_tracker: HTFBiasTracker | None = None
+    level_finder: HTFLevelFinder | None = None
+    if s.htf_bias_enabled:
+        bias_tracker = HTFBiasTracker(lookback=s.htf_bias_lookback)
+    if s.htf_target_enabled:
+        level_finder = HTFLevelFinder(swing_lookback=s.htf_bias_lookback)
+
+    if bias_tracker is None and level_finder is None:
+        return None, None
+
+    await _refresh_htf_once(broker, s, bias_tracker, level_finder)
+    return bias_tracker, level_finder
+
+
+async def _refresh_htf_once(
+    broker: "Broker", s: "StrategyParams",
+    bias_tracker: "HTFBiasTracker | None", level_finder: "HTFLevelFinder | None",
+) -> None:
+    """Fetch recent 4h + 30min bars and rebuild whichever trackers exist."""
+    if bias_tracker is None and level_finder is None:
+        return
+    try:
+        bias_bars = await broker.get_historical_bars(
+            timeframe=s.htf_bias_timeframe, days=30, limit=500,
+        )
+        if bias_tracker is not None:
+            bias_tracker.rebuild(bias_bars)
+        if level_finder is not None:
+            swing_bars = await broker.get_historical_bars(
+                timeframe=s.htf_swing_timeframe, days=10, limit=500,
+            )
+            level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
+    except Exception:
+        log.exception("HTF refresh failed — retaining last-known state")
+
+
+async def _htf_refresh_loop(
+    broker: "Broker", engine: "ExecutionEngine", shutdown: "asyncio.Event",
+) -> None:
+    """Background task: periodically rebuild the engine's HTF trackers from REST.
+
+    Reads engine.strategy_cfg each tick so live PATCH toggles / timeframe changes
+    are honored without restart. No-ops cheaply when both trackers are None.
+    """
+    while not shutdown.is_set():
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=HTF_REFRESH_SECONDS)
+            break
+        except asyncio.TimeoutError:
+            pass
+        s = engine.strategy_cfg
+        if s is not None:
+            await _refresh_htf_once(broker, s, engine.htf_bias, engine.htf_levels)
+
+
+async def _rebuild_engine_htf(
+    broker: "Broker", engine: "ExecutionEngine", s: "StrategyParams",
+) -> None:
+    """(Re)build the engine's HTF trackers to match the current strategy flags.
+
+    Called at startup and on live config changes (PATCH /api/config,
+    /api/strategy/reload). _build_htf_trackers returns (None, None) when both
+    HTF features are disabled, so this also tears trackers down when toggled off.
+    """
+    bias_tracker, level_finder = await _build_htf_trackers(broker, s)
+    engine.htf_bias = bias_tracker
+    engine.htf_levels = level_finder
 
 
 async def _async_main() -> int:
@@ -835,6 +939,7 @@ async def _async_main() -> int:
         # Re-warm VP after a /api/strategy/reload rebuilds the runner, so the
         # filter/target don't silently drop their prior-session profile.
         vp_warmup=lambda runner, bot_cfg_: _warm_up_vp(broker, runner, bot_cfg_),
+        htf_rebuild=lambda body: _rebuild_engine_htf(broker, engine, body.strategy),
     )
 
     shutdown = asyncio.Event()
@@ -913,7 +1018,7 @@ async def _async_main() -> int:
                 engine=engine,
             )
         else:
-            await _run_live(broker, cfg, shutdown, runner=runner, bot_cfg=bot_cfg)
+            await _run_live(broker, cfg, shutdown, runner=runner, bot_cfg=bot_cfg, engine=engine)
 
         return 0
     except Exception as exc:
