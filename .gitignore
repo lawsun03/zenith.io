@@ -13,12 +13,18 @@ __pycache__/
 
 # Bars data (large CSVs, re-fetchable)
 bars_cache/
-bars_MGC.csv
+bars_*.csv
+intrabar_*.csv
+
+# Live trade logs (regenerated from broker every session)
+trades.csv
+trades_*.csv
 
 # Backtest results (generated data) — keep _config_* strategy configs
 backtests/*.json
 !backtests/_config_*.json
 backtest_results/
+walkforward_*/
 
 # Logs
 logs/
@@ -28,6 +34,12 @@ bot_stderr.log
 
 # Claude internal
 .claude/
+
+# Plugins / skills local state
+.superpowers/
+
+# Runtime
+*.pid
 
 # Misc
 Capture.PNG
