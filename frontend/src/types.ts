@@ -28,6 +28,7 @@ export interface StrategyConfig {
   htf_target_enabled: boolean
   htf_target_min_r: string
   htf_swing_timeframe: string
+  kz_levels_enabled: boolean
 }
 
 export interface BotConfig {

@@ -170,6 +170,11 @@ const FIELDS: FieldDef[] = [
     min: 1.0, max: 5.0, step: 0.1,
     hint: 'An HTF level must deliver at least this many R to be used as target. Below this, falls back to VP / fixed R.',
   },
+  {
+    key: 'kz_levels_enabled', label: 'KZ Level Sweeps', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Detect sweeps of completed killzone session highs and lows (e.g. London high, NY AM low) as a parallel signal source tagged kz_level. Runs alongside the existing swing sweep detector.',
+  },
 ]
 
 const inputClass =
@@ -253,6 +258,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       htf_target_enabled:       form.htf_target_enabled === 'true',
       htf_target_min_r:         form.htf_target_min_r                   || '2.0',
       htf_swing_timeframe:      form.htf_swing_timeframe                || '30min',
+      kz_levels_enabled:        form.kz_levels_enabled !== 'false',
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',

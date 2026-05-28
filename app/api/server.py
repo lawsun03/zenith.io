@@ -49,6 +49,7 @@ from app.execution.reconciler import Reconciler
 from app.risk.state import RiskState
 from app.strategy.composer import Signal
 from app.strategy.killzone import in_killzone, killzones_from_names
+from app.strategy.kz_levels import KillzoneLevelTracker
 
 from .journal import Journal, _decimal_to_str
 
@@ -470,6 +471,13 @@ def build_app(
                 await _htf_rebuild(body)
             except Exception:
                 log.exception("PATCH /api/config: HTF tracker rebuild failed")
+        # Hot-apply kz_levels_enabled: wire or unwire per-runner.
+        if _engine is not None:
+            for runner in _engine.runners.values():
+                if body.strategy.kz_levels_enabled and runner.kz_levels is None:
+                    runner.kz_levels = KillzoneLevelTracker()
+                elif not body.strategy.kz_levels_enabled and runner.kz_levels is not None:
+                    runner.kz_levels = None
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
