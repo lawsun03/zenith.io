@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from app.broker.events import Bar
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
+import pytest
 
 
 def _bar(i: int, o, h, l, c, tf="4h") -> Bar:
@@ -141,3 +142,41 @@ def test_level_finder_ignores_mitigated_fvg():
     f = HTFLevelFinder(swing_lookback=2)
     f.rebuild(fvg_bars=bars, swing_bars=[])
     assert f.find_target("long", Decimal("15"), Decimal("13"), Decimal("2.0")) is None
+
+
+def test_level_finder_returns_4h_fvg_below_entry_for_short():
+    # Bearish FVG: b1.low=80, b3.high=76 → gap [76, 80], near edge (gap.high) = 80.
+    bars = [
+        _tf_bar(0, 82, 83, 80, 81, "4h"),   # b1 (low=80)
+        _tf_bar(1, 81, 81, 74, 75, "4h"),   # b2 displacement down
+        _tf_bar(2, 75, 76, 73, 74, "4h"),   # b3 (high=76) → gap 76..80
+        _tf_bar(3, 74, 75, 72, 73, "4h"),   # stays below gap
+    ]
+    f = HTFLevelFinder(swing_lookback=2)
+    f.rebuild(fvg_bars=bars, swing_bars=[])
+    # entry=85, stop=87 → R=2, min_r=2 → min_dist=4. (85-80)=5 >= 4 → 80 qualifies.
+    found = f.find_target("short", Decimal("85"), Decimal("87"), Decimal("2.0"))
+    assert found is not None
+    price, label = found
+    assert price == Decimal("80")
+    assert "4h FVG" in label
+
+
+def test_level_finder_short_ignores_mitigated_bearish_fvg():
+    # Same bearish gap [76, 80]; a later bar trades back up to high=81 (>=80) → mitigated.
+    bars = [
+        _tf_bar(0, 82, 83, 80, 81, "4h"),
+        _tf_bar(1, 81, 81, 74, 75, "4h"),
+        _tf_bar(2, 75, 76, 73, 74, "4h"),
+        _tf_bar(3, 74, 81, 73, 80, "4h"),   # high=81 trades back into gap → mitigated
+    ]
+    f = HTFLevelFinder(swing_lookback=2)
+    f.rebuild(fvg_bars=bars, swing_bars=[])
+    assert f.find_target("short", Decimal("85"), Decimal("87"), Decimal("2.0")) is None
+
+
+def test_find_target_rejects_unknown_side():
+    f = HTFLevelFinder(swing_lookback=2)
+    f.rebuild(fvg_bars=[], swing_bars=[])
+    with pytest.raises(ValueError):
+        f.find_target("buy", Decimal("10"), Decimal("9"), Decimal("2.0"))
