@@ -718,8 +718,21 @@ def test_snapshot_pending_a_keys_included():
     assert "London_high" in state["kz_pending_a"]
 
 
-def test_snapshot_awaiting_sweeps_empty_by_default():
-    """No awaiting sweeps when composer has nothing pending."""
+def test_snapshot_awaiting_sweeps_serialized():
+    """Awaiting sweep entries are serialized with correct fields and string price."""
+    from datetime import timezone
+    from app.strategy.liquidity import Swing, SweepEvent
+    from app.strategy.composer import _Awaiting
     runner = make_runner()
+    # Inject a synthetic _Awaiting entry directly into the composer
+    swing = Swing(kind="high", price=Decimal("103"), bar_ts=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc), confirmed_ts=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc))
+    sweep = SweepEvent(side="high", swept_swing=swing, pattern="B_one_bar", sweep_extreme=Decimal("103.3"), completed_at=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc))
+    runner.composer._awaiting.append(_Awaiting(sweep=sweep, bars_since_sweep=2, killzone_name="London", source="kz_level"))
     state = _snapshot_strategy_state(runner)
-    assert state["awaiting_sweeps"] == []
+    assert len(state["awaiting_sweeps"]) == 1
+    s = state["awaiting_sweeps"][0]
+    assert s["side"] == "high"
+    assert s["source"] == "kz_level"
+    assert s["price"] == "103"
+    assert s["bars_elapsed"] == 2
+    assert s["killzone"] == "London"

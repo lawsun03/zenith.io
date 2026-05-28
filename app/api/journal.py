@@ -276,7 +276,7 @@ class Journal:
     # WebSocket pub-sub
     # ------------------------------------------------------------------
 
-    def publish_strategy_state(self, instrument: str, state: dict) -> None:
+    def publish_strategy_state(self, state: dict) -> None:
         """Stream strategy state to WebSocket subscribers without storing it."""
         entry = JournalEntry(
             ts=datetime.now(timezone.utc),
