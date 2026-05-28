@@ -293,6 +293,20 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     })
     seriesRef.current = series
 
+    // Initial bar load — the [viewTf] effect can't do this because seriesRef
+    // isn't set when it fires on mount. Subsequent TF switches are handled by [viewTf].
+    fetch(`/api/bars?timeframe=${viewTfRef.current}&limit=500`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.bars) && d.bars.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          series.setData(d.bars as any)
+          chart.timeScale().fitContent()
+        }
+        lastBarTimeRef.current = null
+      })
+      .catch(() => {})
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const markersPlugin = createSeriesMarkers(series as any, [])
 
@@ -504,15 +518,15 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       <div className="px-4 py-2 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-[10px] tracking-[0.3em] text-dim uppercase">Price Chart</span>
-          {/* TF selector — Task 6 */}
+          {/* TF selector */}
           <div className="flex items-center gap-1">
-            {Object.entries(TF_LABELS).map(([tf, label]) => (
+            {Object.keys(TF_SECONDS).map(tf => (
               <button
                 key={tf}
                 onClick={() => setViewTf(tf)}
-                className={`text-[9px] font-mono px-1.5 py-0.5 border ${viewTf === tf ? 'border-accent text-accent' : 'border-border text-dim'}`}
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded-sm transition-colors ${viewTf === tf ? 'text-accent bg-accent/10' : 'text-dim hover:text-ink'}`}
               >
-                {label}{tf === timeframe ? '·' : ''}
+                {TF_LABELS[tf]}{tf === timeframe ? '·' : ''}
               </button>
             ))}
           </div>
