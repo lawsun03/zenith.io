@@ -127,16 +127,26 @@ def _pick_target(
     """
     Return (target_price, label) for the signal.
 
-    Scans VP levels on the correct side of entry, sorted nearest-first.
-    Picks the first one that delivers >= vp_min_target_r of R.
+    Only uses VP levels when entry sits within the value area (± vp_filter_tolerance).
+    If entry is outside the value area, falls back to cfg.r_multiple immediately —
+    VP context is not meaningful when price is trading away from the profile.
+
+    When entry is inside the VA, scans VP levels on the correct side of entry,
+    sorted nearest-first, and picks the first one that delivers >= vp_min_target_r of R.
     Falls back to cfg.r_multiple if no level qualifies.
     """
     entry = signal.entry
     stop = signal.stop
     min_r = cfg.vp_min_target_r
+    tol = cfg.vp_filter_tolerance
+
+    entry_in_va = profile.val - tol <= entry <= profile.vah + tol
 
     if signal.side == "long":
         r = entry - stop
+        if not entry_in_va:
+            return entry + r * cfg.r_multiple, f"entry outside VA, using {cfg.r_multiple}R"
+
         candidates: list[tuple[Decimal, str]] = []
         if profile.poc > entry:
             candidates.append((profile.poc, f"POC @ {profile.poc}"))
@@ -153,10 +163,13 @@ def _pick_target(
                 return level, f"{label} ({actual_r:.1f}R)"
 
         fallback = entry + r * cfg.r_multiple
-        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R multiple"
+        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R"
 
     else:  # short
         r = stop - entry
+        if not entry_in_va:
+            return entry - r * cfg.r_multiple, f"entry outside VA, using {cfg.r_multiple}R"
+
         candidates = []
         if profile.poc < entry:
             candidates.append((profile.poc, f"POC @ {profile.poc}"))
@@ -173,7 +186,7 @@ def _pick_target(
                 return level, f"{label} ({actual_r:.1f}R)"
 
         fallback = entry - r * cfg.r_multiple
-        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R multiple"
+        return fallback, f"no VP level ≥{min_r}R, using {cfg.r_multiple}R"
 
 
 class VolumeProfileTracker:
