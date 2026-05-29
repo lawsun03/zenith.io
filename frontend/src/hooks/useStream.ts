@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BarEvent, JournalItem, StatusPayload } from '../types'
+import type { BarEvent, JournalItem, StatusPayload, StrategyStatePayload } from '../types'
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
 
@@ -15,6 +15,7 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
   const [signals, setSignals] = useState<JournalItem[]>([])
   const [fills, setFills] = useState<JournalItem[]>([])
   const [reconciles, setReconciles] = useState<JournalItem[]>([])
+  const [strategyState, setStrategyState] = useState<StrategyStatePayload | null>(null)
   const [connState, setConnState] = useState<ConnState>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -100,6 +101,9 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
         } else if (msg.kind === 'reconcile') {
           setReconciles(prev => [item, ...prev].slice(0, 20))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
+        } else if (msg.kind === 'strategy_state') {
+          setStrategyState(msg.payload as StrategyStatePayload)
+          return
         }
       }
     }
@@ -113,5 +117,5 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
     }
   }, [])
 
-  return { status, signals, fills, reconciles, connState }
+  return { status, signals, fills, reconciles, strategyState, connState }
 }

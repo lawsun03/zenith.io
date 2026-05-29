@@ -133,3 +133,30 @@ export interface VpProfile {
   total_volume: number
   bins: [string, number][]  // [price, volume] pairs sorted ascending
 }
+
+export interface StrategyStatePayload {
+  instrument: string
+  grade?: string                  // "A+" | "A" | "A-" | "B" | "B-"
+  passes?: boolean
+  has_delivery_fvg?: boolean
+  delivery_fvg_side?: string | null
+  delivery_fvg_in_pd?: boolean
+  premium_discount_ok?: boolean
+  target_clear?: boolean
+  fvg_singular?: boolean
+  singularity_timeframe?: string  // "1min" | "30min" | "none"
+  momentum_quality?: string       // "strong" | "decent" | "weak"
+  bpr_confluence?: boolean
+  bpr_timeframe?: string | null
+  recent_sweep_ok?: boolean
+  fib_displacement_ok?: boolean
+  fib_extension?: string
+  ce_respected?: boolean
+  reason?: string
+  active_fvgs_count?: number
+  session_high?: string
+  session_low?: string
+  in_session_window?: boolean
+  in_macro_window?: boolean
+  news_blackout?: boolean
+}
