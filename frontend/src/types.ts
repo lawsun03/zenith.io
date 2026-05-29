@@ -38,6 +38,7 @@ export interface BotConfig {
   account_name: string | null
   entry_mode: string
   enabled_killzones: string[]
+  signal_instrument: string | null
   contracts: number
   risk_per_trade_pct: number
   partial_profit_r: number

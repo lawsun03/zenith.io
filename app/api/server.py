@@ -442,6 +442,7 @@ def build_app(
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "partial_profit_r": float(cfg.partial_profit_r),
             "enabled_killzones": cfg.enabled_killzones,
+            "signal_instrument": cfg.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
         })
@@ -481,6 +482,7 @@ def build_app(
             "risk_per_trade_pct": float(body.risk_per_trade_pct),
             "partial_profit_r": float(body.partial_profit_r),
             "enabled_killzones": body.enabled_killzones,
+            "signal_instrument": body.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
         })
@@ -540,7 +542,10 @@ def build_app(
         try:
             cfg = load_bot_config(_bot_config_path)
             tf = (cfg.timeframes or _effective_timeframes)[0]
-            bars = await _broker.get_historical_bars(timeframe=tf, limit=limit)
+            exec_instr = cfg.instrument or effective_instrument
+            bars = await _broker.get_historical_bars(
+                timeframe=tf, limit=limit, instrument=exec_instr,
+            )
             return JSONResponse({"bars": [
                 {
                     "time": int(b.ts.timestamp()),

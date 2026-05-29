@@ -207,6 +207,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
+      signal_instrument:    config.signal_instrument ?? '',
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
       ),
@@ -265,6 +266,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
       enabled_killzones:    enabledKillzones,
+      signal_instrument:    form.signal_instrument?.trim().toUpperCase() || null,
       strategy,
     })
     setSaved(true)
@@ -494,46 +496,64 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                     </div>
                   </>
                 )}
-                {FIELDS.filter(f => f.section === section).map(field => (
-                  <div key={field.key}>
-                    <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                      {field.label}
-                    </label>
-                    {field.type === 'select' ? (
-                      <select
-                        value={form[field.key] ?? ''}
-                        onChange={e => set(field.key, e.target.value)}
-                        className={inputClass + ' cursor-pointer'}
-                      >
-                        {field.options!.map(o => (
-                          <option key={o} value={o} className="bg-panel">{o}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={field.min}
-                          max={field.max}
-                          step={field.step ?? 1}
-                          value={Number(form[field.key] ?? field.min ?? 0)}
-                          onChange={e => set(field.key, e.target.value)}
-                          className="flex-1 slider-accent"
-                        />
-                        <input
-                          type="number"
-                          min={field.min}
-                          max={field.max}
-                          step={field.step ?? 1}
+                {FIELDS.filter(f => f.section === section).flatMap(field => {
+                  const el = (
+                    <div key={field.key}>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        {field.label}
+                      </label>
+                      {field.type === 'select' ? (
+                        <select
                           value={form[field.key] ?? ''}
                           onChange={e => set(field.key, e.target.value)}
-                          className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                        />
+                          className={inputClass + ' cursor-pointer'}
+                        >
+                          {field.options!.map(o => (
+                            <option key={o} value={o} className="bg-panel">{o}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min={field.min}
+                            max={field.max}
+                            step={field.step ?? 1}
+                            value={Number(form[field.key] ?? field.min ?? 0)}
+                            onChange={e => set(field.key, e.target.value)}
+                            className="flex-1 slider-accent"
+                          />
+                          <input
+                            type="number"
+                            min={field.min}
+                            max={field.max}
+                            step={field.step ?? 1}
+                            value={form[field.key] ?? ''}
+                            onChange={e => set(field.key, e.target.value)}
+                            className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                          />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">{field.hint}</p>
+                    </div>
+                  )
+                  if (field.key !== 'instrument') return [el]
+                  return [
+                    el,
+                    <div key="signal_instrument">
+                      <label className="text-dim text-xs tracking-widest uppercase block mb-1">Signal Instrument</label>
+                      <input
+                        className={inputClass}
+                        value={form.signal_instrument ?? ''}
+                        onChange={e => set('signal_instrument', e.target.value)}
+                        placeholder="blank = same as instrument (e.g. GC)"
+                      />
+                      <div className="text-dim text-[10px] mt-1">
+                        Leave blank to use the same instrument for signals and execution. Set to GC to read structure off full Gold while trading MGC. Requires restart.
                       </div>
-                    )}
-                    <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">{field.hint}</p>
-                  </div>
-                ))}
+                    </div>,
+                  ]
+                })}
               </div>
             </section>
           ))}
