@@ -17,6 +17,7 @@ import { AnalyticsPage } from './pages/Analytics'
 import { ForceSignalPanel } from './components/ForceSignalPanel'
 import { MatrixRain } from './components/MatrixRain'
 import { GlowOverlay } from './components/GlowOverlay'
+import { StrategyDebug } from './components/StrategyDebug'
 import type { JournalItem } from './types'
 
 export default function App() {
@@ -27,7 +28,7 @@ export default function App() {
   if (path.startsWith('/analytics')) return <AnalyticsPage />
 
   const chartCbRef = useRef<ChartCallbacks>({})
-  const { status, signals, fills, reconciles, connState } = useStream(chartCbRef)
+  const { status, signals, fills, reconciles, strategyState, connState } = useStream(chartCbRef)
   const { config, saveConfig, saving, saveError } = useConfig()
   const [configOpen, setConfigOpen] = useState(false)
   const activeKillzone = useKillzone(config?.enabled_killzones)
@@ -66,6 +67,9 @@ export default function App() {
             renderItem={(item: JournalItem, i: number) => <ReconcileRow key={i} entry={item} />}
             empty="Waiting for first reconcile"
           />
+        </div>
+        <div className="grid grid-cols-1 gap-px bg-border border border-border">
+          <StrategyDebug data={strategyState} />
         </div>
         {config?.mode === 'live' && <ForceSignalPanel />}
         <footer className="pt-4 text-[10px] text-dim/60 tracking-widest text-center">
