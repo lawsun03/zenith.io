@@ -97,6 +97,7 @@ def _build_runner(
     s: StrategyParams,
     enabled_killzones: list[str] | None = None,
     timeframe: str = "1min",
+    signal_instrument: str | None = None,
 ) -> StrategyRunner:
     zones = killzones_from_names(enabled_killzones) if enabled_killzones else None
     return StrategyRunner(
@@ -127,6 +128,7 @@ def _build_runner(
             max_atr_filter=s.max_atr_filter,
         )),
         vp=VolumeProfileTracker(),
+        signal_instrument=signal_instrument or "",
     )
 
 
@@ -448,12 +450,14 @@ def _make_fill_journaler(
     return on_fill
 
 
-def _make_bar_journaler(journal: Journal):
+def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     """Build the on_bar subscriber that streams bars to the chart."""
     from app.broker.events import Bar as BarEvent
 
     async def on_bar(bar: BarEvent) -> None:
-        journal.publish_bar(bar)
+        # Re-label signal instrument bars (e.g. GC) as the execution instrument (MGC)
+        # for the chart — prices are identical, only the label differs.
+        journal.publish_bar(bar, display_instrument=execution_instrument or None)
 
     return on_bar
 
@@ -556,8 +560,12 @@ async def _run_paper(
             new_runner = _build_runner(
                 cfg.instrument, new_cfg.strategy, new_cfg.enabled_killzones,
                 timeframe=new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+                signal_instrument=new_cfg.signal_instrument,
             )
             engine.runners = {cfg.instrument: new_runner}
+            engine._bar_router = {
+                new_runner.signal_instrument: new_runner.instrument
+            } if new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
             engine.strategy_cfg = new_cfg.strategy  # keep VP cfg in sync on restart
         broker.reset()
         first_run = False
@@ -572,7 +580,10 @@ async def _run_live(
     engine: "ExecutionEngine | None" = None,
 ) -> None:
     """Live mode: subscribe, warm up VP + HTF trackers, then block on shutdown."""
-    await broker.subscribe([cfg.instrument], cfg.timeframes)
+    signal_instr = (bot_cfg.signal_instrument if bot_cfg and bot_cfg.signal_instrument else None) or cfg.instrument
+    if signal_instr != cfg.instrument:
+        log.info("Signal instrument: %s — execution instrument: %s", signal_instr, cfg.instrument)
+    await broker.subscribe([signal_instr], cfg.timeframes)
     if runner is not None and bot_cfg is not None and runner.vp is not None:
         await _warm_up_vp(broker, runner, bot_cfg)
     htf_task = None
@@ -947,8 +958,11 @@ async def _async_main() -> int:
         # Bootstrap daily P&L so a mid-session restart doesn't reset the DLL gate.
         risk_state.daily_pnl = live_daily_pnl
     runner = _build_runner(
-        cfg.instrument, bot_cfg.strategy, bot_cfg.enabled_killzones,
+        instrument=cfg.instrument,
+        s=bot_cfg.strategy,
+        enabled_killzones=bot_cfg.enabled_killzones,
         timeframe=bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min",
+        signal_instrument=bot_cfg.signal_instrument,
     )
 
     # Sync: enable only if both endpoint and secret are set. Outbox is
@@ -1015,7 +1029,7 @@ async def _async_main() -> int:
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord))
-    broker.on_bar(_make_bar_journaler(journal))
+    broker.on_bar(_make_bar_journaler(journal, execution_instrument=cfg.instrument))
 
     eod_scheduler = EndOfDayScheduler(
         journal=journal,

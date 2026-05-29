@@ -52,8 +52,9 @@ class StrategyParams(BaseModel):
 
 
 class BotConfig(BaseModel):
-    instrument: str | None = None   # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
-    timeframes: list[str] | None = None  # None → fall back to TOPSTEP_BOT_TIMEFRAMES env var
+    instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
+    signal_instrument: str | None = None   # if set, subscribe to this instrument for signals; execute on `instrument`
+    timeframes: list[str] | None = None    # None → fall back to TOPSTEP_BOT_TIMEFRAMES env var
     replay_delay_ms: int = 0        # ms to sleep between bars in paper replay (0 = full speed)
     replay_start_delay_s: int = 5   # seconds to wait before replay begins (lets browser connect)
     account_name: str | None = None  # live mode: TopstepX account name to trade on
@@ -82,6 +83,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
 
     data = {
         "instrument": config.instrument,
+        "signal_instrument": config.signal_instrument,
         "timeframes": config.timeframes,
         "replay_delay_ms": config.replay_delay_ms,
         "replay_start_delay_s": config.replay_start_delay_s,
