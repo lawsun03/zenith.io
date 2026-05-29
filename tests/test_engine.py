@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.bot_config import StrategyParams
 from app.broker.events import Bar, MarkToMarket
 from app.broker.paper import PaperBroker
 from app.execution.engine import (
@@ -29,6 +30,7 @@ from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
+from app.strategy.grader import SetupGrader
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 
 ET = ZoneInfo("America/New_York")
@@ -55,7 +57,48 @@ def in_ny_am(minute_offset: int) -> datetime:
 
 
 def make_runner(instrument: str = "MGC") -> StrategyRunner:
-    """Default-config runner matching the strategy test settings."""
+    """Default-config runner matching the strategy test settings.
+
+    Session filter is disabled (empty list) so the hand-crafted bar timestamps
+    always pass. Grader is seeded with HTF swings that bracket the test price
+    range so target clarity passes — the engine tests verify plumbing, not
+    grader quality criteria.
+    """
+    grader = SetupGrader()
+    # Seed HTF swings around the test price range (~2392–2404) so the grader's
+    # target-clarity and premium/discount checks can resolve. Without these the
+    # grader grades every test signal "B" (no target) and blocks it, which would
+    # break all engine tests that rely on signals reaching the broker.
+    grader.update_htf_swings(
+        highs=[Decimal("2410"), Decimal("2405")],
+        lows=[Decimal("2385"), Decimal("2390")],  # max(lows_below ~2399.5) = 2390 → htf_mid=(2405+2390)/2=2397.5
+    )
+    # Seed a session range for "NY AM" so P/D check has a midpoint.
+    # Short signal entry is ~2399.5. Session low set to 2385 → sess_mid=(2410+2385)/2=2397.5.
+    # Entry 2399.5 > 2397.5 (sess_mid) AND > 2397.5 (htf_mid) → short is in premium. Passes P/D.
+    from app.broker.events import Bar as _Bar
+    _seed_bar = _Bar(
+        instrument=instrument, timeframe="1min", ts=in_ny_am(0),
+        open=Decimal("2400"), high=Decimal("2410"), low=Decimal("2385"), close=Decimal("2400"),
+        volume=100,
+    )
+    grader.update_session_range(_seed_bar, "NY AM")
+    # Seed a synthetic 30min bearish FVG covering [2398.0, 2401.5] so the grader's
+    # _htf_singularity_rescue can contain the gapping-sack cluster.
+    # SHORT_SIGNAL_BARS at bar 15 produces: signal iFVG [2400.2, 2400.5] and a
+    # same-side bearish overlap [2398.3, 2400.8] → cluster [2398.3, 2400.8].
+    # The rescue FVG must satisfy: low <= 2398.3 and high >= 2400.8.
+    # Bearish 3-bar FVG: b1.low > 2400.8, b3.high < 2398.3.
+    _b1 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(0),
+               open=Decimal("2403"), high=Decimal("2405"), low=Decimal("2402"), close=Decimal("2402"),
+               volume=100)
+    _b2 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(30),
+               open=Decimal("2401"), high=Decimal("2401"), low=Decimal("2399"), close=Decimal("2400"),
+               volume=100)
+    _b3 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(60),
+               open=Decimal("2398"), high=Decimal("2398.0"), low=Decimal("2396"), close=Decimal("2397"),
+               volume=100)
+    grader.update_delivery_fvgs([_b1, _b2, _b3])
     return StrategyRunner(
         instrument=instrument,
         timeframe="1min",
@@ -74,6 +117,8 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
             stop_buffer=Decimal("0.30"),
             r_multiple=Decimal("2.0"),
         )),
+        grader=grader,
+        strategy_cfg=StrategyParams(ifvg_session_windows=[]),
     )
 
 
@@ -303,9 +348,12 @@ async def test_lockout_mid_position_triggers_flatten():
 
 async def test_signal_denied_when_already_at_max_contracts():
     """
-    If we've already opened a position elsewhere (max_contracts reached
-    via direct broker calls), a new signal hits the gate at MAX_CONTRACTS
-    and is denied — the broker is NEVER asked to place.
+    If we're already at max contracts in the SAME direction as the signal,
+    the gate denies with MAX_CONTRACTS and the broker is never asked to place.
+
+    When the new signal is OPPOSITE to the open position (which is what
+    SHORT_SIGNAL_BARS produces against a long position), the engine instead
+    initiates a reversal flatten — verified in the reversal path test.
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())  # max=30
@@ -314,10 +362,11 @@ async def test_signal_denied_when_already_at_max_contracts():
     await broker.connect()
     await engine.start()
 
-    # Pre-fill state to 30 open contracts (max for $50K Combine).
+    # Pre-fill state to 30 short contracts — same direction as the SHORT signal.
+    # With 30 shorts open, any additional short is denied by MAX_CONTRACTS.
     state.record_fill(
         realized_pnl_delta=Decimal("0"),
-        contracts_delta=30,
+        contracts_delta=-30,
         ts=in_ny_am(0),
     )
 
@@ -326,7 +375,7 @@ async def test_signal_denied_when_already_at_max_contracts():
         captured.append(out)
     engine.on_signal = cap
 
-    # Drive bars; signal will fire but gate denies.
+    # Drive bars; signal will fire but gate denies (same-side at max).
     for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
         await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
         await asyncio.sleep(0)

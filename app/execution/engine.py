@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Awaitable, Callable, Optional
 
+from dataclasses import replace as dc_replace
+
 from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
 from app.broker.topstepx import _point_value
@@ -51,6 +53,8 @@ from app.risk.sizing import risk_based_size
 from app.risk.state import RiskState
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
+from app.strategy.grader import SetupGrader
+from app.strategy.killzone import in_killzone, in_session_window, in_macro_window, in_news_blackout
 from app.strategy.liquidity import LiquidityTracker
 from app.strategy.volume_profile import VolumeProfileTracker
 
@@ -109,12 +113,21 @@ class StrategyRunner:
     liquidity: LiquidityTracker
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
+    grader: SetupGrader
+    strategy_cfg: StrategyParams
     vp: VolumeProfileTracker | None = None
     signal_instrument: str = ""  # if set, bars from this instrument drive signals; execution uses `instrument`
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
+        # News and session filters (Rules G, H)
+        if in_news_blackout(bar.ts, self.strategy_cfg.ifvg_news_blackout):
+            log.info("Signal blocked: news blackout at %s", bar.ts)
+            return None
+        if not in_session_window(bar.ts, self.strategy_cfg.ifvg_session_windows):
+            return None  # outside configured session windows — silent skip
+
         sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
         for s in sweeps:
             self.composer.on_sweep(bar, s)
@@ -122,11 +135,35 @@ class StrategyRunner:
         signal: Optional[Signal] = None
         disp = self.displacement.on_bar(bar)
         if disp is not None:
-            signal = self.composer.on_displacement(bar, disp)
+            candidate = self.composer.on_displacement(bar, disp)
+            if candidate is not None:
+                grade = self.grader.score(
+                    candidate,
+                    disp,
+                    self.displacement.active_fvgs,
+                    bars_since_sweep=0,  # sweep tracking deferred — always 0 for now
+                    sweep_window_bars=self.strategy_cfg.ifvg_sweep_window_bars,
+                    min_displacement_mult=self.strategy_cfg.ifvg_min_displacement_mult,
+                )
+                if grade.passes:
+                    signal = dc_replace(candidate, setup_grade=grade)
+                else:
+                    log.info(
+                        "Signal filtered by grader: %s — %s",
+                        grade.grade, grade.reason,
+                    )
 
         # Cache ATR for the NEXT bar's liquidity call (one-bar lag is acceptable;
         # ATR doesn't change sharply bar-to-bar and liquidity runs before displacement).
         self._prev_atr = self.displacement.atr
+
+        # Update grader session range every bar
+        kz = in_killzone(bar.ts, self.composer._zones)
+        self.grader.update_session_range(bar, kz.name if kz else None)
+
+        # Macro-window bonus log (observability, not a hard filter)
+        if signal and in_macro_window(bar.ts, self.strategy_cfg.ifvg_macro_windows):
+            log.info("Signal in macro window — higher-confidence timing")
 
         # Bookkeeping AFTER signal evaluation — see composer docstring.
         self.composer.on_bar_close(bar)

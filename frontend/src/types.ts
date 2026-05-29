@@ -31,6 +31,12 @@ export interface StrategyConfig {
   // iFVG entry
   ifvg_entry_mode: string
   ifvg_stop_buffer_ticks: string
+  // iFVG grader / session filters
+  ifvg_sweep_window_bars: number
+  ifvg_min_displacement_mult: string
+  ifvg_session_windows: string[]
+  ifvg_macro_windows: string[]
+  ifvg_news_blackout: string[]
 }
 
 export interface BotConfig {

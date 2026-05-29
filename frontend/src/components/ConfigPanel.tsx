@@ -166,6 +166,16 @@ const FIELDS: FieldDef[] = [
     hint: 'Ticks beyond the iFVG extreme for the stop loss. 1.0 = one tick past the high/low that defined the FVG. Add buffer to avoid tight stop-outs on wicks.',
   },
   {
+    key: 'ifvg_sweep_window_bars', label: 'iFVG Sweep Window (bars)', type: 'slider', section: 'strategy',
+    min: 1, max: 30, step: 1,
+    hint: 'Bars since the sweep that still qualify as "recent" for the grader (Rule A). Beyond this cap, setups without a delivery FVG are capped at B and filtered.',
+  },
+  {
+    key: 'ifvg_min_displacement_mult', label: 'iFVG Min Displacement Mult', type: 'slider', section: 'strategy',
+    min: 0, max: 3.0, step: 0.1,
+    hint: 'Fibonacci displacement quality (Rule E): reversal leg must be ≥ this multiple of the manipulation leg. 0 = disabled.',
+  },
+  {
     key: 'htf_bias_enabled', label: 'HTF Bias Filter', type: 'select', section: 'strategy',
     options: ['true', 'false'],
     hint: 'Block signals that fight the 4h swing-structure bias. Bullish 4h blocks shorts; bearish blocks longs. When the bias agrees, the VP value-area filter is bypassed.',
@@ -266,6 +276,14 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       htf_swing_timeframe:      form.htf_swing_timeframe                || '30min',
       ifvg_entry_mode:          form.ifvg_entry_mode                    || 'ifvg_edge',
       ifvg_stop_buffer_ticks:   form.ifvg_stop_buffer_ticks             || '1.0',
+      ifvg_sweep_window_bars:   parseInt(form.ifvg_sweep_window_bars)   || 10,
+      ifvg_min_displacement_mult: form.ifvg_min_displacement_mult       || '1.0',
+      ifvg_session_windows:     (form.ifvg_session_windows || '09:00-11:00,02:00-05:00')
+                                  .split(',').map((s: string) => s.trim()).filter(Boolean),
+      ifvg_macro_windows:       (form.ifvg_macro_windows || '')
+                                  .split(',').map((s: string) => s.trim()).filter(Boolean),
+      ifvg_news_blackout:       (form.ifvg_news_blackout || '')
+                                  .split(',').map((s: string) => s.trim()).filter(Boolean),
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',
@@ -504,6 +522,52 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                       />
                       <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Take half off at this R-multiple then move the stop to break-even. For 1-contract entries, the scale-out is skipped but the stop still moves to break-even at this level. 0 disables. Hot-applied — affects the next entry.
+                      </p>
+                    </div>
+                  </>
+                )}
+                {section === 'strategy' && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Session Windows (NY time, comma-separated)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={form.ifvg_session_windows ?? '09:00-11:00,02:00-05:00'}
+                        onChange={e => set('ifvg_session_windows', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        NY local time ranges that allow entry signals (e.g. 09:00-11:00). Empty = allow all times.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Macro Windows (NY time, comma-separated)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={form.ifvg_macro_windows ?? ''}
+                        onChange={e => set('ifvg_macro_windows', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        NY local windows near economic releases — adds grade bonus context only, does not block signals.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        News Blackout (UTC ISO intervals, comma-separated)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={form.ifvg_news_blackout ?? ''}
+                        onChange={e => set('ifvg_news_blackout', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        UTC ISO 8601 intervals during which all signals are blocked (e.g. 2026-06-06T12:30/2026-06-06T13:00). Empty = no blackout.
                       </p>
                     </div>
                   </>
