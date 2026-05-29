@@ -34,6 +34,10 @@ class StrategyParams(BaseModel):
     cooldown_bars_after_stop: int = 0       # 0 = disabled; N = bars to suppress signals after a stop
     min_penetration_atr_factor: Decimal = Decimal("0")  # 0 = use fixed min_penetration; >0 = factor × ATR
 
+    # iFVG entry configuration
+    ifvg_entry_mode: str = "ifvg_edge"                        # "ifvg_edge" | "retrace_ce" | "close"
+    ifvg_stop_buffer_ticks: Decimal = Decimal("1.0")          # ticks beyond iFVG extreme for stop
+
     # Volume profile filter + target
     vp_enabled: bool = True
     vp_tick_size: Decimal = Decimal("0.10")       # price quantization for bins

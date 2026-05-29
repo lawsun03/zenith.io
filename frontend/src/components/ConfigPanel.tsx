@@ -156,6 +156,16 @@ const FIELDS: FieldDef[] = [
     hint: 'A VP level must deliver at least this many R to be used as target. Too close levels are skipped; falls back to r_multiple if none qualify.',
   },
   {
+    key: 'ifvg_entry_mode', label: 'iFVG Entry Mode', type: 'select', section: 'strategy',
+    options: ['ifvg_edge', 'retrace_ce', 'close'],
+    hint: 'Where to enter when an iFVG arms: ifvg_edge = at the inversion edge; retrace_ce = wait for retrace to the FVG midpoint (CE); close = on close back inside the FVG.',
+  },
+  {
+    key: 'ifvg_stop_buffer_ticks', label: 'iFVG Stop Buffer (ticks)', type: 'slider', section: 'strategy',
+    min: 0, max: 10, step: 0.5,
+    hint: 'Ticks beyond the iFVG extreme for the stop loss. 1.0 = one tick past the high/low that defined the FVG. Add buffer to avoid tight stop-outs on wicks.',
+  },
+  {
     key: 'htf_bias_enabled', label: 'HTF Bias Filter', type: 'select', section: 'strategy',
     options: ['true', 'false'],
     hint: 'Block signals that fight the 4h swing-structure bias. Bullish 4h blocks shorts; bearish blocks longs. When the bias agrees, the VP value-area filter is bypassed.',
@@ -254,6 +264,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       htf_target_enabled:       form.htf_target_enabled === 'true',
       htf_target_min_r:         form.htf_target_min_r                   || '2.0',
       htf_swing_timeframe:      form.htf_swing_timeframe                || '30min',
+      ifvg_entry_mode:          form.ifvg_entry_mode                    || 'ifvg_edge',
+      ifvg_stop_buffer_ticks:   form.ifvg_stop_buffer_ticks             || '1.0',
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',
