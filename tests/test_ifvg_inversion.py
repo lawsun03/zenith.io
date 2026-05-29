@@ -209,7 +209,7 @@ class TestIFVGInversion:
         # Displacement bar: wick=2393 pierces fvg.low=2401, body close=2393 inverts it
         # This is b2 of the next evaluation window; b3 follows
         d.on_bar(bar(8, "2404", "2405", "2393", "2393"))  # b2: wick low=2393<2401, close=2393<2401
-        result = d.on_bar(bar(9, "2393", "2394", "2392", "2393"))  # b3
+        result = d.on_bar(bar(9, "2393", "2402", "2399", "2402"))  # b3: wick low=2399 pierces fvg.low=2401, close=2402 returns above
 
         assert result is not None, "iFVG signal should fire — inversion wins over mitigation"
         assert result.fvg is not None, "iFVG should be the prior bullish FVG"
