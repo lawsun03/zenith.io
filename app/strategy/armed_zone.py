@@ -39,6 +39,7 @@ class ArmedZone:
     stop_price: Decimal        # beyond iFVG extreme + buffer
     created_at: datetime
     killzone: str
+    tp1_price: Decimal | None = None  # nearest HTF swing in trade direction — premature-liquidity cancel
 
 
 class ArmedZoneTracker:

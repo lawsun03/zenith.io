@@ -82,13 +82,26 @@ def _partial_plan(
     stop: Decimal,
     size: int,
     partial_r: Decimal,
+    tp1_price: "Decimal | None" = None,
+    tp1_fraction: Decimal = Decimal("0.5"),
 ) -> "PartialPlan | None":
     """Compute the partial/BE plan, or None when partials are disabled.
 
-    partial_price = entry ± R*partial_r (R = |entry-stop|); + for long, - for short.
-    Long vs short is inferred from stop position: stop below entry → long.
-    partial_size = size // 2 (0 for a 1-lot). be_price = entry_price.
+    If tp1_price is provided (structural TP1 from HTF swings), use it directly.
+    Otherwise compute from partial_r: entry ± R*partial_r (R = |entry-stop|).
+    Returns None when both tp1_price is None AND partial_r <= 0.
+
+    partial_size = size // 2 for the R-based path; max(0, int(size*fraction)) for structural.
+    be_price = entry_price in both cases.
     """
+    if tp1_price is not None:
+        partial_size = max(0, int(size * tp1_fraction))
+        return PartialPlan(
+            partial_price=tp1_price,
+            partial_size=partial_size,
+            remaining_size=size - partial_size,
+            be_price=entry_price,
+        )
     if partial_r <= 0:
         return None
     r = abs(entry_price - stop)
@@ -361,14 +374,23 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         self._require_connected()
         # Dispatch based on self.entry_mode (set from config), fall back to env var.
         mode = self.entry_mode or os.environ.get("TOPSTEP_BOT_ENTRY_MODE", "market")
         if mode.lower() == "limit":
-            return await self.place_limit_bracket(instrument, side, size, entry, stop, target)
+            return await self.place_limit_bracket(
+                instrument, side, size, entry, stop, target,
+                tp1_price=tp1_price, tp1_fraction=tp1_fraction, be_after_tp1=be_after_tp1,
+            )
         # Default: market fill + stop/target placed after fill confirmed.
-        return await self.place_market_bracket(instrument, side, size, entry, stop, target)
+        return await self.place_market_bracket(
+            instrument, side, size, entry, stop, target,
+            tp1_price=tp1_price, tp1_fraction=tp1_fraction, be_after_tp1=be_after_tp1,
+        )
 
     async def place_market_bracket(
         self,
@@ -378,6 +400,9 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Market fill + bracket after fill. Submits a market entry order for
@@ -441,6 +466,9 @@ class TopstepXBroker:
             "partial_r": self.partial_profit_r,
             "entry_side": side,
             "instrument": instrument,
+            "tp1_price": tp1_price,
+            "tp1_fraction": tp1_fraction,
+            "be_after_tp1": be_after_tp1,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -458,7 +486,7 @@ class TopstepXBroker:
                 "Replaying early entry fill order=%s @ %s — placing stop+target",
                 entry_order_id, early.fill_price,
             )
-            if bracket_data.get("partial_r", Decimal("0")) > 0:
+            if bracket_data.get("partial_r", Decimal("0")) > 0 or bracket_data.get("tp1_price") is not None:
                 asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
             else:
                 asyncio.create_task(self._place_bracket_after_fill(bracket_data))
@@ -497,6 +525,9 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Place a standalone limit entry at the FVG level. When the SDK fires a
@@ -557,6 +588,9 @@ class TopstepXBroker:
             "partial_r": self.partial_profit_r,
             "entry_side": side,
             "instrument": instrument,
+            "tp1_price": tp1_price,
+            "tp1_fraction": tp1_fraction,
+            "be_after_tp1": be_after_tp1,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -706,7 +740,11 @@ class TopstepXBroker:
         instrument = bracket["instrument"]
         entry_side = bracket["entry_side"]
 
-        plan = _partial_plan(fill_price, stop, size, bracket["partial_r"])
+        plan = _partial_plan(
+            fill_price, stop, size, bracket["partial_r"],
+            tp1_price=bracket.get("tp1_price"),
+            tp1_fraction=bracket.get("tp1_fraction", Decimal("0.5")),
+        )
         if plan is None:
             await self._place_bracket_after_fill(bracket)
             return
@@ -749,6 +787,7 @@ class TopstepXBroker:
             "partial_filled": False,
             "close_sdk_side": close_sdk_side,
             "account_id": account_id,
+            "be_after_tp1": bracket.get("be_after_tp1", True),
         }
         for oid in (stop_id, partial_id, target_id):
             if oid is not None:
@@ -759,7 +798,8 @@ class TopstepXBroker:
         )
 
         # size==1: no partial leg — arm a BE-watch on the quote stream.
-        if plan and plan.partial_size == 0:
+        # Only arm when be_after_tp1 is True (default); skip if caller opted out.
+        if plan and plan.partial_size == 0 and bracket.get("be_after_tp1", True):
             self._be_watches[instrument] = {
                 "instrument": instrument,
                 "side": entry_side,
@@ -830,13 +870,14 @@ class TopstepXBroker:
         is_target = (order_id == group["target_id"])
 
         if is_partial:
-            # Scale-out filled → move stop to BE + resize to remaining.
+            # Scale-out filled → move stop to BE + resize to remaining (when be_after_tp1 is True).
             qty = group["partial_size"]
             await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
             group["partial_filled"] = True
             del self._exit_groups[order_id]   # partial leg is one-shot
             group["partial_id"] = None
-            await self._modify_stop_to_be(group)
+            if group.get("be_after_tp1", True):
+                await self._modify_stop_to_be(group)
             return
 
         if is_stop:
@@ -1446,7 +1487,7 @@ class TopstepXBroker:
                         "Entry fill confirmed order=%s @ %s — placing stop+target",
                         order_id, fill.fill_price,
                     )
-                    if bracket_data.get("partial_r", Decimal("0")) > 0:
+                    if bracket_data.get("partial_r", Decimal("0")) > 0 or bracket_data.get("tp1_price") is not None:
                         asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
                     else:
                         asyncio.create_task(self._place_bracket_after_fill(bracket_data))

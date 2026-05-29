@@ -67,9 +67,17 @@ class Broker(Protocol):
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Atomic entry + stop-loss + take-profit.
+
+        Optional structural TP1 params: when tp1_price is provided the broker
+        places a partial exit at that price and (when be_after_tp1 is True)
+        moves the stop to break-even after that leg fills. tp1_fraction controls
+        how much of the position to close at TP1 (0.5 = half).
 
         On success returns the three order IDs. On failure returns an
         error string and no IDs. The caller MUST check `success`.

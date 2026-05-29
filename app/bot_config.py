@@ -49,6 +49,8 @@ class StrategyParams(BaseModel):
         default_factory=lambda: ["08:30-09:10", "09:50-10:10", "10:50-11:10", "13:10-13:40", "15:15-15:45"],
     )
     ifvg_news_blackout: list[str] = Field(default_factory=list)  # UTC ISO ranges "YYYY-MM-DDTHH:MM/..."
+    ifvg_tp1_fraction: Decimal = Decimal("0.5")   # fraction of position to close at structural TP1
+    ifvg_be_after_tp1: bool = True                 # move stop to breakeven when structural TP1 fills
 
     # Volume profile filter + target
     vp_enabled: bool = True

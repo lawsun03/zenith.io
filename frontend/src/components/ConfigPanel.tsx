@@ -176,6 +176,16 @@ const FIELDS: FieldDef[] = [
     hint: 'Fibonacci displacement quality (Rule E): reversal leg must be ≥ this multiple of the manipulation leg. 0 = disabled.',
   },
   {
+    key: 'ifvg_tp1_fraction', label: 'iFVG TP1 Fraction', type: 'slider', section: 'strategy',
+    min: 0, max: 1, step: 0.05,
+    hint: 'Fraction of position to close at the structural TP1 (nearest HTF swing in trade direction). 0.5 = half off. 0 = skip partial, hold full size to final target.',
+  },
+  {
+    key: 'ifvg_be_after_tp1', label: 'iFVG Breakeven After TP1', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Move stop to break-even after the structural TP1 fills. true = stop moves to entry price; false = stop stays at original level.',
+  },
+  {
     key: 'htf_bias_enabled', label: 'HTF Bias Filter', type: 'select', section: 'strategy',
     options: ['true', 'false'],
     hint: 'Block signals that fight the 4h swing-structure bias. Bullish 4h blocks shorts; bearish blocks longs. When the bias agrees, the VP value-area filter is bypassed.',
@@ -284,6 +294,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                                   .split(',').map((s: string) => s.trim()).filter(Boolean),
       ifvg_news_blackout:       (form.ifvg_news_blackout || '')
                                   .split(',').map((s: string) => s.trim()).filter(Boolean),
+      ifvg_tp1_fraction:        form.ifvg_tp1_fraction                   || '0.5',
+      ifvg_be_after_tp1:        form.ifvg_be_after_tp1 !== 'false',
     }
     await onSave({
       instrument:           form.instrument?.trim().toUpperCase() || 'MGC',
