@@ -134,18 +134,22 @@ class StrategyRunner:
 
     def try_signal_from_forming(self, forming_bar: Bar) -> Optional[Signal]:
         """
-        Check if the forming bar (as b3) already satisfies the FVG condition
-        for the most recently processed displacement candidate (b2 = window[-1]).
-        If so, emit a signal via the normal composer path (which clears _awaiting).
-        Returns None if no pending sweep, no displacement, or no FVG yet.
+        Check if the displacement candidate (b2 = window[-1]) can invert a
+        prior active FVG. peek_displacement already gates on this — if it
+        returns non-None, a prior FVG is invertible. The forming bar (b3)
+        is no longer used to generate the FVG; the entry FVG is the prior
+        inverted one identified by _find_inverted_fvg(b2, side).
+        Returns None if no pending sweep, no displacement, or no prior FVG.
         """
         peek = self.displacement.peek_displacement()
         if peek is None:
             return None
         side, b1, b2 = peek
-        fvg = DisplacementDetector._compute_fvg(b1, forming_bar, side)
-        if fvg is None:
+
+        ifvg = self.displacement._find_inverted_fvg(b2, side)
+        if ifvg is None:
             return None
+
         body = abs(b2.close - b2.open)
         atr = self.displacement.atr or body
         event = DisplacementEvent(
@@ -153,8 +157,8 @@ class StrategyRunner:
             displacement_bar=b2,
             body_size=body,
             atr_at_event=atr,
-            body_to_atr=body / atr if atr else Decimal("0"),
-            fvg=fvg,
+            body_to_atr=body / atr,
+            fvg=ifvg,
         )
         return self.composer.on_displacement(forming_bar, event)
 

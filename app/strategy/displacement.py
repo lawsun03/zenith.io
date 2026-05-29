@@ -112,11 +112,17 @@ class DisplacementDetector:
         self._tr_window: Deque[Decimal] = deque(maxlen=self.config.atr_period)
         self._atr: Decimal | None = None
         self._prev_close: Decimal | None = None
+        self._active_fvgs: deque[FairValueGap] = deque(maxlen=30)
 
     @property
     def atr(self) -> Decimal | None:
         """Current ATR value, or None if not yet warmed up."""
         return self._atr
+
+    @property
+    def active_fvgs(self) -> list[FairValueGap]:
+        """Unmitigated 1min FVGs available for iFVG inversion detection."""
+        return list(self._active_fvgs)
 
     def on_bar(self, bar: Bar) -> DisplacementEvent | None:
         """
@@ -138,7 +144,25 @@ class DisplacementDetector:
             return None
 
         bar1, bar2, bar3 = self._window[0], self._window[1], self._window[2]
-        return self._evaluate(bar1, bar2, bar3)
+
+        # Evaluate inversion FIRST (body-close check on b2 vs active FVGs).
+        # This must happen before mitigation so the same bar can't both
+        # invert and mitigate the same FVG — inversion wins.
+        result = self._evaluate(bar1, bar2, bar3)
+
+        # Wick-based mitigation: remove FVGs whose far edge was pierced by
+        # bar3's wick, EXCEPT any FVG that was just inverted (already captured
+        # in result.fvg). Pass inverted_fvg=None if no inversion fired.
+        inverted = result.fvg if result is not None else None
+        self._mitigate_fvgs(bar3, inverted)
+
+        # Form any new 3-bar FVG from the current window AFTER inversion check
+        # so a newly-formed FVG can't be immediately inverted on the same bar.
+        new_fvg = self._form_fvg(bar1, bar3)
+        if new_fvg is not None:
+            self._active_fvgs.append(new_fvg)
+
+        return result
 
     # ------------------------------------------------------------------
     # ATR (Wilder's smoothing)
@@ -174,8 +198,59 @@ class DisplacementDetector:
     # Displacement evaluation
     # ------------------------------------------------------------------
 
+    def _form_fvg(self, b1: Bar, b3: Bar) -> FairValueGap | None:
+        """Check if b1 and b3 bracket a 3-bar gap."""
+        if b3.low > b1.high:
+            return FairValueGap(side="bullish", low=b1.high, high=b3.low, created_at=b3.ts)
+        if b3.high < b1.low:
+            return FairValueGap(side="bearish", low=b3.high, high=b1.low, created_at=b3.ts)
+        return None
+
+    def _find_inverted_fvg(self, displacement_bar: Bar, side: DisplacementSide) -> FairValueGap | None:
+        """
+        Search _active_fvgs for one the displacement bar's body closed through.
+        Bearish displacement (close < open) inverts bullish FVG when bar.close < fvg.low.
+        Bullish displacement (close > open) inverts bearish FVG when bar.close > fvg.high.
+        Returns the most-recently-formed matching FVG, or None.
+        """
+        for fvg in reversed(self._active_fvgs):
+            if side == "bearish" and fvg.side == "bullish":
+                if displacement_bar.close < fvg.low:
+                    return fvg
+            elif side == "bullish" and fvg.side == "bearish":
+                if displacement_bar.close > fvg.high:
+                    return fvg
+        return None
+
+    def _mitigate_fvgs(self, bar: Bar, inverted_fvg: FairValueGap | None) -> None:
+        """
+        Remove FVGs whose far edge was breached by a wick WITHOUT closing through —
+        EXCEPT the one that was just inverted (inversion wins over mitigation).
+
+        Bullish FVG far edge = fvg.low:
+          - Mitigated when bar.low <= fvg.low AND bar.close > fvg.low (wick only).
+          - If bar.close <= fvg.low, the bar closed through → that's inversion, not
+            mitigation. Keep the FVG so a subsequent inversion check can claim it.
+        Bearish FVG far edge = fvg.high:
+          - Mitigated when bar.high >= fvg.high AND bar.close < fvg.high.
+          - If bar.close >= fvg.high, the bar closed through → keep for inversion.
+        """
+        self._active_fvgs = deque(
+            (fvg for fvg in self._active_fvgs
+             if fvg is inverted_fvg or not (
+                 (fvg.side == "bullish" and bar.low <= fvg.low and bar.close > fvg.low) or
+                 (fvg.side == "bearish" and bar.high >= fvg.high and bar.close < fvg.high)
+             )),
+            maxlen=30,
+        )
+
     def _evaluate(self, b1: Bar, b2: Bar, b3: Bar) -> DisplacementEvent | None:
-        """Did bar 2 displace? If so, did it leave an FVG?"""
+        """
+        Did bar2 displace AND invert a prior active FVG (iFVG)?
+        Body/ATR/range thresholds unchanged. FVG reported is the prior
+        active FVG that b2's body closed through — not b2's own 3-bar gap.
+        If no prior FVG was inverted, fvg=None.
+        """
         cfg = self.config
         atr = self._atr
         assert atr is not None  # guarded by caller
@@ -201,7 +276,7 @@ class DisplacementDetector:
             return None  # doji body — already filtered by min_absolute_body
                          # in normal cases, kept as a safety net
 
-        fvg = self._compute_fvg(b1, b3, side)
+        ifvg = self._find_inverted_fvg(b2, side)
 
         ratio = body / atr  # safe: atr is non-zero in normal markets;
                             # if ATR is 0 we'd not have warmed up.
@@ -211,16 +286,14 @@ class DisplacementDetector:
             body_size=body,
             atr_at_event=atr,
             body_to_atr=ratio,
-            fvg=fvg,
+            fvg=ifvg,
         )
 
     def peek_displacement(self) -> "tuple[DisplacementSide, Bar, Bar] | None":
         """
-        Non-mutating: return (side, b1, b2) if the most recently processed bar
-        qualifies as a displacement. b2 = window[-1], b1 = window[-2].
-        The caller can then test FVG by passing a forming bar as b3 to
-        DisplacementDetector._compute_fvg(b1, forming_bar, side).
-        Returns None if ATR not warmed up or window too small.
+        Non-mutating: return (side, b1, b2) if the most recent bar qualifies
+        as a displacement bar AND there is a prior active FVG it could invert.
+        Returns None if no prior FVG exists to invert (no iFVG entry possible).
         """
         if len(self._window) < 2 or self._atr is None:
             return None
@@ -242,38 +315,14 @@ class DisplacementDetector:
             return None
 
         if b2.close > b2.open:
-            return "bullish", b1, b2
-        if b2.close < b2.open:
-            return "bearish", b1, b2
-        return None
+            side: DisplacementSide = "bullish"
+        elif b2.close < b2.open:
+            side = "bearish"
+        else:
+            return None
 
-    @staticmethod
-    def _compute_fvg(
-        b1: Bar,
-        b3: Bar,
-        side: DisplacementSide,
-    ) -> FairValueGap | None:
-        """
-        FVG check on the outer two bars of a 3-bar window.
+        if self._find_inverted_fvg(b2, side) is None:
+            return None
 
-        Bullish FVG exists iff b3.low > b1.high.
-        Bearish FVG exists iff b3.high < b1.low.
+        return side, b1, b2
 
-        If the gap doesn't exist (bars overlap), returns None — the
-        displacement still happened, it just isn't a clean entry zone.
-        """
-        if side == "bullish" and b3.low > b1.high:
-            return FairValueGap(
-                side="bullish",
-                low=b1.high,
-                high=b3.low,
-                created_at=b3.ts,
-            )
-        if side == "bearish" and b3.high < b1.low:
-            return FairValueGap(
-                side="bearish",
-                low=b3.high,
-                high=b1.low,
-                created_at=b3.ts,
-            )
-        return None
