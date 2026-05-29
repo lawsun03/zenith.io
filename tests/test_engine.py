@@ -760,3 +760,29 @@ def test_bar_router_maps_signal_to_execution_instrument():
     runner.signal_instrument = "GC"
     engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
     assert engine._bar_router == {"GC": "MGC"}
+
+
+@pytest.mark.asyncio
+async def test_gc_bar_routes_to_mgc_runner():
+    """GC bars are processed by the MGC runner when signal_instrument='GC'."""
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.signal_instrument = "GC"
+    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
+    await broker.connect()
+    await engine.start()
+
+    processed = []
+    original_on_bar = runner.on_bar
+    def tracking_on_bar(b):
+        processed.append(b)
+        return original_on_bar(b)
+    runner.on_bar = tracking_on_bar
+
+    # Inject a GC bar — should route to the MGC runner
+    gc_bar = bar(in_ny_am(0), '100', '101', '99', '100', instrument="GC")
+    await broker.inject_bar(gc_bar)
+    await asyncio.sleep(0)
+    assert len(processed) == 1
+    assert processed[0].instrument == "GC"

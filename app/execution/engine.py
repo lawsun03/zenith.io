@@ -184,6 +184,7 @@ def _snapshot_strategy_state(runner: "StrategyRunner") -> dict:
     ]
     return {
         "instrument": runner.instrument,
+        "signal_instrument": runner.signal_instrument or runner.instrument,
         "kz_ranges": kz_ranges,
         "kz_pending_a": kz_pending_a,
         "awaiting_sweeps": awaiting,
@@ -331,7 +332,8 @@ class ExecutionEngine:
         and a fill arriving during that window only changes state
         the NEXT signal will see — which is correct behavior.
         """
-        runner = self.runners.get(bar.instrument)
+        exec_instrument = self._bar_router.get(bar.instrument, bar.instrument)
+        runner = self.runners.get(exec_instrument)
         if runner is None:
             # We're subscribed to a symbol we don't have a runner for.
             # Either misconfiguration or a multi-runner setup in

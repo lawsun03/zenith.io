@@ -285,13 +285,13 @@ class Journal:
         )
         self._publish(entry)
 
-    def publish_bar(self, bar: Bar) -> None:
+    def publish_bar(self, bar: Bar, display_instrument: str | None = None) -> None:
         """Stream a bar to WebSocket subscribers without storing it."""
         entry = JournalEntry(
             ts=bar.ts,
             kind="bar",
             payload={
-                "instrument": bar.instrument,
+                "instrument": display_instrument or bar.instrument,
                 "open": str(bar.open),
                 "high": str(bar.high),
                 "low": str(bar.low),
