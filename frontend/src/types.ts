@@ -28,6 +28,9 @@ export interface StrategyConfig {
   htf_target_enabled: boolean
   htf_target_min_r: string
   htf_swing_timeframe: string
+  // iFVG entry
+  ifvg_entry_mode: string
+  ifvg_stop_buffer_ticks: string
 }
 
 export interface BotConfig {
