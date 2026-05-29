@@ -51,6 +51,7 @@ from app.bot_config import StrategyParams
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
 from app.risk.state import RiskState
+from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
 from app.strategy.grader import SetupGrader
@@ -115,6 +116,8 @@ class StrategyRunner:
     composer: SweepDisplacementComposer
     grader: SetupGrader
     strategy_cfg: StrategyParams
+    armed_tracker: ArmedZoneTracker = field(default_factory=ArmedZoneTracker)
+    _pending_signal: Optional[Signal] = field(default=None, init=False, repr=False)
     vp: VolumeProfileTracker | None = None
     signal_instrument: str = ""  # if set, bars from this instrument drive signals; execution uses `instrument`
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
@@ -128,30 +131,88 @@ class StrategyRunner:
         if not in_session_window(bar.ts, self.strategy_cfg.ifvg_session_windows):
             return None  # outside configured session windows — silent skip
 
-        sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
-        for s in sweeps:
-            self.composer.on_sweep(bar, s)
-
         signal: Optional[Signal] = None
-        disp = self.displacement.on_bar(bar)
-        if disp is not None:
-            candidate = self.composer.on_displacement(bar, disp)
-            if candidate is not None:
-                grade = self.grader.score(
-                    candidate,
-                    disp,
-                    self.displacement.active_fvgs,
-                    bars_since_sweep=0,  # sweep tracking deferred — always 0 for now
-                    sweep_window_bars=self.strategy_cfg.ifvg_sweep_window_bars,
-                    min_displacement_mult=self.strategy_cfg.ifvg_min_displacement_mult,
-                )
-                if grade.passes:
-                    signal = dc_replace(candidate, setup_grade=grade)
-                else:
+
+        # ── Armed zone path ──────────────────────────────────────────────
+        if self.armed_tracker.active is not None and self._pending_signal is not None:
+            zone = self.armed_tracker.active  # capture before on_bar clears it
+
+            # Rule F: premature liquidity — TP1 hit before entry fills
+            if zone.tp1_price is not None:
+                if zone.side == "long" and bar.high >= zone.tp1_price:
                     log.info(
-                        "Signal filtered by grader: %s — %s",
-                        grade.grade, grade.reason,
+                        "Premature liquidity: TP1 %s hit before long entry — cancelling armed zone",
+                        zone.tp1_price,
                     )
+                    self.armed_tracker.cancel()
+                    self._pending_signal = None
+                    # fall through to normal signal generation
+                elif zone.side == "short" and bar.low <= zone.tp1_price:
+                    log.info(
+                        "Premature liquidity: TP1 %s hit before short entry — cancelling armed zone",
+                        zone.tp1_price,
+                    )
+                    self.armed_tracker.cancel()
+                    self._pending_signal = None
+                    # fall through to normal signal generation
+
+        if self.armed_tracker.active is not None and self._pending_signal is not None:
+            zone = self.armed_tracker.active
+            status = self.armed_tracker.on_bar(bar)
+
+            if status == "filled":
+                # Build execution signal: zone's entry/stop, pending signal's target+meta
+                pending = self._pending_signal
+                self._pending_signal = None
+                signal = dc_replace(
+                    pending,
+                    entry=zone.entry_price,
+                    stop=zone.stop_price,
+                    armed_zone=zone,
+                )
+                log.info(
+                    "Armed zone filled: %s %s @ entry=%s stop=%s",
+                    zone.killzone, zone.side, zone.entry_price, zone.stop_price,
+                )
+            elif status == "invalidated":
+                log.info("Armed zone invalidated — pending signal discarded")
+                self._pending_signal = None
+                # fall through to normal signal generation on this same bar
+
+            elif status == "pending":
+                # Zone still live — skip signal generation this bar
+                self._prev_atr = self.displacement.atr
+                kz = in_killzone(bar.ts, self.composer._zones)
+                self.grader.update_session_range(bar, kz.name if kz else None)
+                self.composer.on_bar_close(bar)
+                return None
+
+        # ── Normal signal generation (when no active zone or just invalidated) ──
+        if signal is None:
+            sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
+            for sw in sweeps:
+                self.composer.on_sweep(bar, sw)
+
+            disp = self.displacement.on_bar(bar)
+            if disp is not None:
+                candidate = self.composer.on_displacement(bar, disp)
+                if candidate is not None:
+                    grade = self.grader.score(
+                        candidate,
+                        disp,
+                        self.displacement.active_fvgs,
+                        bars_since_sweep=0,  # sweep tracking deferred — always 0 for now
+                        sweep_window_bars=self.strategy_cfg.ifvg_sweep_window_bars,
+                        min_displacement_mult=self.strategy_cfg.ifvg_min_displacement_mult,
+                    )
+                    if grade.passes:
+                        graded = dc_replace(candidate, setup_grade=grade)
+                        signal = self._arm_or_return(bar, graded, disp)
+                    else:
+                        log.info(
+                            "Signal filtered by grader: %s — %s",
+                            grade.grade, grade.reason,
+                        )
 
         # Cache ATR for the NEXT bar's liquidity call (one-bar lag is acceptable;
         # ATR doesn't change sharply bar-to-bar and liquidity runs before displacement).
@@ -168,6 +229,62 @@ class StrategyRunner:
         # Bookkeeping AFTER signal evaluation — see composer docstring.
         self.composer.on_bar_close(bar)
         return signal
+
+    def _arm_or_return(self, bar: Bar, signal: Signal, disp: DisplacementEvent) -> Optional[Signal]:
+        """
+        For 'close' mode: return signal immediately (existing behavior).
+        For 'ifvg_edge' / 'retrace_ce': arm the tracker and return None.
+
+        Stop buffer is sourced from the composer config (already in price units)
+        to avoid a tick-size conversion here.
+        """
+        mode = self.strategy_cfg.ifvg_entry_mode
+
+        if signal.fvg_low is None or signal.fvg_high is None:
+            # No FVG zone bounds — can't compute armed zone; return signal directly
+            log.info("Armed zone skipped: no fvg_low/fvg_high on signal — returning directly")
+            return signal
+
+        if mode == "close":
+            # Immediate fill at signal's original entry — unchanged from previous behavior.
+            return signal
+
+        # Compute TP1 for premature-liquidity cancel (Rule F)
+        tp1_price: Optional[Decimal] = None
+        highs = self.grader._htf_swing_highs
+        lows = self.grader._htf_swing_lows
+        if signal.side == "long":
+            candidates = [h for h in highs if h > signal.entry]
+            tp1_price = min(candidates) if candidates else None
+        else:
+            candidates = [l for l in lows if l < signal.entry]
+            tp1_price = max(candidates) if candidates else None
+
+        # Use composer's stop_buffer (already in price units) as zone stop buffer
+        stop_buffer = self.composer.config.stop_buffer
+
+        zone = self.armed_tracker.arm(
+            side=signal.side,
+            fvg_low=signal.fvg_low,
+            fvg_high=signal.fvg_high,
+            entry_mode=mode,
+            stop_buffer=stop_buffer,
+            created_at=bar.ts,
+            killzone=signal.killzone,
+        )
+        # Attach tp1_price to zone (ArmedZone is frozen — use dc_replace)
+        if tp1_price is not None:
+            zone = dc_replace(zone, tp1_price=tp1_price)
+            self.armed_tracker._active = zone  # update tracker's active zone
+
+        self._pending_signal = dc_replace(signal, armed_zone=zone)
+        log.info(
+            "Signal armed: %s %s zone=[%s-%s] entry=%s mode=%s tp1=%s",
+            signal.killzone, signal.side,
+            signal.fvg_low, signal.fvg_high,
+            zone.entry_price, mode, tp1_price,
+        )
+        return None  # wait for armed zone to fill
 
     def try_signal_from_forming(self, forming_bar: Bar) -> Optional[Signal]:
         """
@@ -204,7 +321,8 @@ class StrategyRunner:
         if not grade.passes:
             log.info("Forming-bar signal filtered: %s — %s", grade.grade, grade.reason)
             return None
-        return dc_replace(candidate, setup_grade=grade)
+        graded = dc_replace(candidate, setup_grade=grade)
+        return self._arm_or_return(forming_bar, graded, event)
 
 
 class ExecutionEngine:
