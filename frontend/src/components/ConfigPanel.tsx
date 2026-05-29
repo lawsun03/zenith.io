@@ -541,16 +541,16 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                   return [
                     el,
                     <div key="signal_instrument">
-                      <label className="text-dim text-xs tracking-widest uppercase block mb-1">Signal Instrument</label>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Signal Instrument</label>
                       <input
                         className={inputClass}
                         value={form.signal_instrument ?? ''}
                         onChange={e => set('signal_instrument', e.target.value)}
                         placeholder="blank = same as instrument (e.g. GC)"
                       />
-                      <div className="text-dim text-[10px] mt-1">
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Leave blank to use the same instrument for signals and execution. Set to GC to read structure off full Gold while trading MGC. Requires restart.
-                      </div>
+                      </p>
                     </div>,
                   ]
                 })}
