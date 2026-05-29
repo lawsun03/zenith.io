@@ -197,7 +197,14 @@ class StrategyRunner:
             body_to_atr=body / atr,
             fvg=ifvg,
         )
-        return self.composer.on_displacement(forming_bar, event)
+        candidate = self.composer.on_displacement(forming_bar, event)
+        if candidate is None:
+            return None
+        grade = self.grader.score(candidate, event, self.displacement.active_fvgs)
+        if not grade.passes:
+            log.info("Forming-bar signal filtered: %s — %s", grade.grade, grade.reason)
+            return None
+        return dc_replace(candidate, setup_grade=grade)
 
 
 class ExecutionEngine:

@@ -19,6 +19,11 @@ def utc(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime
     return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
 
 
+def ny_to_utc(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
+    """Create a datetime from a NY (ET) wall-clock time, returned as UTC."""
+    return datetime(year, month, day, hour, minute, tzinfo=ET).astimezone(timezone.utc)
+
+
 class TestSessionWindow:
     # NY AM session: 09:00-11:00 ET
     # In summer (EDT = UTC-4): 09:00 ET = 13:00 UTC, 11:00 ET = 15:00 UTC
@@ -52,6 +57,27 @@ class TestSessionWindow:
     def test_signal_passes_inside_session_window(self):
         ts = utc(2026, 6, 10, 14, 0)  # 10:00 ET summer
         assert in_session_window(ts, ["09:00-11:00"]) is True
+
+    def test_window_end_exclusive(self):
+        """11:00 NY is excluded — end boundary is exclusive."""
+        ts = ny_to_utc(2026, 5, 28, 11, 0)
+        assert in_session_window(ts, ["09:00-11:00"]) is False
+
+    def test_multiple_windows_first_fails_second_matches(self):
+        """03:30 NY doesn't match 09:00-11:00 but matches 02:00-05:00."""
+        ts = ny_to_utc(2026, 5, 28, 3, 30)
+        assert in_session_window(ts, ["09:00-11:00", "02:00-05:00"]) is True
+
+
+class TestMacroWindow:
+    def test_macro_window_delegates_to_session_window_logic(self):
+        """in_macro_window uses the same logic as in_session_window (grade bonus only)."""
+        ts = ny_to_utc(2026, 5, 28, 9, 55)  # inside 09:50-10:10
+        assert in_macro_window(ts, ["09:50-10:10"]) is True
+
+    def test_macro_window_outside_returns_false(self):
+        ts = ny_to_utc(2026, 5, 28, 11, 0)
+        assert in_macro_window(ts, ["09:50-10:10"]) is False
 
 
 class TestNewsBlackout:
