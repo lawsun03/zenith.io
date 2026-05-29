@@ -744,8 +744,6 @@ def test_snapshot_awaiting_sweeps_serialized():
 
 def test_bar_router_empty_when_no_signal_instrument():
     """Default runner (signal_instrument empty) produces empty bar router."""
-    from app.risk.config import fifty_k_combine
-    from app.broker.paper import PaperBroker
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())
     runner = make_runner()
@@ -756,8 +754,6 @@ def test_bar_router_empty_when_no_signal_instrument():
 
 def test_bar_router_maps_signal_to_execution_instrument():
     """Runner with signal_instrument='GC' builds {'GC': 'MGC'} router."""
-    from app.risk.config import fifty_k_combine
-    from app.broker.paper import PaperBroker
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())
     runner = make_runner()
