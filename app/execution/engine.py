@@ -110,6 +110,7 @@ class StrategyRunner:
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
     vp: VolumeProfileTracker | None = None
+    signal_instrument: str = ""  # if set, bars from this instrument drive signals; execution uses `instrument`
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
@@ -182,6 +183,13 @@ class ExecutionEngine:
         self.broker = broker
         self.risk_state = risk_state
         self.runners = {r.instrument: r for r in runners}
+        # Maps signal_instrument → execution instrument when they differ (GC → MGC).
+        # Built from runners that have a non-empty signal_instrument.
+        self._bar_router: dict[str, str] = {
+            r.signal_instrument: r.instrument
+            for r in runners
+            if r.signal_instrument and r.signal_instrument != r.instrument
+        }
         self.on_signal = on_signal
         self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
         self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
@@ -290,7 +298,9 @@ class ExecutionEngine:
         and a fill arriving during that window only changes state
         the NEXT signal will see — which is correct behavior.
         """
-        runner = self.runners.get(bar.instrument)
+        # Resolve: a GC bar routes to the MGC runner via _bar_router.
+        execution_key = self._bar_router.get(bar.instrument, bar.instrument)
+        runner = self.runners.get(execution_key)
         if runner is None:
             # We're subscribed to a symbol we don't have a runner for.
             # Either misconfiguration or a multi-runner setup in
