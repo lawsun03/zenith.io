@@ -59,6 +59,7 @@ from app.execution.engine import (
     OrderOutcome,
     StrategyRunner,
 )
+from app.strategy.grader import SetupGrader
 from app.execution.reconciler import Reconciler, ReconcilerConfig
 from app.notifications import DiscordNotifier, EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
 from project_x_py.exceptions import ProjectXConnectionError
@@ -127,6 +128,8 @@ def _build_runner(
             min_atr_filter=s.min_atr_filter,
             max_atr_filter=s.max_atr_filter,
         )),
+        grader=SetupGrader(),
+        strategy_cfg=s,
         vp=VolumeProfileTracker(),
         signal_instrument=signal_instrument or "",
     )
@@ -790,6 +793,7 @@ async def _build_htf_trackers(
 async def _refresh_htf_once(
     broker: "Broker", s: "StrategyParams",
     bias_tracker: "HTFBiasTracker | None", level_finder: "HTFLevelFinder | None",
+    runners: "dict | None" = None,
 ) -> None:
     """Fetch recent 4h + 30min bars and rebuild whichever trackers exist."""
     if bias_tracker is None and level_finder is None:
@@ -857,6 +861,14 @@ async def _refresh_htf_once(
                     s.htf_swing_timeframe,
                 )
             level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
+            # Feed grader with 30min delivery FVGs and HTF swing levels
+            if runners:
+                for runner in runners.values():
+                    runner.grader.update_delivery_fvgs(swing_bars)
+                    runner.grader.update_htf_swings(
+                        level_finder.swing_highs,
+                        level_finder.swing_lows,
+                    )
     except Exception:
         log.exception("HTF refresh failed — retaining last-known state")
 
@@ -877,7 +889,7 @@ async def _htf_refresh_loop(
             pass
         s = engine.strategy_cfg
         if s is not None:
-            await _refresh_htf_once(broker, s, engine.htf_bias, engine.htf_levels)
+            await _refresh_htf_once(broker, s, engine.htf_bias, engine.htf_levels, engine.runners)
 
 
 async def _rebuild_engine_htf(
