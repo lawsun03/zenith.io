@@ -16,6 +16,7 @@ from app.bot_config import StrategyParams
 from app.broker.events import Bar, Fill
 from app.broker.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
+from app.strategy.grader import SetupGrader
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
@@ -135,6 +136,8 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 min_atr_filter=s.min_atr_filter,
                 max_atr_filter=s.max_atr_filter,
             )),
+            grader=SetupGrader(),
+            strategy_cfg=s,
             vp=VolumeProfileTracker(),
         )
 
@@ -146,6 +149,8 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
         liquidity=LiquidityTracker(cfg.liquidity_config),
         displacement=DisplacementDetector(cfg.displacement_config),
         composer=SweepDisplacementComposer(composer_cfg),
+        grader=SetupGrader(),
+        strategy_cfg=StrategyParams(),
     )
 
 

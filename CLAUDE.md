@@ -181,3 +181,36 @@ Default to surfacing uncertainty, not hiding it.
 - If `EmailNotifier.enabled` is False at startup, the log must say so. It does — don't remove that log line.
 - If `_pending_brackets` contains an entry that never received a fill (order rejected, timed out), surface it. Don't silently drop it.
 - If the frontend loses SSE connection, `connState` must reflect `"disconnected"` — don't mask reconnect latency by holding the last known state as "connected."
+
+---
+
+## Rule 13 — Every strategy feature must be observable in the UI
+
+A feature that adds strategy state (a new tracker, detector, filter, or signal source) is not done until Lawrence can see it working from the dashboard. Three required layers:
+
+**1. Backend: log key state transitions**
+Log at `DEBUG` or `INFO` when meaningful state changes: a level locked, a sweep detected, a filter blocking a signal, a tracker reset. One line per event, enough to grep the log and see the feature firing.
+
+**2. Backend: expose state via SSE**
+Add the feature's live state to the `strategy_state` SSE event (emitted each bar via `/api/stream`). This event is the X-ray into what the strategy is currently "seeing." Each tracker adds its own key. Example shape:
+```json
+{
+  "type": "strategy_state",
+  "kz_ranges":  {"London": {"high": "103.0", "low": "98.0"}},
+  "awaiting_sweeps": [{"side": "high", "price": "103.0", "bars_elapsed": 2}],
+  "vp_poc": "101.5"
+}
+```
+If `strategy_state` doesn't exist yet, create it. Keep each field small — just enough to confirm the feature is alive.
+
+**3. Frontend: render it in the debug state panel**
+The dashboard has (or will have) a collapsible `StrategyDebug` panel that subscribes to `strategy_state` and renders each field. Add a section for the new feature alongside existing ones. It doesn't need to be pretty — a labeled value or a short list is fine. The goal is: Lawrence opens the dashboard during a live/paper run and can see the feature's current state without looking at logs.
+
+**Checkpoint wording for Rule 10:**
+After any strategy feature: checkpoint includes "state logged at key transitions, exposed in strategy_state SSE field, rendered in StrategyDebug panel, verified visible in dashboard during paper run."
+
+**Project specifics:**
+- The `strategy_state` event is emitted inside the bar handler in `server.py` after `runner.on_bar()` completes, using the same SSE queue as other events.
+- The debug panel is `frontend/src/components/StrategyDebug.tsx` (create it if absent). It sits below the signal panel in `App.tsx`, collapsed by default.
+- Don't add `strategy_state` fields that require heavy computation — the bar handler is on the hot path. Read pre-computed state from the tracker, don't recompute it.
+- `strategy_state` is debug data. It must never trigger a trade or mutate broker state. Pure read.
