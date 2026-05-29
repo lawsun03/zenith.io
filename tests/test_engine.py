@@ -79,24 +79,34 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
 
 # Bar sequence designed to fire a SHORT signal in NY AM.
 # Same scenario as test_strategy.py but reused here for the engine.
+# Includes a prior bullish FVG [2399.0, 2399.5] (bars 5-7) so the
+# bearish displacement bar (bar 14, close=2398.5 < fvg.low=2400.2) can
+# perform an iFVG inversion and emit a signal via the composer.
 SHORT_SIGNAL_BARS = [
     # Warmup (5 bars) — quiet, builds ATR.
-    ("2400", "2400.4", "2399.6", "2400.1"),
-    ("2400.1", "2400.5", "2399.8", "2400.2"),
-    ("2400.2", "2400.6", "2399.9", "2400.3"),
-    ("2400.3", "2400.7", "2400", "2400.4"),
-    ("2400.4", "2400.8", "2400.1", "2400.5"),
+    ("2400", "2400.4", "2399.6", "2400.1"),    # 0
+    ("2400.1", "2400.5", "2399.8", "2400.2"),  # 1
+    ("2400.2", "2400.6", "2399.9", "2400.3"),  # 2
+    ("2400.3", "2400.7", "2400", "2400.4"),    # 3
+    ("2400.4", "2400.8", "2400.1", "2400.5"),  # 4
+    # 3 bars forming a prior bullish FVG [2399.0, 2399.5].
+    # All subsequent bars have low > 2399.0 until the displacement bar,
+    # so this FVG accumulates more bullish FVGs without being mitigated.
+    ("2399.5", "2399.0", "2398.5", "2398.8"),  # 5 b1: high=2399.0
+    ("2398.8", "2399.2", "2398.7", "2399.0"),  # 6 middle
+    ("2399.0", "2400.2", "2399.5", "2400.0"),  # 7 b3: low=2399.5 > 2399.0 → bullish FVG
     # Build swing high.
-    ("2400.5", "2401", "2400.3", "2400.8"),
-    ("2400.8", "2403", "2400.5", "2402.5"),
-    ("2402.5", "2402.8", "2401.5", "2401.8"),
-    ("2401.8", "2402.5", "2401", "2401.5"),
+    ("2400.5", "2401", "2400.3", "2400.8"),    # 8
+    ("2400.8", "2403", "2400.5", "2402.5"),    # 9 SWING HIGH candidate
+    ("2402.5", "2402.8", "2401.5", "2401.8"),  # 10
+    ("2401.8", "2402.5", "2401", "2401.5"),    # 11 confirms swing high
     # Pattern B sweep of 2403.
-    ("2401.5", "2403.5", "2401", "2401.5"),
-    # FVG window: b1, b2 (displacement), b3 (gaps down) → bearish FVG.
-    ("2401.5", "2401.7", "2400.8", "2401"),
-    ("2401", "2401.2", "2398.4", "2398.5"),
-    ("2398.5", "2398.3", "2397", "2397.5"),
+    ("2401.5", "2403.5", "2401", "2401.5"),    # 12 SWEEP
+    # Displacement window: b1, b2 (displacement), b3.
+    ("2401.5", "2401.7", "2400.8", "2401"),    # 13 b1
+    # Bearish displacement (b2): close=2398.5 < fvg.low of most recent bullish FVG → iFVG.
+    ("2401", "2401.2", "2398.4", "2398.5"),    # 14 DISPLACE
+    ("2398.5", "2398.3", "2397", "2397.5"),    # 15 b3
 ]
 
 
