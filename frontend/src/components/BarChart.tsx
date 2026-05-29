@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
+import { createChart, CandlestickSeries } from 'lightweight-charts'
 import type { ChartCallbacks } from '../hooks/useStream'
 import type { VpProfile } from '../types'
 
@@ -202,6 +202,16 @@ function HtfCheckItem({ htf }: { htf: NonNullable<SetupInstrument['htf']> }) {
 }
 
 
+function isValidBar(b: { time: number; open: number; high: number; low: number; close: number }): boolean {
+  return (
+    typeof b.open  === 'number' && isFinite(b.open)  &&
+    typeof b.high  === 'number' && isFinite(b.high)  &&
+    typeof b.low   === 'number' && isFinite(b.low)   &&
+    typeof b.close === 'number' && isFinite(b.close) &&
+    typeof b.time  === 'number' && isFinite(b.time)
+  )
+}
+
 export function BarChart({ callbacksRef, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastBarTimeRef = useRef<number | null>(null)
@@ -317,8 +327,15 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     seriesRef.current = series
     chartRef.current = chart
 
+    // Use legacy setMarkers API — createSeriesMarkers (v5 plugin) hooks into the
+    // bar colorer during positioning and crashes when marker times have no bar.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const markersPlugin = createSeriesMarkers(series as any, [])
+    const seriesAny = series as any
+    let currentMarkers: any[] = []
+    const markersPlugin = {
+      markers: () => currentMarkers,
+      setMarkers: (m: any[]) => { currentMarkers = m; seriesAny.setMarkers(m) },
+    }
 
     // VP histogram canvas overlay — draws volume-by-price on the right side.
     let currentVpProfile: VpProfile | null = null
@@ -409,9 +426,10 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     fetch(`/api/bars?timeframe=${viewTfRef.current}&limit=500`)
       .then(r => r.json())
       .then(d => {
-        if (Array.isArray(d.bars) && d.bars.length > 0) {
+        const validBars = Array.isArray(d.bars) ? d.bars.filter(isValidBar) : []
+        if (validBars.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          series.setData(d.bars as any)
+          series.setData(validBars as any)
           chart.timeScale().fitContent()
         }
       })
@@ -424,7 +442,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       fetch('/api/forming-bar')
         .then(r => r.json())
         .then((b: { time: number; open: number; high: number; low: number; close: number } | null) => {
-          if (!b) return
+          if (!b || !isValidBar(b)) return
           // Forming bar only makes sense at the bot's trading TF.
           if (viewTfRef.current !== timeframe) return
           // Only show if forming bar is newer than (or same as) the last closed bar.
@@ -500,9 +518,10 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       .then(r => r.json())
       .then(d => {
         if (!seriesRef.current || !chartRef.current) return
-        if (Array.isArray(d.bars) && d.bars.length > 0) {
+        const validBars = Array.isArray(d.bars) ? d.bars.filter(isValidBar) : []
+        if (validBars.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          seriesRef.current.setData(d.bars as any)
+          seriesRef.current.setData(validBars as any)
           // Reset forming-bar anchor so off-TF bars don't show stale data.
           lastBarTimeRef.current = null
           chartRef.current.timeScale().fitContent()
