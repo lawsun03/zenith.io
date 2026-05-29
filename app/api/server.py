@@ -809,8 +809,12 @@ def build_app(
             new_runner = _runner_factory(
                 instrument, new_cfg.strategy, new_cfg.enabled_killzones,
                 new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+                signal_instrument=new_cfg.signal_instrument,
             )
             _engine.runners = {instrument: new_runner}
+            _engine._bar_router = {
+                new_runner.signal_instrument: new_runner.instrument
+            } if new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
             _engine.strategy_cfg = new_cfg.strategy
             # Reset HTF fail-loud guard so a fresh rebuild can re-warn if needed.
             _engine._htf_warned = False
