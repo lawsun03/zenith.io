@@ -39,7 +39,11 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from app.strategy.grader import SetupGrade
+    from app.strategy.armed_zone import ArmedZone
 
 from app.broker.events import Bar
 from app.risk.pretrade import Side
@@ -74,6 +78,9 @@ class Signal:
     fvg_low: Decimal | None      # for the dashboard / journal
     fvg_high: Decimal | None
     rationale: str               # human-readable, one line
+    setup_grade: "SetupGrade | None" = None
+    armed_zone: "ArmedZone | None" = None
+    ce: Decimal | None = None
 
 
 @dataclass
