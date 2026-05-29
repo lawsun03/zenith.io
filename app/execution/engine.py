@@ -283,6 +283,13 @@ class ExecutionEngine:
 
         self._started = False
 
+        # Rule F: premature-liquidity cancel.
+        # Maps instrument → (tp1_price, side) for the most recently placed
+        # pending entry. Cleared on fill. When a bar crosses the TP1 level
+        # before the entry fills, the pending order is cancelled — the setup
+        # is dead because the opposing liquidity has already been taken.
+        self._pending_entry_tp1: dict[str, tuple[Decimal, str]] = {}
+
         # HTF confluence trackers — set externally by main.py after warm-up.
         # Engine-owned (not per-runner) so they survive /api/strategy/reload.
         # None until wired; the on_bar gates no-op while None or while the
@@ -348,6 +355,27 @@ class ExecutionEngine:
         """
         # Resolve: a GC bar routes to the MGC runner via _bar_router.
         execution_key = self._bar_router.get(bar.instrument, bar.instrument)
+
+        # Rule F: premature-liquidity cancel.
+        # If we have a pending limit entry and the bar crossed the TP1 price
+        # before the entry filled, the setup's opposing liquidity is already
+        # taken — cancel all working orders for this instrument.
+        # Runs before the runner-None guard so it fires even during misconfiguration.
+        pending_tp1 = self._pending_entry_tp1.get(execution_key)
+        if pending_tp1 is not None and self.risk_state.open_contracts == 0:
+            tp1_lvl, tp1_side = pending_tp1
+            hit = (
+                (tp1_side == "long" and bar.high >= tp1_lvl)
+                or (tp1_side == "short" and bar.low <= tp1_lvl)
+            )
+            if hit:
+                log.info(
+                    "Premature liquidity: TP1 %s hit before %s entry filled — cancelling pending orders",
+                    tp1_lvl, tp1_side,
+                )
+                self._pending_entry_tp1.pop(execution_key, None)
+                asyncio.create_task(self.broker.cancel_all(execution_key))
+
         runner = self.runners.get(execution_key)
         if runner is None:
             # We're subscribed to a symbol we don't have a runner for.
@@ -408,6 +436,9 @@ class ExecutionEngine:
 
     async def _handle_fill(self, fill: Fill) -> None:
         """Fill arrived. Update risk state. Synchronous, no await needed."""
+        if fill.is_entry:
+            # Entry confirmed — TP1 premature-liquidity watch is no longer needed.
+            self._pending_entry_tp1.pop(fill.instrument, None)
         self.risk_state.record_fill(
             realized_pnl_delta=fill.realized_pnl_delta,
             contracts_delta=fill.contracts_delta,
@@ -619,6 +650,25 @@ class ExecutionEngine:
             except Exception:
                 log.exception("on_pre_place callback raised")
 
+        # Compute structural TP1 from the nearest HTF swing in trade direction.
+        # Uses the runner's grader swing data — already computed during on_bar.
+        # Falls back gracefully to None (uses partial_profit_r path instead).
+        tp1_price: Decimal | None = None
+        tp1_fraction = Decimal("0.5")
+        be_after_tp1 = True
+        runner = self.runners.get(signal.instrument)
+        if runner is not None and self.strategy_cfg is not None:
+            highs = runner.grader._htf_swing_highs
+            lows = runner.grader._htf_swing_lows
+            if signal.side == "long":
+                candidates = [h for h in highs if h > signal.entry]
+                tp1_price = min(candidates) if candidates else None
+            else:
+                candidates = [lo for lo in lows if lo < signal.entry]
+                tp1_price = max(candidates) if candidates else None
+            tp1_fraction = self.strategy_cfg.ifvg_tp1_fraction
+            be_after_tp1 = self.strategy_cfg.ifvg_be_after_tp1
+
         # Allowed — place the bracket. Note: the gate may have sized down,
         # which is reflected in decision.allowed_size.
         result = await self.broker.place_bracket(
@@ -628,6 +678,9 @@ class ExecutionEngine:
             entry=signal.entry,
             stop=signal.stop,
             target=signal.target,
+            tp1_price=tp1_price,
+            tp1_fraction=tp1_fraction if tp1_price is not None else Decimal("0.5"),
+            be_after_tp1=be_after_tp1 if tp1_price is not None else True,
         )
 
         if not result.success:
@@ -642,11 +695,19 @@ class ExecutionEngine:
             )
 
         log.info(
-            "Bracket placed: %s size=%d entry=%s stop=%s target=%s",
+            "Bracket placed: %s size=%d entry=%s stop=%s target=%s tp1=%s",
             signal.rationale,
             decision.allowed_size,
-            signal.entry, signal.stop, signal.target,
+            signal.entry, signal.stop, signal.target, tp1_price,
         )
+
+        # Rule F: arm the premature-liquidity watch.
+        # Only for limit entries — market entries fill immediately so there is
+        # no pending window during which TP1 can be hit first.
+        broker_entry_mode = getattr(self.broker, "entry_mode", "market")
+        if broker_entry_mode == "limit" and tp1_price is not None:
+            self._pending_entry_tp1[signal.instrument] = (tp1_price, signal.side)
+
         return OrderOutcome(
             placed=True,
             reason="allowed",

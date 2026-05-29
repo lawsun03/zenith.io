@@ -177,6 +177,9 @@ class PaperBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         if not self._connected:
             return BracketResult(False, None, None, None, error="not connected")

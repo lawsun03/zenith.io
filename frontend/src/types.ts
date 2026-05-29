@@ -37,6 +37,9 @@ export interface StrategyConfig {
   ifvg_session_windows: string[]
   ifvg_macro_windows: string[]
   ifvg_news_blackout: string[]
+  // iFVG exit ladder
+  ifvg_tp1_fraction: string    // fraction of position to close at structural TP1 (0–1)
+  ifvg_be_after_tp1: boolean   // move stop to breakeven when structural TP1 fills
 }
 
 export interface BotConfig {
