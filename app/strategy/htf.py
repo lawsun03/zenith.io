@@ -153,6 +153,14 @@ class HTFLevelFinder:
         self._swing_highs = [s.price for s in tracker.recent_high_swings]
         self._swing_lows = [s.price for s in tracker.recent_low_swings]
 
+    @property
+    def swing_highs(self) -> list[Decimal]:
+        return list(self._swing_highs)
+
+    @property
+    def swing_lows(self) -> list[Decimal]:
+        return list(self._swing_lows)
+
     @staticmethod
     def _compute_unmitigated_gaps(bars: list[Bar]) -> list[_Gap]:
         """Find 3-bar FVGs, then drop any a later bar has traded back through."""
