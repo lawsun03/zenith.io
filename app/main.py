@@ -465,6 +465,57 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = ""):
+    """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
+
+    Reads pre-computed grader state — no heavy computation on the hot path.
+    Pure observability: never affects trade decisions.
+    """
+    from app.broker.events import Bar as BarEvent
+    from app.strategy.killzone import in_session_window, in_macro_window, in_news_blackout
+
+    async def on_bar(bar: BarEvent) -> None:
+        runner = engine.runners.get(execution_instrument) if execution_instrument else None
+        if runner is None:
+            # Try the first runner if instrument key doesn't match
+            if engine.runners:
+                runner = next(iter(engine.runners.values()))
+        if runner is None:
+            return
+
+        grade = runner.grader.last_grade
+        active_fvgs_count = len(runner.displacement.active_fvgs)
+
+        # Read session range for the current bar's killzone (already maintained by runner)
+        cfg = engine.strategy_cfg
+        kz = None
+        if cfg is not None:
+            from app.strategy.killzone import in_killzone
+            kz = in_killzone(bar.ts, runner.composer._zones)
+        sr = runner.grader.session_range(kz.name if kz else "") if kz else None
+
+        in_session = True
+        in_macro = False
+        news_block = False
+        if cfg is not None:
+            in_session = in_session_window(bar.ts, cfg.ifvg_session_windows)
+            in_macro = in_macro_window(bar.ts, cfg.ifvg_macro_windows)
+            news_block = in_news_blackout(bar.ts, cfg.ifvg_news_blackout)
+
+        journal.publish_strategy_state(
+            instrument=runner.instrument,
+            grade=grade,
+            active_fvgs_count=active_fvgs_count,
+            session_high=sr[0] if sr else None,
+            session_low=sr[1] if sr else None,
+            in_session=in_session,
+            in_macro=in_macro,
+            news_blackout=news_block,
+        )
+
+    return on_bar
+
+
 async def _run_paper(
     broker: PaperBroker,
     cfg: AppConfig,
@@ -1042,6 +1093,7 @@ async def _async_main() -> int:
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord))
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=cfg.instrument))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=cfg.instrument))
 
     eod_scheduler = EndOfDayScheduler(
         journal=journal,
