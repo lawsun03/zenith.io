@@ -38,6 +38,18 @@ class StrategyParams(BaseModel):
     ifvg_entry_mode: str = "ifvg_edge"                        # "ifvg_edge" | "retrace_ce" | "close"
     ifvg_stop_buffer_ticks: Decimal = Decimal("1.0")          # ticks beyond iFVG extreme for stop
 
+    # iFVG grader configuration
+    ifvg_sweep_window_bars: int = 10                   # bars since sweep for Rule A
+    ifvg_min_displacement_mult: Decimal = Decimal("1.0")  # Fibonacci displacement quality (Rule E)
+    # iFVG session / news filters (Rule G, H)
+    ifvg_session_windows: list[str] = Field(
+        default_factory=lambda: ["09:00-11:00", "02:00-05:00"],
+    )
+    ifvg_macro_windows: list[str] = Field(
+        default_factory=lambda: ["08:30-09:10", "09:50-10:10", "10:50-11:10", "13:10-13:40", "15:15-15:45"],
+    )
+    ifvg_news_blackout: list[str] = Field(default_factory=list)  # UTC ISO ranges "YYYY-MM-DDTHH:MM/..."
+
     # Volume profile filter + target
     vp_enabled: bool = True
     vp_tick_size: Decimal = Decimal("0.10")       # price quantization for bins

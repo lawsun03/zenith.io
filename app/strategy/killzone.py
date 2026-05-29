@@ -23,11 +23,12 @@ The bot_config's `enabled_killzones` field uses these names.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
+_ET = ET  # alias used by session/news helpers below
 
 
 @dataclass(frozen=True)
@@ -113,3 +114,52 @@ def in_killzone(ts: datetime, zones: Iterable[Killzone]) -> Killzone | None:
 def killzone_for_bar(ts: datetime) -> Killzone | None:
     """Convenience: check against the default killzones."""
     return in_killzone(ts, default_killzones())
+
+
+def _parse_time_range_et(range_str: str, ref_date) -> tuple[datetime, datetime]:
+    """Parse 'HH:MM-HH:MM' (ET) into UTC datetimes for ref_date."""
+    start_str, end_str = range_str.strip().split("-")
+    sh, sm = int(start_str[:2]), int(start_str[3:])
+    eh, em = int(end_str[:2]), int(end_str[3:])
+    start_et = datetime(ref_date.year, ref_date.month, ref_date.day, sh, sm,
+                        tzinfo=_ET)
+    end_et = datetime(ref_date.year, ref_date.month, ref_date.day, eh, em,
+                      tzinfo=_ET)
+    return start_et.astimezone(timezone.utc), end_et.astimezone(timezone.utc)
+
+
+def in_session_window(ts: datetime, windows: list[str]) -> bool:
+    """True if ts (UTC) falls within any of the ET time-range strings."""
+    if not windows:
+        return True  # no filter configured = allow all
+    ref = ts.astimezone(_ET).date()
+    for w in windows:
+        start, end = _parse_time_range_et(w, ref)
+        if start <= ts < end:
+            return True
+    return False
+
+
+def in_macro_window(ts: datetime, windows: list[str]) -> bool:
+    """True if ts falls within a macro-window (grade bonus, not a hard block)."""
+    return in_session_window(ts, windows)
+
+
+def in_news_blackout(ts: datetime, blackout_windows: list[str]) -> bool:
+    """
+    True if ts falls within a UTC ISO-range string (e.g. '2026-06-06T12:30/2026-06-06T13:00').
+    Returns False if blackout_windows is empty.
+    """
+    for w in blackout_windows:
+        parts = w.strip().split("/")
+        if len(parts) != 2:
+            continue
+        start = datetime.fromisoformat(parts[0])
+        end = datetime.fromisoformat(parts[1])
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        if start <= ts < end:
+            return True
+    return False
