@@ -118,7 +118,7 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
             r_multiple=Decimal("2.0"),
         )),
         grader=grader,
-        strategy_cfg=StrategyParams(ifvg_session_windows=[]),
+        strategy_cfg=StrategyParams(ifvg_session_windows=[], ifvg_entry_mode="close"),
     )
 
 

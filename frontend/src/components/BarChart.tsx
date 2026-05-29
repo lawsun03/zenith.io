@@ -39,6 +39,13 @@ interface SetupState {
 const TF_SECONDS: Record<string, number> = {
   '1min': 60, '3min': 180, '5min': 300,
   '15min': 900, '30min': 1800, '1h': 3600,
+  '4h': 14400, '1d': 86400,
+}
+
+const TF_LABELS: Record<string, string> = {
+  '1min': '1m', '3min': '3m', '5min': '5m',
+  '15min': '15m', '30min': '30m', '1h': '1h',
+  '4h': '4h', '1d': '1D',
 }
 
 interface Props {
@@ -200,6 +207,12 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
   const lastBarTimeRef = useRef<number | null>(null)
   const [countdown, setCountdown] = useState<string | null>(null)
   const [setupState, setSetupState] = useState<SetupState | null>(null)
+  const [viewTf, setViewTf] = useState<string>(timeframe ?? '1min')
+  const viewTfRef = useRef<string>(timeframe ?? '1min')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const seriesRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chartRef = useRef<any>(null)
 
   const pollSetupState = useCallback(() => {
     fetch('/api/setup_state')
@@ -214,6 +227,9 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     return () => clearInterval(id)
   }, [pollSetupState])
 
+  // Keep viewTfRef in sync so the chart useEffect closure reads fresh values.
+  useEffect(() => { viewTfRef.current = viewTf }, [viewTf])
+
   const formingHot = (setupState?.instruments ?? []).some(
     i => i.displacement_candidate !== null && i.sweeps_pending.length > 0
   )
@@ -221,7 +237,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
   // Countdown ticker — time until the next bar boundary (next minute, next 5min, etc.)
   // Wall-clock based, so it's accurate even when REST bar delivery lags.
   useEffect(() => {
-    const tfSecs = TF_SECONDS[timeframe ?? ''] ?? null
+    const tfSecs = TF_SECONDS[viewTf] ?? null
     if (!tfSecs) { setCountdown(null); return }
     const tick = () => {
       const nowSecs = Math.floor(Date.now() / 1000)
@@ -234,7 +250,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [timeframe])
+  }, [viewTf])
 
   useEffect(() => {
     const el = containerRef.current
@@ -298,6 +314,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       wickUpColor:     '#00ff41',
       wickDownColor:   '#ff3333',
     })
+    seriesRef.current = series
+    chartRef.current = chart
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const markersPlugin = createSeriesMarkers(series as any, [])
@@ -386,7 +404,9 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     const vpRefetchId = setInterval(fetchAndDrawVp, 60_000)
 
     // Pre-populate the chart with historical bars so it's not empty on connect.
-    fetch('/api/bars?limit=500')
+    // Initial bar load — the [viewTf] effect can't do this because seriesRef
+    // isn't set when it fires on mount. Subsequent TF switches are handled by [viewTf].
+    fetch(`/api/bars?timeframe=${viewTfRef.current}&limit=500`)
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d.bars) && d.bars.length > 0) {
@@ -405,6 +425,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
         .then(r => r.json())
         .then((b: { time: number; open: number; high: number; low: number; close: number } | null) => {
           if (!b) return
+          // Forming bar only makes sense at the bot's trading TF.
+          if (viewTfRef.current !== timeframe) return
           // Only show if forming bar is newer than (or same as) the last closed bar.
           if (lastBarTimeRef.current !== null && b.time < lastBarTimeRef.current) return
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -417,6 +439,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
 
     callbacksRef.current = {
       onBar(bar) {
+        // Only update chart when viewing the bot's trading TF.
+        if (viewTfRef.current !== timeframe) return
         lastBarTimeRef.current = bar.time
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         series.update({ time: bar.time as any, open: bar.open, high: bar.high, low: bar.low, close: bar.close })
@@ -463,9 +487,29 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(drawHistogram)
       if (el.contains(vpCanvas)) el.removeChild(vpCanvas)
       callbacksRef.current = {}
+      seriesRef.current = null
+      chartRef.current = null
       chart.remove()
     }
   }, [callbacksRef])
+
+  // Re-populate the chart whenever the viewed timeframe changes.
+  useEffect(() => {
+    if (!seriesRef.current || !chartRef.current) return
+    fetch(`/api/bars?timeframe=${viewTf}&limit=500`)
+      .then(r => r.json())
+      .then(d => {
+        if (!seriesRef.current || !chartRef.current) return
+        if (Array.isArray(d.bars) && d.bars.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          seriesRef.current.setData(d.bars as any)
+          // Reset forming-bar anchor so off-TF bars don't show stale data.
+          lastBarTimeRef.current = null
+          chartRef.current.timeScale().fitContent()
+        }
+      })
+      .catch(() => {})
+  }, [viewTf])
 
   const inst = setupState?.available ? (setupState.instruments[0] ?? null) : null
 
@@ -475,6 +519,18 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
       <div className="px-4 py-2 border-b border-border flex items-center justify-between">
         <span className="text-[10px] tracking-[0.3em] text-dim uppercase">Price Chart</span>
         <div className="flex items-center gap-3">
+          {/* TF selector */}
+          <div className="flex items-center gap-0.5">
+            {Object.keys(TF_SECONDS).map(tf => (
+              <button
+                key={tf}
+                onClick={() => setViewTf(tf)}
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded-sm transition-colors ${viewTf === tf ? 'text-accent bg-accent/10' : 'text-dim hover:text-ink'}`}
+              >
+                {TF_LABELS[tf]}{tf === timeframe ? '·' : ''}
+              </button>
+            ))}
+          </div>
           {formingHot && (
             <span className="flex items-center gap-1 text-[10px] font-mono text-yellow-400 animate-pulse">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400" />

@@ -532,19 +532,21 @@ def build_app(
             })
 
     @app.get("/api/bars")
-    async def get_bars(limit: int = 500) -> JSONResponse:
+    async def get_bars(limit: int = 500, timeframe: str = "") -> JSONResponse:
         """
         Recent historical bars for chart pre-population. Live mode only.
-        Returns up to `limit` bars at the currently-configured timeframe.
+        Returns up to `limit` bars at the requested timeframe, or the
+        bot's configured timeframe if not specified.
         """
         if _mode != "live" or _broker is None:
             return JSONResponse({"bars": []})
         try:
             cfg = load_bot_config(_bot_config_path)
-            tf = (cfg.timeframes or _effective_timeframes)[0]
+            tf = timeframe or (cfg.timeframes or _effective_timeframes)[0]
             exec_instr = cfg.instrument or effective_instrument
+            _days = {"4h": 60, "1d": 90}.get(tf, 5)
             bars = await _broker.get_historical_bars(
-                timeframe=tf, limit=limit, instrument=exec_instr,
+                timeframe=tf, limit=limit, days=_days, instrument=exec_instr,
             )
             return JSONResponse({"bars": [
                 {
