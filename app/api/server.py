@@ -195,7 +195,7 @@ def _csv_cached_through(csv_path: str) -> str | None:
         with p.open(newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                ts = row.get("timestamp", "")
+                ts = row.get("ts", "") or row.get("timestamp", "")
                 if ts:
                     last_ts = ts
     except Exception:
