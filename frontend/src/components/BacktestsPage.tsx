@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fmtBarTs } from '../utils/format'
 
 interface BacktestStats {
@@ -27,6 +27,14 @@ interface BacktestSummary {
   bookmarked?: boolean
 }
 
+interface GradeCriteria {
+  mom: boolean
+  tgt: boolean
+  fvg: boolean
+  pd: boolean
+  del: boolean
+}
+
 interface Trade {
   entry_ts: string
   exit_ts: string
@@ -35,7 +43,14 @@ interface Trade {
   exit_price: string
   size: number
   pnl: string
+  grade?: string
+  criteria?: GradeCriteria
 }
+
+const GRADE_TIERS = ['A+', 'A', 'A-', 'B', 'B-'] as const
+type GradeTier = typeof GRADE_TIERS[number]
+
+const CRITERIA_KEYS: Array<keyof GradeCriteria> = ['mom', 'tgt', 'fvg', 'pd', 'del']
 
 interface StrategyParams {
   swing_lookback: number | string
@@ -175,6 +190,8 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   r_multiple:               '2.5',
 }
 
+type DataSource = 'local' | 'databento'
+
 export function BacktestsPage() {
   const [list, setList] = useState<BacktestSummary[]>([])
   const [selected, setSelected] = useState<BacktestDetail | null>(null)
@@ -195,6 +212,14 @@ export function BacktestsPage() {
   } | null>(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [dataSource, setDataSource] = useState<DataSource>('local')
+  const [bentoMeta, setBentoMeta] = useState<{
+    cost: number
+    cachedThrough: string | null
+    willFetch: number
+  } | null>(null)
+  const [bentoLoading, setBentoLoading] = useState(false)
+  const [gradeFilter, setGradeFilter] = useState<string | null>(null)
 
   // Filtering and sorting for the saved-runs list.
   type SortKey = 'pnl_desc' | 'pnl_asc' | 'trades_desc' | 'win_rate_desc' | 'profit_factor_desc' | 'date_desc'
@@ -239,6 +264,57 @@ export function BacktestsPage() {
         setStrategy(next)
         setStrategyDirty(false)
       })
+  }
+
+  async function switchToDataSource(src: DataSource) {
+    setDataSource(src)
+    setBentoMeta(null)
+    if (src !== 'databento') return
+    setBentoLoading(true)
+    try {
+      const cfg = await fetch('/api/config').then(r => r.json())
+      const symbol = cfg?.instrument ?? 'MGC'
+      const res = await fetch('/api/databento/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: startDate, end: endDate, symbol, dry_run: true }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const body = await res.json()
+      if (body.ok) {
+        setBentoMeta({ cost: body.cost_estimate ?? 0, cachedThrough: body.cached_through ?? null, willFetch: body.days_fetched ?? 0 })
+      } else {
+        setMsg(`Databento: ${body.reason}`)
+        setDataSource('local')
+      }
+    } catch {
+      setMsg('Databento probe failed')
+      setDataSource('local')
+    } finally {
+      setBentoLoading(false)
+    }
+  }
+
+  function gradeColor(g: string): string {
+    switch (g) {
+      case 'A+': return 'ring-1 ring-accent text-accent bg-accent/10'
+      case 'A':  return 'ring-1 ring-accent/60 text-accent/80 bg-accent/5'
+      case 'A-': return 'ring-1 ring-warn/60 text-warn bg-warn/5'
+      case 'B':  return 'ring-1 ring-warn/30 text-warn/60 bg-warn/5'
+      case 'B-': return 'ring-1 ring-danger/40 text-danger/70 bg-danger/5'
+      default:   return 'ring-1 ring-border text-dim'
+    }
+  }
+
+  function gradeBadge(g: string | undefined): string {
+    switch (g) {
+      case 'A+': return 'bg-accent text-bg'
+      case 'A':  return 'bg-accent/70 text-bg'
+      case 'A-': return 'bg-warn text-bg'
+      case 'B':  return 'bg-warn/60 text-bg'
+      case 'B-': return 'bg-danger/70 text-bg'
+      default:   return 'bg-dim/20 text-dim'
+    }
   }
 
   useEffect(() => {
@@ -306,8 +382,26 @@ export function BacktestsPage() {
 
   async function startRun() {
     setRunning(true)
-    setMsg('Fetching historical bars…')
     try {
+      if (dataSource !== 'databento') {
+        setMsg('Fetching historical bars…')
+      }
+      if (dataSource === 'databento') {
+        setMsg('Fetching bars from Databento…')
+        const cfg = await fetch('/api/config').then(r => r.json())
+        const symbol = cfg?.instrument ?? 'MGC'
+        const bentoRes = await fetch('/api/databento/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start: startDate, end: endDate, symbol, dry_run: false }),
+        })
+        const bentoBody = await bentoRes.json()
+        if (!bentoBody.ok) {
+          setMsg(`Databento fetch failed: ${bentoBody.reason}`)
+          setRunning(false)
+          return
+        }
+      }
       const beforeCount = list.length
       // Build the strategy override payload. Strings preserve decimal
       // precision; the backend will coerce them through Pydantic.
@@ -460,6 +554,16 @@ export function BacktestsPage() {
     return () => clearInterval(id)
   }, [searchId])
 
+  useEffect(() => {
+    setGradeFilter(null)
+  }, [selected?.id])
+
+  useEffect(() => {
+    if (dataSource === 'databento') {
+      setBentoMeta(null)
+    }
+  }, [startDate, endDate])
+
   // Identify the best backtest from this search (or overall if no search yet).
   const searchLabelSet = new Set(searchProgress?.labels ?? [])
   const candidateList = searchProgress
@@ -503,6 +607,29 @@ export function BacktestsPage() {
     }
     return out.sort(cmp)
   })()
+
+  const gradeStats = useMemo(() => {
+    if (!selected?.trades) return {} as Record<GradeTier, { count: number; winRate: number; profitFactor: number | null }>
+    return GRADE_TIERS.reduce((acc, g) => {
+      const gt = selected.trades.filter(t => t.grade === g)
+      const wins = gt.filter(t => parseFloat(t.pnl) > 0)
+      const losses = gt.filter(t => parseFloat(t.pnl) < 0)
+      const grossWin = wins.reduce((s, t) => s + parseFloat(t.pnl), 0)
+      const grossLoss = Math.abs(losses.reduce((s, t) => s + parseFloat(t.pnl), 0))
+      acc[g] = {
+        count: gt.length,
+        winRate: gt.length > 0 ? Math.round(wins.length / gt.length * 100) : 0,
+        profitFactor: grossLoss > 0 ? Math.round((grossWin / grossLoss) * 100) / 100 : null,
+      }
+      return acc
+    }, {} as Record<GradeTier, { count: number; winRate: number; profitFactor: number | null }>)
+  }, [selected?.trades])
+
+  const displayedTrades = useMemo(() => {
+    if (!selected?.trades) return []
+    if (!gradeFilter) return selected.trades
+    return selected.trades.filter(t => t.grade === gradeFilter)
+  }, [selected?.trades, gradeFilter])
 
   function resetFilters() {
     setFilterTf('all')
@@ -709,6 +836,47 @@ export function BacktestsPage() {
               ))}
             </div>
           </details>
+
+          {/* Data source toggle */}
+          <div className="border border-border bg-bg/30 p-3">
+            <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Data Source</div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => switchToDataSource('local')}
+                disabled={running}
+                className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
+                  dataSource === 'local'
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-border text-dim hover:text-ink'
+                }`}
+              >
+                Local CSV
+              </button>
+              <button
+                onClick={() => switchToDataSource('databento')}
+                disabled={running}
+                className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
+                  dataSource === 'databento'
+                    ? 'border-warn text-warn bg-warn/10'
+                    : 'border-border text-dim hover:text-ink'
+                }`}
+              >
+                Databento
+              </button>
+              {bentoLoading && <span className="text-[10px] text-dim ml-2">probing…</span>}
+              {dataSource === 'databento' && bentoMeta && !bentoLoading && (
+                <span className="text-[10px] text-dim ml-2 font-mono">
+                  est. <span className="text-warn">${bentoMeta.cost.toFixed(2)}</span>
+                  {bentoMeta.cachedThrough && (
+                    <> · cached through <span className="text-ink">{bentoMeta.cachedThrough}</span></>
+                  )}
+                  {bentoMeta.willFetch === 0 && (
+                    <> · <span className="text-accent">full cache hit</span></>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
 
           <div className="flex items-center gap-3">
             <input
@@ -1024,40 +1192,94 @@ export function BacktestsPage() {
                   </button>
                 </div>
 
+                {/* Grade scorecard tiles */}
+                {selected.trades.some(t => t.grade) && (
+                  <div>
+                    <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
+                      Grade Breakdown <span className="text-dim/50 normal-case tracking-normal">· click to filter</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-px bg-border border border-border mb-3">
+                      {GRADE_TIERS.map(g => {
+                        const s = gradeStats[g] ?? { count: 0, winRate: 0, profitFactor: null }
+                        const isActive = gradeFilter === g
+                        return (
+                          <button
+                            key={g}
+                            onClick={() => setGradeFilter(isActive ? null : g)}
+                            className={`p-2 text-center bg-panel transition-colors ${
+                              isActive ? gradeColor(g) : 'text-dim hover:text-ink'
+                            } ${s.count === 0 ? 'opacity-30 cursor-default' : 'cursor-pointer'}`}
+                            disabled={s.count === 0}
+                          >
+                            <div className={`text-base font-bold font-mono ${isActive ? '' : 'text-inherit'}`}>{g}</div>
+                            <div className="text-[9px] text-dim mt-0.5">{s.count} trade{s.count !== 1 ? 's' : ''}</div>
+                            {s.count > 0 && (
+                              <>
+                                <div className="text-[10px] font-mono">{s.winRate}% WR</div>
+                                <div className="text-[10px] font-mono">
+                                  {s.profitFactor !== null ? `PF ${s.profitFactor.toFixed(1)}` : 'PF —'}
+                                </div>
+                              </>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Trade list */}
                 <div>
-                  <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Trades</div>
-                  <div className="max-h-[40vh] overflow-y-auto feed border border-border">
-                    <table className="w-full text-[11px] font-mono tabular-nums">
-                      <thead className="text-dim text-[10px] tracking-widest uppercase">
-                        <tr>
-                          <th className="text-left px-3 py-2">Entry</th>
-                          <th className="text-left px-3 py-2">Exit</th>
-                          <th className="text-left px-3 py-2">Side</th>
-                          <th className="text-right px-3 py-2">In</th>
-                          <th className="text-right px-3 py-2">Out</th>
-                          <th className="text-right px-3 py-2">P&L</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selected.trades.map((t, i) => {
-                          const pnl = parseFloat(t.pnl)
-                          return (
-                            <tr key={i} className="border-t border-border">
-                              <td className="px-3 py-1 text-dim">{fmtBarTs(t.entry_ts)}</td>
-                              <td className="px-3 py-1 text-dim">{fmtBarTs(t.exit_ts)}</td>
-                              <td className={`px-3 py-1 ${t.side === 'long' ? 'text-accent' : 'text-danger'}`}>
+                  <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
+                    Trades
+                    {gradeFilter && (
+                      <span className="text-warn normal-case tracking-normal ml-2">
+                        · {gradeFilter} only ({displayedTrades.length} of {selected.trades.length})
+                      </span>
+                    )}
+                    {!gradeFilter && ` (${selected.trades.length})`}
+                  </div>
+                  <div className="max-h-[40vh] overflow-y-auto feed border border-border divide-y divide-border">
+                    {displayedTrades.map((t, i) => {
+                      const pnl = parseFloat(t.pnl)
+                      return (
+                        <div key={i} className="px-3 py-2 text-[11px] font-mono">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-dim">{fmtBarTs(t.entry_ts)}</span>
+                              <span className={t.side === 'long' ? 'text-accent' : 'text-danger'}>
                                 {t.side.toUpperCase()}
-                              </td>
-                              <td className="px-3 py-1 text-right">{t.entry_price}</td>
-                              <td className="px-3 py-1 text-right">{t.exit_price}</td>
-                              <td className={`px-3 py-1 text-right ${pnl >= 0 ? 'text-accent' : 'text-danger'}`}>
+                              </span>
+                              <span className="text-dim tabular-nums">
+                                {t.entry_price} → {t.exit_price}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`tabular-nums font-bold ${pnl >= 0 ? 'text-accent' : 'text-danger'}`}>
                                 {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                              </span>
+                              {t.grade && (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-sm font-bold ${gradeBadge(t.grade)}`}>
+                                  {t.grade}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {t.criteria && (
+                            <div className="flex gap-3 mt-1 text-[9px]">
+                              {CRITERIA_KEYS.map(k => (
+                                <span key={k} className={t.criteria![k] ? 'text-accent' : 'text-danger'}>
+                                  {k}{t.criteria![k] ? '✓' : '✗'}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {displayedTrades.length === 0 && (
+                      <div className="px-3 py-4 text-[11px] text-dim">No trades match the current filter.</div>
+                    )}
                   </div>
                 </div>
               </div>

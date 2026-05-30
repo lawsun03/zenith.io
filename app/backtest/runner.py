@@ -242,7 +242,7 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
             entry_ts = datetime.fromisoformat(open_entry["ts"])
             exit_ts = datetime.fromisoformat(f["ts"])
             hold = int((exit_ts - entry_ts).total_seconds())
-            trades.append({
+            trade: dict = {
                 "instrument": f.get("instrument", ""),
                 "side": open_entry["side"],
                 "size": open_entry["size"],
@@ -252,7 +252,11 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 "exit_price": f["fill_price"],
                 "realized_pnl": f["realized_pnl_delta"],
                 "hold_seconds": hold,
-            })
+            }
+            if open_entry.get("grade") is not None:
+                trade["grade"] = open_entry["grade"]
+                trade["criteria"] = open_entry["criteria"]
+            trades.append(trade)
             open_entry = None
     if open_entry is not None:
         log.warning(
@@ -279,6 +283,11 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     # on_signal fires after place_bracket (entry fill already emitted), so
     # entry fills get "unknown"; exit fills always get the correct killzone.
     _order_killzones: dict[str, str] = {}
+    # Maps entry order_id → {"grade": str, "criteria": dict} for grade propagation.
+    # Same timing constraint as killzones: populated in on_signal, applied
+    # retroactively to the already-captured entry fill dict via order_id lookup
+    # before _reconstruct_trades runs.
+    _order_grades: dict[str, dict] = {}
 
     def _kz_for_fill(broker_order_id: str | None) -> str:
         if not broker_order_id:
@@ -296,9 +305,22 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             return
         if outcome.broker_order_id:
             _order_killzones[outcome.broker_order_id] = signal.killzone
+            g = signal.setup_grade
+            if g is not None:
+                _order_grades[outcome.broker_order_id] = {
+                    "grade": g.grade,
+                    "criteria": {
+                        # mom is a bool: "strong"/"decent" pass, "weak" fails
+                        "mom": g.momentum_quality != "weak",
+                        "tgt": g.target_clear,
+                        "fvg": g.fvg_singular,
+                        "pd": g.premium_discount_ok,
+                        "del": g.has_delivery_fvg,
+                    },
+                }
 
     async def on_fill(fill: Fill) -> None:
-        fills_captured.append({
+        fill_dict: dict = {
             "ts": fill.ts.isoformat(),
             "instrument": fill.instrument,
             "side": fill.side,
@@ -307,7 +329,9 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             "is_entry": fill.is_entry,
             "realized_pnl_delta": str(fill.realized_pnl_delta),
             "killzone": _kz_for_fill(fill.broker_order_id),
-        })
+            "order_id": fill.broker_order_id or "",
+        }
+        fills_captured.append(fill_dict)
 
     engine = ExecutionEngine(
         broker=broker,
@@ -334,6 +358,13 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     await engine.stop()
     await broker.disconnect()
 
+    # Retroactively attach grade to entry fill dicts now that on_signal has fired.
+    for fill_dict in fills_captured:
+        if fill_dict["is_entry"]:
+            grade_info = _order_grades.get(fill_dict["order_id"])
+            if grade_info:
+                fill_dict["grade"] = grade_info["grade"]
+                fill_dict["criteria"] = grade_info["criteria"]
     stats = _compute_stats(fills_captured, risk_state, cfg.starting_balance)
     trades = _reconstruct_trades(fills_captured)
 

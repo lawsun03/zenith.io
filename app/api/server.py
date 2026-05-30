@@ -70,6 +70,13 @@ class BacktestRequest(BaseModel):
     enabled_killzones: list[str] | None = None
 
 
+class DatabentoBarsRequest(BaseModel):
+    start: str       # "YYYY-MM-DD"
+    end: str         # "YYYY-MM-DD"
+    symbol: str      # "MGC" — mapped to GC.c.0 for Databento
+    dry_run: bool = False
+
+
 class RandomSearchRequest(BaseModel):
     count_per_timeframe: int = 15
     timeframes: list[str] = ["1min", "5min"]
@@ -171,6 +178,29 @@ def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
         "min_target_r": str(cfg.strategy.vp_min_target_r),
         "session_date": str(prior.session_date),
     }
+
+
+def _bars_csv_path(symbol: str) -> str:
+    """Return the absolute path to the local bars CSV for the given instrument symbol."""
+    return str(Path(__file__).resolve().parent.parent.parent / f"bars_{symbol.upper()}.csv")
+
+
+def _csv_cached_through(csv_path: str) -> str | None:
+    """Return the YYYY-MM-DD of the last bar in the CSV, or None if absent/empty."""
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    last_ts = ""
+    try:
+        with p.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ts = row.get("timestamp", "")
+                if ts:
+                    last_ts = ts
+    except Exception:
+        return None
+    return last_ts[:10] if last_ts else None
 
 
 def build_app(
@@ -929,6 +959,79 @@ def build_app(
                 ])
         log.info("Wrote %d bars to %s", len(unique), out_path)
         return out_path
+
+    @app.post("/api/databento/fetch")
+    async def databento_fetch(req: DatabentoBarsRequest) -> JSONResponse:
+        """
+        Fetch Databento bars for the requested date range and symbol.
+        Skips download if local CSV already covers req.end (cache hit).
+        With dry_run=True, returns cost estimate without downloading.
+        """
+        api_key = os.environ.get("DATABENTO_API_KEY")
+        if not api_key:
+            return JSONResponse({"ok": False, "reason": "DATABENTO_API_KEY not set in .env"})
+
+        _SYMBOL_MAP = {"MGC": "GC.c.0"}
+        db_symbol = _SYMBOL_MAP.get(req.symbol.upper())
+        if db_symbol is None:
+            return JSONResponse(
+                {"ok": False, "reason": f"Unsupported symbol: {req.symbol!r}. Supported: {list(_SYMBOL_MAP)}"},
+                status_code=400,
+            )
+
+        csv_path = _bars_csv_path(req.symbol)
+        cached_through = _csv_cached_through(csv_path)
+
+        # Cache hit: skip download entirely.
+        if not req.dry_run and cached_through is not None and cached_through >= req.end:
+            return JSONResponse({
+                "ok": True,
+                "days_fetched": 0,
+                "cached_through": cached_through,
+                "cost_estimate": 0.0,
+            })
+
+        script = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetch_bars_databento.py"
+        cmd = [
+            sys.executable, str(script),
+            "--symbol", db_symbol,
+            "--start", req.start,
+            "--end", req.end,
+            "--out", csv_path,
+        ]
+        if req.dry_run:
+            cmd.append("--estimate-only")
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            return JSONResponse({"ok": False, "reason": "Databento fetch timed out (>120s)"}, status_code=500)
+        except Exception as e:
+            return JSONResponse({"ok": False, "reason": str(e)}, status_code=500)
+
+        if result.returncode != 0:
+            return JSONResponse({
+                "ok": False,
+                "reason": result.stderr.strip() or f"Script exited with code {result.returncode}",
+            }, status_code=500)
+
+        cost_match = re.search(r'\$(\d+\.\d+)', result.stdout)
+        cost = float(cost_match.group(1)) if cost_match else 0.0
+
+        from datetime import date as _date
+        try:
+            _days = (_date.fromisoformat(req.end) - _date.fromisoformat(req.start)).days + 1
+        except ValueError:
+            _days = 0
+
+        new_cached_through = _csv_cached_through(csv_path) if not req.dry_run else cached_through
+
+        return JSONResponse({
+            "ok": True,
+            "days_fetched": 0 if req.dry_run else _days,
+            "cached_through": new_cached_through or req.end,
+            "cost_estimate": cost,
+        })
 
     @app.post("/api/backtest/run")
     async def run_backtest(req: BacktestRequest) -> JSONResponse:

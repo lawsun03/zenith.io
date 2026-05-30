@@ -146,3 +146,63 @@ def test_backtest_config_defaults():
     assert cfg.starting_balance == Decimal("50000")
     assert cfg.timeframe == "1min"
     assert cfg.contracts == 1
+
+
+def test_reconstruct_trades_includes_grade():
+    """Trades carry grade and criteria from their entry fill dict."""
+    entry = {
+        "ts": "2026-01-02T10:01:00+00:00",
+        "instrument": "MGC",
+        "side": "long",
+        "fill_price": "100.0",
+        "size": 1,
+        "is_entry": True,
+        "realized_pnl_delta": "-0.74",
+        "killzone": "NY AM",
+        "order_id": "abc123",
+        "grade": "A+",
+        "criteria": {"mom": True, "tgt": True, "fvg": True, "pd": True, "del": True},
+    }
+    exit_fill = {
+        "ts": "2026-01-02T10:10:00+00:00",
+        "instrument": "MGC",
+        "side": "long",
+        "fill_price": "102.0",
+        "size": 1,
+        "is_entry": False,
+        "realized_pnl_delta": "10.0",
+        "killzone": "NY AM",
+        "order_id": "abc123-T",
+    }
+    trades = _reconstruct_trades([entry, exit_fill])
+    assert len(trades) == 1
+    assert trades[0]["grade"] == "A+"
+    assert trades[0]["criteria"] == {"mom": True, "tgt": True, "fvg": True, "pd": True, "del": True}
+
+
+def test_reconstruct_trades_grade_missing_when_no_grade_on_fill():
+    """Trades without grade on entry fill still reconstruct correctly."""
+    entry = {
+        "ts": "2026-01-02T10:01:00+00:00",
+        "instrument": "MGC",
+        "side": "long",
+        "fill_price": "100.0",
+        "size": 1,
+        "is_entry": True,
+        "realized_pnl_delta": "-0.74",
+        "killzone": "NY AM",
+    }
+    exit_fill = {
+        "ts": "2026-01-02T10:10:00+00:00",
+        "instrument": "MGC",
+        "side": "long",
+        "fill_price": "102.0",
+        "size": 1,
+        "is_entry": False,
+        "realized_pnl_delta": "10.0",
+        "killzone": "NY AM",
+    }
+    trades = _reconstruct_trades([entry, exit_fill])
+    assert len(trades) == 1
+    assert trades[0].get("grade") is None
+    assert trades[0].get("criteria") is None
