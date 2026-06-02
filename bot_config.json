@@ -29,10 +29,10 @@
     "vp_enabled": true,
     "vp_tick_size": "0.10",
     "vp_value_area_pct": 0.70,
-    "vp_filter_tolerance": "2.0",
+    "vp_filter_tolerance": "5.0",
     "vp_hvn_threshold": 1.5,
     "vp_min_target_r": "2.0",
-    "htf_bias_enabled": false,
+    "htf_bias_enabled": true,
     "htf_bias_timeframe": "4h",
     "htf_target_enabled": true
   }
