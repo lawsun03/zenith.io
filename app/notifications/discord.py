@@ -129,9 +129,16 @@ class DiscordNotifier:
         side = signal.side.upper()
         color = _COLOR_LONG if signal.side == "long" else _COLOR_SHORT
         g = signal.setup_grade
-        grade_val = "—"
-        if g is not None:
-            grade_val = g.grade if not g.reason else f"{g.grade} — {g.reason}"
+        if g is None:
+            grade_val = "—"
+        else:
+            # Bold the letter; render the reason's criteria (the comma list after
+            # the em-dash) as a bulleted list instead of one long line.
+            grade_val = f"**{g.grade}**"
+            crit = g.reason.split("—", 1)[1].strip() if g.reason and "—" in g.reason else ""
+            if crit:
+                bullets = "\n".join(f"• {c.strip()}" for c in crit.split(",") if c.strip())
+                grade_val = f"**{g.grade}**\n{bullets}"
         embed = {
             "title": f"SIGNAL {side} {signal.instrument} x{outcome.allowed_size} @ {signal.entry}",
             "color": color,
