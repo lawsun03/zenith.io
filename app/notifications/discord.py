@@ -128,10 +128,15 @@ class DiscordNotifier:
             return
         side = signal.side.upper()
         color = _COLOR_LONG if signal.side == "long" else _COLOR_SHORT
+        g = signal.setup_grade
+        grade_val = "—"
+        if g is not None:
+            grade_val = g.grade if not g.reason else f"{g.grade} — {g.reason}"
         embed = {
             "title": f"SIGNAL {side} {signal.instrument} x{outcome.allowed_size} @ {signal.entry}",
             "color": color,
             "fields": [
+                {"name": "Grade",    "value": grade_val, "inline": False},
                 {"name": "Entry",    "value": str(signal.entry),  "inline": True},
                 {"name": "Stop",     "value": str(signal.stop),   "inline": True},
                 {"name": "Target",   "value": str(signal.target), "inline": True},
