@@ -525,13 +525,29 @@ class ExecutionEngine:
             log.exception("Strategy raised on bar %s", bar.ts)
             return
 
-        if signal is None or is_stale:
-            if is_stale and signal is not None:
-                log.debug(
-                    "Warmup bar %s (age=%.0fs) generated signal — skipping order.",
-                    bar.ts, (datetime.now(timezone.utc) - bar.ts).total_seconds(),
-                )
+        if signal is None:
             return
+
+        # Armed-zone fills are live market events — price re-entered the zone on
+        # THIS bar — so the warmup/replay staleness guard must not discard them.
+        # Staleness still applies to fresh signals so we don't trade on bars that
+        # a reconnect re-delivered with old timestamps. Both branches log at
+        # WARNING: the prior DEBUG line made silent drops invisible at INFO and
+        # swallowed legitimate armed fills during SignalR reconnect churn.
+        if is_stale:
+            age_secs = (datetime.now(timezone.utc) - bar.ts).total_seconds()
+            if signal.armed_zone is None:
+                log.warning(
+                    "Stale bar %s (age=%.0fs) produced a signal — skipping order "
+                    "(bar-stream latency / reconnect churn).",
+                    bar.ts, age_secs,
+                )
+                return
+            log.warning(
+                "Armed-zone fill on stale bar %s (age=%.0fs) — placing anyway; "
+                "armed fills are live events.",
+                bar.ts, age_secs,
+            )
 
         original_signal = signal
         signal, deny_reason = self._apply_confluence(signal, runner)

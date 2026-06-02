@@ -61,6 +61,13 @@ def london_ny() -> Killzone:
     return Killzone(name="London/NY", start=time(6, 0), end=time(8, 30))
 
 
+def all_day() -> Killzone:
+    """Whole-day window (00:00–23:59:59 ET). Disables the killzone time gate so
+    the composer records sweeps every hour. Used for all-hours verification runs;
+    note the grader's per-session range becomes a 24h range under this zone."""
+    return Killzone(name="All", start=time(0, 0), end=time(23, 59, 59))
+
+
 # Name → builder lookup. Used by bot_config so a JSON config can pick
 # the subset of killzones without import gymnastics.
 KILLZONE_BUILDERS = {
@@ -69,6 +76,7 @@ KILLZONE_BUILDERS = {
     "london_ny": london_ny,
     "ny_am":     ny_am,
     "ny_pm":     ny_pm,
+    "all":       all_day,
 }
 
 

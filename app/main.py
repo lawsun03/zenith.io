@@ -5,7 +5,7 @@ stream ends in paper mode).
 Run:
     TOPSTEP_BOT_MODE=paper \
     TOPSTEP_BOT_INSTRUMENT=MGC \
-    TOPSTEP_BOT_PAPER_BARS=./bars.csv \
+    TOPSTEP_BOT_PAPER_BARS=bars/bars_MGC.csv \
     python -m app.main
 
 Or for live (after demo-account testing!):
@@ -280,9 +280,11 @@ def _make_signal_journaler(
 
     async def journal_signal(signal: Signal, outcome: OrderOutcome) -> None:
         if outcome.placed:
+            _g = signal.setup_grade
             log.info(
-                "SIGNAL PLACED  %s  size=%d  oid=%s | %s",
-                signal.side.upper(), outcome.allowed_size,
+                "SIGNAL PLACED  %s  grade=%s  size=%d  oid=%s | %s",
+                signal.side.upper(), (_g.grade if _g is not None else "—"),
+                outcome.allowed_size,
                 outcome.broker_order_id, signal.rationale,
             )
             if outcome.broker_order_id:
@@ -294,8 +296,11 @@ def _make_signal_journaler(
                 if existing is not None:
                     _pending_signal_meta[outcome.broker_order_id] = existing
             if notifier is not None and notifier.enabled:
+                g = signal.setup_grade
+                grade_letter = g.grade if g is not None else "—"
+                grade_line = grade_letter + (f" — {g.reason}" if g is not None and g.reason else "")
                 subject = (
-                    f"ENTRY {signal.side.upper()} {signal.instrument} "
+                    f"ENTRY [{grade_letter}] {signal.side.upper()} {signal.instrument} "
                     f"x{outcome.allowed_size} @ {signal.entry}"
                 )
                 body = (
@@ -306,6 +311,7 @@ def _make_signal_journaler(
                     f"  Target: {signal.target}\n"
                     f"  Order:  {outcome.broker_order_id}\n"
                     f"  Killzone: {signal.killzone}\n"
+                    f"  Grade:  {grade_line}\n"
                     f"  Setup:  {signal.rationale}"
                 )
                 await notifier.send(subject, body)
@@ -321,7 +327,7 @@ def _make_signal_journaler(
     return journal_signal
 
 
-_TRADES_CSV = Path("trades.csv")  # permanent master ledger
+_TRADES_CSV = Path("trades/trades.csv")  # permanent master ledger
 _TRADES_HEADERS = [
     # Fill fields
     "ts", "instrument", "side", "type", "fill_price", "size", "realized_pnl",
@@ -346,7 +352,7 @@ _pending_signal_meta: dict[str, dict] = {}
 def _daily_csv_path() -> Path:
     """Today's trading-day CSV path (CT date, matches Topstep session boundary)."""
     ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
-    return Path(f"trades_{ct_date}.csv")
+    return Path("trades") / f"trades_{ct_date}.csv"
 
 
 def _append_fill_csv(fill: Fill) -> None:
@@ -398,6 +404,7 @@ def _append_fill_csv(fill: Fill) -> None:
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             write_header = not path.exists()
             # encoding="utf-8" is load-bearing: signal rationales contain non-cp1252
             # characters (e.g. "≥" U+2265 in "no VP level ≥2.0R"). Without it, Windows
