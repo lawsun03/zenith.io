@@ -204,6 +204,28 @@ def test_runner_records_grader_b_rejection():
     assert rejects[-1].side == "short"
 
 
+async def test_engine_invokes_on_reject_on_grader_b():
+    """A runner-internal rejection (grader-B) with no placed signal is surfaced
+    to the engine's on_reject callback (replay_mode keeps is_stale False)."""
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.grader = SetupGrader()  # unseeded -> grader-B
+    captured: list[tuple[str, str, str]] = []
+
+    async def on_reject(info, instrument: str) -> None:
+        captured.append((instrument, info.reason, info.side))
+
+    engine = ExecutionEngine(broker, state, [runner], on_reject=on_reject, replay_mode=True)
+    await broker.connect()
+    await engine.start()
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await asyncio.sleep(0)
+    await engine.stop()
+    assert any(r.startswith("grader_") for _, r, _ in captured), captured
+
+
 # =====================================================================
 # Full replay — winning trade
 # =====================================================================

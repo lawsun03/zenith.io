@@ -392,6 +392,7 @@ class ExecutionEngine:
         on_signal: SignalEmitted | None = None,
         on_order_placed: Callable[[], None] | None = None,
         on_pre_place: PrePlaceCallback | None = None,
+        on_reject: "Callable[[RejectInfo, str], Awaitable[None]] | None" = None,
         replay_mode: bool = False,
         contracts: int = 1,
         risk_per_trade_pct: Decimal = Decimal("0"),
@@ -417,6 +418,9 @@ class ExecutionEngine:
         # Called BEFORE await broker.place_bracket() so signal meta is written
         # before the market-order fill can race in during the HTTP round-trip.
         self._on_pre_place = on_pre_place
+        # Called when the runner rejects a setup internally (grader-B, premature
+        # liquidity, invalidate) so the rejection ledger can record the miss.
+        self._on_reject = on_reject
 
         # When True, the wall-clock staleness check is skipped so historical
         # bars are processed the same way regardless of when the run happens.
@@ -577,6 +581,14 @@ class ExecutionEngine:
             return
 
         if signal is None:
+            # Runner rejected internally (grader-B / premature-liq / invalidate).
+            # Skip stale/warmup bars so the ledger holds live misses only.
+            rej = runner.last_reject
+            if rej is not None and self._on_reject is not None and not is_stale:
+                try:
+                    await self._on_reject(rej, runner.instrument)
+                except Exception:
+                    log.exception("on_reject callback raised")
             return
 
         # Armed-zone fills are live market events — price re-entered the zone on
