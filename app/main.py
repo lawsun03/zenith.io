@@ -60,6 +60,7 @@ from app.execution.engine import (
     StrategyRunner,
 )
 from app.strategy.grader import SetupGrader
+from app.execution.excursion import ExcursionTracker
 from app.execution.reconciler import Reconciler, ReconcilerConfig
 from app.notifications import DiscordNotifier, EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
 from project_x_py.exceptions import ProjectXConnectionError
@@ -277,6 +278,7 @@ def _make_signal_journaler(
     notifier: EmailNotifier | None = None,
     config_path: Path | None = None,
     discord: DiscordNotifier | None = None,
+    excursion_tracker=None,
 ):
     """Build the on_signal callback bound to a specific Journal."""
 
@@ -331,6 +333,12 @@ def _make_signal_journaler(
                 target=str(signal.target), killzone=signal.killzone or "",
                 rationale=signal.rationale or "", source="engine",
             )
+            if excursion_tracker is not None:
+                excursion_tracker.open(
+                    key=f"rej-{signal.instrument}-{outcome.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
+                    kind="rejection", side=signal.side, ref=signal.entry,
+                    target=signal.target, window_bars=_MFE_WINDOW_BARS,
+                )
         if discord is not None and discord.enabled:
             await discord.send_signal(signal, outcome)
         await journal.record_signal(signal, outcome)
@@ -486,6 +494,9 @@ def _append_rejection_csv(
             log.exception("_append_rejection_csv failed for %s", path)
 
 
+# Bars of post-event price action to track for MFE/MAE (30 = 30 min on 1-min bars).
+_MFE_WINDOW_BARS = 30
+
 _EXCURSIONS_CSV = Path("trades/excursions.csv")
 _EXCURSIONS_HEADERS = [
     "key", "kind", "side", "ref", "target", "mfe", "mae", "reached_target",
@@ -516,7 +527,7 @@ def _append_excursion_csv(w) -> None:
             log.exception("_append_excursion_csv failed for %s", path)
 
 
-def _make_reject_journaler():
+def _make_reject_journaler(excursion_tracker=None):
     """Build the on_reject callback: write runner-internal rejections to rejections.csv."""
 
     async def on_reject(info, instrument: str) -> None:
@@ -528,6 +539,12 @@ def _make_reject_journaler():
             target=str(info.target) if info.target is not None else "",
             killzone=info.killzone, rationale=info.rationale, source="runner",
         )
+        if excursion_tracker is not None and info.entry is not None:
+            excursion_tracker.open(
+                key=f"rej-{instrument}-{info.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
+                kind="rejection", side=info.side, ref=info.entry,
+                target=info.target, window_bars=_MFE_WINDOW_BARS,
+            )
 
     return on_reject
 
@@ -536,6 +553,7 @@ def _make_fill_journaler(
     journal: Journal,
     notifier: EmailNotifier | None = None,
     discord: DiscordNotifier | None = None,
+    excursion_tracker=None,
 ):
     """Build the on_fill broker subscriber bound to a specific Journal."""
 
@@ -546,6 +564,15 @@ def _make_fill_journaler(
         if getattr(fill, "is_provisional", False):
             await journal.record_fill(fill)  # journal also skips internally
             return
+        # Open an MFE/MAE window BEFORE _append_fill_csv (which pops the meta).
+        if fill.is_entry and excursion_tracker is not None:
+            m = _pending_signal_meta.get(fill.broker_order_id, {})
+            tgt = m.get("target")
+            excursion_tracker.open(
+                key=fill.broker_order_id or fill.instrument, kind="trade",
+                side=fill.side, ref=Decimal(str(fill.fill_price)),
+                target=Decimal(tgt) if tgt else None, window_bars=_MFE_WINDOW_BARS,
+            )
         _append_fill_csv(fill)
         await journal.record_fill(fill)
         if discord is not None and discord.enabled:
@@ -1199,22 +1226,31 @@ async def _async_main() -> int:
         notifier=notifier,
     )
 
+    # Records MFE/MAE over _MFE_WINDOW_BARS after each trade/rejection — pure
+    # observation, writes excursions.csv via emit; never touches orders.
+    excursion_tracker = ExcursionTracker(emit=_append_excursion_csv)
+
     engine = ExecutionEngine(
         broker=broker,
         risk_state=risk_state,
         runners=[runner],
-        on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path, discord=discord),
+        on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path, discord=discord, excursion_tracker=excursion_tracker),
         on_order_placed=reconciler.notify_order_placed,
         on_pre_place=_make_pre_place(config_path=cfg.bot_config_path),
-        on_reject=_make_reject_journaler(),
+        on_reject=_make_reject_journaler(excursion_tracker=excursion_tracker),
         contracts=bot_cfg.contracts,
         risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         strategy_cfg=bot_cfg.strategy,
     )
     # Subscribe the journal to broker fills and bars.
-    broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord))
+    broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=cfg.instrument))
     broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=cfg.instrument))
+
+    # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
+    async def _excursion_on_bar(b):
+        excursion_tracker.on_bar(b)
+    broker.on_bar(_excursion_on_bar)
 
     eod_scheduler = EndOfDayScheduler(
         journal=journal,
