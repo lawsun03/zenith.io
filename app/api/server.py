@@ -25,7 +25,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -51,55 +51,17 @@ from app.strategy.composer import Signal
 from app.strategy.killzone import in_killzone, killzones_from_names
 
 from .journal import Journal, _decimal_to_str
+from .schemas import (
+    AskClaudeRequest,
+    BacktestRequest,
+    DatabentoBarsRequest,
+    ForceSignalRequest,
+    NoteRequest,
+    RandomSearchRequest,
+)
 
 if TYPE_CHECKING:
     from app.sync.outbox import Outbox
-
-
-class BacktestRequest(BaseModel):
-    bars_path: str | None = None      # default: bars_<INSTRUMENT>.csv (or fetched)
-    instrument: str | None = None     # default: current config
-    timeframe: str | None = None      # default: current config
-    label: str | None = None
-    starting_balance: str = "50000"
-    start_date: str | None = None     # "YYYY-MM-DD"
-    end_date: str | None = None       # "YYYY-MM-DD"
-    # Per-run overrides. When provided, we write a temporary config
-    # for the backtest subprocess; the live bot's bot_config.json is untouched.
-    strategy: dict[str, Any] | None = None
-    enabled_killzones: list[str] | None = None
-
-
-class DatabentoBarsRequest(BaseModel):
-    start: str       # "YYYY-MM-DD"
-    end: str         # "YYYY-MM-DD"
-    symbol: str      # "MGC" — mapped to GC.c.0 for Databento
-    dry_run: bool = False
-
-
-class RandomSearchRequest(BaseModel):
-    count_per_timeframe: int = 15
-    timeframes: list[str] = ["1min", "5min"]
-    start_date: str
-    end_date: str
-    concurrency: int = 2          # how many subprocesses at once
-    label_prefix: str = "rs"
-    seed: int | None = None       # set for reproducible searches
-
-
-class NoteRequest(BaseModel):
-    note: str = ""
-
-
-class ForceSignalRequest(BaseModel):
-    side: str = "long"          # "long" or "short"
-    entry: str                  # price as string, e.g. "4720.0"
-    stop_distance: str = "2.0"  # points from entry
-    r_multiple: str = "2.0"
-
-
-class AskClaudeRequest(BaseModel):
-    question: str | None = None
 
 
 def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
@@ -180,9 +142,12 @@ def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
     }
 
 
+_DATABENTO_SYMBOL_MAP: dict[str, str] = {"MGC": "GC.c.0"}
+
+
 def _bars_csv_path(symbol: str) -> str:
     """Return the absolute path to the local bars CSV for the given instrument symbol."""
-    return str(Path(__file__).resolve().parent.parent.parent / f"bars_{symbol.upper()}.csv")
+    return str(Path(__file__).resolve().parent.parent.parent / "bars" / f"bars_{symbol.upper()}.csv")
 
 
 def _csv_cached_through(csv_path: str) -> str | None:
@@ -190,17 +155,25 @@ def _csv_cached_through(csv_path: str) -> str | None:
     p = Path(csv_path)
     if not p.exists():
         return None
-    last_ts = ""
     try:
-        with p.open(newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ts = row.get("ts", "") or row.get("timestamp", "")
-                if ts:
-                    last_ts = ts
+        with p.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size == 0:
+                return None
+            chunk = min(512, size)
+            f.seek(-chunk, 2)
+            tail = f.read().decode("utf-8", errors="replace")
+        for line in reversed(tail.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            ts = line.split(",")[0].strip()
+            if len(ts) >= 10:
+                return ts[:10]
+        return None
     except Exception:
         return None
-    return last_ts[:10] if last_ts else None
 
 
 def build_app(
@@ -897,7 +870,7 @@ def build_app(
 
     backtests_dir = Path("backtests")
 
-    bars_cache_dir = Path("bars_cache")
+    bars_cache_dir = Path("bars")
 
     async def _fetch_bars_to_csv(
         instrument: str,
@@ -971,11 +944,10 @@ def build_app(
         if not api_key:
             return JSONResponse({"ok": False, "reason": "DATABENTO_API_KEY not set in .env"})
 
-        _SYMBOL_MAP = {"MGC": "GC.c.0"}
-        db_symbol = _SYMBOL_MAP.get(req.symbol.upper())
+        db_symbol = _DATABENTO_SYMBOL_MAP.get(req.symbol.upper())
         if db_symbol is None:
             return JSONResponse(
-                {"ok": False, "reason": f"Unsupported symbol: {req.symbol!r}. Supported: {list(_SYMBOL_MAP)}"},
+                {"ok": False, "reason": f"Unsupported symbol: {req.symbol!r}. Supported: {list(_DATABENTO_SYMBOL_MAP)}"},
                 status_code=400,
             )
 
@@ -1018,18 +990,15 @@ def build_app(
         cost_match = re.search(r'\$(\d+\.\d+)', result.stdout)
         cost = float(cost_match.group(1)) if cost_match else 0.0
 
-        from datetime import date as _date
         try:
-            _days = (_date.fromisoformat(req.end) - _date.fromisoformat(req.start)).days + 1
+            days_fetched = (date.fromisoformat(req.end) - date.fromisoformat(req.start)).days + 1
         except ValueError:
-            _days = 0
-
-        new_cached_through = _csv_cached_through(csv_path) if not req.dry_run else cached_through
+            days_fetched = 0
 
         return JSONResponse({
             "ok": True,
-            "days_fetched": 0 if req.dry_run else _days,
-            "cached_through": new_cached_through or req.end,
+            "days_fetched": 0 if req.dry_run else days_fetched,
+            "cached_through": _csv_cached_through(csv_path) or req.end,
             "cost_estimate": cost,
         })
 
@@ -1097,7 +1066,7 @@ def build_app(
                     status_code=500,
                 )
         else:
-            bars_path = req.bars_path or f"./bars_{instrument}.csv"
+            bars_path = req.bars_path or f"bars/bars_{instrument}.csv"
             if not Path(bars_path).exists():
                 return JSONResponse(
                     {"ok": False, "reason": f"bars file not found: {bars_path}"},
