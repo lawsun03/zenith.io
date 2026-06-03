@@ -322,6 +322,15 @@ def _make_signal_journaler(
                 "SIGNAL DENIED  %s  reason=%s | %s",
                 signal.side.upper(), outcome.reason, signal.rationale,
             )
+            _g = signal.setup_grade
+            _append_rejection_csv(
+                ts=datetime.now(timezone.utc).isoformat(),
+                instrument=signal.instrument, side=signal.side,
+                reason=outcome.reason or "", grade=(_g.grade if _g else ""),
+                entry=str(signal.entry), stop=str(signal.stop),
+                target=str(signal.target), killzone=signal.killzone or "",
+                rationale=signal.rationale or "", source="engine",
+            )
         if discord is not None and discord.enabled:
             await discord.send_signal(signal, outcome)
         await journal.record_signal(signal, outcome)
@@ -441,6 +450,40 @@ def _append_fill_csv(fill: Fill) -> None:
                 w.writerow(row)
         except Exception:
             log.exception("_append_fill_csv failed for %s — fill not logged", path)
+
+
+_REJECTIONS_CSV = Path("trades/rejections.csv")
+_REJECTIONS_HEADERS = [
+    "ts", "instrument", "side", "reason", "grade",
+    "entry", "stop", "target", "killzone", "rationale", "source",
+]
+
+
+def _daily_rejections_path() -> Path:
+    """Today's rejections CSV (CT date, matches Topstep session boundary)."""
+    ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
+    return Path("trades") / f"rejections_{ct_date}.csv"
+
+
+def _append_rejection_csv(
+    *, ts: str, instrument: str, side: str, reason: str, grade: str = "",
+    entry: str = "", stop: str = "", target: str = "", killzone: str = "",
+    rationale: str = "", source: str = "",
+) -> None:
+    """Append one rejected/missed setup. source = 'engine' (vp/bias deny) or 'runner'."""
+    row = [ts, instrument, side, reason, grade, entry, stop, target,
+           killzone, rationale, source]
+    for path in (_REJECTIONS_CSV, _daily_rejections_path()):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_header = not path.exists()
+            with path.open("a", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                if write_header:
+                    w.writerow(_REJECTIONS_HEADERS)
+                w.writerow(row)
+        except Exception:
+            log.exception("_append_rejection_csv failed for %s", path)
 
 
 def _make_fill_journaler(

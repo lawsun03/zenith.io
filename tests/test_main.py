@@ -172,6 +172,25 @@ def test_pre_place_captures_grade_into_meta(monkeypatch):
     assert meta["grade_reason"] == "All: grade A - momentum=strong, P/D=ok"
 
 
+def test_append_rejection_csv_writes_row(tmp_path: Path, monkeypatch):
+    """A rejected setup is written to rejections.csv with reason + would-be levels."""
+    from app.main import _append_rejection_csv
+    master = tmp_path / "rejections.csv"
+    daily = tmp_path / "rejections_today.csv"
+    monkeypatch.setattr("app.main._REJECTIONS_CSV", master)
+    monkeypatch.setattr("app.main._daily_rejections_path", lambda: daily)
+    _append_rejection_csv(
+        ts="2026-06-02T12:19:00+00:00", instrument="MGC", side="long",
+        reason="vp_filter", grade="A-", entry="4556.4", stop="4555.5",
+        target="4561.0", killzone="All", rationale="bullish", source="engine",
+    )
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["reason"] == "vp_filter"
+    assert rows[0]["side"] == "long"
+    assert rows[0]["entry"] == "4556.4"
+    assert rows[0]["source"] == "engine"
+
+
 def test_config_loader_validates_mode(monkeypatch):
     """Bad mode value should raise."""
     monkeypatch.setenv("TOPSTEP_BOT_MODE", "wrong")
