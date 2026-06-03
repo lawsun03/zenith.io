@@ -46,7 +46,7 @@ from dataclasses import replace as dc_replace
 
 from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
-from app.broker.topstepx import _point_value
+from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
