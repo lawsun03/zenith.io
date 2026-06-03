@@ -486,6 +486,22 @@ def _append_rejection_csv(
             log.exception("_append_rejection_csv failed for %s", path)
 
 
+def _make_reject_journaler():
+    """Build the on_reject callback: write runner-internal rejections to rejections.csv."""
+
+    async def on_reject(info, instrument: str) -> None:
+        _append_rejection_csv(
+            ts=datetime.now(timezone.utc).isoformat(), instrument=instrument,
+            side=info.side, reason=info.reason, grade=info.grade,
+            entry=str(info.entry) if info.entry is not None else "",
+            stop=str(info.stop) if info.stop is not None else "",
+            target=str(info.target) if info.target is not None else "",
+            killzone=info.killzone, rationale=info.rationale, source="runner",
+        )
+
+    return on_reject
+
+
 def _make_fill_journaler(
     journal: Journal,
     notifier: EmailNotifier | None = None,
@@ -1160,6 +1176,7 @@ async def _async_main() -> int:
         on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path, discord=discord),
         on_order_placed=reconciler.notify_order_placed,
         on_pre_place=_make_pre_place(config_path=cfg.bot_config_path),
+        on_reject=_make_reject_journaler(),
         contracts=bot_cfg.contracts,
         risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         strategy_cfg=bot_cfg.strategy,
