@@ -77,6 +77,7 @@ class ArmedZoneTracker:
         stop_buffer: Decimal,
         created_at: datetime,
         killzone: str,
+        sweep_extreme: Decimal | None = None,
     ) -> ArmedZone:
         """
         Create an ArmedZone from an iFVG zone.
@@ -92,18 +93,24 @@ class ArmedZoneTracker:
           - retrace_ce: ce
           - close: box_boundary (caller treats this as immediate fill)
 
-        stop_price:
-          - long: fvg_low - stop_buffer
-          - short: fvg_high + stop_buffer
+        stop_price (beyond the sweep wick that took liquidity, so a normal
+        retest of the wick doesn't stop the trade — matches composer.py's path):
+          - long:  min(sweep_extreme, fvg_low)  - stop_buffer
+          - short: max(sweep_extreme, fvg_high) + stop_buffer
+          - sweep_extreme omitted/None → falls back to the iFVG edge. The
+            min/max guard keeps the stop from ever landing *tighter* than the
+            iFVG edge on a degenerate sweep inside the FVG.
         """
         ce = (fvg_low + fvg_high) / 2
 
         if side == "long":
             box_boundary = fvg_high
-            stop_price = fvg_low - stop_buffer
+            stop_anchor = min(sweep_extreme, fvg_low) if sweep_extreme is not None else fvg_low
+            stop_price = stop_anchor - stop_buffer
         else:
             box_boundary = fvg_low
-            stop_price = fvg_high + stop_buffer
+            stop_anchor = max(sweep_extreme, fvg_high) if sweep_extreme is not None else fvg_high
+            stop_price = stop_anchor + stop_buffer
 
         if entry_mode == "retrace_ce":
             entry_price = ce

@@ -322,6 +322,7 @@ class StrategyRunner:
             stop_buffer=stop_buffer,
             created_at=bar.ts,
             killzone=signal.killzone,
+            sweep_extreme=signal.sweep_extreme,
         )
         # Attach tp1_price to zone (ArmedZone is frozen — use dc_replace)
         if tp1_price is not None:

@@ -273,3 +273,37 @@ class TestArmedZoneCancel:
     def test_on_bar_returns_none_when_no_active_zone(self):
         t = make_tracker()
         assert t.on_bar(bar(0, "2400", "2401", "2399", "2400")) is None
+
+
+class TestStopUsesSweepExtreme:
+    """Stop should sit beyond the sweep wick (liquidity level), not the iFVG edge,
+    so a normal wick retest doesn't stop the trade. Matches composer.py's path."""
+
+    def test_short_stop_uses_sweep_extreme_beyond_fvg(self):
+        t = make_tracker()
+        z = t.arm(side="short", fvg_low=Decimal("2401"), fvg_high=Decimal("2403"),
+                  entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+                  killzone="NY AM", sweep_extreme=Decimal("2404"))
+        assert z.stop_price == Decimal("2404.50")   # sweep_extreme 2404 + 0.50
+
+    def test_long_stop_uses_sweep_extreme_beyond_fvg(self):
+        t = make_tracker()
+        z = t.arm(side="long", fvg_low=Decimal("2398"), fvg_high=Decimal("2400"),
+                  entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+                  killzone="NY AM", sweep_extreme=Decimal("2397"))
+        assert z.stop_price == Decimal("2396.50")   # sweep_extreme 2397 - 0.50
+
+    def test_stop_never_tighter_than_fvg_edge(self):
+        """Degenerate sweep inside the FVG → keep the iFVG-edge stop, never tighter."""
+        t = make_tracker()
+        z = t.arm(side="short", fvg_low=Decimal("2401"), fvg_high=Decimal("2403"),
+                  entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+                  killzone="NY AM", sweep_extreme=Decimal("2402"))   # inside FVG
+        assert z.stop_price == Decimal("2403.50")   # max(2402, 2403) + 0.50
+
+    def test_stop_falls_back_to_fvg_edge_when_no_sweep_extreme(self):
+        t = make_tracker()
+        z = t.arm(side="short", fvg_low=Decimal("2401"), fvg_high=Decimal("2403"),
+                  entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+                  killzone="NY AM")   # sweep_extreme omitted
+        assert z.stop_price == Decimal("2403.50")
