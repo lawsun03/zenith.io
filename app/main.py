@@ -265,6 +265,8 @@ def _make_pre_place(config_path: Path | None = None):
             "stop_buffer":       str(cfg_snap.strategy.stop_buffer),
             "body_atr_multiple": str(cfg_snap.strategy.body_atr_multiple),
             "vp_enabled":        str(cfg_snap.strategy.vp_enabled),
+            "grade":             signal.setup_grade.grade if signal.setup_grade else "",
+            "grade_reason":      signal.setup_grade.reason if signal.setup_grade else "",
         }
 
     return pre_place
@@ -340,6 +342,8 @@ _TRADES_HEADERS = [
     # Config snapshot at signal time (ENTRY rows only)
     "contracts", "entry_mode", "r_multiple", "stop_buffer",
     "body_atr_multiple", "vp_enabled",
+    # Grade + execution quality (ENTRY rows)
+    "grade", "grade_reason", "slippage",
 ]
 
 # Keyed by instrument (written in on_pre_place, before HTTP round-trip) then
@@ -353,6 +357,22 @@ def _daily_csv_path() -> Path:
     """Today's trading-day CSV path (CT date, matches Topstep session boundary)."""
     ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
     return Path("trades") / f"trades_{ct_date}.csv"
+
+
+def _entry_slippage(fill: Fill, meta: dict) -> str:
+    """fill_price - signal_entry for ENTRY rows; "" otherwise or if entry unknown.
+
+    Raw signed difference (interpret adversity by side downstream: a SHORT
+    filling below its planned entry, or a LONG above, is adverse)."""
+    if not fill.is_entry:
+        return ""
+    entry = meta.get("signal_entry")
+    if not entry:
+        return ""
+    try:
+        return str(Decimal(str(fill.fill_price)) - Decimal(str(entry)))
+    except Exception:
+        return ""
 
 
 def _append_fill_csv(fill: Fill) -> None:
@@ -401,6 +421,10 @@ def _append_fill_csv(fill: Fill) -> None:
         meta.get("stop_buffer", ""),
         meta.get("body_atr_multiple", ""),
         meta.get("vp_enabled", ""),
+        # Grade + slippage
+        meta.get("grade", ""),
+        meta.get("grade_reason", ""),
+        _entry_slippage(fill, meta),
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:

@@ -126,6 +126,52 @@ def test_append_fill_csv_logs_entry_with_unicode_rationale(tmp_path: Path, monke
         assert rows[0]["rationale"] == rationale  # ≥ preserved
 
 
+def test_append_fill_csv_records_grade_and_slippage(tmp_path: Path, monkeypatch):
+    """ENTRY rows carry grade, grade_reason, and computed slippage (fill - entry)."""
+    master = tmp_path / "trades.csv"
+    daily = tmp_path / "trades_today.csv"
+    monkeypatch.setattr("app.main._TRADES_CSV", master)
+    monkeypatch.setattr("app.main._daily_csv_path", lambda: daily)
+    oid = "OID-1"
+    monkeypatch.setattr("app.main._pending_signal_meta", {oid: {
+        "signal_entry": "4559.7",
+        "grade": "A-",
+        "grade_reason": "All: grade A- - momentum=decent, P/D=ok, fib=low (0.91x)",
+    }})
+    fill = Fill(
+        ts=datetime(2026, 6, 2, 10, 14, tzinfo=timezone.utc),
+        instrument="MGC", side="short", fill_price=Decimal("4558.1"),
+        size=20, is_entry=True, realized_pnl_delta=Decimal("0"),
+        contracts_delta=-20, broker_order_id=oid,
+    )
+    _append_fill_csv(fill)
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["grade"] == "A-"
+    assert rows[0]["grade_reason"].startswith("All: grade A-")
+    # slippage = fill - signal_entry = 4558.1 - 4559.7 = -1.6
+    assert float(rows[0]["slippage"]) == pytest.approx(-1.6)
+
+
+def test_pre_place_captures_grade_into_meta(monkeypatch):
+    """pre_place copies the signal's setup_grade letter + reason into the meta dict."""
+    from types import SimpleNamespace
+    from app.main import _make_pre_place, _pending_signal_meta
+    _pending_signal_meta.clear()
+    grade = SimpleNamespace(grade="A", reason="All: grade A - momentum=strong, P/D=ok")
+    signal = SimpleNamespace(
+        instrument="MGC", side="long", entry=Decimal("4556.4"),
+        stop=Decimal("4555.5"), target=Decimal("4561.0"), killzone="All",
+        sweep_pattern="B_one_bar", sweep_extreme=Decimal("4555.6"),
+        fvg_low=Decimal("4555.8"), fvg_high=Decimal("4556.4"),
+        rationale="bullish setup", setup_grade=grade,
+    )
+    pre_place = _make_pre_place(config_path=None)  # None -> BotConfig() defaults
+    asyncio.run(pre_place(signal, 20))
+    meta = _pending_signal_meta["MGC"]
+    assert meta["grade"] == "A"
+    assert meta["grade_reason"] == "All: grade A - momentum=strong, P/D=ok"
+
+
 def test_config_loader_validates_mode(monkeypatch):
     """Bad mode value should raise."""
     monkeypatch.setenv("TOPSTEP_BOT_MODE", "wrong")
