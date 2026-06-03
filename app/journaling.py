@@ -134,7 +134,7 @@ def _make_signal_journaler(
                 excursion_tracker.open(
                     key=f"rej-{signal.instrument}-{outcome.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
                     kind="rejection", side=signal.side, ref=signal.entry,
-                    target=signal.target, window_bars=_MFE_WINDOW_BARS,
+                    target=signal.target, stop=signal.stop, window_bars=_MFE_WINDOW_BARS,
                 )
         if discord is not None and discord.enabled:
             await discord.send_signal(signal, outcome)
@@ -293,7 +293,8 @@ def _append_rejection_csv(
 
 _EXCURSIONS_CSV = Path("trades/excursions.csv")
 _EXCURSIONS_HEADERS = [
-    "key", "kind", "side", "ref", "target", "mfe", "mae", "reached_target",
+    "key", "kind", "side", "ref", "stop", "target", "mfe", "mae",
+    "reached_target", "stop_hit", "outcome",
 ]
 
 
@@ -306,8 +307,10 @@ def _daily_excursions_path() -> Path:
 def _append_excursion_csv(w) -> None:
     """Append one completed excursion window (MFE/MAE over N bars)."""
     row = [w.key, w.kind, w.side, str(w.ref),
+           str(w.stop) if w.stop is not None else "",
            str(w.target) if w.target is not None else "",
-           str(w.mfe), str(w.mae), str(w.reached_target)]
+           str(w.mfe), str(w.mae), str(w.reached_target),
+           str(w.stop_hit), w.outcome]
     for path in (_EXCURSIONS_CSV, _daily_excursions_path()):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -337,7 +340,7 @@ def _make_reject_journaler(excursion_tracker=None):
             excursion_tracker.open(
                 key=f"rej-{instrument}-{info.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
                 kind="rejection", side=info.side, ref=info.entry,
-                target=info.target, window_bars=_MFE_WINDOW_BARS,
+                target=info.target, stop=info.stop, window_bars=_MFE_WINDOW_BARS,
             )
 
     return on_reject
@@ -362,10 +365,12 @@ def _make_fill_journaler(
         if fill.is_entry and excursion_tracker is not None:
             m = _pending_signal_meta.get(fill.broker_order_id, {})
             tgt = m.get("target")
+            stp = m.get("stop")
             excursion_tracker.open(
                 key=fill.broker_order_id or fill.instrument, kind="trade",
                 side=fill.side, ref=Decimal(str(fill.fill_price)),
-                target=Decimal(tgt) if tgt else None, window_bars=_MFE_WINDOW_BARS,
+                target=Decimal(tgt) if tgt else None,
+                stop=Decimal(stp) if stp else None, window_bars=_MFE_WINDOW_BARS,
             )
         _append_fill_csv(fill)
         await journal.record_fill(fill)
