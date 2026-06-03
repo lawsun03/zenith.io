@@ -299,3 +299,24 @@ def test_append_excursion_csv_writes_row(tmp_path: Path, monkeypatch):
     assert rows[0]["mfe"] == "4.5"
     assert rows[0]["mae"] == "1"
     assert rows[0]["reached_target"] == "True"
+
+
+def test_fill_journaler_opens_trade_excursion(monkeypatch, tmp_path):
+    """An ENTRY fill opens an excursion window keyed by broker_order_id."""
+    from app.main import _make_fill_journaler
+    from app.execution.excursion import ExcursionTracker
+    from app.api.journal import Journal
+    monkeypatch.setattr("app.main._TRADES_CSV", tmp_path / "t.csv")
+    monkeypatch.setattr("app.main._daily_csv_path", lambda: tmp_path / "td.csv")
+    monkeypatch.setattr("app.main._pending_signal_meta",
+                        {"OID9": {"signal_entry": "100", "target": "104"}})
+    opened = []
+    tracker = ExcursionTracker(emit=lambda w: None)
+    monkeypatch.setattr(tracker, "open", lambda **k: opened.append(k))
+    on_fill = _make_fill_journaler(Journal(), excursion_tracker=tracker)
+    fill = Fill(ts=datetime(2026, 6, 2, tzinfo=timezone.utc), instrument="MGC",
+                side="long", fill_price=Decimal("100.5"), size=20, is_entry=True,
+                realized_pnl_delta=Decimal("0"), contracts_delta=20, broker_order_id="OID9")
+    asyncio.run(on_fill(fill))
+    assert opened and opened[0]["key"] == "OID9"
+    assert opened[0]["kind"] == "trade" and opened[0]["side"] == "long"
