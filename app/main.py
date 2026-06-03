@@ -486,6 +486,36 @@ def _append_rejection_csv(
             log.exception("_append_rejection_csv failed for %s", path)
 
 
+_EXCURSIONS_CSV = Path("trades/excursions.csv")
+_EXCURSIONS_HEADERS = [
+    "key", "kind", "side", "ref", "target", "mfe", "mae", "reached_target",
+]
+
+
+def _daily_excursions_path() -> Path:
+    """Today's excursions CSV (CT date, matches Topstep session boundary)."""
+    ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
+    return Path("trades") / f"excursions_{ct_date}.csv"
+
+
+def _append_excursion_csv(w) -> None:
+    """Append one completed excursion window (MFE/MAE over N bars)."""
+    row = [w.key, w.kind, w.side, str(w.ref),
+           str(w.target) if w.target is not None else "",
+           str(w.mfe), str(w.mae), str(w.reached_target)]
+    for path in (_EXCURSIONS_CSV, _daily_excursions_path()):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_header = not path.exists()
+            with path.open("a", newline="", encoding="utf-8") as f:
+                wr = csv.writer(f)
+                if write_header:
+                    wr.writerow(_EXCURSIONS_HEADERS)
+                wr.writerow(row)
+        except Exception:
+            log.exception("_append_excursion_csv failed for %s", path)
+
+
 def _make_reject_journaler():
     """Build the on_reject callback: write runner-internal rejections to rejections.csv."""
 

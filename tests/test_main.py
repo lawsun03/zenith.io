@@ -278,3 +278,24 @@ async def test_paper_mode_full_run(tmp_path: Path, monkeypatch):
 
     # If we got here without a different exception, the cleanup ran.
     # That's the success condition.
+
+
+def test_append_excursion_csv_writes_row(tmp_path: Path, monkeypatch):
+    from decimal import Decimal
+    from app.main import _append_excursion_csv
+    from app.execution.excursion import ExcursionWindow
+    master = tmp_path / "excursions.csv"
+    daily = tmp_path / "excursions_today.csv"
+    monkeypatch.setattr("app.main._EXCURSIONS_CSV", master)
+    monkeypatch.setattr("app.main._daily_excursions_path", lambda: daily)
+    w = ExcursionWindow(key="OID-1", kind="trade", side="long",
+                        ref=Decimal("100"), target=Decimal("104"), bars_left=0,
+                        max_high=Decimal("104.5"), min_low=Decimal("99"),
+                        reached_target=True)
+    _append_excursion_csv(w)
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["key"] == "OID-1"
+    assert rows[0]["kind"] == "trade"
+    assert rows[0]["mfe"] == "4.5"
+    assert rows[0]["mae"] == "1"
+    assert rows[0]["reached_target"] == "True"
