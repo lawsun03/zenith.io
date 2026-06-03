@@ -1,0 +1,72 @@
+"""Excursion tracker — records MFE/MAE over N bars after a trade or rejection.
+
+Pure + stateful: no I/O. open() registers a window; on_bar() advances every
+window and calls emit(window) when its bar countdown completes. Used for
+observability only — never affects orders."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Callable, Literal
+
+from app.broker.events import Bar
+
+
+@dataclass
+class ExcursionWindow:
+    key: str
+    kind: Literal["trade", "rejection"]
+    side: str                       # "long" | "short"
+    ref: Decimal                    # (would-be) entry price
+    target: Decimal | None
+    bars_left: int
+    max_high: Decimal               # running max of bar.high while open
+    min_low: Decimal                # running min of bar.low while open
+    reached_target: bool = False
+
+    @property
+    def mfe(self) -> Decimal:
+        """Max favorable excursion in points (positive = in your favor)."""
+        return (self.max_high - self.ref) if self.side == "long" else (self.ref - self.min_low)
+
+    @property
+    def mae(self) -> Decimal:
+        """Max adverse excursion in points (positive = against you)."""
+        return (self.ref - self.min_low) if self.side == "long" else (self.max_high - self.ref)
+
+
+class ExcursionTracker:
+    def __init__(self, emit: Callable[[ExcursionWindow], None]) -> None:
+        self._emit = emit
+        self._windows: list[ExcursionWindow] = []
+
+    def open(self, *, key: str, kind: str, side: str, ref: Decimal,
+             target: Decimal | None, window_bars: int) -> None:
+        if window_bars <= 0:
+            return
+        self._windows.append(ExcursionWindow(
+            key=key, kind=kind, side=side, ref=ref, target=target,
+            bars_left=window_bars, max_high=ref, min_low=ref,
+        ))
+
+    def on_bar(self, bar: Bar) -> None:
+        """Advance every open window with this bar; emit + drop completed ones."""
+        still_open: list[ExcursionWindow] = []
+        for w in self._windows:
+            if bar.high > w.max_high:
+                w.max_high = bar.high
+            if bar.low < w.min_low:
+                w.min_low = bar.low
+            if w.target is not None and not w.reached_target:
+                if (w.side == "long" and bar.high >= w.target) or \
+                   (w.side == "short" and bar.low <= w.target):
+                    w.reached_target = True
+            w.bars_left -= 1
+            if w.bars_left <= 0:
+                try:
+                    self._emit(w)
+                except Exception:
+                    pass  # observability must never break the bar handler
+            else:
+                still_open.append(w)
+        self._windows = still_open
