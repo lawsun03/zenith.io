@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,6 +18,7 @@ from app.broker.events import Bar, Fill
 from app.broker.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
 from app.strategy.grader import SetupGrader
+from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
@@ -24,6 +26,30 @@ from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.killzone import default_killzones, killzones_from_names
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 from app.strategy.volume_profile import VolumeProfileTracker
+
+# How the faithful backtest replicates the live HTF refresh (main._refresh_htf_once),
+# which is what feeds the grader's structural-target gate. Without it every candidate
+# fails grading ("no structural target found") and 0 trades are produced.
+_HTF_REFRESH_BARS = 60     # rebuild once per ~hour of replay (HTF structure barely moves intraday)
+_HTF_WINDOW_BARS = 12000   # trailing 1min bars to aggregate (bounds cost; ~enough for 4h swings)
+_HTF_MIN_BARS = 480        # need several aggregated HTF bars before swings can confirm
+
+
+def _refresh_backtest_htf(bars, s: StrategyParams, level_finder, bias_tracker, graders) -> None:
+    """Rebuild HTF trackers + feed each grader from the bars seen so far.
+
+    Mirrors main._refresh_htf_once but aggregates the replay stream (the
+    PaperBroker has no get_historical_bars) using only past bars — no lookahead."""
+    from app.main import _aggregate_bars, _tf_to_seconds  # lazy: avoid import cycle
+    bias_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_bias_timeframe), s.htf_bias_timeframe)
+    if level_finder is not None:
+        swing_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_swing_timeframe), s.htf_swing_timeframe)
+        level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
+        for g in graders:
+            g.update_delivery_fvgs(swing_bars)
+            g.update_htf_swings(level_finder.swing_highs, level_finder.swing_lows)
+    if bias_tracker is not None:
+        bias_tracker.rebuild(bias_bars)
 
 
 @dataclass
@@ -347,11 +373,32 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         strategy_cfg=cfg.strategy_params,
     )
     broker.on_fill(on_fill)
+
+    # Faithful HTF feed: live runs an HTF refresh loop (main._refresh_htf_once)
+    # that rebuilds bias/level trackers and feeds the grader's structural-target
+    # gate. The backtest must replicate it from the replay stream or the grader
+    # rejects every candidate ("no structural target found") → 0 trades.
+    s = cfg.strategy_params
+    htf_bias = htf_levels = None
+    if s is not None and (s.htf_bias_enabled or s.htf_target_enabled):
+        if s.htf_bias_enabled:
+            htf_bias = HTFBiasTracker(lookback=s.htf_bias_lookback)
+        if s.htf_target_enabled:
+            htf_levels = HTFLevelFinder(swing_lookback=s.htf_bias_lookback)
+        engine.htf_bias = htf_bias
+        engine.htf_levels = htf_levels
+    _graders = [r.grader for r in [runner] if r.grader is not None]
+    _seen: deque[Bar] = deque(maxlen=_HTF_WINDOW_BARS)
+
     await broker.connect()
     await engine.start()
 
     bar_count = 0
     for bar in cfg.bars:
+        _seen.append(bar)
+        if (htf_bias is not None or htf_levels is not None) \
+                and bar_count % _HTF_REFRESH_BARS == 0 and len(_seen) >= _HTF_MIN_BARS:
+            _refresh_backtest_htf(list(_seen), s, htf_levels, htf_bias, _graders)
         await broker.inject_bar(bar)
         bar_count += 1
 
