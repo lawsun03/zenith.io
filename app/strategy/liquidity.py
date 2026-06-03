@@ -147,7 +147,7 @@ class LiquidityTracker:
         # Without this, a swing that's been tagged and expired would
         # re-tag on the very next bar that pierces it again, defeating
         # the multi-bar window.
-        self._used_swings: set[int] = set()  # set of id(Swing)
+        self._used_swings: set[Swing] = set()  # value-identity (frozen Swing); id() is reused after GC -> nondeterministic
 
         # Monotonic bar counter for windowing.
         self._bar_idx = 0
@@ -292,7 +292,7 @@ class LiquidityTracker:
         for swing in reversed(list(self._swings)):
             if swing.kind != "high":
                 continue
-            if id(swing) in self._used_swings:
+            if swing in self._used_swings:
                 continue
             if (
                 bar.high >= swing.price + pen
@@ -305,13 +305,13 @@ class LiquidityTracker:
                     sweep_extreme=bar.high,
                     completed_at=bar.ts,
                 ))
-                self._used_swings.add(id(swing))
+                self._used_swings.add(swing)
                 break  # one sweep per bar per side; nearest swing wins
 
         for swing in reversed(list(self._swings)):
             if swing.kind != "low":
                 continue
-            if id(swing) in self._used_swings:
+            if swing in self._used_swings:
                 continue
             if (
                 bar.low <= swing.price - pen
@@ -324,7 +324,7 @@ class LiquidityTracker:
                     sweep_extreme=bar.low,
                     completed_at=bar.ts,
                 ))
-                self._used_swings.add(id(swing))
+                self._used_swings.add(swing)
                 break
 
         return events
@@ -345,7 +345,7 @@ class LiquidityTracker:
         for swing in reversed(list(self._swings)):
             if swing.kind != "high":
                 continue
-            if id(swing) in self._used_swings:
+            if swing in self._used_swings:
                 continue
             if (
                 bar.high >= swing.price + pen
@@ -366,7 +366,7 @@ class LiquidityTracker:
         for swing in reversed(list(self._swings)):
             if swing.kind != "low":
                 continue
-            if id(swing) in self._used_swings:
+            if swing in self._used_swings:
                 continue
             if (
                 bar.low <= swing.price - pen
@@ -414,7 +414,7 @@ class LiquidityTracker:
                     sweep_extreme=p_extreme,
                     completed_at=bar.ts,
                 ))
-                self._used_swings.add(id(p.swing))
+                self._used_swings.add(p.swing)
                 continue  # resolved, drop from pending
 
             if p.side == "low" and bar.close > p.swing.price:
@@ -425,14 +425,14 @@ class LiquidityTracker:
                     sweep_extreme=p_extreme,
                     completed_at=bar.ts,
                 ))
-                self._used_swings.add(id(p.swing))
+                self._used_swings.add(p.swing)
                 continue
 
             if elapsed >= window:
                 # Expired — price never closed back. No sweep event.
                 # Mark as used so a later bar piercing the same level
                 # doesn't immediately re-tag and bypass the window.
-                self._used_swings.add(id(p.swing))
+                self._used_swings.add(p.swing)
                 continue
 
             still_pending.append(_PendingSweep(

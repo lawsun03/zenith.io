@@ -546,12 +546,12 @@ class _StubLevels:
     def find_target(self, side, entry, stop, min_r): return self._r
 
 
-async def _run_short_signal(engine, broker):
+async def _run_short_signal(engine, broker, minute_offset: int = 0):
     captured = []
     async def cap(_, out): captured.append(out)
     engine.on_signal = cap
     for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
-        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await broker.inject_bar(bar(in_ny_am(i + minute_offset), o, h, l, c))
         await asyncio.sleep(0)
     return captured
 
@@ -774,7 +774,11 @@ async def test_htf_live_toggle_takes_effect_without_restart():
     engine.htf_bias = _StubBias("bullish")
     engine._htf_warned = False
 
-    second = await _run_short_signal(engine, broker)
+    # Distinct timestamps so the second run forms a FRESH swing. The liquidity
+    # tracker dedupes a swept swing by value-identity (kind/price/ts), so
+    # replaying the same bar timestamps is correctly treated as the
+    # already-swept swing and produces no new signal.
+    second = await _run_short_signal(engine, broker, minute_offset=80)
     assert len(second) == 1
     assert second[0].placed is False
     assert second[0].reason == "htf_bias"
