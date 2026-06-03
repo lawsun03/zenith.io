@@ -187,6 +187,23 @@ async def test_engine_idempotent_start():
     await engine.stop()
 
 
+def test_runner_records_grader_b_rejection():
+    """An unseeded grader grades the test short 'B' (no structural target); the
+    runner records it as last_reject on the rejecting bar so the engine can surface
+    it to the rejection ledger. last_reject is cleared each bar — capture per-bar,
+    exactly as ExecutionEngine._handle_bar reads it right after on_bar()."""
+    runner = make_runner()
+    runner.grader = SetupGrader()  # fresh/unseeded -> grader-B (no target) -> reject
+    rejects = []
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        runner.on_bar(bar(in_ny_am(i), o, h, l, c))
+        if runner.last_reject is not None:
+            rejects.append(runner.last_reject)
+    assert rejects, "expected a grader-B rejection to be recorded"
+    assert rejects[-1].reason.startswith("grader_")
+    assert rejects[-1].side == "short"
+
+
 # =====================================================================
 # Full replay — winning trade
 # =====================================================================
