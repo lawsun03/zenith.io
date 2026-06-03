@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.topstepx import _partial_plan
+from app.broker.pricing import _partial_plan
 
 
 def test_partial_plan_disabled_returns_none():

@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.broker.topstepx import PartialPlan, _partial_plan
+from app.broker.pricing import PartialPlan, _partial_plan
 from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 
 
