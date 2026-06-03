@@ -99,6 +99,21 @@ class OrderOutcome:
     broker_order_id: str | None = None
 
 
+@dataclass(frozen=True)
+class RejectInfo:
+    """A setup the runner rejected internally (grader-B, premature liquidity, or
+    zone invalidation). Surfaced to the rejection ledger via ExecutionEngine.on_reject."""
+
+    reason: str                  # "grader_<G>" | "premature_liquidity" | "invalidated"
+    side: str
+    entry: Decimal | None
+    stop: Decimal | None
+    target: Decimal | None
+    grade: str
+    killzone: str
+    rationale: str
+
+
 @dataclass
 class StrategyRunner:
     """
@@ -121,9 +136,13 @@ class StrategyRunner:
     vp: VolumeProfileTracker | None = None
     signal_instrument: str = ""  # if set, bars from this instrument drive signals; execution uses `instrument`
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
+    last_reject: "RejectInfo | None" = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
+        # Cleared each bar; set at an internal reject site below. The engine reads
+        # it immediately after on_bar(), before the next bar clears it.
+        self.last_reject = None
         # News and session filters (Rules G, H)
         if in_news_blackout(bar.ts, self.strategy_cfg.ifvg_news_blackout):
             log.info("Signal blocked: news blackout at %s", bar.ts)
@@ -144,16 +163,32 @@ class StrategyRunner:
                         "Premature liquidity: TP1 %s hit before long entry — cancelling armed zone",
                         zone.tp1_price,
                     )
+                    _ps = self._pending_signal
                     self.armed_tracker.cancel()
                     self._pending_signal = None
+                    self.last_reject = RejectInfo(
+                        reason="premature_liquidity", side="long",
+                        entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
+                        grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        killzone=(_ps.killzone if _ps else "") or "",
+                        rationale=(_ps.rationale if _ps else "") or "",
+                    )
                     # fall through to normal signal generation
                 elif zone.side == "short" and bar.low <= zone.tp1_price:
                     log.info(
                         "Premature liquidity: TP1 %s hit before short entry — cancelling armed zone",
                         zone.tp1_price,
                     )
+                    _ps = self._pending_signal
                     self.armed_tracker.cancel()
                     self._pending_signal = None
+                    self.last_reject = RejectInfo(
+                        reason="premature_liquidity", side="short",
+                        entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
+                        grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        killzone=(_ps.killzone if _ps else "") or "",
+                        rationale=(_ps.rationale if _ps else "") or "",
+                    )
                     # fall through to normal signal generation
 
         if self.armed_tracker.active is not None and self._pending_signal is not None:
@@ -176,7 +211,16 @@ class StrategyRunner:
                 )
             elif status == "invalidated":
                 log.info("Armed zone invalidated — pending signal discarded")
+                _ps = self._pending_signal
                 self._pending_signal = None
+                self.last_reject = RejectInfo(
+                    reason="invalidated", side=(_ps.side if _ps else ""),
+                    entry=(_ps.entry if _ps else None), stop=(_ps.stop if _ps else None),
+                    target=(_ps.target if _ps else None),
+                    grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                    killzone=(_ps.killzone if _ps else "") or "",
+                    rationale=(_ps.rationale if _ps else "") or "",
+                )
                 # fall through to normal signal generation on this same bar
 
             elif status == "pending":
@@ -212,6 +256,13 @@ class StrategyRunner:
                         log.info(
                             "Signal filtered by grader: %s — %s",
                             grade.grade, grade.reason,
+                        )
+                        self.last_reject = RejectInfo(
+                            reason=f"grader_{grade.grade}", side=candidate.side,
+                            entry=candidate.entry, stop=candidate.stop,
+                            target=candidate.target, grade=grade.grade,
+                            killzone=candidate.killzone or "",
+                            rationale=candidate.rationale or "",
                         )
 
         # Cache ATR for the NEXT bar's liquidity call (one-bar lag is acceptable;
