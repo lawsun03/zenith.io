@@ -96,6 +96,9 @@ const PARAM_LABELS: Record<string, string> = {
   displacement_window_bars: 'Displacement Window',
   stop_buffer: 'Stop Buffer ($)',
   r_multiple: 'R Multiple',
+  ifvg_entry_mode: 'iFVG Entry Mode',
+  ifvg_rule_f_enabled: 'Rule F',
+  target_clarity_mode: 'Target-Clarity Gate',
 }
 
 const TIMEFRAMES = ['1min', '3min', '5min', '15min', '30min', '1h']
@@ -128,10 +131,12 @@ interface Availability {
 interface StrategyField {
   key: string
   label: string
-  min: number
-  max: number
-  step: number
+  min?: number
+  max?: number
+  step?: number
   hint: string
+  kind?: 'number' | 'select' | 'toggle'   // default 'number'
+  options?: string[]                       // for kind 'select'
 }
 
 const STRATEGY_FIELDS: StrategyField[] = [
@@ -175,6 +180,20 @@ const STRATEGY_FIELDS: StrategyField[] = [
     key: 'r_multiple', label: 'R Multiple', min: 0.5, max: 10, step: 0.1,
     hint: 'Reward-to-risk ratio: target distance ÷ stop distance. 2.0 = risk $50 to make $100. Higher targets = more profit per win but lower win rate. 2.0–3.0 is a common sweet spot.',
   },
+  {
+    key: 'ifvg_entry_mode', label: 'iFVG Entry Mode', kind: 'select',
+    options: ['ifvg_edge', 'retrace_ce', 'close'],
+    hint: 'How to enter once a setup is graded. ifvg_edge/retrace_ce arm a zone and wait for price to retrace to the FVG edge / center (often missed in trends). close = enter immediately — far more trades, rides trends, higher variance.',
+  },
+  {
+    key: 'ifvg_rule_f_enabled', label: 'Rule F (premature-liq cancel)', kind: 'toggle',
+    hint: 'When ON, cancels an armed zone if the target is hit before the entry fills. In trends this voids the with-trend setups that work, so turning it OFF was the single biggest backtest improvement. (No effect in "close" mode — close never arms.)',
+  },
+  {
+    key: 'target_clarity_mode', label: 'Target-Clarity Gate', kind: 'select',
+    options: ['reject', 'penalty', 'off'],
+    hint: 'What to do when a setup has no structural target near an HTF swing. reject = drop it (cut ~85% of candidates). penalty = downgrade one grade notch. off = ignore the gate entirely (most trades).',
+  },
 ]
 
 const STRATEGY_DEFAULTS: Record<string, string> = {
@@ -188,6 +207,9 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   displacement_window_bars: '5',
   stop_buffer:              '0.30',
   r_multiple:               '2.5',
+  ifvg_entry_mode:          'close',
+  ifvg_rule_f_enabled:      'true',
+  target_clarity_mode:      'reject',
 }
 
 type DataSource = 'local' | 'databento'
@@ -272,8 +294,7 @@ export function BacktestsPage() {
     if (src !== 'databento') return
     setBentoLoading(true)
     try {
-      const cfg = await fetch('/api/config').then(r => r.json())
-      const symbol = cfg?.instrument ?? 'MGC'
+      const symbol = await resolveSymbol()
       const res = await fetch('/api/databento/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -295,26 +316,23 @@ export function BacktestsPage() {
     }
   }
 
+  const GRADE_STYLES: Record<string, { color: string; badge: string }> = {
+    'A+': { color: 'ring-1 ring-accent text-accent bg-accent/10',       badge: 'bg-accent text-bg' },
+    'A':  { color: 'ring-1 ring-accent/60 text-accent/80 bg-accent/5',  badge: 'bg-accent/70 text-bg' },
+    'A-': { color: 'ring-1 ring-warn/60 text-warn bg-warn/5',           badge: 'bg-warn text-bg' },
+    'B':  { color: 'ring-1 ring-warn/30 text-warn/60 bg-warn/5',        badge: 'bg-warn/60 text-bg' },
+    'B-': { color: 'ring-1 ring-danger/40 text-danger/70 bg-danger/5',  badge: 'bg-danger/70 text-bg' },
+  }
   function gradeColor(g: string): string {
-    switch (g) {
-      case 'A+': return 'ring-1 ring-accent text-accent bg-accent/10'
-      case 'A':  return 'ring-1 ring-accent/60 text-accent/80 bg-accent/5'
-      case 'A-': return 'ring-1 ring-warn/60 text-warn bg-warn/5'
-      case 'B':  return 'ring-1 ring-warn/30 text-warn/60 bg-warn/5'
-      case 'B-': return 'ring-1 ring-danger/40 text-danger/70 bg-danger/5'
-      default:   return 'ring-1 ring-border text-dim'
-    }
+    return GRADE_STYLES[g]?.color ?? 'ring-1 ring-border text-dim'
+  }
+  function gradeBadge(g: string | undefined): string {
+    return GRADE_STYLES[g ?? '']?.badge ?? 'bg-dim/20 text-dim'
   }
 
-  function gradeBadge(g: string | undefined): string {
-    switch (g) {
-      case 'A+': return 'bg-accent text-bg'
-      case 'A':  return 'bg-accent/70 text-bg'
-      case 'A-': return 'bg-warn text-bg'
-      case 'B':  return 'bg-warn/60 text-bg'
-      case 'B-': return 'bg-danger/70 text-bg'
-      default:   return 'bg-dim/20 text-dim'
-    }
+  async function resolveSymbol(): Promise<string> {
+    const cfg = await fetch('/api/config').then(r => r.json())
+    return (cfg?.instrument ?? 'MGC') as string
   }
 
   useEffect(() => {
@@ -388,8 +406,7 @@ export function BacktestsPage() {
       }
       if (dataSource === 'databento') {
         setMsg('Fetching bars from Databento…')
-        const cfg = await fetch('/api/config').then(r => r.json())
-        const symbol = cfg?.instrument ?? 'MGC'
+        const symbol = await resolveSymbol()
         const bentoRes = await fetch('/api/databento/fetch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -609,17 +626,22 @@ export function BacktestsPage() {
   })()
 
   const gradeStats = useMemo(() => {
-    if (!selected?.trades) return {} as Record<GradeTier, { count: number; winRate: number; profitFactor: number | null }>
+    type Bucket = { wins: number; grossWin: number; grossLoss: number; count: number }
+    const buckets: Record<string, Bucket> = {}
+    for (const t of selected?.trades ?? []) {
+      const pnl = parseFloat(t.pnl)
+      const g = t.grade ?? ''
+      const b = buckets[g] ??= { wins: 0, grossWin: 0, grossLoss: 0, count: 0 }
+      b.count++
+      if (pnl > 0) { b.wins++; b.grossWin += pnl }
+      else if (pnl < 0) { b.grossLoss += Math.abs(pnl) }
+    }
     return GRADE_TIERS.reduce((acc, g) => {
-      const gt = selected.trades.filter(t => t.grade === g)
-      const wins = gt.filter(t => parseFloat(t.pnl) > 0)
-      const losses = gt.filter(t => parseFloat(t.pnl) < 0)
-      const grossWin = wins.reduce((s, t) => s + parseFloat(t.pnl), 0)
-      const grossLoss = Math.abs(losses.reduce((s, t) => s + parseFloat(t.pnl), 0))
+      const b = buckets[g] ?? { wins: 0, grossWin: 0, grossLoss: 0, count: 0 }
       acc[g] = {
-        count: gt.length,
-        winRate: gt.length > 0 ? Math.round(wins.length / gt.length * 100) : 0,
-        profitFactor: grossLoss > 0 ? Math.round((grossWin / grossLoss) * 100) / 100 : null,
+        count: b.count,
+        winRate: b.count > 0 ? Math.round(b.wins / b.count * 100) : 0,
+        profitFactor: b.grossLoss > 0 ? Math.round(b.grossWin / b.grossLoss * 100) / 100 : null,
       }
       return acc
     }, {} as Record<GradeTier, { count: number; winRate: number; profitFactor: number | null }>)
@@ -809,6 +831,29 @@ export function BacktestsPage() {
                   <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
                     {f.label}
                   </label>
+                  {f.kind === 'select' ? (
+                    <select
+                      value={strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]}
+                      onChange={e => setStratField(f.key, e.target.value)}
+                      disabled={running}
+                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                    >
+                      {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : f.kind === 'toggle' ? (
+                    <button
+                      type="button"
+                      onClick={() => setStratField(f.key, (strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true' ? 'false' : 'true')}
+                      disabled={running}
+                      className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
+                        (strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true'
+                          ? 'border-accent text-accent bg-accent/10'
+                          : 'border-border text-dim hover:text-ink'
+                      }`}
+                    >
+                      {(strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true' ? 'ON' : 'OFF'}
+                    </button>
+                  ) : (
                   <div className="flex items-center gap-2">
                     <input
                       type="range"
@@ -831,6 +876,7 @@ export function BacktestsPage() {
                       className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
                     />
                   </div>
+                  )}
                   <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">{f.hint}</p>
                 </div>
               ))}
