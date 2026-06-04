@@ -36,6 +36,7 @@ class StrategyParams(BaseModel):
 
     # iFVG entry configuration
     ifvg_entry_mode: str = "ifvg_edge"                        # "ifvg_edge" | "retrace_ce" | "close"
+    ifvg_rule_f_enabled: bool = True                          # Rule F: cancel armed zone if TP1 hit before entry
     ifvg_stop_buffer_ticks: Decimal = Decimal("1.0")          # ticks beyond iFVG extreme for stop
 
     # iFVG grader configuration

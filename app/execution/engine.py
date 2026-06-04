@@ -156,8 +156,8 @@ class StrategyRunner:
         if self.armed_tracker.active is not None and self._pending_signal is not None:
             zone = self.armed_tracker.active  # capture before on_bar clears it
 
-            # Rule F: premature liquidity — TP1 hit before entry fills
-            if zone.tp1_price is not None:
+            # Rule F: premature liquidity — TP1 hit before entry fills (config-gated)
+            if self.strategy_cfg.ifvg_rule_f_enabled and zone.tp1_price is not None:
                 if zone.side == "long" and bar.high >= zone.tp1_price:
                     log.info(
                         "Premature liquidity: TP1 %s hit before long entry — cancelling armed zone",
