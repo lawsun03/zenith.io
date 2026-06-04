@@ -68,7 +68,10 @@ class SetupGrader:
     Updated by the HTF refresh loop every 60s; scored once per signal candidate.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, target_clarity_mode: str = "reject") -> None:
+        # How to treat a setup with no structural target: "reject" (cap B, the
+        # original behavior), "penalty" (downgrade one notch), or "off" (ignore).
+        self._target_clarity_mode = target_clarity_mode
         self._delivery_fvgs: list[FairValueGap] = []
         self._htf_swing_highs: list[Decimal] = []
         self._htf_swing_lows: list[Decimal] = []
@@ -158,20 +161,26 @@ class SetupGrader:
             return grade
 
         # ── Step 2: Target clarity ─────────────────────────────────────
+        # Config-gated: reject (cap B) / penalty (downgrade one notch) / off (ignore).
         target_clear = self._check_target_clarity(signal, disp.atr_at_event)
+        target_penalty = False
         if not target_clear:
-            grade = self._make_grade(
-                "B", False,
-                momentum_quality="decent",
-                target_clear=False,
-                reason="no structural target found — B",
-                signal=signal, disp=disp,
-                bars_since_sweep=bars_since_sweep,
-                sweep_window_bars=sweep_window_bars,
-                min_displacement_mult=min_displacement_mult,
-            )
-            self.last_grade = grade
-            return grade
+            if self._target_clarity_mode == "reject":
+                grade = self._make_grade(
+                    "B", False,
+                    momentum_quality="decent",
+                    target_clear=False,
+                    reason="no structural target found — B",
+                    signal=signal, disp=disp,
+                    bars_since_sweep=bars_since_sweep,
+                    sweep_window_bars=sweep_window_bars,
+                    min_displacement_mult=min_displacement_mult,
+                )
+                self.last_grade = grade
+                return grade
+            elif self._target_clarity_mode == "penalty":
+                target_penalty = True  # downgrade the final grade one notch
+            # "off": fall through as if the target were clear (no penalty)
 
         # ── Step 3: FVG singularity (Corrections 4, 5, Rule I) ────────
         singular, sing_tf, bpr, bpr_tf = self._check_fvg_singular(
@@ -233,12 +242,20 @@ class SetupGrader:
                 grade_str = "A+"
             passes = True
 
+        # penalty mode: no structural target → downgrade one notch (A+→A, A→A-,
+        # A-→B which then fails). Strong setups still trade; marginal ones don't.
+        if target_penalty:
+            _DOWN = {"A+": "A", "A": "A-", "A-": "B", "B": "B-", "B-": "B-"}
+            grade_str = _DOWN[grade_str]
+            passes = grade_str in ("A+", "A", "A-")
+
         reason = (
             f"{signal.killzone}: grade {grade_str} — "
             f"momentum={momentum_quality}, P/D={'ok' if pd_ok else 'off'}, "
             f"delivery={'yes' if delivery else 'no'}, "
             f"BPR={'yes' if bpr else 'no'}, "
             f"fib={'ok' if fib_ok else 'low'} ({fib_ext:.2f}x)"
+            + (" [no-struct-target penalty]" if target_penalty else "")
         )
         log.info(reason)
 
@@ -249,7 +266,7 @@ class SetupGrader:
             delivery_fvg_side=delivery_side,
             delivery_fvg_in_pd=delivery_in_pd,
             premium_discount_ok=pd_ok,
-            target_clear=True,
+            target_clear=target_clear,
             fvg_singular=singular,
             singularity_timeframe=sing_tf,
             momentum_quality=momentum_quality,

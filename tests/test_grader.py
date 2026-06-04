@@ -321,3 +321,37 @@ class TestGradeAssignment:
         disp = make_disp(body_to_atr="1.8", body_to_range="0.4", atr="2.0")
         grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("0.7"))
         assert grade.fib_displacement_ok is False
+
+
+_DOWNGRADE = {"A+": "A", "A": "A-", "A-": "B", "B": "B-", "B-": "B-"}
+
+
+class TestTargetClarityMode:
+    """no-structural-target behavior is config-gated: reject (default) /
+    penalty (downgrade one notch) / off (ignore)."""
+
+    def test_penalty_downgrades_instead_of_rejecting(self):
+        disp = make_disp()
+        # Baseline: clear target (== session low 2390) → normal grade.
+        base = grader_with_htf().score(make_signal(target="2390"), disp, active_fvgs=[])
+        assert base.target_clear is True
+        # Penalty mode: target far from all structure → downgraded, NOT hard-rejected.
+        g = grader_with_htf()
+        g._target_clarity_mode = "penalty"
+        pen = g.score(make_signal(target="2300"), disp, active_fvgs=[])
+        assert pen.target_clear is False
+        assert "no structural target" not in pen.reason       # not the step-2 hard reject
+        assert pen.grade == _DOWNGRADE[base.grade]            # exactly one notch below
+
+    def test_off_mode_ignores_missing_target(self):
+        g = grader_with_htf()
+        g._target_clarity_mode = "off"
+        off = g.score(make_signal(target="2300"), disp=make_disp(), active_fvgs=[])
+        base = grader_with_htf().score(make_signal(target="2390"), make_disp(), active_fvgs=[])
+        assert off.grade == base.grade                        # no penalty at all
+
+    def test_reject_is_the_default(self):
+        g = grader_with_htf()  # no mode set
+        rej = g.score(make_signal(target="2300"), make_disp(), active_fvgs=[])
+        assert rej.passes is False
+        assert "no structural target" in rej.reason

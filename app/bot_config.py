@@ -68,6 +68,10 @@ class StrategyParams(BaseModel):
     htf_target_min_r: Decimal = Decimal("2.0")  # min R an HTF level must deliver
     htf_swing_timeframe: str = "30min"      # fallback swing-target timeframe
 
+    # Grader "no structural target" gate: "reject" (cap B, original), "penalty"
+    # (downgrade one notch so strong setups still trade), or "off" (ignore).
+    target_clarity_mode: str = "reject"
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
