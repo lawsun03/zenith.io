@@ -138,7 +138,7 @@ def _build_runner(
             min_atr_filter=s.min_atr_filter,
             max_atr_filter=s.max_atr_filter,
         )),
-        grader=SetupGrader(),
+        grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,
         vp=VolumeProfileTracker(),
         signal_instrument=signal_instrument or "",

@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20.0 0.0 1100.0 2330.0" font-family="Segoe UI,Arial,sans-serif">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#444"/></marker></defs>
+<rect x="20.0" y="0.0" width="1100.0" height="2330.0" fill="white"/>
+<line x1="570.0" y1="145.0" x2="570.0" y2="255.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<line x1="570.0" y1="255.0" x2="1000.0" y2="255.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="772.4" y="246.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="258.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="255.0" x2="570.0" y2="385.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="560.6" y="311.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="323.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="385.0" x2="1000.0" y2="385.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="775.6" y="376.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="388.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="385.0" x2="570.0" y2="515.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="557.4" y="441.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="453.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="515.0" x2="180.0" y2="675.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="314.4" y="586.0" width="121.2" height="15" fill="white" opacity="0.85"/>
+<text x="375.0" y="598.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes → process zone</text>
+<line x1="570.0" y1="515.0" x2="570.0" y2="680.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="525.4" y="588.5" width="89.2" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="600.5" font-size="10" fill="#7a3b30" text-anchor="middle">no → generate</text>
+<line x1="180.0" y1="675.0" x2="180.0" y2="785.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="167.4" y="721.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="180.0" y="733.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="180.0" y1="675.0" x2="180.0" y2="900.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="170.6" y="778.5" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="180.0" y="790.5" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="180.0" y1="900.0" x2="175.0" y2="1020.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="139.3" y="951.0" width="76.4" height="15" fill="white" opacity="0.85"/>
+<text x="177.5" y="963.0" font-size="10" fill="#7a3b30" text-anchor="middle">invalidated</text>
+<line x1="180.0" y1="900.0" x2="175.0" y2="1105.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="152.1" y="993.5" width="50.800000000000004" height="15" fill="white" opacity="0.85"/>
+<text x="177.5" y="1005.5" font-size="10" fill="#7a3b30" text-anchor="middle">pending</text>
+<line x1="180.0" y1="900.0" x2="180.0" y2="1205.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="157.8" y="1043.5" width="44.400000000000006" height="15" fill="white" opacity="0.85"/>
+<text x="180.0" y="1055.5" font-size="10" fill="#7a3b30" text-anchor="middle">filled</text>
+<line x1="180.0" y1="1205.0" x2="580.0" y2="1590.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<line x1="570.0" y1="680.0" x2="1000.0" y2="680.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="775.6" y="671.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="683.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="680.0" x2="570.0" y2="820.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="557.4" y="741.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="753.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="820.0" x2="1000.0" y2="820.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="775.6" y="811.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="823.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="820.0" x2="570.0" y2="965.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="557.4" y="883.5" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="895.5" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="965.0" x2="1000.0" y2="965.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="775.6" y="956.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="968.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="965.0" x2="570.0" y2="1125.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="557.4" y="1036.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="1048.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="1125.0" x2="570.0" y2="1275.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<line x1="570.0" y1="1275.0" x2="1000.0" y2="1275.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="775.6" y="1266.0" width="18.8" height="15" fill="white" opacity="0.85"/>
+<text x="785.0" y="1278.0" font-size="10" fill="#7a3b30" text-anchor="middle">no</text>
+<line x1="570.0" y1="1275.0" x2="570.0" y2="1405.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="557.4" y="1331.0" width="25.200000000000003" height="15" fill="white" opacity="0.85"/>
+<text x="570.0" y="1343.0" font-size="10" fill="#7a3b30" text-anchor="middle">yes</text>
+<line x1="570.0" y1="1405.0" x2="350.0" y2="1510.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="386.6" y="1448.5" width="146.8" height="15" fill="white" opacity="0.85"/>
+<text x="460.0" y="1460.5" font-size="10" fill="#7a3b30" text-anchor="middle">ifvg_edge / retrace_ce</text>
+<line x1="570.0" y1="1405.0" x2="580.0" y2="1590.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="517.6" y="1488.5" width="114.80000000000001" height="15" fill="white" opacity="0.85"/>
+<text x="575.0" y="1500.5" font-size="10" fill="#7a3b30" text-anchor="middle">close → immediate</text>
+<line x1="350.0" y1="1510.0" x2="180.0" y2="675.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="233.2" y="1083.5" width="63.6" height="15" fill="white" opacity="0.85"/>
+<text x="265.0" y="1095.5" font-size="10" fill="#7a3b30" text-anchor="middle">next bars</text>
+<line x1="580.0" y1="1590.0" x2="1000.0" y2="1590.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="771.0" y="1581.0" width="38.0" height="15" fill="white" opacity="0.85"/>
+<text x="790.0" y="1593.0" font-size="10" fill="#7a3b30" text-anchor="middle">block</text>
+<line x1="580.0" y1="1590.0" x2="580.0" y2="1730.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="564.2" y="1651.0" width="31.6" height="15" fill="white" opacity="0.85"/>
+<text x="580.0" y="1663.0" font-size="10" fill="#7a3b30" text-anchor="middle">pass</text>
+<line x1="580.0" y1="1730.0" x2="1000.0" y2="1730.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="771.0" y="1721.0" width="38.0" height="15" fill="white" opacity="0.85"/>
+<text x="790.0" y="1733.0" font-size="10" fill="#7a3b30" text-anchor="middle">block</text>
+<line x1="580.0" y1="1730.0" x2="580.0" y2="1850.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="564.2" y="1781.0" width="31.6" height="15" fill="white" opacity="0.85"/>
+<text x="580.0" y="1793.0" font-size="10" fill="#7a3b30" text-anchor="middle">pass</text>
+<line x1="580.0" y1="1850.0" x2="580.0" y2="1970.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<line x1="580.0" y1="1970.0" x2="1000.0" y2="1970.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="771.0" y="1961.0" width="38.0" height="15" fill="white" opacity="0.85"/>
+<text x="790.0" y="1973.0" font-size="10" fill="#7a3b30" text-anchor="middle">block</text>
+<line x1="580.0" y1="1970.0" x2="580.0" y2="2090.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="564.2" y="2021.0" width="31.6" height="15" fill="white" opacity="0.85"/>
+<text x="580.0" y="2033.0" font-size="10" fill="#7a3b30" text-anchor="middle">pass</text>
+<line x1="580.0" y1="2090.0" x2="580.0" y2="2190.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<line x1="580.0" y1="2190.0" x2="580.0" y2="2285.0" stroke="#555" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="40.0" y="20.0" rx="6" width="640.0" height="70.0" fill="#f5f5f5" stroke="#666666" stroke-width="1.4"/>
+<text x="360.0" y="42.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="360.0" dy="0">ENTRY CONDITIONS — TopstepX iFVG strategy (per 1-min bar)</tspan>
+<tspan x="360.0" dy="12.649999999999999">Green=start/end  Yellow=filter/gate  Blue=process  Purple=grader  Red=reject/skip</tspan>
+<tspan x="360.0" dy="12.649999999999999">Left column = armed-zone lifecycle · Center = signal generation · Bottom = engine gates</tspan>
+</text>
+<rect x="460.0" y="120.0" rx="6" width="220.0" height="50.0" fill="#d5e8d4" stroke="#82b366" stroke-width="1.4"/>
+<text x="570.0" y="145.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">New 1-min bar (close)</tspan>
+</text>
+<polygon points="570.0,210.0 690.0,255.0 570.0,300.0 450.0,255.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="248.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">News blackout?</tspan>
+<tspan x="570.0" dy="12.649999999999999">(ifvg_news_blackout)</tspan>
+</text>
+<rect x="900.0" y="230.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="255.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Skip — news blackout</tspan>
+</text>
+<polygon points="570.0,340.0 690.0,385.0 570.0,430.0 450.0,385.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="372.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Inside session window?</tspan>
+<tspan x="570.0" dy="12.649999999999999">(ifvg_session_windows;</tspan>
+<tspan x="570.0" dy="12.649999999999999">empty = allow all)</tspan>
+</text>
+<rect x="900.0" y="360.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="385.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Skip — outside session</tspan>
+</text>
+<polygon points="570.0,470.0 690.0,515.0 570.0,560.0 450.0,515.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="508.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Armed zone</tspan>
+<tspan x="570.0" dy="12.649999999999999">active &amp; pending?</tspan>
+</text>
+<text x="40.0" y="614.0" font-size="11" font-weight="bold" fill="#333">ARMED-ZONE LIFECYCLE (iFVG delayed entry)</text>
+<polygon points="180.0,630.0 300.0,675.0 180.0,720.0 60.0,675.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="180.0" y="668.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="180.0" dy="0">Premature liquidity?</tspan>
+<tspan x="180.0" dy="12.649999999999999">TP1 hit before entry (Rule F)</tspan>
+</text>
+<rect x="60.0" y="760.0" rx="6" width="240.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="180.0" y="778.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="180.0" dy="0">Reject — premature_liquidity</tspan>
+<tspan x="180.0" dy="12.649999999999999">(cancel zone)</tspan>
+</text>
+<polygon points="180.0,850.0 300.0,900.0 180.0,950.0 60.0,900.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="180.0" y="887.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="180.0" dy="0">Zone status this bar?</tspan>
+<tspan x="180.0" dy="12.649999999999999">(body close vs far edge,</tspan>
+<tspan x="180.0" dy="12.649999999999999">price vs entry)</tspan>
+</text>
+<rect x="40.0" y="990.0" rx="6" width="270.0" height="60.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="175.0" y="1007.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="175.0" dy="0">Reject — invalidated</tspan>
+<tspan x="175.0" dy="12.649999999999999">(close back thru far FVG edge;</tspan>
+<tspan x="175.0" dy="12.649999999999999">wick does NOT count)</tspan>
+</text>
+<rect x="40.0" y="1080.0" rx="6" width="270.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="175.0" y="1105.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="175.0" dy="0">Skip bar — zone still pending</tspan>
+</text>
+<rect x="60.0" y="1170.0" rx="6" width="240.0" height="70.0" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1.4"/>
+<text x="180.0" y="1192.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="180.0" dy="0">FILLED — build execution signal</tspan>
+<tspan x="180.0" dy="12.649999999999999">(entry=zone entry, stop=zone stop,</tspan>
+<tspan x="180.0" dy="12.649999999999999">target=tp1 / HTF)</tspan>
+</text>
+<text x="450.0" y="614.0" font-size="11" font-weight="bold" fill="#333">SIGNAL GENERATION (no active zone)</text>
+<polygon points="570.0,630.0 690.0,680.0 570.0,730.0 450.0,680.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="667.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Liquidity sweep?</tspan>
+<tspan x="570.0" dy="12.649999999999999">(A_multi_bar / B_one_bar</tspan>
+<tspan x="570.0" dy="12.649999999999999">sweep of swing high/low)</tspan>
+</text>
+<rect x="900.0" y="655.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="680.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">No signal — no sweep</tspan>
+</text>
+<polygon points="570.0,770.0 690.0,820.0 570.0,870.0 450.0,820.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="807.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Displacement?</tspan>
+<tspan x="570.0" dy="12.649999999999999">(body ≥ body_atr_multiple × ATR,</tspan>
+<tspan x="570.0" dy="12.649999999999999">min body-to-range)</tspan>
+</text>
+<rect x="900.0" y="795.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="820.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">No signal — no displacement</tspan>
+</text>
+<polygon points="570.0,910.0 700.0,965.0 570.0,1020.0 440.0,965.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="948.5" font-size="10" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Composer: iFVG candidate?</tspan>
+<tspan x="570.0" dy="11.5">(sweep + displacement inverts a</tspan>
+<tspan x="570.0" dy="11.5">prior FVG → entry=FVG edge,</tspan>
+<tspan x="570.0" dy="11.5">stop=sweep_extreme ± buffer)</tspan>
+</text>
+<rect x="900.0" y="940.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="965.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">No signal — no FVG candidate</tspan>
+</text>
+<rect x="420.0" y="1060.0" rx="6" width="300.0" height="130.0" fill="#e1d5e7" stroke="#9673a6" stroke-width="1.4"/>
+<text x="570.0" y="1097.5" font-size="10" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">GRADER (Dodgy 5-criteria + structural target)</tspan>
+<tspan x="570.0" dy="11.5">• momentum (decent/strong)  • premium/discount</tspan>
+<tspan x="570.0" dy="11.5">• delivery from 30min FVG  • FVG singularity / BPR  • fib</tspan>
+<tspan x="570.0" dy="11.5">• structural target (HTF swing ≤3×ATR, else 'no target')</tspan>
+<tspan x="570.0" dy="11.5">• Rule A: recent sweep OR delivery (else cap B)</tspan>
+<tspan x="570.0" dy="11.5">• Rule I: gapping sack → fail unless 30min rescue</tspan>
+</text>
+<polygon points="570.0,1230.0 690.0,1275.0 570.0,1320.0 450.0,1275.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="1268.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">Grade ≥ A-?</tspan>
+<tspan x="570.0" dy="12.649999999999999">(passes)</tspan>
+</text>
+<rect x="900.0" y="1245.0" rx="6" width="200.0" height="60.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="1268.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Reject — grader_B / grader_*</tspan>
+<tspan x="1000.0" dy="12.649999999999999">(logged to rejections.csv)</tspan>
+</text>
+<polygon points="570.0,1360.0 690.0,1405.0 570.0,1450.0 450.0,1405.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="570.0" y="1405.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="570.0" dy="0">ifvg_entry_mode?</tspan>
+</text>
+<rect x="230.0" y="1470.0" rx="6" width="240.0" height="80.0" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1.4"/>
+<text x="350.0" y="1493.5" font-size="10" fill="#222" text-anchor="middle">
+<tspan x="350.0" dy="0">ARM zone &amp; wait for fill</tspan>
+<tspan x="350.0" dy="11.5">(entry = FVG edge or CE,</tspan>
+<tspan x="350.0" dy="11.5">stop = sweep_extreme ± buffer,</tspan>
+<tspan x="350.0" dy="11.5">tp1 = nearest HTF swing)</tspan>
+</text>
+<text x="460.0" y="1514.0" font-size="11" font-weight="bold" fill="#333">ENGINE GATES (on a filled / immediate signal)</text>
+<polygon points="580.0,1540.0 700.0,1590.0 580.0,1640.0 460.0,1590.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="580.0" y="1577.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">HTF bias gate</tspan>
+<tspan x="580.0" dy="12.649999999999999">(htf_bias_enabled: block</tspan>
+<tspan x="580.0" dy="12.649999999999999">counter-trend vs 4h bias)</tspan>
+</text>
+<rect x="900.0" y="1565.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="1590.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Reject — htf_bias</tspan>
+</text>
+<polygon points="580.0,1680.0 700.0,1730.0 580.0,1780.0 460.0,1730.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="580.0" y="1717.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">VP filter</tspan>
+<tspan x="580.0" dy="12.649999999999999">(vp_enabled: volume-profile</tspan>
+<tspan x="580.0" dy="12.649999999999999">level/target gate)</tspan>
+</text>
+<rect x="900.0" y="1705.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="1730.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Reject — vp_filter</tspan>
+</text>
+<rect x="450.0" y="1820.0" rx="6" width="260.0" height="60.0" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1.4"/>
+<text x="580.0" y="1843.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">Target precedence</tspan>
+<tspan x="580.0" dy="12.649999999999999">(HTF 4h FVG → 30min swing → VP → r_multiple)</tspan>
+</text>
+<polygon points="580.0,1920.0 700.0,1970.0 580.0,2020.0 460.0,1970.0" fill="#fff2cc" stroke="#d6b656" stroke-width="1.4"/>
+<text x="580.0" y="1957.9" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">Risk pretrade gate</tspan>
+<tspan x="580.0" dy="12.649999999999999">(daily-loss limit, max contracts,</tspan>
+<tspan x="580.0" dy="12.649999999999999">stop on correct side of entry)</tspan>
+</text>
+<rect x="900.0" y="1945.0" rx="6" width="200.0" height="50.0" fill="#f8cecc" stroke="#b85450" stroke-width="1.4"/>
+<text x="1000.0" y="1970.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="1000.0" dy="0">Reject — risk gate</tspan>
+</text>
+<rect x="440.0" y="2060.0" rx="6" width="280.0" height="60.0" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1.4"/>
+<text x="580.0" y="2083.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">Risk sizing</tspan>
+<tspan x="580.0" dy="12.649999999999999">(contracts = risk% × equity / (stop_dist × point_value), clamp [1, max])</tspan>
+</text>
+<rect x="450.0" y="2160.0" rx="6" width="260.0" height="60.0" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1.4"/>
+<text x="580.0" y="2183.95" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">Place entry (market / limit) →</tspan>
+<tspan x="580.0" dy="12.649999999999999">bracket-after-fill (stop + target)</tspan>
+</text>
+<rect x="470.0" y="2260.0" rx="6" width="220.0" height="50.0" fill="#d5e8d4" stroke="#82b366" stroke-width="1.4"/>
+<text x="580.0" y="2285.0" font-size="11" fill="#222" text-anchor="middle">
+<tspan x="580.0" dy="0">ENTRY PLACED</tspan>
+</text>
+</svg>
