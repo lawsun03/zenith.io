@@ -464,3 +464,30 @@ class TestArmedZoneTrackerField:
         r1 = _make_runner()
         r2 = _make_runner()
         assert r1.armed_tracker is not r2.armed_tracker
+
+
+class TestRuleFFlag:
+    """Rule F (premature-liquidity cancel) is config-gated via ifvg_rule_f_enabled."""
+
+    def _armed_short_with_tp1(self, rule_f: bool):
+        runner = _make_runner(entry_mode="ifvg_edge")
+        runner.strategy_cfg = runner.strategy_cfg.model_copy(update={"ifvg_rule_f_enabled": rule_f})
+        runner._arm_or_return(_bar(0, "2401", "2401.2", "2398.4", "2398.5"),
+                              _make_short_signal(), _make_disp_event())
+        z = dc_replace(runner.armed_tracker.active, tp1_price=Decimal("2397.0"))
+        runner.armed_tracker._active = z
+        runner._pending_signal = dc_replace(runner._pending_signal, armed_zone=z)
+        return runner
+
+    # tp1_bar: low 2396.5 <= tp1 2397 (premature TP1) but high 2400 < entry 2401 (no fill)
+    def test_rule_f_on_cancels_on_premature_tp1(self):
+        runner = self._armed_short_with_tp1(rule_f=True)
+        runner.on_bar(_bar(1, "2399", "2400", "2396.5", "2398"))
+        assert runner.armed_tracker.active is None
+        assert runner.last_reject is not None and runner.last_reject.reason == "premature_liquidity"
+
+    def test_rule_f_off_keeps_zone(self):
+        runner = self._armed_short_with_tp1(rule_f=False)
+        runner.on_bar(_bar(1, "2399", "2400", "2396.5", "2398"))
+        assert runner.armed_tracker.active is not None      # zone NOT cancelled
+        assert runner.last_reject is None

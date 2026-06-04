@@ -26,6 +26,7 @@
     "ifvg_session_windows": [],
     "ifvg_min_displacement_mult": "0.7",
     "ifvg_sweep_window_bars": 20,
+    "ifvg_entry_mode": "close",
     "vp_enabled": true,
     "vp_tick_size": "0.10",
     "vp_value_area_pct": 0.70,
