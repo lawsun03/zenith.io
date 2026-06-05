@@ -155,18 +155,23 @@ presentation only.
 - Tone maps to the dot color and the value color only.
 
 ### 4.4 `BarChart.tsx`
-- **Keep all chart logic** (lightweight-charts v5 `addSeries(CandlestickSeries)`,
-  forming-bar poll, markers, VP histogram overlay, TF selector, countdown,
-  setup-state poll). Only restyle:
+- **Keep chart logic** (lightweight-charts v5 `addSeries(CandlestickSeries)`,
+  forming-bar poll, markers, TF selector, countdown, setup-state poll). Only
+  restyle:
   - chart `layout.background` → transparent (so the glass/gradient shows),
     `textColor` → `faint`, grid lines → `rgba(255,255,255,0.02)`,
     crosshair → blue, candles up=`good` down=`danger`.
   - Outer frame → glass panel; header bar → "MGC · Micro Gold · 1min" + live price.
 - **Move the inline "Conditions" panel OUT of BarChart** into the Activity feed
   as a new **"Setup" tab** (see 4.5). The chart becomes full-width.
-- **Remove the VP filter row** (`VpCheckItem`) from the conditions content. (The
-  VP histogram overlay on the chart itself is a separate feature — leave it as-is
-  unless told otherwise; only the VP *row in the conditions checklist* is removed.)
+- **Remove the VP histogram overlay entirely** from the chart: delete the
+  `vpCanvas` element, `drawHistogram`, `fetchAndDrawVp`, the
+  `subscribeVisibleLogicalRangeChange(drawHistogram)` hook, the `syncId`/
+  `vpRefetchId` intervals, the `onVpUpdate` callback, and the `currentVpProfile`
+  state. The `/api/vp/profile` fetch and `VpProfile` import go away from this
+  component. (Backend endpoint is left in place, just unused by the chart.)
+- **Remove the VP filter row** (`VpCheckItem`) from the relocated conditions
+  content as well.
 
 ### 4.5 Activity feed (replaces the 3 `FeedSection`s + `StrategyDebug`)
 - New right-column panel with text tabs: **All · Signals · Fills · Recon · Setup**.
@@ -205,9 +210,14 @@ utils), `frontend/src/App.tsx`, `frontend/src/components/Header.tsx`,
 **Delete:** `StrategyDebug.tsx`, `MatrixRain.tsx`, `GlowOverlay.tsx`,
 `FeedSection.tsx` + `SignalRow/FillRow/ReconcileRow.tsx` (folded into ActivityRow).
 
-**Unchanged:** `useStream.ts`, `useConfig.ts`, `useKillzone.ts`, `types.ts`
-(may add small types for ActivityRow), `ConfigPanel.tsx`, `ForceSignalPanel.tsx`,
-`BacktestsPage.tsx`, `Analytics.tsx`, all backend.
+**Light edit:** `useStream.ts` — drop the now-dead `onVpUpdate` from the
+`ChartCallbacks` interface and its call site in the `bar` handler (VP overlay
+removed). No other behavior change.
+
+**Unchanged:** `useConfig.ts`, `useKillzone.ts`, `types.ts` (may add small types
+for ActivityRow; keep `VpProfile` type even if unused, or remove if no other
+consumer), `ConfigPanel.tsx`, `ForceSignalPanel.tsx`, `BacktestsPage.tsx`,
+`Analytics.tsx`, all backend.
 
 ---
 
@@ -220,8 +230,11 @@ utils), `frontend/src/App.tsx`, `frontend/src/components/Header.tsx`,
    open in new tabs; reskinning them can be a follow-up.
 3. **Product name** — "Zenith" in the header wordmark and `index.html` `<title>`.
    Not renaming the repo, Python package, or config files.
-4. **VP histogram overlay** on the chart — kept; only the VP *row* in the
-   conditions checklist is removed. Confirm if you also want the overlay gone.
+4. **VP** — removed from the dashboard entirely: both the chart histogram overlay
+   and the conditions-checklist row. The `/api/vp/profile` backend endpoint stays
+   (unused by the UI). `useStream`'s `onVpUpdate` chart callback becomes dead and
+   is dropped from the `ChartCallbacks` interface + its call site in the `bar`
+   handler.
 
 ---
 
