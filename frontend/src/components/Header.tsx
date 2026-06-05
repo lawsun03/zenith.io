@@ -10,11 +10,6 @@ interface Props {
   activeKillzone?: string | null
 }
 
-const DOT: Record<ConnState, string> = {
-  connected:    'bg-accent animate-pulse-soft',
-  connecting:   'bg-warn',
-  disconnected: 'bg-danger',
-}
 const LABEL: Record<ConnState, string> = {
   connected:    'STREAMING',
   connecting:   'CONNECTING',
@@ -84,134 +79,93 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
   }
 
   return (
-    <header className="border-b border-border px-6 py-4 flex items-center justify-between bg-bg">
-      <div className="flex items-baseline gap-4">
-        <span className="text-xs tracking-[0.4em] text-dim">TOPSTEP-BOT</span>
-        <span className="text-xs text-dim">
-          {status?.account
-            ? `${(status.account.type || '').toUpperCase()} · $${Number(status.account.size).toLocaleString()}`
-            : '-'}
-        </span>
+    <header className="flex items-center px-7 h-[54px] shrink-0 bg-[rgba(7,11,22,0.85)] backdrop-blur-xl border-b border-border animate-fade-up">
+      {/* identity */}
+      <div className="flex items-center gap-3 pr-5 border-r border-border">
+        <div
+          className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-medium text-white shrink-0"
+          style={{ background: 'linear-gradient(135deg,#2563eb 0%,#7c3aed 100%)', boxShadow: '0 0 16px rgba(37,99,235,0.4)' }}
+        >
+          Z
+        </div>
+        <div className="leading-none">
+          <div className="text-[15px] font-medium text-ink tracking-tight">Zenith</div>
+          <div className="text-[9px] text-faint font-mono tracking-wide mt-0.5">
+            {status?.account
+              ? `${(status.account.type || '').toUpperCase()} · $${Number(status.account.size).toLocaleString()}`
+              : '—'}
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-4">
+
+      {/* live status pills */}
+      <div className="flex-1 flex items-center gap-3.5 px-5 min-w-0">
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border text-[11px] ${
+          connState === 'connected'
+            ? 'border-good/30 bg-good/[0.07] text-good'
+            : connState === 'connecting'
+            ? 'border-warn/30 bg-warn/[0.07] text-warn'
+            : 'border-danger/30 bg-danger/[0.07] text-danger'
+        }`}>
+          <span className={`w-[5px] h-[5px] rounded-full bg-current ${connState === 'connected' ? 'animate-blink' : ''}`} />
+          {LABEL[connState]}
+        </span>
         {activeKillzone && (
           <span
-            className="text-[10px] tracking-widest text-accent border border-accent/50 px-2 py-0.5 animate-pulse-soft"
+            className="inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border border-accent/30 bg-accent/[0.12] text-[11px] text-accent-ink"
             title="Bot is inside a killzone window — entry signals are active"
           >
             ▶ {activeKillzone}
           </span>
         )}
         {syncLabel && (
-          <span
-            className={`text-[10px] tracking-widest ${syncTone}`}
-            title={sync ? `pending=${sync.pending} poisoned=${sync.poisoned} sent=${sync.sent}` : ''}
-          >
+          <span className={`text-[11px] font-mono ${syncTone}`} title={sync ? `pending=${sync.pending} poisoned=${sync.poisoned} sent=${sync.sent}` : ''}>
             {syncLabel}
           </span>
         )}
-        <div className="flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${DOT[connState]}`} />
-          <span className="text-xs tracking-widest text-dim">{LABEL[connState]}</span>
-          <span className="text-xs text-dim ml-4 tabular-nums">
-            {now.toLocaleTimeString('en-US', {
-              timeZone: 'America/Los_Angeles',
-              hour: 'numeric',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: true,
-            })}
-          </span>
-        </div>
+        <span className="text-[11px] text-dim font-mono tabular-nums">
+          {now.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })} PT
+        </span>
         {isLocked && (
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] tracking-widest text-danger border border-danger/50 px-2 py-0.5"
-              title={status?.lockout?.message ?? ''}
-            >
+          <span className="inline-flex items-center gap-2">
+            <span className="text-[10px] tracking-wider text-danger border border-danger/40 px-2 py-0.5 rounded" title={status?.lockout?.message ?? ''}>
               LOCKED: {status?.lockout?.code}
             </span>
             {isDriftLock && (
-              <button
-                onClick={handleClearLockout}
-                className="text-[10px] tracking-widest uppercase border border-danger/30 text-danger/70 px-2 py-0.5 hover:bg-danger/10"
-                title="Positions confirmed closed — clear the drift lockout"
-              >
+              <button onClick={handleClearLockout} className="text-[10px] tracking-wider uppercase border border-danger/30 text-danger/80 px-2 py-0.5 rounded hover:bg-danger/10">
                 Clear
               </button>
             )}
-          </div>
+          </span>
         )}
+      </div>
+
+      {/* controls + nav */}
+      <div className="flex items-center gap-0.5 pl-5 border-l border-border shrink-0">
         {mode === 'live' && (
-          <div className="flex items-center gap-2">
-            {flattenMsg && (
-              <span className="text-[10px] text-danger tabular-nums">{flattenMsg}</span>
-            )}
-            <button
-              onClick={handleFlatten}
-              disabled={!!flattenMsg}
-              className="text-[10px] tracking-widest uppercase border border-danger/50 text-danger px-3 py-1 hover:bg-danger/10 disabled:opacity-40"
-              title="Close all open positions immediately"
-            >
-              Flatten All
+          <>
+            {flattenMsg && <span className="text-[10px] text-danger font-mono mr-1">{flattenMsg}</span>}
+            <button onClick={handleFlatten} disabled={!!flattenMsg}
+              className="text-[11px] text-danger px-2.5 py-1 rounded hover:bg-danger/10 disabled:opacity-40" title="Close all open positions immediately">
+              Flatten
             </button>
-            {testMsg && (
-              <span className="text-[10px] text-warn tabular-nums">{testMsg}</span>
-            )}
-            <button
-              onClick={handleTestTrade}
-              disabled={!!testMsg}
-              className="text-[10px] tracking-widest uppercase border border-warn/50 text-warn px-3 py-1 hover:bg-warn/10 disabled:opacity-40"
-              title="Place 1-contract long, flatten after 30s"
-            >
-              Test Trade
+            {testMsg && <span className="text-[10px] text-warn font-mono mr-1">{testMsg}</span>}
+            <button onClick={handleTestTrade} disabled={!!testMsg}
+              className="text-[11px] text-warn px-2.5 py-1 rounded hover:bg-warn/10 disabled:opacity-40" title="Place 1-contract long, flatten after 30s">
+              Test
             </button>
-            {restartMsg && (
-              <span className="text-[10px] text-dim tabular-nums">{restartMsg}</span>
-            )}
-            <button
-              onClick={handleRestart}
-              disabled={!!restartMsg}
-              className="text-[10px] tracking-widest uppercase border border-dim text-dim px-3 py-1 hover:bg-dim/10 disabled:opacity-40"
-              title="Restart bot (applies account/timeframe changes)"
-            >
+            {restartMsg && <span className="text-[10px] text-faint font-mono mr-1">{restartMsg}</span>}
+            <button onClick={handleRestart} disabled={!!restartMsg}
+              className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 disabled:opacity-40" title="Restart bot (applies account/timeframe changes)">
               Restart
             </button>
-          </div>
+            <span className="w-px h-4 bg-border mx-1.5" />
+          </>
         )}
-        <a
-          href="/analytics"
-          target="_blank"
-          rel="noreferrer"
-          className="text-dim hover:text-ink text-xs tracking-widest uppercase ml-2"
-          title="Open analytics and Claude advisor"
-        >
-          Analytics &#x29C9;
-        </a>
-        <a
-          href="/backtests"
-          target="_blank"
-          rel="noreferrer"
-          className="text-dim hover:text-ink text-xs tracking-widest uppercase ml-2"
-          title="Open backtests page in a new window"
-        >
-          Backtests &#x29C9;
-        </a>
-        <a
-          href="/api/export/trades.csv"
-          download="trades.csv"
-          className="text-dim hover:text-ink text-xs tracking-widest uppercase ml-2"
-          title="Export trades CSV"
-        >
-          &#8659; CSV
-        </a>
-        <button
-          onClick={onConfigOpen}
-          className="text-dim hover:text-ink text-sm ml-2"
-          title="Configuration"
-        >
-          &#9881;
-        </button>
+        <a href="/analytics" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open analytics">Analytics ↗</a>
+        <a href="/backtests" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open backtests">Backtests ↗</a>
+        <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Export trades CSV">↓ CSV</a>
+        <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/5 hover:text-ink" title="Configuration">⚙</button>
       </div>
     </header>
   )
