@@ -1,0 +1,68 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: TOPSTEP-BOT
+      - generic [ref=e7]: "-"
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: CONNECTING
+        - generic [ref=e12]: 10:41:05 AM
+      - link "Analytics ⧉" [ref=e13] [cursor=pointer]:
+        - /url: /analytics
+      - link "Backtests ⧉" [ref=e14] [cursor=pointer]:
+        - /url: /backtests
+      - link "⇓ CSV" [ref=e15] [cursor=pointer]:
+        - /url: /api/export/trades.csv
+      - button "⚙" [ref=e16] [cursor=pointer]
+  - main [ref=e17]:
+    - generic [ref=e18]: Awaiting state...
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]: Price Chart
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - button "1m" [ref=e24] [cursor=pointer]
+            - button "3m" [ref=e25] [cursor=pointer]
+            - button "5m" [ref=e26] [cursor=pointer]
+            - button "15m" [ref=e27] [cursor=pointer]
+            - button "30m" [ref=e28] [cursor=pointer]
+            - button "1h" [ref=e29] [cursor=pointer]
+            - button "4h" [ref=e30] [cursor=pointer]
+            - button "1D" [ref=e31] [cursor=pointer]
+          - generic [ref=e32]: next bar 55s
+      - generic [ref=e33]:
+        - table [ref=e37]:
+          - row [ref=e38]:
+            - cell
+            - cell [ref=e39]:
+              - link "Charting by TradingView" [ref=e43] [cursor=pointer]:
+                - /url: https://www.tradingview.com/?utm_medium=lwc-link&utm_campaign=lwc-chart&utm_source=localhost/
+                - img [ref=e44]
+            - cell [ref=e48]
+          - row [ref=e52]:
+            - cell
+            - cell [ref=e53]
+            - cell [ref=e57]
+        - generic [ref=e60]:
+          - generic [ref=e61]: Conditions
+          - generic [ref=e63]: Waiting…
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - heading "Signals" [level=2] [ref=e67]
+          - generic [ref=e68]: "0"
+        - generic [ref=e69]: Waiting for the first signal
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - heading "Fills" [level=2] [ref=e72]
+          - generic [ref=e73]: "0"
+        - generic [ref=e74]: No fills yet
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - heading "Reconcile" [level=2] [ref=e77]
+          - generic [ref=e78]: "0"
+        - generic [ref=e79]: Waiting for first reconcile
+    - button "Strategy Debug ▼" [ref=e82] [cursor=pointer]:
+      - heading "Strategy Debug" [level=2] [ref=e83]
+      - generic [ref=e84]: ▼
+    - generic [ref=e85]: READ-ONLY · LOCAL · NO-VPS COMPLIANT

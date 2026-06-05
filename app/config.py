@@ -87,7 +87,7 @@ def load_config() -> AppConfig:
     # paper_bars_path: env override → auto-derive from instrument
     paper_bars_path = (
         os.environ.get("TOPSTEP_BOT_PAPER_BARS")
-        or f"./bars_{instrument}.csv"
+        or f"bars/bars_{instrument}.csv"
     )
 
     # Sync: optional. If endpoint + secret are present, sync is enabled.

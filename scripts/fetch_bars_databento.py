@@ -7,7 +7,7 @@ Called by the bot's /api/databento/fetch endpoint:
         --symbol GC.c.0 \
         --start 2024-01-01 \
         --end 2026-05-30 \
-        --out /abs/path/to/bars_MGC.csv \
+        --out bars/bars_MGC.csv \
         [--estimate-only]
 
 With --estimate-only: prints "$X.XXXX" to stdout and exits without fetching.
@@ -41,23 +41,54 @@ def _last_csv_date(csv_path: str) -> str | None:
     p = Path(csv_path)
     if not p.exists():
         return None
-    last_ts = ""
     try:
-        with p.open(newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ts = row.get("ts", "")
-                if ts:
-                    last_ts = ts
+        with p.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size == 0:
+                return None
+            chunk = min(512, size)
+            f.seek(-chunk, 2)
+            tail = f.read().decode("utf-8", errors="replace")
+        for line in reversed(tail.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            ts = line.split(",")[0].strip()
+            if len(ts) >= 10:
+                return ts[:10]
+        return None
     except Exception:
         return None
-    return last_ts[:10] if last_ts else None
+
+
+def _first_csv_date(csv_path: str) -> str | None:
+    """Return YYYY-MM-DD of the first data bar in the CSV, or None if absent/empty."""
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                ts = line.split(",")[0].strip()
+                # Skip header row
+                if ts.lower() in ("ts", "timestamp", "datetime"):
+                    continue
+                if len(ts) >= 10:
+                    return ts[:10]
+        return None
+    except Exception:
+        return None
 
 
 def _incremental_start(cached_through: str | None, requested_start: str, requested_end: str) -> str | None:
     """
     Return the fetch start date given what's already cached.
     Returns None if the CSV already covers through requested_end (full cache hit).
+    Does NOT handle backfill — call _needs_backfill separately.
     """
     if cached_through is None or cached_through < requested_start:
         return requested_start
@@ -65,6 +96,12 @@ def _incremental_start(cached_through: str | None, requested_start: str, request
     if next_day >= requested_end:
         return None  # full cache hit (Databento end is exclusive)
     return next_day
+
+
+def _needs_backfill(csv_path: str, requested_start: str) -> bool:
+    """True if the CSV exists but its earliest bar is after requested_start."""
+    first = _first_csv_date(csv_path)
+    return first is not None and first > requested_start
 
 
 def main() -> None:
@@ -91,7 +128,14 @@ def main() -> None:
 
     # Find what's already cached so we only fetch the new range.
     cached_through = _last_csv_date(args.out)
-    fetch_start = _incremental_start(cached_through, args.start, args.end)
+    backfill = _needs_backfill(args.out, args.start)
+
+    # If historical data is missing before what's in the file, re-fetch the full
+    # range from scratch (overwrite). Otherwise use incremental append.
+    if backfill:
+        fetch_start = args.start
+    else:
+        fetch_start = _incremental_start(cached_through, args.start, args.end)
 
     if args.estimate_only:
         if fetch_start is None:
@@ -99,18 +143,25 @@ def main() -> None:
             print(f"$0.0000")
             print(f"[estimate] fully cached through {cached_through}, nothing to fetch", flush=True)
             return
+        # Append explicit UTC midnight so Databento treats end as start-of-day,
+        # not end-of-day — bare dates are ambiguous and trigger 422 when end=today.
+        end_ts = args.end if "T" in args.end else f"{args.end}T00:00:00+00:00"
         cost = client.metadata.get_cost(
             dataset=DATASET,
             symbols=[args.symbol],
             schema="ohlcv-1m",
             stype_in="continuous",
             start=fetch_start,
-            end=args.end,
+            end=end_ts,
         )
         print(f"${cost:.4f}")
+        suffix = ""
+        if backfill:
+            suffix = f" (overwrite: file starts {_first_csv_date(args.out)}, need history from {args.start})"
+        elif cached_through:
+            suffix = f" (cached through {cached_through})"
         print(
-            f"[estimate] ohlcv-1m {args.symbol} {fetch_start}→{args.end}: ${cost:.4f}"
-            + (f" (cached through {cached_through})" if cached_through else ""),
+            f"[estimate] ohlcv-1m {args.symbol} {fetch_start}->{args.end}: ${cost:.4f}{suffix}",
             flush=True,
         )
         return
@@ -119,23 +170,33 @@ def main() -> None:
         print(f"[databento] fully cached through {cached_through}, skipping fetch", flush=True)
         return
 
-    print(f"[databento] fetching {args.symbol} {fetch_start}→{args.end} …", flush=True)
+    if backfill:
+        print(
+            f"[databento] backfill: file starts {_first_csv_date(args.out)}, "
+            f"re-fetching full range {args.start}->{args.end} ...",
+            flush=True,
+        )
+    else:
+        print(f"[databento] fetching {args.symbol} {fetch_start}->{args.end} ...", flush=True)
 
+    end_ts = args.end if "T" in args.end else f"{args.end}T00:00:00+00:00"
     data = client.timeseries.get_range(
         dataset=DATASET,
         symbols=[args.symbol],
         schema="ohlcv-1m",
         stype_in="continuous",
         start=fetch_start,
-        end=args.end,
+        end=end_ts,
     )
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not out_path.exists() or out_path.stat().st_size == 0
+    # Overwrite if backfilling historical data; otherwise append.
+    open_mode = "w" if backfill else "a"
+    write_header = backfill or not out_path.exists() or out_path.stat().st_size == 0
 
     rows_written = 0
-    with out_path.open("a", newline="", encoding="utf-8") as f:
+    with out_path.open(open_mode, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if write_header:
             writer.writerow(["ts", "open", "high", "low", "close", "volume"])
@@ -153,7 +214,7 @@ def main() -> None:
 
     print(
         f"[databento] wrote {rows_written} bars to {args.out} "
-        f"(fetch range {fetch_start}→{args.end})",
+        f"(fetch range {fetch_start}->{args.end})",
         flush=True,
     )
 

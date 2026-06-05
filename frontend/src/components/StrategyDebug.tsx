@@ -7,8 +7,8 @@ interface Props {
 
 function CriterionRow({ label, value, badge }: { label: string; value: boolean | undefined; badge?: string }) {
   const mark =
-    value === true  ? <span className="text-[#00ff41]">✓</span> :
-    value === false ? <span className="text-red-500">✗</span> :
+    value === true  ? <span className="text-accent">✓</span> :
+    value === false ? <span className="text-danger">✗</span> :
                       <span className="text-dim">—</span>
   return (
     <div className="flex items-center justify-between py-[3px]">
@@ -24,12 +24,12 @@ function CriterionRow({ label, value, badge }: { label: string; value: boolean |
 function GradeBadge({ grade, passes }: { grade?: string; passes?: boolean }) {
   if (!grade) return <span className="text-dim text-xs">—</span>
   const isGood = grade === 'A+' || grade === 'A' || grade === 'A-'
-  const colorClass = isGood ? 'text-[#00ff41]' : 'text-red-500'
+  const colorClass = isGood ? 'text-accent' : 'text-danger'
   return (
     <div className="flex items-baseline gap-3">
       <span className={`text-2xl font-bold tabular-nums ${colorClass}`}>{grade}</span>
       {passes !== undefined && (
-        <span className={`text-[10px] tracking-widest uppercase ${passes ? 'text-[#00ff41]' : 'text-red-500'}`}>
+        <span className={`text-[10px] tracking-widest uppercase ${passes ? 'text-accent' : 'text-danger'}`}>
           {passes ? 'PASS' : 'FAIL'}
         </span>
       )}
@@ -39,9 +39,9 @@ function GradeBadge({ grade, passes }: { grade?: string; passes?: boolean }) {
 
 function MomentumBadge({ quality }: { quality?: string }) {
   if (!quality) return <span className="text-dim">—</span>
-  if (quality === 'strong') return <span className="text-[#00ff41]">strong</span>
-  if (quality === 'decent') return <span className="text-yellow-400">decent</span>
-  return <span className="text-red-500">weak</span>
+  if (quality === 'strong') return <span className="text-accent">strong</span>
+  if (quality === 'decent') return <span className="text-warn">decent</span>
+  return <span className="text-danger">weak</span>
 }
 
 export function StrategyDebug({ data }: Props) {
@@ -126,15 +126,15 @@ export function StrategyDebug({ data }: Props) {
                 {data?.fib_extension && (
                   <span className="text-dim/70 tabular-nums">{data.fib_extension}</span>
                 )}
-                {data?.fib_displacement_ok === true && <span className="text-[#00ff41]">ok</span>}
-                {data?.fib_displacement_ok === false && <span className="text-red-500">low</span>}
+                {data?.fib_displacement_ok === true && <span className="text-accent">ok</span>}
+                {data?.fib_displacement_ok === false && <span className="text-danger">low</span>}
                 {data?.fib_displacement_ok === undefined && <span className="text-dim">—</span>}
               </span>
             </div>
             <div className="flex items-center justify-between py-[3px]">
               <span className="text-dim">Recent sweep</span>
-              {data?.recent_sweep_ok === true && <span className="text-[#00ff41]">ok</span>}
-              {data?.recent_sweep_ok === false && <span className="text-red-500">stale</span>}
+              {data?.recent_sweep_ok === true && <span className="text-accent">ok</span>}
+              {data?.recent_sweep_ok === false && <span className="text-danger">stale</span>}
               {data?.recent_sweep_ok === undefined && <span className="text-dim">—</span>}
             </div>
           </div>
@@ -152,19 +152,19 @@ export function StrategyDebug({ data }: Props) {
             )}
             <div className="flex items-center justify-between py-[3px]">
               <span className="text-dim">Window</span>
-              {data?.in_session_window === true && <span className="text-[#00ff41]">in-session</span>}
+              {data?.in_session_window === true && <span className="text-accent">in-session</span>}
               {data?.in_session_window === false && <span className="text-dim">outside</span>}
               {data?.in_session_window === undefined && <span className="text-dim">—</span>}
             </div>
             <div className="flex items-center justify-between py-[3px]">
               <span className="text-dim">Macro</span>
-              {data?.in_macro_window === true && <span className="text-yellow-400">active</span>}
+              {data?.in_macro_window === true && <span className="text-warn">active</span>}
               {data?.in_macro_window === false && <span className="text-dim">inactive</span>}
               {data?.in_macro_window === undefined && <span className="text-dim">—</span>}
             </div>
             <div className="flex items-center justify-between py-[3px]">
               <span className="text-dim">News</span>
-              {data?.news_blackout === true && <span className="text-red-500 tracking-widest text-[10px]">BLACKOUT</span>}
+              {data?.news_blackout === true && <span className="text-danger tracking-widest text-[10px]">BLACKOUT</span>}
               {data?.news_blackout === false && <span className="text-dim">clear</span>}
               {data?.news_blackout === undefined && <span className="text-dim">—</span>}
             </div>

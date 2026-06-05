@@ -152,10 +152,10 @@ class TopstepXBroker:
         # The engine checks this before placing orders — a disconnected feed means fill
         # events won't arrive, which causes reconcile drift on every entry.
         self._feed_connected: bool = False
-        # Tick-aggregated forming bar: accumulates quote mid-prices within the current
-        # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
-        self._forming_bar: Bar | None = None
-        self._forming_bar_minute: datetime | None = None
+        # Tick-aggregated forming bars per instrument: accumulates quote mid-prices
+        # within the current minute. Updated by QUOTE_UPDATE handlers in subscribe().
+        self._forming_bars: dict[str, Bar | None] = {}
+        self._forming_bar_minutes: dict[str, datetime | None] = {}
         # Background task that snapshots the forming bar to intrabar_<instr>.csv.
         # Started at the end of subscribe(), cancelled in disconnect().
         self._intrabar_task: asyncio.Task | None = None
@@ -202,18 +202,19 @@ class TopstepXBroker:
             self._suite = None
 
     async def _intrabar_sampler_loop(self) -> None:
-        """Every _INTRABAR_SAMPLE_SECONDS, snapshot the forming bar to CSV.
+        """Every _INTRABAR_SAMPLE_SECONDS, snapshot all forming bars to CSV.
 
-        Pure observer: reads self._forming_bar only. A disk/serialization error
+        Pure observer: reads self._forming_bars only. A disk/serialization error
         is logged at ERROR and the loop continues — it never crashes the broker
         and never dies silently (Rule 12). CancelledError exits cleanly.
         """
         while True:
             try:
                 await asyncio.sleep(_INTRABAR_SAMPLE_SECONDS)
-                bar = self._forming_bar
-                if bar is not None:
-                    _append_intrabar_csv(bar, _utcnow())
+                now = _utcnow()
+                for bar in list(self._forming_bars.values()):
+                    if bar is not None:
+                        _append_intrabar_csv(bar, now)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -239,6 +240,11 @@ class TopstepXBroker:
         # endpoint directly via the authenticated HTTP client.
         raw = await self._raw_positions()
         primary = self._instruments[0] if self._instruments else ""
+        # Build contractId → symbol reverse map so multi-instrument positions
+        # are resolved to the correct symbol instead of always using the primary.
+        id_to_symbol: dict[str, str] = {self._suite.instrument_id: primary}
+        for sym, es in self._extra_suites.items():
+            id_to_symbol[es.instrument_id] = sym
         positions = []
         for p in raw:
             size = int(p.get("size", 0) or 0)
@@ -252,8 +258,10 @@ class TopstepXBroker:
                 side = "short"
             else:
                 continue
+            contract_id = str(p.get("contractId", ""))
+            instrument = id_to_symbol.get(contract_id, primary)
             positions.append(BrokerPosition(
-                instrument=primary,
+                instrument=instrument,
                 side=side,
                 size=size,
                 average_price=Decimal(str(p.get("averagePrice") or 0)),
@@ -1110,13 +1118,14 @@ class TopstepXBroker:
             ))
         return bars
 
-    async def get_forming_bar(self, timeframe: str = "1min") -> Bar | None:
+    async def get_forming_bar(self, timeframe: str = "1min", instrument: str = "") -> Bar | None:
         """
-        Return the current forming bar, built by aggregating live quote mid-prices
-        tick-by-tick within the current minute. Returns None until the first quote
-        arrives after subscribe() completes.
+        Return the current forming bar for the given instrument, built by
+        aggregating live quote mid-prices tick-by-tick within the current minute.
+        Returns None until the first quote arrives after subscribe() completes.
         """
-        return self._forming_bar
+        key = instrument or (self._instruments[0] if self._instruments else "")
+        return self._forming_bars.get(key)
 
     async def place_market_order(self, side: Side, size: int = 1) -> bool:
         """Place a market order. Used for test trades and emergency entries."""
@@ -1329,8 +1338,8 @@ class TopstepXBroker:
             await self._maybe_move_stop_to_be(primary, price)
             now = _utcnow()
             minute_start = now.replace(second=0, microsecond=0)
-            if self._forming_bar_minute != minute_start:
-                self._forming_bar = Bar(
+            if self._forming_bar_minutes.get(primary) != minute_start:
+                self._forming_bars[primary] = Bar(
                     instrument=primary,
                     timeframe=tf_list[0],
                     ts=minute_start,
@@ -1340,10 +1349,10 @@ class TopstepXBroker:
                     close=price,
                     volume=1,
                 )
-                self._forming_bar_minute = minute_start
-            elif self._forming_bar is not None:
-                fb = self._forming_bar
-                self._forming_bar = Bar(
+                self._forming_bar_minutes[primary] = minute_start
+            elif self._forming_bars.get(primary) is not None:
+                fb = self._forming_bars[primary]
+                self._forming_bars[primary] = Bar(
                     instrument=fb.instrument,
                     timeframe=fb.timeframe,
                     ts=fb.ts,
@@ -1592,6 +1601,32 @@ class TopstepXBroker:
                 except (ValueError, TypeError):
                     return
                 await self._maybe_move_stop_to_be(_ei, price)
+                now = _utcnow()
+                minute_start = now.replace(second=0, microsecond=0)
+                if self._forming_bar_minutes.get(_ei) != minute_start:
+                    self._forming_bars[_ei] = Bar(
+                        instrument=_ei,
+                        timeframe=tf_list[0],
+                        ts=minute_start,
+                        open=price,
+                        high=price,
+                        low=price,
+                        close=price,
+                        volume=1,
+                    )
+                    self._forming_bar_minutes[_ei] = minute_start
+                elif self._forming_bars.get(_ei) is not None:
+                    fb = self._forming_bars[_ei]
+                    self._forming_bars[_ei] = Bar(
+                        instrument=fb.instrument,
+                        timeframe=fb.timeframe,
+                        ts=fb.ts,
+                        open=fb.open,
+                        high=max(fb.high, price),
+                        low=min(fb.low, price),
+                        close=price,
+                        volume=fb.volume + 1,
+                    )
 
             await _es.events.on(EventType.NEW_BAR, _on_sec_bar)
             await _es.events.on(EventType.QUOTE_UPDATE, _on_sec_quote)

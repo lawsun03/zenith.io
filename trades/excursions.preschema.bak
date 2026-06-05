@@ -1,0 +1,5 @@
+key,kind,side,ref,target,mfe,mae,reached_target
+rej-MGC-invalidated-1780472881,rejection,short,4485.2,4472.200,6.1,7.1,False
+rej-MGC-grader_B-1780476301,rejection,short,4485.0,4480.250,16.6,2.9,True
+rej-MGC-premature_liquidity-1780489320,rejection,long,4488.1,4489.7,7.8,12.0,True
+3067121389,trade,short,4489.6,4477.0,16.0,5.2,True

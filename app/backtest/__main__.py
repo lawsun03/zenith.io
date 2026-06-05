@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 import re
-import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -20,54 +19,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from app.bot_config import BotConfig, StrategyParams, load_bot_config
-from app.broker.events import Fill
-from app.broker.paper import PaperBroker
-from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
-from app.strategy.grader import SetupGrader
+from app.backtest.runner import BacktestConfig, run_backtest as _runner_backtest
+from app.bot_config import BotConfig, load_bot_config
 from app.replay import load_bars_csv
-from app.risk.config import fifty_k_combine
-from app.risk.state import RiskState
-from app.strategy.composer import (
-    ComposerConfig,
-    Signal,
-    SweepDisplacementComposer,
-)
-from app.strategy.displacement import DisplacementConfig, DisplacementDetector
-from app.strategy.killzone import default_killzones, killzones_from_names
-from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 
 log = logging.getLogger("topstep_bot.backtest")
-
-
-def _build_runner(instrument: str, s, enabled_killzones: list[str] | None = None) -> StrategyRunner:
-    zones = killzones_from_names(enabled_killzones) if enabled_killzones else default_killzones()
-    strategy_params = s if isinstance(s, StrategyParams) else StrategyParams()
-    return StrategyRunner(
-        instrument=instrument,
-        timeframe="1min",
-        liquidity=LiquidityTracker(LiquidityConfig(
-            swing_lookback=s.swing_lookback,
-            min_penetration=s.min_penetration,
-            multi_bar_window=s.multi_bar_window,
-            max_swings=50,
-        )),
-        displacement=DisplacementDetector(DisplacementConfig(
-            atr_period=s.atr_period,
-            body_atr_multiple=s.body_atr_multiple,
-            min_body_to_range_ratio=s.min_body_to_range_ratio,
-            min_absolute_body=s.min_absolute_body,
-        )),
-        composer=SweepDisplacementComposer(ComposerConfig(
-            instrument=instrument,
-            displacement_window_bars=s.displacement_window_bars,
-            stop_buffer=s.stop_buffer,
-            r_multiple=s.r_multiple,
-            killzones=zones,
-        )),
-        grader=SetupGrader(),
-        strategy_cfg=strategy_params,
-    )
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -82,177 +38,64 @@ def _to_jsonable(obj: Any) -> Any:
     return obj
 
 
-def _compute_stats(fills: list[dict]) -> dict:
-    exits = [f for f in fills if not f["is_entry"]]
-    pnls = [Decimal(f["realized_pnl_delta"]) for f in exits]
-    wins = [p for p in pnls if p > 0]
-    losses = [p for p in pnls if p < 0]
-    net = sum(pnls, Decimal("0"))
-    gross_win = sum(wins, Decimal("0"))
-    gross_loss = abs(sum(losses, Decimal("0")))
-
-    equity = Decimal("0")
-    peak = Decimal("0")
-    max_dd = Decimal("0")
-    for p in pnls:
-        equity += p
-        if equity > peak:
-            peak = equity
-        dd = peak - equity
-        if dd > max_dd:
-            max_dd = dd
-
-    return {
-        "trades": len(exits),
-        "wins": len(wins),
-        "losses": len(losses),
-        "win_rate": round(len(wins) / len(exits) * 100, 1) if exits else 0.0,
-        "net_pnl": str(net),
-        "gross_win": str(gross_win),
-        "gross_loss": str(gross_loss),
-        "avg_win": str(gross_win / len(wins)) if wins else "0",
-        "avg_loss": str(gross_loss / len(losses)) if losses else "0",
-        "profit_factor": (float(gross_win / gross_loss) if gross_loss > 0 else None),
-        "max_drawdown": str(max_dd),
-    }
-
-
-def _reconstruct_trades(fills: list[dict]) -> list[dict]:
-    trades: list[dict] = []
-    open_entry: dict | None = None
-    for f in fills:
-        if f["is_entry"]:
-            open_entry = f
-        elif open_entry is not None:
-            trade: dict = {
-                "entry_ts": open_entry["ts"],
-                "exit_ts": f["ts"],
-                "side": open_entry["side"],
-                "entry_price": open_entry["fill_price"],
-                "exit_price": f["fill_price"],
-                "size": open_entry["size"],
-                "pnl": f["realized_pnl_delta"],
-            }
-            if open_entry.get("grade") is not None:
-                trade["grade"] = open_entry["grade"]
-                trade["criteria"] = open_entry["criteria"]
-            trades.append(trade)
-            open_entry = None
-    return trades
-
-
 async def _run_backtest(
     config: BotConfig,
     bars_path: str | Path,
     instrument: str,
     timeframe: str,
     starting_balance: Decimal = Decimal("50000"),
+    enforce_risk_limits: bool = True,
 ) -> dict:
-    broker = PaperBroker(starting_balance=starting_balance)
-    risk_state = RiskState(config=fifty_k_combine(soft_buffer=Decimal("500")))
-    runner = _build_runner(instrument, config.strategy, config.enabled_killzones)
-
-    signals_captured: list[dict] = []
-    fills_captured: list[dict] = []
-    # Maps entry order_id → {grade, criteria} for grade propagation.
-    # on_signal fires after place_bracket (entry fill already emitted), so
-    # we stamp fills retroactively before _reconstruct_trades.
-    _order_grades: dict[str, dict] = {}
-
-    async def on_signal(signal: Signal, outcome: OrderOutcome) -> None:
-        g = signal.setup_grade
-        signals_captured.append({
-            "ts": signal.created_at.isoformat(),
-            "side": signal.side,
-            "entry": str(signal.entry),
-            "stop": str(signal.stop),
-            "target": str(signal.target),
-            "killzone": signal.killzone,
-            "rationale": signal.rationale,
-            "grade": g.grade if g is not None else None,
-            "criteria": {
-                # mom is a bool: "strong"/"decent" pass, "weak" fails
-                "mom": g.momentum_quality != "weak",
-                "tgt": g.target_clear,
-                "fvg": g.fvg_singular,
-                "pd": g.premium_discount_ok,
-                "del": g.has_delivery_fvg,
-            } if g is not None else None,
-            "outcome": {
-                "placed": outcome.placed,
-                "reason": outcome.reason,
-                "allowed_size": outcome.allowed_size,
-            },
-        })
-        if outcome.placed and outcome.broker_order_id and g is not None:
-            _order_grades[outcome.broker_order_id] = {
-                "grade": g.grade,
-                "criteria": {
-                    "mom": g.momentum_quality != "weak",
-                    "tgt": g.target_clear,
-                    "fvg": g.fvg_singular,
-                    "pd": g.premium_discount_ok,
-                    "del": g.has_delivery_fvg,
-                },
-            }
-
-    async def on_fill(fill: Fill) -> None:
-        fills_captured.append({
-            "ts": fill.ts.isoformat(),
-            "instrument": fill.instrument,
-            "side": fill.side,
-            "fill_price": str(fill.fill_price),
-            "size": fill.size,
-            "is_entry": fill.is_entry,
-            "realized_pnl_delta": str(fill.realized_pnl_delta),
-            "order_id": fill.broker_order_id or "",
-        })
-
-    engine = ExecutionEngine(
-        broker=broker,
-        risk_state=risk_state,
-        runners=[runner],
-        on_signal=on_signal,
-        replay_mode=True,
+    t0 = time.time()
+    bc = BacktestConfig(
+        instrument=instrument,
+        bars=load_bars_csv(bars_path, instrument=instrument, timeframe=timeframe),
+        starting_balance=starting_balance,
+        timeframe=timeframe,
+        contracts=config.contracts,
+        risk_per_trade_pct=config.risk_per_trade_pct,
+        partial_profit_r=config.partial_profit_r,
+        enabled_killzones=config.enabled_killzones,
+        strategy_params=config.strategy,
+        enforce_risk_limits=enforce_risk_limits,
     )
-    broker.on_fill(on_fill)
-    await broker.connect()
-    await engine.start()
+    result = await _runner_backtest(bc)
+    duration = time.time() - t0
 
-    started_at = time.time()
-    bar_count = 0
-    for bar in load_bars_csv(bars_path, instrument=instrument, timeframe=timeframe):
-        await broker.inject_bar(bar)
-        bar_count += 1
-    duration = time.time() - started_at
-
-    await engine.stop()
-    await broker.disconnect()
-
-    # Retroactively attach grade to entry fill dicts now that on_signal has fired.
-    for fill_dict in fills_captured:
-        if fill_dict["is_entry"]:
-            grade_info = _order_grades.get(fill_dict["order_id"])
-            if grade_info:
-                fill_dict["grade"] = grade_info["grade"]
-                fill_dict["criteria"] = grade_info["criteria"]
-
-    stats = _compute_stats(fills_captured)
-    trades = _reconstruct_trades(fills_captured)
+    s = result.stats
+    stats = {
+        "trades": s.trades,
+        "wins": s.wins,
+        "losses": s.losses,
+        "win_rate": s.win_rate,
+        "net_pnl": str(s.net_pnl),
+        "gross_win": str(s.gross_win),
+        "gross_loss": str(s.gross_loss),
+        "avg_win": str(s.avg_win),
+        "avg_loss": str(s.avg_loss),
+        "profit_factor": s.profit_factor,
+        "max_drawdown": str(s.max_drawdown),
+        "expectancy": str(s.expectancy),
+        "is_profitable": s.is_profitable,
+        "passed_combine": s.passed_combine,
+        "mll_breached": s.mll_breached,
+        "by_killzone": s.by_killzone,
+        "equity_curve": [[ts.isoformat(), str(eq)] for ts, eq in s.equity_curve],
+    }
 
     return {
         "config": _to_jsonable(config.model_dump()),
         "instrument": instrument,
         "timeframe": timeframe,
         "bars_path": str(bars_path),
-        "bars_processed": bar_count,
+        "bars_processed": result.bars_processed,
         "starting_balance": str(starting_balance),
-        "ending_balance": str(risk_state.realized_balance),
+        "ending_balance": str(starting_balance + s.net_pnl),
         "duration_seconds": round(duration, 2),
         "stats": stats,
-        "trades": trades,
-        "signals": signals_captured,
-        "fills": fills_captured,
+        "trades": result.trades,
+        "signals": [],
+        "fills": [],
     }
 
 
@@ -277,6 +120,8 @@ async def _amain(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", default="backtests")
     parser.add_argument("--id", default=None)
     parser.add_argument("--label", default=None)
+    parser.add_argument("--no-risk-limits", action="store_true",
+                        help="Disable MLL/DLL/DPL (exploration only — not representative of live conditions)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -303,6 +148,7 @@ async def _amain(argv: list[str] | None = None) -> int:
         instrument=args.instrument,
         timeframe=timeframe,
         starting_balance=Decimal(args.starting_balance),
+        enforce_risk_limits=not args.no_risk_limits,
     )
     completed_at = datetime.now(timezone.utc).isoformat()
 
@@ -319,4 +165,5 @@ async def _amain(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    import sys
     sys.exit(asyncio.run(_amain()))

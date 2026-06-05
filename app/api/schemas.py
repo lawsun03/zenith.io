@@ -22,6 +22,8 @@ class BacktestRequest(BaseModel):
     # for the backtest subprocess; the live bot's bot_config.json is untouched.
     strategy: dict[str, Any] | None = None
     enabled_killzones: list[str] | None = None
+    partial_profit_r: str | None = None
+    enforce_risk_limits: bool = True  # False = disable MLL/DLL/DPL for exploration
 
 
 class DatabentoBarsRequest(BaseModel):

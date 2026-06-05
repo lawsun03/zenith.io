@@ -1,16 +1,24 @@
 {
   "instrument": "MGC",
-  "instruments": ["MGC", "MNQ", "MES"],
+  "instruments": [
+    "MGC",
+    "MNQ",
+    "MES"
+  ],
   "signal_instrument": null,
-  "timeframes": ["1min"],
+  "timeframes": [
+    "1min"
+  ],
   "replay_delay_ms": 0,
   "replay_start_delay_s": 5,
-  "account_name": "50KTC-V2-248764-98745451",
+  "account_name": "PRAC-V2-248764-39258280",
   "entry_mode": "market",
   "contracts": 2,
   "risk_per_trade_pct": "0.25",
   "partial_profit_r": "1.5",
-  "enabled_killzones": ["all"],
+  "enabled_killzones": [
+    "all"
+  ],
   "strategy": {
     "swing_lookback": 2,
     "min_penetration": "0.20",
@@ -45,7 +53,7 @@
     "ifvg_be_after_tp1": true,
     "vp_enabled": false,
     "vp_tick_size": "0.10",
-    "vp_value_area_pct": 0.70,
+    "vp_value_area_pct": 0.7,
     "vp_filter_tolerance": "5.0",
     "vp_hvn_threshold": 1.5,
     "vp_min_target_r": "2.0",

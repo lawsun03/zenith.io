@@ -121,7 +121,7 @@ class Broker(Protocol):
         """True if the real-time event feed is connected and delivering events."""
         ...
 
-    async def get_forming_bar(self, timeframe: str = "1min") -> "Bar | None":
+    async def get_forming_bar(self, timeframe: str = "1min", instrument: str = "") -> "Bar | None":
         """
         Return the currently-forming bar (partially closed), or None if
         not supported by this broker implementation.

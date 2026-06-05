@@ -248,7 +248,7 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
     all_results: list[BacktestResult] = []
 
     for symbol in symbols:
-        bars_path = args.bars or f"bars_{symbol}.csv"
+        bars_path = args.bars or f"bars/bars_{symbol}.csv"
         if not Path(bars_path).exists():
             print(f"SKIP {symbol}: {bars_path} not found")
             continue
@@ -290,12 +290,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="topstep-bot backtest runner")
     parser.add_argument(
         "--bars", default=None,
-        help="Path to OHLCV CSV. Defaults to bars_{SYMBOL}.csv when --symbol is used.",
+        help="Path to OHLCV CSV. Defaults to bars/bars_{SYMBOL}.csv when --symbol is used.",
     )
     parser.add_argument(
         "--symbol", default=None,
         help="Symbol or comma-separated list for multi-symbol runs (e.g. MGC,MNQ,ES). "
-             "Auto-loads bars_{SYMBOL}.csv for each.",
+             "Auto-loads bars/bars_{SYMBOL}.csv for each.",
     )
     parser.add_argument(
         "--instrument", default="MGC",
@@ -346,7 +346,7 @@ def main() -> int:
         # Single symbol via --symbol, treat as --instrument
         args.instrument = symbols[0]
         if not args.bars:
-            args.bars = f"bars_{symbols[0]}.csv"
+            args.bars = f"bars/bars_{symbols[0]}.csv"
 
     if not args.bars:
         print("ERROR: provide --bars <path> or --symbol <SYMBOL>", file=sys.stderr)

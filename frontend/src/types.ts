@@ -44,6 +44,7 @@ export interface StrategyConfig {
 
 export interface BotConfig {
   instrument: string
+  instruments?: string[]
   timeframes: string[]
   replay_delay_ms: number
   replay_start_delay_s: number

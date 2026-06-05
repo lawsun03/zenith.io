@@ -1,2 +1,6 @@
 key,kind,side,ref,stop,target,mfe,mae,reached_target,stop_hit,outcome
 3080409959,trade,long,4471.1,4468.20,4476.7,25756.9,5.9,True,True,win
+3080946674,trade,long,4493.8,4486.20,4496.5,25766.2,3.3,True,False,win
+3081187820,trade,short,7567.25,7571.30,7557.125,3077.35,22616.75,True,True,stopped_then_target
+3084908927,trade,short,29433.0,29505.55,29395.125,25070.9,24.5,True,False,win
+rej-MES-INVALID_STOP-1780691465,rejection,short,7406.75,7371.80,7494.125,3060.55,21432.00,True,True,stopped_then_target

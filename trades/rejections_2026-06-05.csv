@@ -1,0 +1,4 @@
+ts,instrument,side,reason,grade,entry,stop,target,killzone,rationale,source
+2026-06-05T07:41:00.942703+00:00,MNQ,short,vp_filter,A-,30144.75,30149.05,30134.000,All,"All: B_one_bar sweep of high @ 30145.0, bearish displacement (1.14× ATR), FVG 30144.75–30146.75",engine
+2026-06-05T20:31:05.132400+00:00,MES,short,INVALID_STOP,A-,7406.75,7371.80,7494.125,All,"All: B_one_bar sweep of high @ 7370.75, bearish displacement (1.28× ATR), FVG 7406.75–7407.25",engine
+2026-06-05T20:54:01.530978+00:00,MES,short,INVALID_STOP,A-,7406.75,7372.05,7493.500,All,"All: A_multi_bar sweep of high @ 7371.5, bearish displacement (1.11× ATR), FVG 7406.75–7407.25",engine
