@@ -6,7 +6,7 @@ interface Props { status: StatusPayload | null }
 
 export function MetricsGrid({ status }: Props) {
   if (!status) {
-    return <div className="p-6 text-dim">Awaiting state...</div>
+    return <div className="bg-panel border border-border rounded-[10px] p-5 text-faint text-sm">Awaiting state…</div>
   }
 
   const { equity, limits, account, lockout } = status
@@ -20,7 +20,7 @@ export function MetricsGrid({ status }: Props) {
   const pnlTone = pnl > 0 ? 'good' : pnl < 0 ? 'bad' : 'neutral'
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-[11px]">
       <MetricCard
         label="Buffer to MLL"
         primary={fmtMoney(limits.buffer_to_mll)}
