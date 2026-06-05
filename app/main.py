@@ -269,11 +269,11 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
     from app.strategy.killzone import in_session_window, in_macro_window, in_news_blackout
 
     async def on_bar(bar: BarEvent) -> None:
-        runner = engine.runners.get(execution_instrument) if execution_instrument else None
-        if runner is None:
-            # Try the first runner if instrument key doesn't match
-            if engine.runners:
-                runner = next(iter(engine.runners.values()))
+        runner = engine.runners.get(bar.instrument) or (
+            engine.runners.get(execution_instrument) if execution_instrument else None
+        )
+        if runner is None and engine.runners:
+            runner = next(iter(engine.runners.values()))
         if runner is None:
             return
 
@@ -405,15 +405,21 @@ async def _run_paper(
             risk_state.reset()
         if engine is not None:
             new_cfg = load_bot_config(cfg.bot_config_path)
-            new_runner = _build_runner(
-                cfg.instrument, new_cfg.strategy, new_cfg.enabled_killzones,
-                timeframe=new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
-                signal_instrument=new_cfg.signal_instrument,
-            )
-            engine.runners = {cfg.instrument: new_runner}
-            engine._bar_router = {
-                new_runner.signal_instrument: new_runner.instrument
-            } if new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
+            new_instr_list = new_cfg.instruments if new_cfg.instruments else [cfg.instrument]
+            new_runners = [
+                _build_runner(
+                    inst, new_cfg.strategy, new_cfg.enabled_killzones,
+                    timeframe=new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+                    signal_instrument=new_cfg.signal_instrument if len(new_instr_list) == 1 else None,
+                )
+                for inst in new_instr_list
+            ]
+            engine.runners = {r.instrument: r for r in new_runners}
+            engine._bar_router = {}
+            if len(new_instr_list) == 1:
+                nr = new_runners[0]
+                if nr.signal_instrument and nr.signal_instrument != nr.instrument:
+                    engine._bar_router = {nr.signal_instrument: nr.instrument}
             engine.strategy_cfg = new_cfg.strategy  # keep VP cfg in sync on restart
         broker.reset()
         first_run = False
@@ -426,12 +432,17 @@ async def _run_live(
     runner: "StrategyRunner | None" = None,
     bot_cfg: "BotConfig | None" = None,
     engine: "ExecutionEngine | None" = None,
+    instruments_list: "list[str] | None" = None,
 ) -> None:
     """Live mode: subscribe, warm up VP + HTF trackers, then block on shutdown."""
-    signal_instr = (bot_cfg.signal_instrument if bot_cfg and bot_cfg.signal_instrument else None) or cfg.instrument
-    if signal_instr != cfg.instrument:
-        log.info("Signal instrument: %s — execution instrument: %s", signal_instr, cfg.instrument)
-    await broker.subscribe([signal_instr], cfg.timeframes)
+    if instruments_list and len(instruments_list) > 1:
+        log.info("Multi-symbol: subscribing to %s", instruments_list)
+        await broker.subscribe(instruments_list, cfg.timeframes)
+    else:
+        signal_instr = (bot_cfg.signal_instrument if bot_cfg and bot_cfg.signal_instrument else None) or cfg.instrument
+        if signal_instr != cfg.instrument:
+            log.info("Signal instrument: %s — execution instrument: %s", signal_instr, cfg.instrument)
+        await broker.subscribe([signal_instr], cfg.timeframes)
     if runner is not None and bot_cfg is not None and runner.vp is not None:
         await _warm_up_vp(broker, runner, bot_cfg)
     htf_task = None
@@ -749,6 +760,9 @@ async def _rebuild_engine_htf(
     bias_tracker, level_finder = await _build_htf_trackers(broker, s)
     engine.htf_bias = bias_tracker
     engine.htf_levels = level_finder
+    engine._htf_instrument = (
+        broker._instruments[0] if getattr(broker, "_instruments", None) else None
+    )
 
 
 async def _async_main() -> int:
@@ -814,13 +828,20 @@ async def _async_main() -> int:
         risk_state._current_equity = live_balance
         # Bootstrap daily P&L so a mid-session restart doesn't reset the DLL gate.
         risk_state.daily_pnl = live_daily_pnl
-    runner = _build_runner(
-        instrument=cfg.instrument,
-        s=bot_cfg.strategy,
-        enabled_killzones=bot_cfg.enabled_killzones,
-        timeframe=bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min",
-        signal_instrument=bot_cfg.signal_instrument,
-    )
+    instruments_list = bot_cfg.instruments if bot_cfg.instruments else [cfg.instrument]
+    if len(instruments_list) > 1:
+        log.info("Multi-symbol mode: %d instruments: %s", len(instruments_list), instruments_list)
+    runners = [
+        _build_runner(
+            instrument=inst,
+            s=bot_cfg.strategy,
+            enabled_killzones=bot_cfg.enabled_killzones,
+            timeframe=bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min",
+            signal_instrument=bot_cfg.signal_instrument if len(instruments_list) == 1 else None,
+        )
+        for inst in instruments_list
+    ]
+    runner = runners[0]  # primary runner (VP warm-up, notification display)
 
     # Sync: enable only if both endpoint and secret are set. Outbox is
     # always created (it's a local file, harmless when unused) — but
@@ -880,7 +901,7 @@ async def _async_main() -> int:
     engine = ExecutionEngine(
         broker=broker,
         risk_state=risk_state,
-        runners=[runner],
+        runners=runners,
         on_signal=_make_signal_journaler(journal, notifier, config_path=cfg.bot_config_path, discord=discord, excursion_tracker=excursion_tracker),
         on_order_placed=reconciler.notify_order_placed,
         on_pre_place=_make_pre_place(config_path=cfg.bot_config_path),
@@ -891,8 +912,11 @@ async def _async_main() -> int:
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
-    broker.on_bar(_make_bar_journaler(journal, execution_instrument=cfg.instrument))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=cfg.instrument))
+    # For multi-symbol, let bars display their own instrument; for single-symbol
+    # override is needed when signal_instrument != execution_instrument (e.g. GC→MGC).
+    exec_instr = cfg.instrument if len(instruments_list) == 1 else ""
+    broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):
@@ -998,7 +1022,7 @@ async def _async_main() -> int:
                     f"{account_line}"
                     f"  Balance:    ${live_balance}\n"
                     f"  Daily P&L:  ${live_daily_pnl}\n"
-                    f"  Instrument: {cfg.instrument}\n"
+                    f"  Instrument: {', '.join(instruments_list)}\n"
                     f"  Killzones:  {killzones_str}\n"
                     f"  Dashboard:  http://127.0.0.1:{api_config.port}"
                 ),
@@ -1007,7 +1031,7 @@ async def _async_main() -> int:
         if discord.enabled:
             await discord.send_startup(
                 mode=cfg.mode,
-                instrument=cfg.instrument,
+                instrument=", ".join(instruments_list),
                 balance=str(live_balance),
                 daily_pnl=str(live_daily_pnl),
                 killzones=killzones_str,
@@ -1025,7 +1049,7 @@ async def _async_main() -> int:
                 engine=engine,
             )
         else:
-            await _run_live(broker, cfg, shutdown, runner=runner, bot_cfg=bot_cfg, engine=engine)
+            await _run_live(broker, cfg, shutdown, runner=runner, bot_cfg=bot_cfg, engine=engine, instruments_list=instruments_list)
 
         return 0
     except Exception as exc:

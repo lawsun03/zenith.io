@@ -176,6 +176,27 @@ def _csv_cached_through(csv_path: str) -> str | None:
         return None
 
 
+def _csv_cached_from(csv_path: str) -> str | None:
+    """Return the YYYY-MM-DD of the first data bar in the CSV, or None if absent/empty."""
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                ts = line.split(",")[0].strip()
+                if ts.lower() in ("ts", "timestamp", "datetime"):
+                    continue
+                if len(ts) >= 10:
+                    return ts[:10]
+        return None
+    except Exception:
+        return None
+
+
 def build_app(
     risk_state: RiskState,
     reconciler: Reconciler,
@@ -436,6 +457,7 @@ def build_app(
         cfg = load_bot_config(_bot_config_path)
         return JSONResponse({
             "instrument": cfg.instrument or effective_instrument,
+            "instruments": cfg.instruments or [],
             "timeframes": cfg.timeframes or _effective_timeframes,
             "replay_delay_ms": cfg.replay_delay_ms,
             "replay_start_delay_s": cfg.replay_start_delay_s,
@@ -535,7 +557,7 @@ def build_app(
             })
 
     @app.get("/api/bars")
-    async def get_bars(limit: int = 500, timeframe: str = "") -> JSONResponse:
+    async def get_bars(limit: int = 500, timeframe: str = "", instrument: str = "") -> JSONResponse:
         """
         Recent historical bars for chart pre-population. Live mode only.
         Returns up to `limit` bars at the requested timeframe, or the
@@ -546,7 +568,7 @@ def build_app(
         try:
             cfg = load_bot_config(_bot_config_path)
             tf = timeframe or (cfg.timeframes or _effective_timeframes)[0]
-            exec_instr = cfg.instrument or effective_instrument
+            exec_instr = instrument or cfg.instrument or effective_instrument
             _days = {"4h": 60, "1d": 90}.get(tf, 5)
             bars = await _broker.get_historical_bars(
                 timeframe=tf, limit=limit, days=_days, instrument=exec_instr,
@@ -601,7 +623,7 @@ def build_app(
         return JSONResponse(result)
 
     @app.get("/api/forming-bar")
-    async def get_forming_bar() -> JSONResponse:
+    async def get_forming_bar(instrument: str = "") -> JSONResponse:
         """Return the current partially-closed bar for chart display."""
         if _broker is None:
             return JSONResponse(None)
@@ -609,6 +631,11 @@ def build_app(
         if get_fb is None:
             return JSONResponse(None)
         cfg = load_bot_config(_bot_config_path)
+        # Forming bar is only tracked for the primary instrument.
+        # Return null when the caller is viewing a different symbol.
+        primary = cfg.instrument or effective_instrument
+        if instrument and instrument != primary:
+            return JSONResponse(None)
         tf = (cfg.timeframes or _effective_timeframes)[0]
         bar = await get_fb(tf)
         if bar is None:
@@ -953,9 +980,11 @@ def build_app(
 
         csv_path = _bars_csv_path(req.symbol)
         cached_through = _csv_cached_through(csv_path)
+        cached_from = _csv_cached_from(csv_path)
 
-        # Cache hit: skip download entirely.
-        if not req.dry_run and cached_through is not None and cached_through >= req.end:
+        # Cache hit: skip download only if the end is covered AND no historical gap.
+        needs_backfill = cached_from is not None and cached_from > req.start
+        if not req.dry_run and cached_through is not None and cached_through >= req.end and not needs_backfill:
             return JSONResponse({
                 "ok": True,
                 "days_fetched": 0,
@@ -1079,7 +1108,7 @@ def build_app(
         # config so the subprocess picks them up *without* touching the
         # live bot_config.json. Falls back to the live config otherwise.
         config_path_for_run = str(_bot_config_path)
-        if req.strategy or req.enabled_killzones is not None:
+        if req.strategy or req.enabled_killzones is not None or req.partial_profit_r is not None:
             try:
                 base_cfg = load_bot_config(_bot_config_path).model_dump()
                 if req.strategy:
@@ -1091,6 +1120,8 @@ def build_app(
                     base_cfg["strategy"] = merged_strategy
                 if req.enabled_killzones is not None:
                     base_cfg["enabled_killzones"] = req.enabled_killzones
+                if req.partial_profit_r is not None:
+                    base_cfg["partial_profit_r"] = req.partial_profit_r
                 # Pydantic refuses Decimals in JSON dump output, so coerce.
                 tmp_cfg = backtests_dir / f"_config_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}.json"
                 tmp_cfg.write_text(json.dumps(base_cfg, default=str, indent=2))

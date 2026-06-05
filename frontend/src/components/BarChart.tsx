@@ -51,6 +51,7 @@ const TF_LABELS: Record<string, string> = {
 interface Props {
   callbacksRef: React.MutableRefObject<ChartCallbacks>
   timeframe?: string
+  activeSymbol?: string
 }
 
 const CHART_HEIGHT = 320
@@ -60,7 +61,7 @@ const S = {
     display: 'flex' as const,
     alignItems: 'flex-start' as const,
     opacity: muted ? 0.28 : 1,
-    borderLeft: `3px solid ${active ? '#00ff41' : '#001f00'}`,
+    borderLeft: `3px solid ${active ? '#00ff41' : '#003a00'}`,
     paddingLeft: 10,
     paddingRight: 12,
     paddingTop: 6,
@@ -80,21 +81,21 @@ const S = {
     fontSize: 13,
     lineHeight: '20px',
     fontWeight: active ? 700 : 400,
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "'JetBrains Mono', monospace",
   }),
   detail: {
     color: '#4a8f4a',
     fontSize: 11,
     lineHeight: '16px',
     marginTop: 2,
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "'JetBrains Mono', monospace",
   },
   subDetail: {
     color: '#2d6b2d',
     fontSize: 10,
     lineHeight: '15px',
     marginTop: 1,
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "'JetBrains Mono', monospace",
   },
 }
 
@@ -212,13 +213,18 @@ function isValidBar(b: { time: number; open: number; high: number; low: number; 
   )
 }
 
-export function BarChart({ callbacksRef, timeframe }: Props) {
+export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastBarTimeRef = useRef<number | null>(null)
   const [countdown, setCountdown] = useState<string | null>(null)
   const [setupState, setSetupState] = useState<SetupState | null>(null)
   const [viewTf, setViewTf] = useState<string>(timeframe ?? '1min')
   const viewTfRef = useRef<string>(timeframe ?? '1min')
+  // timeframeRef tracks the live prop value so closures created at mount don't
+  // capture the undefined that exists before config loads.
+  const timeframeRef = useRef<string | undefined>(timeframe)
+  // activeSymbolRef so the forming-bar closure always reads the current symbol.
+  const activeSymbolRef = useRef<string>(activeSymbol ?? '')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const seriesRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -239,6 +245,17 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
 
   // Keep viewTfRef in sync so the chart useEffect closure reads fresh values.
   useEffect(() => { viewTfRef.current = viewTf }, [viewTf])
+  useEffect(() => { activeSymbolRef.current = activeSymbol ?? '' }, [activeSymbol])
+
+  // Keep timeframeRef current. When timeframe first becomes defined (config
+  // loaded after mount), also auto-select the bot's trading TF as the view.
+  useEffect(() => {
+    const prev = timeframeRef.current
+    timeframeRef.current = timeframe
+    if (timeframe && !prev) {
+      setViewTf(timeframe)
+    }
+  }, [timeframe])
 
   const formingHot = (setupState?.instruments ?? []).some(
     i => i.displacement_candidate !== null && i.sweeps_pending.length > 0
@@ -422,8 +439,9 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
 
     // Pre-populate the chart with historical bars so it's not empty on connect.
     // Initial bar load — the [viewTf] effect can't do this because seriesRef
-    // isn't set when it fires on mount. Subsequent TF switches are handled by [viewTf].
-    fetch(`/api/bars?timeframe=${viewTfRef.current}&limit=500`)
+    // isn't set when it fires on mount. Subsequent TF/symbol switches are handled by [viewTf]/[activeSymbol].
+    const instrParam = activeSymbol ? `&instrument=${activeSymbol}` : ''
+    fetch(`/api/bars?timeframe=${viewTfRef.current}&limit=500${instrParam}`)
       .then(r => r.json())
       .then(d => {
         const validBars = Array.isArray(d.bars) ? d.bars.filter(isValidBar) : []
@@ -439,12 +457,13 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
 
     // Forming bar poll — updates the live rightmost candle every 1s.
     const fetchFormingBar = () => {
-      fetch('/api/forming-bar')
+      const sym = activeSymbolRef.current
+      fetch(`/api/forming-bar${sym ? `?instrument=${sym}` : ''}`)
         .then(r => r.json())
         .then((b: { time: number; open: number; high: number; low: number; close: number } | null) => {
           if (!b || !isValidBar(b)) return
           // Forming bar only makes sense at the bot's trading TF.
-          if (viewTfRef.current !== timeframe) return
+          if (viewTfRef.current !== timeframeRef.current) return
           // Only show if forming bar is newer than (or same as) the last closed bar.
           if (lastBarTimeRef.current !== null && b.time < lastBarTimeRef.current) return
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -458,7 +477,7 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     callbacksRef.current = {
       onBar(bar) {
         // Only update chart when viewing the bot's trading TF.
-        if (viewTfRef.current !== timeframe) return
+        if (viewTfRef.current !== timeframeRef.current) return
         lastBarTimeRef.current = bar.time
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         series.update({ time: bar.time as any, open: bar.open, high: bar.high, low: bar.low, close: bar.close })
@@ -511,24 +530,23 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
     }
   }, [callbacksRef])
 
-  // Re-populate the chart whenever the viewed timeframe changes.
+  // Re-populate the chart whenever the viewed timeframe or active symbol changes.
   useEffect(() => {
     if (!seriesRef.current || !chartRef.current) return
-    fetch(`/api/bars?timeframe=${viewTf}&limit=500`)
+    const instrParam = activeSymbol ? `&instrument=${activeSymbol}` : ''
+    fetch(`/api/bars?timeframe=${viewTf}&limit=500${instrParam}`)
       .then(r => r.json())
       .then(d => {
         if (!seriesRef.current || !chartRef.current) return
         const validBars = Array.isArray(d.bars) ? d.bars.filter(isValidBar) : []
-        if (validBars.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          seriesRef.current.setData(validBars as any)
-          // Reset forming-bar anchor so off-TF bars don't show stale data.
-          lastBarTimeRef.current = null
-          chartRef.current.timeScale().fitContent()
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        seriesRef.current.setData(validBars.length > 0 ? validBars as any : [])
+        // Reset forming-bar anchor so off-TF/off-symbol bars don't show stale data.
+        lastBarTimeRef.current = null
+        if (validBars.length > 0) chartRef.current.timeScale().fitContent()
       })
       .catch(() => {})
-  }, [viewTf])
+  }, [viewTf, activeSymbol])
 
   const inst = setupState?.available ? (setupState.instruments[0] ?? null) : null
 
@@ -551,8 +569,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
             ))}
           </div>
           {formingHot && (
-            <span className="flex items-center gap-1 text-[10px] font-mono text-yellow-400 animate-pulse">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400" />
+            <span className="flex items-center gap-1 text-[10px] font-mono text-warn animate-pulse">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-warn" />
               SETUP
             </span>
           )}
@@ -577,19 +595,19 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
         {/* Signal conditions — 1/5 width */}
         <div style={{
           flex: 1,
-          borderLeft: '1px solid #001800',
+          borderLeft: '1px solid #003a00',
           background: '#000',
           height: CHART_HEIGHT,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          fontFamily: "'Courier New', monospace",
+          fontFamily: "'JetBrains Mono', monospace",
         }}>
           {/* Panel header */}
           <div style={{
             padding: '7px 12px 6px',
-            borderBottom: '1px solid #001800',
-            color: '#2d5c2d',
+            borderBottom: '1px solid #003a00',
+            color: '#00aa22',
             fontSize: 9,
             letterSpacing: '0.4em',
             textTransform: 'uppercase' as const,
@@ -650,8 +668,8 @@ export function BarChart({ callbacksRef, timeframe }: Props) {
           {inst?.atr && (
             <div style={{
               padding: '5px 12px',
-              borderTop: '1px solid #001800',
-              color: '#2d5c2d',
+              borderTop: '1px solid #003a00',
+              color: '#00aa22',
               fontSize: 10,
               letterSpacing: '0.1em',
               flexShrink: 0,

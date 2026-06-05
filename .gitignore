@@ -16,7 +16,7 @@ bars/
 intrabar_*.csv
 
 # Live trade logs (regenerated from broker every session)
-trades/
+# trades/ intentionally tracked — CSVs committed daily for cloud analysis
 
 # Backtest results (generated data) — keep _config_* strategy configs
 backtests/*.json

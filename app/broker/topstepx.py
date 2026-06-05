@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
 from .pricing import (
@@ -115,6 +115,7 @@ class TopstepXBroker:
 
     def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0")) -> None:
         self._suite = None  # project_x_py.TradingSuite, lazily imported
+        self._extra_suites: dict[str, Any] = {}  # secondary instrument suites
         self._account_name = account_name
         self.entry_mode = entry_mode  # "market" or "limit"
         self.partial_profit_r = partial_profit_r  # 0 = disabled; >0 = take half at NxR then BE (hot-applied via PATCH /api/config)
@@ -187,6 +188,12 @@ class TopstepXBroker:
             except asyncio.CancelledError:
                 pass
             self._intrabar_task = None
+        for _instr, _es in list(self._extra_suites.items()):
+            try:
+                await _es.disconnect()
+            except Exception as e:
+                log.warning("Error during secondary disconnect (%s): %s", _instr, e)
+        self._extra_suites.clear()
         if self._suite is not None:
             try:
                 await self._suite.disconnect()
@@ -215,6 +222,10 @@ class TopstepXBroker:
     # ------------------------------------------------------------------
     # Account info
     # ------------------------------------------------------------------
+
+    def _get_suite_for(self, instrument: str) -> Any:
+        """Return the TradingSuite for `instrument`; falls back to primary suite."""
+        return self._extra_suites.get(instrument, self._suite)
 
     async def account_balance(self) -> Decimal:
         self._require_connected()
@@ -337,9 +348,10 @@ class TopstepXBroker:
         close_sdk_side = SIDE_SELL if sdk_side == SIDE_BUY else SIDE_BUY
         account_id = self._get_account_id()
 
+        suite = self._get_suite_for(instrument)
         try:
-            resp = await self._suite.orders.place_market_order(
-                self._suite.instrument_id,
+            resp = await suite.orders.place_market_order(
+                suite.instrument_id,
                 sdk_side,
                 size,
                 account_id,
@@ -461,9 +473,10 @@ class TopstepXBroker:
         close_sdk_side = SIDE_SELL if sdk_side == SIDE_BUY else SIDE_BUY
         account_id = self._get_account_id()
 
+        suite = self._get_suite_for(instrument)
         try:
-            resp = await self._suite.orders.place_limit_order(
-                self._suite.instrument_id,
+            resp = await suite.orders.place_limit_order(
+                suite.instrument_id,
                 sdk_side,
                 size,
                 float(entry),
@@ -561,6 +574,7 @@ class TopstepXBroker:
         close_sdk_side = bracket["close_sdk_side"]
         size = bracket["size"]
         account_id = bracket["account_id"]
+        _suite = self._get_suite_for(bracket.get("instrument", ""))
         log.info(
             "_place_bracket_after_fill: fill=%s stop=%s target=%s",
             fill_price, stop, target,
@@ -568,8 +582,8 @@ class TopstepXBroker:
 
         async def _place_stop() -> str | None:
             try:
-                resp = await self._suite.orders.place_stop_order(
-                    self._suite.instrument_id,
+                resp = await _suite.orders.place_stop_order(
+                    _suite.instrument_id,
                     close_sdk_side,
                     size,
                     float(stop),
@@ -586,8 +600,8 @@ class TopstepXBroker:
 
         async def _place_target() -> str | None:
             try:
-                resp = await self._suite.orders.place_limit_order(
-                    self._suite.instrument_id,
+                resp = await _suite.orders.place_limit_order(
+                    _suite.instrument_id,
                     close_sdk_side,
                     size,
                     float(target),
@@ -670,25 +684,27 @@ class TopstepXBroker:
             await self._place_bracket_after_fill(bracket)
             return
 
+        _suite = self._get_suite_for(instrument)
+
         # 1) Stop (full size) FIRST.
-        stop_id = await self._place_stop(close_sdk_side, size, stop, account_id)
+        stop_id = await self._place_stop(close_sdk_side, size, stop, account_id, suite=_suite)
         if stop_id is None:
             log.error("_place_partial_bracket_after_fill: stop placement failed — position UNPROTECTED")
             return
 
         # 2) Final target at remaining size.
-        target_id = await self._place_limit(close_sdk_side, plan.remaining_size, target, account_id)
+        target_id = await self._place_limit(close_sdk_side, plan.remaining_size, target, account_id, suite=_suite)
 
         # 3) Partial-target leg (size>=2 only).
         partial_id = None
         if plan.partial_size > 0:
-            partial_id = await self._place_limit(close_sdk_side, plan.partial_size, plan.partial_price, account_id)
+            partial_id = await self._place_limit(close_sdk_side, plan.partial_size, plan.partial_price, account_id, suite=_suite)
             if partial_id is None:
                 # Degrade to a full-size 2-leg bracket: bump target back to full size.
                 log.error("partial-target placement failed — degrading to plain bracket")
                 if target_id is not None:
                     await self._cancel_order(target_id)
-                target_id = await self._place_limit(close_sdk_side, size, target, account_id)
+                target_id = await self._place_limit(close_sdk_side, size, target, account_id, suite=_suite)
                 plan = None  # signal: no partial this trade
 
         if target_id is None:
@@ -739,10 +755,11 @@ class TopstepXBroker:
                 log.info("Replaying early group-leg fill: order=%s", oid)
                 asyncio.create_task(self._handle_group_fill(early))
 
-    async def _place_stop(self, close_sdk_side, size, price, account_id) -> "str | None":
+    async def _place_stop(self, close_sdk_side, size, price, account_id, suite=None) -> "str | None":
+        s = suite or self._suite
         try:
-            resp = await self._suite.orders.place_stop_order(
-                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            resp = await s.orders.place_stop_order(
+                s.instrument_id, close_sdk_side, size, float(price), account_id)
             if getattr(resp, "success", False):
                 oid = str(resp.orderId)
                 log.info("Stop placed: order=%s @ %s size=%d", oid, price, size)
@@ -752,10 +769,11 @@ class TopstepXBroker:
             log.exception("_place_stop failed")
         return None
 
-    async def _place_limit(self, close_sdk_side, size, price, account_id) -> "str | None":
+    async def _place_limit(self, close_sdk_side, size, price, account_id, suite=None) -> "str | None":
+        s = suite or self._suite
         try:
-            resp = await self._suite.orders.place_limit_order(
-                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            resp = await s.orders.place_limit_order(
+                s.instrument_id, close_sdk_side, size, float(price), account_id)
             if getattr(resp, "success", False):
                 oid = str(resp.orderId)
                 log.info("Limit (exit) placed: order=%s @ %s size=%d", oid, price, size)
@@ -876,7 +894,8 @@ class TopstepXBroker:
             log.exception("cancel of oversized stop failed: %s", stop_id)
 
         new_id = await self._place_stop(
-            group["close_sdk_side"], remaining, group["be_price"], group["account_id"])
+            group["close_sdk_side"], remaining, group["be_price"], group["account_id"],
+            suite=self._get_suite_for(group.get("instrument", "")))
         if new_id is not None:
             # Re-register: drop old stop id, add the new one to the group.
             self._exit_groups.pop(stop_id, None)
@@ -1140,6 +1159,7 @@ class TopstepXBroker:
             }
             self._exit_pairs.clear()
 
+        _suite = self._get_suite_for(instrument)
         success = True
         for pos in open_positions:
             ptype = int(pos.get("type", 0))
@@ -1149,8 +1169,8 @@ class TopstepXBroker:
             # type=1 LONG → close with SELL; type=2 SHORT → close with BUY
             close_side = SIDE_SELL if ptype == 1 else SIDE_BUY
             try:
-                response = await self._suite.orders.place_market_order(
-                    contract_id=self._suite.instrument_id,
+                response = await _suite.orders.place_market_order(
+                    contract_id=_suite.instrument_id,
                     side=close_side,
                     size=size,
                 )
@@ -1200,15 +1220,6 @@ class TopstepXBroker:
         instr_list = list(instruments)
         if not instr_list:
             raise ValueError("Must subscribe to at least one instrument")
-        if len(instr_list) > 1:
-            # Multi-instrument requires one suite per symbol or the SDK's
-            # multi-instrument suite (depends on version). Out of scope
-            # for first ship; flag explicitly so it doesn't silently break.
-            raise NotImplementedError(
-                "Multi-instrument subscription not yet implemented. "
-                "Use one TopstepXBroker per instrument for now."
-            )
-
         primary = instr_list[0]
         tf_list = list(timeframes)
 
@@ -1223,6 +1234,14 @@ class TopstepXBroker:
             timeframes=tf_list,
         )
         self._instruments = instr_list
+
+        # Create one suite per secondary instrument for bar events.
+        for _sec_instr in instr_list[1:]:
+            self._extra_suites[_sec_instr] = await self._TradingSuite.create(
+                instrument=_sec_instr,
+                timeframes=tf_list,
+            )
+            log.info("TopstepXBroker: secondary suite created for %s", _sec_instr)
 
         # Wire SDK events → our handlers.
         # events.on(event_type, handler) — NOT a decorator factory.
@@ -1517,6 +1536,72 @@ class TopstepXBroker:
                 await self._emit_equity_snapshot(fill.ts)
 
             await self._suite.events.on(event_type, _on_fill_event)
+
+        # Wire bar events for each secondary instrument.
+        # Fills stay wired to the primary suite only (account-level; dedup handles
+        # any cross-suite duplicates via _processed_fill_ids).
+        for _ei in instr_list[1:]:
+            _es = self._extra_suites[_ei]
+            _last_ts: list = [None]  # mutable ref; one per instrument per loop iteration
+
+            async def _on_sec_bar(event, _ei=_ei, _last_ts=_last_ts):
+                data = event.data
+                inner = data.get("data") or data
+                ts_raw = (
+                    data.get("bar_time")
+                    or inner.get("timestamp")
+                    or data.get("t")
+                    or data.get("timestamp")
+                )
+                ts = self._coerce_ts(ts_raw)
+                try:
+                    window_start = ts - timedelta(minutes=60)
+                    recent = await self.get_historical_bars(
+                        timeframe=tf_list[0],
+                        start_time=window_start,
+                        end_time=ts,
+                        instrument=_ei,
+                    )
+                    to_send = [
+                        b for b in recent
+                        if b.ts < ts and (_last_ts[0] is None or b.ts > _last_ts[0])
+                    ]
+                    to_send.sort(key=lambda b: b.ts)
+                    for bar in to_send:
+                        await self._fanout(self._bar_handlers, bar)
+                        _last_ts[0] = bar.ts
+                    if to_send:
+                        log.info(
+                            "_on_new_bar(%s): sent %d bars (%s..%s)",
+                            _ei, len(to_send),
+                            to_send[0].ts.isoformat(), to_send[-1].ts.isoformat(),
+                        )
+                    else:
+                        log.info("_on_new_bar(%s): no new bars (event=%s)", _ei, ts.isoformat())
+                except Exception:
+                    log.exception("_on_new_bar(%s) failed", _ei)
+                await self._emit_equity_snapshot(ts)
+
+            async def _on_sec_quote(event, _ei=_ei):
+                data = event.data
+                bid, ask = data.get("bid"), data.get("ask")
+                if bid is None or ask is None:
+                    return
+                try:
+                    price = Decimal(str((float(bid) + float(ask)) / 2))
+                except (ValueError, TypeError):
+                    return
+                await self._maybe_move_stop_to_be(_ei, price)
+
+            await _es.events.on(EventType.NEW_BAR, _on_sec_bar)
+            await _es.events.on(EventType.QUOTE_UPDATE, _on_sec_quote)
+            for _conn_event in ("CONNECTED", "DISCONNECTED"):
+                try:
+                    _conn_type = getattr(EventType, _conn_event)
+                    _handler = _on_feed_connected if _conn_event == "CONNECTED" else _on_feed_disconnected
+                    await _es.events.on(_conn_type, _handler)
+                except AttributeError:
+                    pass
 
         log.info("Subscribed: instruments=%s timeframes=%s", instr_list, tf_list)
 
