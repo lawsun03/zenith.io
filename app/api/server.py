@@ -142,7 +142,14 @@ def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
     }
 
 
-_DATABENTO_SYMBOL_MAP: dict[str, str] = {"MGC": "GC.c.0"}
+# Maps the bot's instrument symbol to the Databento continuous front-month
+# symbol on GLBX.MDP3 (stype_in="continuous", schema="ohlcv-1m"), as consumed
+# by scripts/fetch_bars_databento.py.
+_DATABENTO_SYMBOL_MAP: dict[str, str] = {
+    "MGC": "GC.c.0",
+    "MES": "ES.c.0",
+    "MNQ": "NQ.c.0",
+}
 
 
 def _bars_csv_path(symbol: str) -> str:
@@ -954,6 +961,11 @@ def build_app(
                 ])
         log.info("Wrote %d bars to %s", len(unique), out_path)
         return out_path
+
+    @app.get("/api/databento/symbols")
+    async def databento_symbols() -> JSONResponse:
+        """Return the instrument symbols supported for Databento fetch."""
+        return JSONResponse({"symbols": sorted(_DATABENTO_SYMBOL_MAP.keys())})
 
     @app.post("/api/databento/fetch")
     async def databento_fetch(req: DatabentoBarsRequest) -> JSONResponse:

@@ -416,6 +416,7 @@ interface ABVariant {
 }
 
 interface ABResult {
+  instrument: string
   letter: string
   label: string
   id: string | null
@@ -423,6 +424,10 @@ interface ABResult {
   startingBalance: string
   status: 'pending' | 'running' | 'done' | 'error'
 }
+
+// Databento-supported instruments for the A/B matrix. Fetched from the backend
+// (/api/databento/symbols); this is the fallback if that call fails.
+const DEFAULT_AB_INSTRUMENTS = ['MES', 'MGC', 'MNQ']
 
 export function BacktestsPage() {
   const [list, setList] = useState<BacktestSummary[]>([])
@@ -461,6 +466,11 @@ export function BacktestsPage() {
   const [abVariants, setAbVariants] = useState<ABVariant[]>([{ overrides: {} }, { overrides: {} }])
   const [abResults, setAbResults] = useState<ABResult[] | null>(null)
   const [abRunning, setAbRunning] = useState(false)
+  // A/B runs on Databento across its own calendar range + selected instruments.
+  const [abStartDate, setAbStartDate] = useState(daysAgo(365))
+  const [abEndDate, setAbEndDate] = useState(isoDate(new Date()))
+  const [abInstruments, setAbInstruments] = useState<string[]>([])
+  const [supportedSymbols, setSupportedSymbols] = useState<string[]>(DEFAULT_AB_INSTRUMENTS)
 
   // Filtering and sorting for the saved-runs list.
   type SortKey = 'pnl_desc' | 'pnl_asc' | 'trades_desc' | 'win_rate_desc' | 'profit_factor_desc' | 'date_desc'
@@ -498,6 +508,32 @@ export function BacktestsPage() {
   function setStratField(k: string, v: string) {
     setStrategy(s => ({ ...s, [k]: v }))
     setStrategyDirty(true)
+  }
+
+  // Populate the A/B instrument picker from the backend's Databento symbol map,
+  // and default the selection to the live bot's instrument.
+  useEffect(() => {
+    fetch('/api/databento/symbols')
+      .then(r => r.json())
+      .then(d => {
+        const syms: string[] = Array.isArray(d?.symbols) && d.symbols.length ? d.symbols : DEFAULT_AB_INSTRUMENTS
+        setSupportedSymbols(syms)
+        return resolveSymbol().then(sym => {
+          const def = sym.toUpperCase()
+          setAbInstruments([syms.includes(def) ? def : syms[0]])
+        })
+      })
+      .catch(() => {
+        setSupportedSymbols(DEFAULT_AB_INSTRUMENTS)
+        setAbInstruments([DEFAULT_AB_INSTRUMENTS[0]])
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function toggleAbInstrument(sym: string) {
+    setAbInstruments(prev =>
+      prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
+    )
   }
 
   // Build the strategy override payload from the current form state. `tpOverrides`
@@ -750,57 +786,114 @@ export function BacktestsPage() {
     return v.overrides[key] ?? strategy[key] ?? (key === 'partial_profit_r' ? partialR : STRATEGY_DEFAULTS[key])
   }
 
+  // A/B runs on Databento as a full matrix: each TP variant × each selected
+  // instrument. Bars are fetched once per instrument, then one isolated backtest
+  // per (instrument, variant). Labels encode both so list-polling can match back.
   async function runABTest() {
-    if (dataSource === 'databento') {
-      setMsg('A/B test currently runs against TopstepX bars (Local CSV / date range). Switch data source to Local.')
+    if (abInstruments.length < 1) {
+      setMsg('Select at least one instrument for the A/B matrix.')
+      return
+    }
+    if (abStartDate > abEndDate) {
+      setMsg('A/B start date must be on or before the end date.')
       return
     }
     setAbRunning(true)
-    setMsg('Starting A/B test…')
+    setMsg('Starting A/B matrix…')
 
-    const base = (label || `${timeframe} ${startDate}→${endDate}`).slice(0, 60)
-    const runs: ABResult[] = abVariants.map((_, i) => ({
-      letter: VARIANT_LETTERS[i],
-      label: `A/B: ${base} — Variant ${VARIANT_LETTERS[i]}`,
-      id: null,
-      stats: null,
-      startingBalance: '50000',
-      status: 'pending',
-    }))
+    const base = (label || `${abStartDate}→${abEndDate}`).slice(0, 60)
+    // Seed one pending result cell per (instrument, variant) combo.
+    const runs: ABResult[] = []
+    for (const instr of abInstruments) {
+      for (let i = 0; i < abVariants.length; i++) {
+        runs.push({
+          instrument: instr,
+          letter: VARIANT_LETTERS[i],
+          label: `A/B: ${base} — ${instr} — Variant ${VARIANT_LETTERS[i]}`,
+          id: null,
+          stats: null,
+          startingBalance: '50000',
+          status: 'pending',
+        })
+      }
+    }
     setAbResults(runs)
 
+    // Labels of runs that actually started — only these are polled for results.
+    const startedLabels = new Set<string>()
+
     try {
-      // Fire each variant as its own isolated run. Labels are unique so we can
-      // match completed results back to variants when polling the list.
-      for (let i = 0; i < abVariants.length; i++) {
-        const { strategy: stratPayload, partialProfitR } = buildRunPayload(abVariants[i].overrides)
-        const runBody: Record<string, unknown> = {
-          label: runs[i].label,
-          timeframe,
-          strategy: stratPayload,
-          start_date: startDate,
-          end_date: endDate,
+      for (const instr of abInstruments) {
+        const sym = instr.toUpperCase()
+        // Fetch Databento bars once per instrument before running its variants.
+        setMsg(`Fetching ${sym} bars from Databento…`)
+        let fetchOk = false
+        try {
+          const bentoRes = await fetch('/api/databento/fetch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: sym, start: abStartDate, end: abEndDate, dry_run: false }),
+          })
+          const bentoBody = await bentoRes.json()
+          fetchOk = !!bentoBody.ok
+          if (!fetchOk) {
+            setMsg(`${sym}: Databento fetch failed — ${bentoBody.reason ?? 'unknown'} (skipping)`)
+          }
+        } catch (e) {
+          setMsg(`${sym}: Databento fetch error — ${String(e)} (skipping)`)
         }
-        if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
-        const res = await fetch('/api/backtest/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(runBody),
-        })
-        const body = await res.json()
-        if (!body.ok) {
-          setAbResults(prev => prev?.map((r, j) => j === i ? { ...r, status: 'error' } : r) ?? null)
-          setMsg(`Variant ${VARIANT_LETTERS[i]} failed to start: ${body.reason ?? 'unknown'}`)
-        } else {
-          setAbResults(prev => prev?.map((r, j) => j === i ? { ...r, status: 'running' } : r) ?? null)
+
+        if (!fetchOk) {
+          // Mark every variant cell for this instrument as errored and skip it.
+          setAbResults(prev => prev?.map(r =>
+            r.instrument === sym && r.status === 'pending' ? { ...r, status: 'error' } : r
+          ) ?? null)
+          continue
+        }
+
+        for (let i = 0; i < abVariants.length; i++) {
+          const r = runs.find(x => x.instrument === sym && x.letter === VARIANT_LETTERS[i])!
+          setMsg(`Running ${sym} · Variant ${VARIANT_LETTERS[i]}…`)
+          const { strategy: stratPayload, partialProfitR } = buildRunPayload(abVariants[i].overrides)
+          // NOTE: deliberately do NOT send start_date/end_date here. The backtest
+          // endpoint routes start_date+end_date to a *broker* fetch (live-mode
+          // only) and ignores bars_path; the date range is already applied by the
+          // Databento fetch above (the CSV only holds bars for that range). This
+          // mirrors the working single-run Databento flow.
+          const runBody: Record<string, unknown> = {
+            label: r.label,
+            timeframe,
+            strategy: stratPayload,
+            bars_path: `bars/bars_${sym}.csv`,
+            instrument: sym,
+          }
+          if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
+          const res = await fetch('/api/backtest/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(runBody),
+          })
+          const body = await res.json()
+          if (body.ok) startedLabels.add(r.label)
+          setAbResults(prev => prev?.map(x =>
+            x.label === r.label ? { ...x, status: body.ok ? 'running' : 'error' } : x
+          ) ?? null)
+          if (!body.ok) {
+            setMsg(`${sym} · Variant ${VARIANT_LETTERS[i]} failed to start: ${body.reason ?? 'unknown'}`)
+          }
         }
       }
 
-      setMsg('A/B variants running — collecting results…')
-      const wantLabels = new Set(runs.filter(r => r.status !== 'error').map(r => r.label))
+      setMsg('A/B matrix running — collecting results…')
       // Poll the list; backfill stats as each labeled run lands. Stop when all
-      // wanted labels are found or after a generous timeout.
-      const deadline = Date.now() + 5 * 60 * 1000
+      // started runs are found or after a generous timeout.
+      const targets = startedLabels
+      if (targets.size === 0) {
+        setAbRunning(false)
+        setMsg('A/B matrix: no runs started.')
+        return
+      }
+      const deadline = Date.now() + 10 * 60 * 1000
       const matched = new Set<string>()
       const poll = setInterval(async () => {
         try {
@@ -808,7 +901,7 @@ export function BacktestsPage() {
           const items: BacktestSummary[] = d.backtests ?? []
           setList(items)
           for (const it of items) {
-            if (wantLabels.has(it.label) && !matched.has(it.label)) {
+            if (targets.has(it.label) && !matched.has(it.label)) {
               matched.add(it.label)
               const detail = await fetch(`/api/backtest/${it.id}`).then(r => r.json())
               setAbResults(prev => prev?.map(r =>
@@ -818,12 +911,12 @@ export function BacktestsPage() {
               ) ?? null)
             }
           }
-          if (matched.size >= wantLabels.size || Date.now() > deadline) {
+          if (matched.size >= targets.size || Date.now() > deadline) {
             clearInterval(poll)
             setAbRunning(false)
-            setMsg(matched.size >= wantLabels.size
-              ? 'A/B test complete'
-              : `A/B test timed out — ${matched.size}/${wantLabels.size} variants completed`)
+            setMsg(matched.size >= targets.size
+              ? 'A/B matrix complete'
+              : `A/B matrix timed out — ${matched.size}/${targets.size} runs completed`)
             setTimeout(() => setMsg(null), 5000)
           }
         } catch { /* keep polling */ }
@@ -1427,6 +1520,13 @@ export function BacktestsPage() {
               variants={abVariants}
               results={abResults}
               running={abRunning}
+              startDate={abStartDate}
+              endDate={abEndDate}
+              onStartDate={setAbStartDate}
+              onEndDate={setAbEndDate}
+              supportedSymbols={supportedSymbols}
+              selectedInstruments={abInstruments}
+              onToggleInstrument={toggleAbInstrument}
               onAddVariant={addVariant}
               onRemoveVariant={removeVariant}
               onSetOverride={setVariantOverride}
@@ -2002,6 +2102,13 @@ interface ABPanelProps {
   variants: ABVariant[]
   results: ABResult[] | null
   running: boolean
+  startDate: string
+  endDate: string
+  onStartDate: (v: string) => void
+  onEndDate: (v: string) => void
+  supportedSymbols: string[]
+  selectedInstruments: string[]
+  onToggleInstrument: (sym: string) => void
   onAddVariant: () => void
   onRemoveVariant: (idx: number) => void
   onSetOverride: (idx: number, key: string, value: string) => void
@@ -2012,11 +2119,81 @@ interface ABPanelProps {
 
 function ABPanel({
   variants, results, running,
+  startDate, endDate, onStartDate, onEndDate,
+  supportedSymbols, selectedInstruments, onToggleInstrument,
   onAddVariant, onRemoveVariant, onSetOverride, onClearOverride,
   variantTpValue, onRun,
 }: ABPanelProps) {
+  const combos = selectedInstruments.length * variants.length
   return (
     <div className="space-y-4">
+      <p className="text-[11px] text-dim leading-relaxed">
+        Runs on <span className="text-accent">Databento</span> data across the selected
+        instruments and date range — a full matrix of each TP variant × each instrument.
+        Non-TP strategy params stay identical to the form above; only the take-profit
+        overrides differ per variant.
+      </p>
+
+      {/* Databento date range for the A/B matrix. */}
+      <div className="border border-border bg-bg/30 p-3">
+        <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Databento Date Range</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Start</label>
+            <input
+              type="date"
+              value={startDate}
+              max={endDate}
+              onChange={e => onStartDate(e.target.value)}
+              disabled={running}
+              className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">End</label>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate}
+              max={isoDate(new Date())}
+              onChange={e => onEndDate(e.target.value)}
+              disabled={running}
+              className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Instrument multi-select — the matrix runs every variant on each. */}
+      <div className="border border-border bg-bg/30 p-3">
+        <div className="text-[9px] tracking-widest text-dim uppercase mb-2">
+          Instruments
+          <span className="text-faint ml-2 normal-case tracking-normal">select one or more</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {supportedSymbols.map(sym => {
+            const on = selectedInstruments.includes(sym)
+            return (
+              <button
+                key={sym}
+                onClick={() => onToggleInstrument(sym)}
+                disabled={running}
+                className={`text-[11px] font-mono tracking-widest uppercase px-3 py-1.5 border disabled:opacity-50 ${
+                  on
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-border text-dim hover:text-ink'
+                }`}
+              >
+                {sym}
+              </button>
+            )
+          })}
+        </div>
+        {selectedInstruments.length === 0 && (
+          <p className="text-[10px] text-warn mt-2">Select at least one instrument.</p>
+        )}
+      </div>
+
       {/* Variant editor — one column per variant, editing only TP params. */}
       <div className="border border-border bg-bg/30 p-3">
         <div className="flex items-center justify-between mb-3">
@@ -2097,22 +2274,50 @@ function ABPanel({
       <div className="flex items-center gap-3">
         <button
           onClick={onRun}
-          disabled={running}
+          disabled={running || selectedInstruments.length === 0}
           className="bg-accent/10 border border-accent text-accent text-xs tracking-widest uppercase px-5 py-2 hover:bg-accent/20 disabled:opacity-50"
         >
-          {running ? 'Running A/B…' : `Run A/B (${variants.length})`}
+          {running ? 'Running A/B…' : `Run A/B Matrix (${combos})`}
         </button>
         {running && (
           <span className="text-[10px] text-dim font-mono">
-            {(results ?? []).filter(r => r.status === 'done').length} / {variants.length} complete
+            {(results ?? []).filter(r => r.status === 'done').length} / {combos} complete
           </span>
         )}
       </div>
 
-      {results && <ABComparison results={results} />}
-      {results && results.some(r => r.stats?.equity_curve?.length) && (
-        <ABEquityOverlay results={results} />
-      )}
+      {results && <ABMatrixResults results={results} running={running} />}
+    </div>
+  )
+}
+
+// Group matrix results by instrument and render one comparison table +
+// equity-curve overlay per instrument, stacked vertically.
+function ABMatrixResults({ results, running }: { results: ABResult[]; running: boolean }) {
+  // Preserve first-seen instrument order.
+  const order: string[] = []
+  for (const r of results) if (!order.includes(r.instrument)) order.push(r.instrument)
+  return (
+    <div className="space-y-6">
+      {order.map(instr => {
+        const group = results.filter(r => r.instrument === instr)
+        return (
+          <div key={instr} className="border border-border bg-bg/20 p-3 space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] tracking-[0.3em] text-accent uppercase font-mono">{instr}</span>
+              {running && (
+                <span className="text-[10px] text-faint font-mono">
+                  {group.filter(r => r.status === 'done').length}/{group.length}
+                </span>
+              )}
+            </div>
+            <ABComparison results={group} />
+            {group.some(r => r.stats?.equity_curve?.length) && (
+              <ABEquityOverlay results={group} />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
