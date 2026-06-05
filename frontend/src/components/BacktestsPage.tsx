@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
+
+interface KillzoneStat {
+  trades: number
+  wins: number
+  losses: number
+  win_rate: number
+  net_pnl: number
+}
 
 interface BacktestStats {
   trades: number
@@ -17,6 +26,7 @@ interface BacktestStats {
   is_profitable?: boolean
   passed_combine?: boolean
   mll_breached?: boolean
+  by_killzone?: Record<string, KillzoneStat>
   equity_curve?: [string, string][]
 }
 
@@ -26,6 +36,8 @@ interface BacktestSummary {
   completed_at: string | null
   instrument: string
   timeframe: string
+  start_date?: string | null
+  end_date?: string | null
   bars_processed: number
   ending_balance: string
   stats: BacktestStats
@@ -150,6 +162,12 @@ function daysAgo(n: number): string {
   return isoDate(d)
 }
 
+// Older saved runs predate start_date/end_date persistence; show "—" for them.
+function fmtRange(start?: string | null, end?: string | null): string {
+  if (!start || !end) return '—'
+  return `${start} → ${end}`
+}
+
 interface Availability {
   earliest: string | null
   latest: string | null
@@ -159,9 +177,25 @@ interface Availability {
   timeframe?: string
 }
 
+type StrategySection =
+  | 'Entry / Signal'
+  | 'Risk & Sizing'
+  | 'Take-Profit'
+  | 'Killzones'
+  | 'Structure / IFVG'
+
+const SECTION_ORDER: StrategySection[] = [
+  'Entry / Signal',
+  'Risk & Sizing',
+  'Take-Profit',
+  'Killzones',
+  'Structure / IFVG',
+]
+
 interface StrategyField {
   key: string
   label: string
+  section: StrategySection
   min?: number
   max?: number
   step?: number
@@ -172,134 +206,134 @@ interface StrategyField {
 
 const STRATEGY_FIELDS: StrategyField[] = [
   {
-    key: 'swing_lookback', label: 'Swing Lookback', min: 1, max: 20, step: 1,
+    key: 'swing_lookback', label: 'Swing Lookback', section: 'Entry / Signal', min: 1, max: 20, step: 1,
     hint: 'How many bars on each side must be lower (or higher) for the bot to call a price a "swing low" (or "swing high"). Lower = more swings, including small wiggles. Higher = only major levels. Try: 2 for active trading, 5+ for slower setups.',
   },
   {
-    key: 'min_penetration', label: 'Min Penetration ($)', min: 0, max: 5, step: 0.05,
+    key: 'min_penetration', label: 'Min Penetration ($)', section: 'Entry / Signal', min: 0, max: 5, step: 0.05,
     hint: 'How far past a swing level price must move to count as a real sweep (stop hunt). Filters out tiny one-tick wicks. Try: 0.20 for MGC (~2 ticks). Raise it if the bot is firing on noise.',
   },
   {
-    key: 'multi_bar_window', label: 'Multi-Bar Window', min: 1, max: 20, step: 1,
+    key: 'multi_bar_window', label: 'Multi-Bar Window', section: 'Entry / Signal', min: 1, max: 20, step: 1,
     hint: 'How many bars a slow stop-hunt can span before we stop calling it a sweep. 1 = single-bar sweeps only. Higher = catches grinds that take 3–5 bars to penetrate a level.',
   },
   {
-    key: 'atr_period', label: 'ATR Period', min: 5, max: 50, step: 1,
+    key: 'atr_period', label: 'ATR Period', section: 'Entry / Signal', min: 5, max: 50, step: 1,
     hint: 'How many bars to average for "what does normal range look like right now?". Shorter (5–10) reacts faster to changing volatility; longer (20+) smooths things out. 14 is standard.',
   },
   {
-    key: 'body_atr_multiple', label: 'Body ATR Multiple', min: 0, max: 5, step: 0.1,
+    key: 'body_atr_multiple', label: 'Body ATR Multiple', section: 'Entry / Signal', min: 0, max: 5, step: 0.1,
     hint: 'How big the trigger candle\'s body must be relative to recent ATR. 1.0 = body ≥ 1× ATR (normal impulse). 2.0 = need a strong move. Higher = stricter, fewer signals.',
   },
   {
-    key: 'min_body_to_range_ratio', label: 'Body / Range Ratio', min: 0, max: 1, step: 0.05,
+    key: 'min_body_to_range_ratio', label: 'Body / Range Ratio', section: 'Entry / Signal', min: 0, max: 1, step: 0.05,
     hint: 'How "solid" the trigger candle must be: body length ÷ full high-to-low range. 0.6 = body fills 60% of the candle. Filters out doji/indecision wicks. Higher = only big-bodied moves.',
   },
   {
-    key: 'min_absolute_body', label: 'Min Body ($)', min: 0, max: 10, step: 0.1,
+    key: 'min_absolute_body', label: 'Min Body ($)', section: 'Entry / Signal', min: 0, max: 10, step: 0.1,
     hint: 'Hard floor on the trigger candle\'s body size in dollars. Catches cases where ATR is tiny (overnight chop) but the relative ratio still passes. Try: 1.0 for MGC.',
   },
   {
-    key: 'displacement_window_bars', label: 'Displacement Window', min: 1, max: 20, step: 1,
+    key: 'displacement_window_bars', label: 'Displacement Window', section: 'Entry / Signal', min: 1, max: 20, step: 1,
     hint: 'After a sweep happens, how many bars to wait for a strong move (displacement) in the opposite direction. If nothing impulsive shows up in that window, the setup expires.',
   },
   {
-    key: 'stop_buffer', label: 'Stop Buffer ($)', min: 0, max: 5, step: 0.05,
+    key: 'stop_buffer', label: 'Stop Buffer ($)', section: 'Risk & Sizing', min: 0, max: 5, step: 0.05,
     hint: 'Extra dollars added beyond the sweep extreme when placing the stop. Bigger buffer = wider stops, fewer stop-outs from wick noise, but worse risk/reward. Try: 0.30 for MGC.',
   },
   {
-    key: 'r_multiple', label: 'R Multiple', min: 0.5, max: 10, step: 0.1,
+    key: 'r_multiple', label: 'R Multiple', section: 'Take-Profit', min: 0.5, max: 10, step: 0.1,
     hint: 'Reward-to-risk ratio: target distance ÷ stop distance. 2.0 = risk $50 to make $100. Higher targets = more profit per win but lower win rate. 2.0–3.0 is a common sweet spot.',
   },
   {
-    key: 'ifvg_entry_mode', label: 'iFVG Entry Mode', kind: 'select',
+    key: 'ifvg_entry_mode', label: 'iFVG Entry Mode', section: 'Entry / Signal', kind: 'select',
     options: ['ifvg_edge', 'retrace_ce', 'close'],
     hint: 'How to enter once a setup is graded. ifvg_edge/retrace_ce arm a zone and wait for price to retrace to the FVG edge / center (often missed in trends). close = enter immediately — far more trades, rides trends, higher variance.',
   },
   {
-    key: 'ifvg_rule_f_enabled', label: 'Rule F (premature-liq cancel)', kind: 'toggle',
+    key: 'ifvg_rule_f_enabled', label: 'Rule F (premature-liq cancel)', section: 'Entry / Signal', kind: 'toggle',
     hint: 'When ON, cancels an armed zone if the target is hit before the entry fills. In trends this voids the with-trend setups that work, so turning it OFF was the single biggest backtest improvement. (No effect in "close" mode — close never arms.)',
   },
   {
-    key: 'target_clarity_mode', label: 'Target-Clarity Gate', kind: 'select',
+    key: 'target_clarity_mode', label: 'Target-Clarity Gate', section: 'Take-Profit', kind: 'select',
     options: ['reject', 'penalty', 'off'],
     hint: 'What to do when a setup has no structural target near an HTF swing. reject = drop it (cut ~85% of candidates). penalty = downgrade one grade notch. off = ignore the gate entirely (most trades).',
   },
   {
-    key: 'htf_bias_enabled', label: 'HTF Bias Gate', kind: 'toggle',
+    key: 'htf_bias_enabled', label: 'HTF Bias Gate', section: 'Structure / IFVG', kind: 'toggle',
     hint: 'When ON, only takes setups that align with the 4h swing-structure bias (bullish = longs only, bearish = shorts only). Cuts trade count significantly but improves with-trend quality.',
   },
   {
-    key: 'htf_target_enabled', label: 'HTF Target Selection', kind: 'toggle',
+    key: 'htf_target_enabled', label: 'HTF Target Selection', section: 'Take-Profit', kind: 'toggle',
     hint: 'When ON, uses HTF swing levels as targets instead of a fixed R multiple. Requires HTF structure to be built from replay bars — adds latency to the first few signals.',
   },
   {
-    key: 'trend_ema_period', label: 'Trend EMA Filter', min: 0, max: 200, step: 1,
+    key: 'trend_ema_period', label: 'Trend EMA Filter', section: 'Entry / Signal', min: 0, max: 200, step: 1,
     hint: '0 = disabled (take all setups, both directions). N = only take signals aligned with the N-bar EMA trend. Your live config is 50 — this alone drops counter-trend setups. Set to 0 to see the full picture.',
   },
   {
-    key: 'ifvg_macro_blackouts_enabled', label: 'Macro Blackouts', kind: 'toggle',
+    key: 'ifvg_macro_blackouts_enabled', label: 'Macro Blackouts', section: 'Killzones', kind: 'toggle',
     hint: 'When ON, blocks entries during economic release windows (08:30–09:10, 09:50–10:10, 10:50–11:10, 13:10–13:40, 15:15–15:45 ET). Turn OFF to trade through news windows.',
   },
   {
-    key: 'min_atr_filter', label: 'Min ATR Filter', min: 0, max: 20, step: 0.1,
+    key: 'min_atr_filter', label: 'Min ATR Filter', section: 'Entry / Signal', min: 0, max: 20, step: 0.1,
     hint: '0 = disabled. N = skip setups when the current ATR is below N (avoids entering in dead chop). Useful if your strategy fires junk signals during low-volatility overnight hours.',
   },
   {
-    key: 'max_atr_filter', label: 'Max ATR Filter', min: 0, max: 50, step: 0.5,
+    key: 'max_atr_filter', label: 'Max ATR Filter', section: 'Entry / Signal', min: 0, max: 50, step: 0.5,
     hint: '0 = disabled. N = skip setups when ATR exceeds N (avoids blowout moves where your stop math breaks down). Useful when news spikes inflate ATR well beyond normal range.',
   },
   {
-    key: 'cooldown_bars_after_stop', label: 'Cooldown After Stop', min: 0, max: 20, step: 1,
+    key: 'cooldown_bars_after_stop', label: 'Cooldown After Stop', section: 'Entry / Signal', min: 0, max: 20, step: 1,
     hint: '0 = disabled. N = suppress new signals for N bars after taking a stop-loss. Prevents immediately re-entering into the same adverse move.',
   },
   {
-    key: 'min_penetration_atr_factor', label: 'Penetration ATR Factor', min: 0, max: 3, step: 0.05,
+    key: 'min_penetration_atr_factor', label: 'Penetration ATR Factor', section: 'Entry / Signal', min: 0, max: 3, step: 0.05,
     hint: '0 = use the fixed Min Penetration ($) value. >0 = scale the required penetration by factor × ATR, so it tightens in quiet markets and widens in volatile ones.',
   },
   {
-    key: 'ifvg_stop_buffer_ticks', label: 'iFVG Stop Buffer (ticks)', min: 0, max: 10, step: 0.5,
+    key: 'ifvg_stop_buffer_ticks', label: 'iFVG Stop Buffer (ticks)', section: 'Risk & Sizing', min: 0, max: 10, step: 0.5,
     hint: 'Extra ticks beyond the iFVG extreme when placing the stop. Larger = wider stop, less noise-stopped, worse R/R.',
   },
   {
-    key: 'ifvg_sweep_window_bars', label: 'Sweep Window (bars)', min: 1, max: 30, step: 1,
+    key: 'ifvg_sweep_window_bars', label: 'Sweep Window (bars)', section: 'Structure / IFVG', min: 1, max: 30, step: 1,
     hint: 'Rule A: how many bars back we look for a prior swing sweep before the iFVG formed. Larger window = more setups qualify; smaller = only recent, "clean" sweeps pass.',
   },
   {
-    key: 'ifvg_min_displacement_mult', label: 'Min Displacement Mult', min: 0, max: 3, step: 0.1,
+    key: 'ifvg_min_displacement_mult', label: 'Min Displacement Mult', section: 'Structure / IFVG', min: 0, max: 3, step: 0.1,
     hint: 'Rule E: the displacement candle must be ≥ N × ATR to qualify. 1.0 = needs a full ATR-sized move. Lower = more setups but includes weak displacements. 0 = off.',
   },
   {
-    key: 'ifvg_tp1_fraction', label: 'TP1 Fraction', min: 0, max: 1, step: 0.05,
+    key: 'ifvg_tp1_fraction', label: 'TP1 Fraction', section: 'Take-Profit', min: 0, max: 1, step: 0.05,
     hint: 'Fraction of position to close at the structural TP1 level (e.g. 0.5 = close half). Only relevant with multi-contract sizing; BE-only for 1-lots.',
   },
   {
-    key: 'ifvg_be_after_tp1', label: 'BE After TP1', kind: 'toggle',
+    key: 'ifvg_be_after_tp1', label: 'BE After TP1', section: 'Take-Profit', kind: 'toggle',
     hint: 'When ON, moves stop to break-even after TP1 fills. Protects profits on the runner but reduces final win size on strong moves. With partials disabled, has no effect.',
   },
   {
-    key: 'ifvg_session_windows', label: 'Session Windows', kind: 'list',
+    key: 'ifvg_session_windows', label: 'Session Windows', section: 'Killzones', kind: 'list',
     hint: 'Comma-separated UTC time ranges (HH:MM-HH:MM) when entries are allowed. Empty = no session filter (trade any time). Example: 09:00-11:00, 02:00-05:00.',
   },
   {
-    key: 'ifvg_news_blackout', label: 'News Blackout', kind: 'list',
+    key: 'ifvg_news_blackout', label: 'News Blackout', section: 'Killzones', kind: 'list',
     hint: 'Comma-separated ISO date-time ranges to block entirely (e.g. a high-impact event day). Format: YYYY-MM-DDTHH:MM/YYYY-MM-DDTHH:MM. Usually empty.',
   },
   {
-    key: 'htf_bias_timeframe', label: 'HTF Bias Timeframe', kind: 'select',
+    key: 'htf_bias_timeframe', label: 'HTF Bias Timeframe', section: 'Structure / IFVG', kind: 'select',
     options: ['15min', '30min', '1h', '4h'],
     hint: 'Timeframe used to determine the higher-timeframe swing-structure bias. Only relevant when HTF Bias Gate is ON.',
   },
   {
-    key: 'htf_bias_lookback', label: 'HTF Bias Lookback', min: 1, max: 10, step: 1,
+    key: 'htf_bias_lookback', label: 'HTF Bias Lookback', section: 'Structure / IFVG', min: 1, max: 10, step: 1,
     hint: 'Number of swing points on the HTF chart used to determine trend direction. 3 = last 3 swings. Only relevant when HTF Bias Gate is ON.',
   },
   {
-    key: 'htf_target_min_r', label: 'HTF Target Min R', min: 0, max: 5, step: 0.5,
+    key: 'htf_target_min_r', label: 'HTF Target Min R', section: 'Take-Profit', min: 0, max: 5, step: 0.5,
     hint: 'Minimum R an HTF swing level must deliver as a target to qualify. Lower HTF levels that are too close get skipped. Only relevant when HTF Target Selection is ON.',
   },
   {
-    key: 'htf_swing_timeframe', label: 'HTF Swing Timeframe', kind: 'select',
+    key: 'htf_swing_timeframe', label: 'HTF Swing Timeframe', section: 'Take-Profit', kind: 'select',
     options: ['15min', '30min', '1h', '4h'],
     hint: 'Fallback timeframe for swing-based target selection when HTF Target Selection is ON but no 4h level is available.',
   },
@@ -348,6 +382,48 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
 
 type DataSource = 'local' | 'databento'
 
+// TP-system params varied in A/B comparison. partial_profit_r is a top-level
+// config field; the rest live in the strategy dict. Both are sent on the run
+// request (partial_profit_r at top level, the others inside `strategy`).
+const TP_AB_FIELDS = [
+  'r_multiple',
+  'partial_profit_r',
+  'ifvg_tp1_fraction',
+  'ifvg_be_after_tp1',
+  'htf_target_enabled',
+  'htf_target_min_r',
+  'target_clarity_mode',
+] as const
+
+const TP_AB_LABELS: Record<string, string> = {
+  r_multiple: 'R Multiple',
+  partial_profit_r: 'Partial Profit R',
+  ifvg_tp1_fraction: 'TP1 Fraction',
+  ifvg_be_after_tp1: 'BE After TP1',
+  htf_target_enabled: 'HTF Target Selection',
+  htf_target_min_r: 'HTF Target Min R',
+  target_clarity_mode: 'Target-Clarity Gate',
+}
+
+// Distinct colors for overlaying variant equity curves (matrix-theme friendly).
+const VARIANT_COLORS = ['#00ff41', '#38bdf8', '#fbbf24', '#f87171', '#c084fc', '#fb923c']
+
+const VARIANT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
+
+interface ABVariant {
+  // Overrides for TP_AB_FIELDS only; absent keys inherit the base form value.
+  overrides: Record<string, string>
+}
+
+interface ABResult {
+  letter: string
+  label: string
+  id: string | null
+  stats: BacktestStats | null
+  startingBalance: string
+  status: 'pending' | 'running' | 'done' | 'error'
+}
+
 export function BacktestsPage() {
   const [list, setList] = useState<BacktestSummary[]>([])
   const [selected, setSelected] = useState<BacktestDetail | null>(null)
@@ -379,6 +455,12 @@ export function BacktestsPage() {
   } | null>(null)
   const [bentoLoading, setBentoLoading] = useState(false)
   const [gradeFilter, setGradeFilter] = useState<string | null>(null)
+
+  // A/B test mode: compare TP-system variants side by side.
+  const [abMode, setAbMode] = useState(false)
+  const [abVariants, setAbVariants] = useState<ABVariant[]>([{ overrides: {} }, { overrides: {} }])
+  const [abResults, setAbResults] = useState<ABResult[] | null>(null)
+  const [abRunning, setAbRunning] = useState(false)
 
   // Filtering and sorting for the saved-runs list.
   type SortKey = 'pnl_desc' | 'pnl_asc' | 'trades_desc' | 'win_rate_desc' | 'profit_factor_desc' | 'date_desc'
@@ -416,6 +498,32 @@ export function BacktestsPage() {
   function setStratField(k: string, v: string) {
     setStrategy(s => ({ ...s, [k]: v }))
     setStrategyDirty(true)
+  }
+
+  // Build the strategy override payload from the current form state. `tpOverrides`
+  // lets A/B variants replace specific TP params without mutating form state.
+  // Returns the strategy dict plus the resolved top-level partial_profit_r.
+  function buildRunPayload(tpOverrides: Record<string, string> = {}): {
+    strategy: Record<string, unknown>
+    partialProfitR: string
+  } {
+    const eff = (k: string): string =>
+      tpOverrides[k] ?? strategy[k] ?? STRATEGY_DEFAULTS[k]
+    const stratPayload: Record<string, unknown> = {}
+    for (const f of STRATEGY_FIELDS) {
+      if (f.key === 'ifvg_macro_blackouts_enabled') continue
+      stratPayload[f.key] = eff(f.key)
+    }
+    const macroEnabled = eff('ifvg_macro_blackouts_enabled') === 'true'
+    if (!macroEnabled) stratPayload['ifvg_macro_windows'] = []
+    const LIST_FIELDS = ['ifvg_session_windows', 'ifvg_news_blackout'] as const
+    for (const lf of LIST_FIELDS) {
+      const raw = String(stratPayload[lf] ?? '').trim()
+      stratPayload[lf] = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []
+    }
+    // partial_profit_r is a top-level config field, not a strategy key.
+    const partialProfitR = tpOverrides['partial_profit_r'] ?? partialR
+    return { strategy: stratPayload, partialProfitR }
   }
 
   function resetStrategyToConfig() {
@@ -569,28 +677,14 @@ export function BacktestsPage() {
       }
 
       const beforeCount = list.length
-      // Build the strategy override payload. Strings preserve decimal
-      // precision; the backend will coerce them through Pydantic.
-      const stratPayload: Record<string, unknown> = {}
-      for (const f of STRATEGY_FIELDS) {
-        if (f.key === 'ifvg_macro_blackouts_enabled') continue
-        stratPayload[f.key] = strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]
-      }
-      // Translate synthetic macro toggle -> real list field
-      const macroEnabled = (strategy['ifvg_macro_blackouts_enabled'] ?? 'true') === 'true'
-      if (!macroEnabled) stratPayload['ifvg_macro_windows'] = []
-      // Translate comma-separated text fields -> string arrays
-      const LIST_FIELDS = ['ifvg_session_windows', 'ifvg_news_blackout'] as const
-      for (const lf of LIST_FIELDS) {
-        const raw = String(stratPayload[lf] ?? '').trim()
-        stratPayload[lf] = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []
-      }
+      // Strings preserve decimal precision; the backend coerces via Pydantic.
+      const { strategy: stratPayload, partialProfitR } = buildRunPayload()
       const runBody: Record<string, unknown> = {
         label: label || null,
         timeframe,
         strategy: stratPayload,
       }
-      if (partialR !== '0') runBody.partial_profit_r = partialR
+      if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
       if (dataSource === 'databento') {
         runBody.bars_path = `bars/bars_${symbol.toUpperCase()}.csv`
       } else {
@@ -625,6 +719,118 @@ export function BacktestsPage() {
     } catch (e) {
       setMsg(String(e))
       setRunning(false)
+    }
+  }
+
+  function setVariantOverride(idx: number, key: string, value: string) {
+    setAbVariants(vs => vs.map((v, i) =>
+      i === idx ? { ...v, overrides: { ...v.overrides, [key]: value } } : v
+    ))
+  }
+
+  function clearVariantOverride(idx: number, key: string) {
+    setAbVariants(vs => vs.map((v, i) => {
+      if (i !== idx) return v
+      const next = { ...v.overrides }
+      delete next[key]
+      return { ...v, overrides: next }
+    }))
+  }
+
+  function addVariant() {
+    setAbVariants(vs => vs.length >= VARIANT_LETTERS.length ? vs : [...vs, { overrides: {} }])
+  }
+
+  function removeVariant(idx: number) {
+    setAbVariants(vs => vs.length <= 2 ? vs : vs.filter((_, i) => i !== idx))
+  }
+
+  // Resolve the effective TP value a variant will run with (override or base form).
+  function variantTpValue(v: ABVariant, key: string): string {
+    return v.overrides[key] ?? strategy[key] ?? (key === 'partial_profit_r' ? partialR : STRATEGY_DEFAULTS[key])
+  }
+
+  async function runABTest() {
+    if (dataSource === 'databento') {
+      setMsg('A/B test currently runs against TopstepX bars (Local CSV / date range). Switch data source to Local.')
+      return
+    }
+    setAbRunning(true)
+    setMsg('Starting A/B test…')
+
+    const base = (label || `${timeframe} ${startDate}→${endDate}`).slice(0, 60)
+    const runs: ABResult[] = abVariants.map((_, i) => ({
+      letter: VARIANT_LETTERS[i],
+      label: `A/B: ${base} — Variant ${VARIANT_LETTERS[i]}`,
+      id: null,
+      stats: null,
+      startingBalance: '50000',
+      status: 'pending',
+    }))
+    setAbResults(runs)
+
+    try {
+      // Fire each variant as its own isolated run. Labels are unique so we can
+      // match completed results back to variants when polling the list.
+      for (let i = 0; i < abVariants.length; i++) {
+        const { strategy: stratPayload, partialProfitR } = buildRunPayload(abVariants[i].overrides)
+        const runBody: Record<string, unknown> = {
+          label: runs[i].label,
+          timeframe,
+          strategy: stratPayload,
+          start_date: startDate,
+          end_date: endDate,
+        }
+        if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
+        const res = await fetch('/api/backtest/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(runBody),
+        })
+        const body = await res.json()
+        if (!body.ok) {
+          setAbResults(prev => prev?.map((r, j) => j === i ? { ...r, status: 'error' } : r) ?? null)
+          setMsg(`Variant ${VARIANT_LETTERS[i]} failed to start: ${body.reason ?? 'unknown'}`)
+        } else {
+          setAbResults(prev => prev?.map((r, j) => j === i ? { ...r, status: 'running' } : r) ?? null)
+        }
+      }
+
+      setMsg('A/B variants running — collecting results…')
+      const wantLabels = new Set(runs.filter(r => r.status !== 'error').map(r => r.label))
+      // Poll the list; backfill stats as each labeled run lands. Stop when all
+      // wanted labels are found or after a generous timeout.
+      const deadline = Date.now() + 5 * 60 * 1000
+      const matched = new Set<string>()
+      const poll = setInterval(async () => {
+        try {
+          const d = await fetch('/api/backtest/list').then(r => r.json())
+          const items: BacktestSummary[] = d.backtests ?? []
+          setList(items)
+          for (const it of items) {
+            if (wantLabels.has(it.label) && !matched.has(it.label)) {
+              matched.add(it.label)
+              const detail = await fetch(`/api/backtest/${it.id}`).then(r => r.json())
+              setAbResults(prev => prev?.map(r =>
+                r.label === it.label
+                  ? { ...r, id: it.id, stats: detail.stats, startingBalance: detail.starting_balance ?? '50000', status: 'done' }
+                  : r
+              ) ?? null)
+            }
+          }
+          if (matched.size >= wantLabels.size || Date.now() > deadline) {
+            clearInterval(poll)
+            setAbRunning(false)
+            setMsg(matched.size >= wantLabels.size
+              ? 'A/B test complete'
+              : `A/B test timed out — ${matched.size}/${wantLabels.size} variants completed`)
+            setTimeout(() => setMsg(null), 5000)
+          }
+        } catch { /* keep polling */ }
+      }, 2500)
+    } catch (e) {
+      setMsg(String(e))
+      setAbRunning(false)
     }
   }
 
@@ -897,13 +1103,39 @@ export function BacktestsPage() {
 
       <main className="p-6 max-w-[1400px] mx-auto space-y-6">
         <section className="bg-panel border border-border p-5">
-          <h2 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-4">
-            Run New Backtest
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[10px] tracking-[0.3em] text-accent uppercase">
+              {abMode ? 'TP A/B Test' : 'Run New Backtest'}
+            </h2>
+            <div className="flex items-center gap-px bg-border border border-border">
+              <button
+                onClick={() => setAbMode(false)}
+                className={`text-[10px] tracking-widest uppercase px-3 py-1 ${
+                  !abMode ? 'bg-accent/10 text-accent' : 'bg-panel text-dim hover:text-ink'
+                }`}
+              >
+                Single
+              </button>
+              <button
+                onClick={() => setAbMode(true)}
+                className={`text-[10px] tracking-widest uppercase px-3 py-1 ${
+                  abMode ? 'bg-accent/10 text-accent' : 'bg-panel text-dim hover:text-ink'
+                }`}
+              >
+                A/B Test
+              </button>
+            </div>
+          </div>
           <p className="text-[11px] text-dim mb-4 leading-relaxed">
-            Pulls historical bars from TopstepX for the date range you pick, runs the
-            current strategy config against them in a separate process, and saves the
-            full stats. The live bot keeps running untouched.
+            {abMode ? (
+              <>Run the base strategy config against 2+ variants that differ only in their
+              take-profit parameters, over the same bars and date window. Each variant runs
+              as its own isolated backtest and is saved to the list, then compared side by side.</>
+            ) : (
+              <>Pulls historical bars from TopstepX for the date range you pick, runs the
+              current strategy config against them in a separate process, and saves the
+              full stats. The live bot keeps running untouched.</>
+            )}
           </p>
 
           <div className="mb-3 px-3 py-2 border border-border bg-bg/40">
@@ -1007,103 +1239,71 @@ export function BacktestsPage() {
                 Reset to bot config
               </button>
             </summary>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {STRATEGY_FIELDS.map(f => (
-                <div key={f.key}>
-                  <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                    {f.label}
-                  </label>
-                  {f.kind === 'select' ? (
-                    <select
-                      value={strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]}
-                      onChange={e => setStratField(f.key, e.target.value)}
-                      disabled={running}
-                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
-                    >
-                      {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  ) : f.kind === 'toggle' ? (
-                    <button
-                      type="button"
-                      onClick={() => setStratField(f.key, (strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true' ? 'false' : 'true')}
-                      disabled={running}
-                      className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
-                        (strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true'
-                          ? 'border-accent text-accent bg-accent/10'
-                          : 'border-border text-dim hover:text-ink'
-                      }`}
-                    >
-                      {(strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true' ? 'ON' : 'OFF'}
-                    </button>
-                  ) : f.kind === 'list' ? (
-                    <input
-                      type="text"
-                      value={strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]}
-                      onChange={e => setStratField(f.key, e.target.value)}
-                      disabled={running}
-                      placeholder="comma-separated, or leave blank"
-                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
-                    />
-                  ) : (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min={f.min}
-                      max={f.max}
-                      step={f.step}
-                      value={Number(strategy[f.key] ?? f.min)}
-                      onChange={e => setStratField(f.key, e.target.value)}
-                      disabled={running}
-                      className="flex-1 slider-accent"
-                    />
-                    <input
-                      type="number"
-                      min={f.min}
-                      max={f.max}
-                      step={f.step}
-                      value={strategy[f.key] ?? ''}
-                      onChange={e => setStratField(f.key, e.target.value)}
-                      disabled={running}
-                      className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                    />
-                  </div>
-                  )}
-                  <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">{f.hint}</p>
-                </div>
-              ))}
-              <div>
-                <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                  Partial Profit R
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={5}
-                    step={0.25}
-                    value={Number(partialR)}
-                    onChange={e => setPartialR(e.target.value)}
-                    disabled={running}
-                    className="flex-1 slider-accent"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={5}
-                    step={0.25}
-                    value={partialR}
-                    onChange={e => setPartialR(e.target.value)}
-                    disabled={running}
-                    className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">
-                  R level to take a partial exit (half position). 0 = disabled. E.g. 1.5 = close half at 1.5R then move stop to break-even.
-                </p>
-              </div>
+            <div className="p-4 space-y-px bg-border">
+              {SECTION_ORDER.map(section => {
+                const fields = STRATEGY_FIELDS.filter(f => f.section === section)
+                if (fields.length === 0) return null
+                return (
+                  <details key={section} open className="bg-panel">
+                    <summary className="cursor-pointer px-3 py-2 bg-bg/40 text-[10px] tracking-[0.3em] text-dim uppercase hover:text-ink">
+                      {section} <span className="text-dim/50 normal-case tracking-normal">({fields.length})</span>
+                    </summary>
+                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {fields.map(f => (
+                        <div key={f.key}>
+                          <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                            {f.label}
+                          </label>
+                          <StrategyFieldInput
+                            field={f}
+                            value={strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]}
+                            onChange={v => setStratField(f.key, v)}
+                            disabled={running}
+                          />
+                          <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">{f.hint}</p>
+                        </div>
+                      ))}
+                      {section === 'Take-Profit' && (
+                        <div>
+                          <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                            Partial Profit R
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={5}
+                              step={0.25}
+                              value={Number(partialR)}
+                              onChange={e => setPartialR(e.target.value)}
+                              disabled={running}
+                              className="flex-1 slider-accent"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={5}
+                              step={0.25}
+                              value={partialR}
+                              onChange={e => setPartialR(e.target.value)}
+                              disabled={running}
+                              className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                            />
+                          </div>
+                          <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">
+                            R level to take a partial exit (half position). 0 = disabled. E.g. 1.5 = close half at 1.5R then move stop to break-even.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                )
+              })}
             </div>
           </details>
 
+          {!abMode && (
+          <>
           {/* Data source toggle */}
           <div className="border border-border bg-bg/30 p-3">
             <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Data Source</div>
@@ -1218,6 +1418,22 @@ export function BacktestsPage() {
                 />
               </div>
             </div>
+          )}
+          </>
+          )}
+
+          {abMode && (
+            <ABPanel
+              variants={abVariants}
+              results={abResults}
+              running={abRunning}
+              onAddVariant={addVariant}
+              onRemoveVariant={removeVariant}
+              onSetOverride={setVariantOverride}
+              onClearOverride={clearVariantOverride}
+              variantTpValue={variantTpValue}
+              onRun={runABTest}
+            />
           )}
 
           {msg && <p className="text-[11px] text-accent mt-3">{msg}</p>}
@@ -1377,6 +1593,9 @@ export function BacktestsPage() {
                       <span>{b.stats.trades} trades · {b.stats.win_rate}% win</span>
                       <span>{b.instrument} · {b.timeframe}</span>
                     </div>
+                    <div className="mt-0.5 text-[9px] text-dim/60 font-mono tabular-nums">
+                      {fmtRange(b.start_date, b.end_date)}
+                    </div>
                   </div>
                 )
               })}
@@ -1436,10 +1655,15 @@ export function BacktestsPage() {
                   <Stat label="Ending" value={`$${selected.ending_balance}`} />
                   <Stat label="Timeframe" value={selected.timeframe} />
                   <Stat label="Duration" value={`${selected.duration_seconds}s`} />
+                  <Stat label="Date Range" value={fmtRange(selected.start_date, selected.end_date)} />
                 </div>
 
                 {selected.stats.equity_curve && selected.stats.equity_curve.length > 1 && (
                   <EquityCurve curve={selected.stats.equity_curve} startingBalance={selected.starting_balance} />
+                )}
+
+                {selected.stats.by_killzone && Object.keys(selected.stats.by_killzone).length > 0 && (
+                  <KillzoneBreakdown byKillzone={selected.stats.by_killzone} />
                 )}
 
                 <div>
@@ -1593,6 +1817,44 @@ export function BacktestsPage() {
   )
 }
 
+function KillzoneBreakdown({ byKillzone }: { byKillzone: Record<string, KillzoneStat> }) {
+  const rows = Object.entries(byKillzone).sort((a, b) => b[1].net_pnl - a[1].net_pnl)
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">By Killzone</div>
+      <div className="border border-border overflow-x-auto">
+        <table className="w-full text-[11px] font-mono tabular-nums">
+          <thead>
+            <tr className="text-[9px] tracking-widest text-dim uppercase bg-bg/40">
+              <th className="text-left px-3 py-1.5 font-normal">Killzone</th>
+              <th className="text-right px-3 py-1.5 font-normal">Trades</th>
+              <th className="text-right px-3 py-1.5 font-normal">Win %</th>
+              <th className="text-right px-3 py-1.5 font-normal">W / L</th>
+              <th className="text-right px-3 py-1.5 font-normal">Net P&L</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map(([kz, s]) => {
+              const positive = s.net_pnl >= 0
+              return (
+                <tr key={kz} className="text-ink">
+                  <td className="px-3 py-1.5 uppercase tracking-wider text-dim">{kz}</td>
+                  <td className="px-3 py-1.5 text-right">{s.trades}</td>
+                  <td className="px-3 py-1.5 text-right">{s.win_rate}%</td>
+                  <td className="px-3 py-1.5 text-right">{s.wins} / {s.losses}</td>
+                  <td className={`px-3 py-1.5 text-right ${positive ? 'text-accent' : 'text-danger'}`}>
+                    {positive ? '+' : ''}${s.net_pnl.toFixed(2)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function EquityCurve({ curve, startingBalance }: { curve: [string, string][]; startingBalance: string }) {
   const start = parseFloat(startingBalance)
   const equities = curve.map(([, eq]) => parseFloat(eq))
@@ -1631,6 +1893,79 @@ function EquityCurve({ curve, startingBalance }: { curve: [string, string][]; st
   )
 }
 
+function StrategyFieldInput({
+  field, value, onChange, disabled,
+}: {
+  field: StrategyField
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  if (field.kind === 'select') {
+    return (
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+      >
+        {field.options!.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    )
+  }
+  if (field.kind === 'toggle') {
+    const on = value === 'true'
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(on ? 'false' : 'true')}
+        disabled={disabled}
+        className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
+          on ? 'border-accent text-accent bg-accent/10' : 'border-border text-dim hover:text-ink'
+        }`}
+      >
+        {on ? 'ON' : 'OFF'}
+      </button>
+    )
+  }
+  if (field.kind === 'list') {
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        placeholder="comma-separated, or leave blank"
+        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+      />
+    )
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="range"
+        min={field.min}
+        max={field.max}
+        step={field.step}
+        value={Number(value || field.min || 0)}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className="flex-1 slider-accent"
+      />
+      <input
+        type="number"
+        min={field.min}
+        max={field.max}
+        step={field.step}
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+      />
+    </div>
+  )
+}
+
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: 'accent' | 'danger' }) {
   const colorClass = highlight === 'accent'
     ? 'text-accent'
@@ -1641,6 +1976,309 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
     <div className="bg-bg border border-border px-3 py-2">
       <div className="text-[9px] tracking-widest text-dim uppercase">{label}</div>
       <div className={`text-sm mt-1 ${colorClass}`}>{value}</div>
+    </div>
+  )
+}
+
+// Field definitions for the A/B variant editor. Most TP fields reuse their
+// STRATEGY_FIELDS entry; partial_profit_r is a top-level config field (not in
+// the strategy dict) so it gets an inline def here.
+const TP_AB_FIELD_DEFS: Record<string, StrategyField> = (() => {
+  const byKey = Object.fromEntries(STRATEGY_FIELDS.map(f => [f.key, f]))
+  const defs: Record<string, StrategyField> = {}
+  for (const key of TP_AB_FIELDS) {
+    defs[key] = byKey[key] ?? {
+      key,
+      label: TP_AB_LABELS[key] ?? key,
+      section: 'Take-Profit',
+      min: 0, max: 5, step: 0.5,
+      hint: '',
+    }
+  }
+  return defs
+})()
+
+interface ABPanelProps {
+  variants: ABVariant[]
+  results: ABResult[] | null
+  running: boolean
+  onAddVariant: () => void
+  onRemoveVariant: (idx: number) => void
+  onSetOverride: (idx: number, key: string, value: string) => void
+  onClearOverride: (idx: number, key: string) => void
+  variantTpValue: (v: ABVariant, key: string) => string
+  onRun: () => void
+}
+
+function ABPanel({
+  variants, results, running,
+  onAddVariant, onRemoveVariant, onSetOverride, onClearOverride,
+  variantTpValue, onRun,
+}: ABPanelProps) {
+  return (
+    <div className="space-y-4">
+      {/* Variant editor — one column per variant, editing only TP params. */}
+      <div className="border border-border bg-bg/30 p-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[9px] tracking-widest text-dim uppercase">
+            Take-Profit Variants
+            <span className="text-faint ml-2 normal-case tracking-normal">
+              base config from form above · blank = inherit
+            </span>
+          </div>
+          <button
+            onClick={onAddVariant}
+            disabled={running || variants.length >= VARIANT_LETTERS.length}
+            className="text-[10px] tracking-widest uppercase px-3 py-1 border border-border text-dim hover:text-ink disabled:opacity-40"
+          >
+            + Variant
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] font-mono">
+            <thead>
+              <tr className="text-[9px] tracking-widest text-dim uppercase">
+                <th className="text-left px-2 py-1 font-normal">TP Param</th>
+                {variants.map((_, i) => (
+                  <th key={i} className="text-left px-2 py-1 font-normal" style={{ color: VARIANT_COLORS[i] }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>Variant {VARIANT_LETTERS[i]}</span>
+                      {variants.length > 2 && (
+                        <button
+                          onClick={() => onRemoveVariant(i)}
+                          disabled={running}
+                          className="text-faint hover:text-danger normal-case"
+                          title="Remove variant"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {TP_AB_FIELDS.map(key => {
+                const field = TP_AB_FIELD_DEFS[key]
+                return (
+                  <tr key={key} className="align-top">
+                    <td className="px-2 py-2 text-dim whitespace-nowrap">{TP_AB_LABELS[key] ?? field.label}</td>
+                    {variants.map((v, i) => {
+                      const overridden = key in v.overrides
+                      return (
+                        <td key={i} className="px-2 py-2 min-w-[160px]">
+                          <StrategyFieldInput
+                            field={field}
+                            value={variantTpValue(v, key)}
+                            onChange={val => onSetOverride(i, key, val)}
+                            disabled={running}
+                          />
+                          {overridden && (
+                            <button
+                              onClick={() => onClearOverride(i, key)}
+                              disabled={running}
+                              className="text-[9px] text-faint hover:text-dim mt-1 uppercase tracking-wider"
+                            >
+                              reset to base
+                            </button>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onRun}
+          disabled={running}
+          className="bg-accent/10 border border-accent text-accent text-xs tracking-widest uppercase px-5 py-2 hover:bg-accent/20 disabled:opacity-50"
+        >
+          {running ? 'Running A/B…' : `Run A/B (${variants.length})`}
+        </button>
+        {running && (
+          <span className="text-[10px] text-dim font-mono">
+            {(results ?? []).filter(r => r.status === 'done').length} / {variants.length} complete
+          </span>
+        )}
+      </div>
+
+      {results && <ABComparison results={results} />}
+      {results && results.some(r => r.stats?.equity_curve?.length) && (
+        <ABEquityOverlay results={results} />
+      )}
+    </div>
+  )
+}
+
+// Side-by-side metrics table: one column per variant, best value per row highlighted.
+function ABComparison({ results }: { results: ABResult[] }) {
+  const num = (s: string | null | undefined) => (s == null ? NaN : parseFloat(s))
+  type Row = {
+    label: string
+    get: (s: BacktestStats) => number | null
+    fmt: (s: BacktestStats) => string
+    better: 'high' | 'low'
+  }
+  const rows: Row[] = [
+    { label: 'Net P&L',      get: s => num(s.net_pnl),       fmt: s => `${num(s.net_pnl) >= 0 ? '+' : ''}$${num(s.net_pnl).toFixed(0)}`, better: 'high' },
+    { label: 'Win Rate',     get: s => s.win_rate,           fmt: s => `${s.win_rate}%`,                                                better: 'high' },
+    { label: 'Trades',       get: s => s.trades,             fmt: s => String(s.trades),                                                better: 'high' },
+    { label: 'Profit Factor',get: s => s.profit_factor ?? null, fmt: s => s.profit_factor == null ? '—' : s.profit_factor.toFixed(2),  better: 'high' },
+    { label: 'Expectancy',   get: s => num(s.expectancy),    fmt: s => s.expectancy == null ? '—' : `$${num(s.expectancy).toFixed(2)}`, better: 'high' },
+    { label: 'Max Drawdown', get: s => num(s.max_drawdown),  fmt: s => `$${num(s.max_drawdown).toFixed(0)}`,                             better: 'low' },
+  ]
+  const done = results.filter(r => r.stats)
+  const bestIdx = (row: Row): number => {
+    let best = -1, bestVal = NaN
+    results.forEach((r, i) => {
+      if (!r.stats) return
+      const v = row.get(r.stats)
+      if (v == null || isNaN(v)) return
+      if (isNaN(bestVal) || (row.better === 'high' ? v > bestVal : v < bestVal)) {
+        bestVal = v; best = i
+      }
+    })
+    return best
+  }
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Comparison</div>
+      <div className="border border-border overflow-x-auto">
+        <table className="w-full text-[11px] font-mono tabular-nums">
+          <thead>
+            <tr className="text-[9px] tracking-widest text-dim uppercase bg-bg/40">
+              <th className="text-left px-3 py-1.5 font-normal">Metric</th>
+              {results.map((r, i) => (
+                <th key={i} className="text-right px-3 py-1.5 font-normal" style={{ color: VARIANT_COLORS[i] }}>
+                  {r.letter}
+                  {r.status !== 'done' && (
+                    <span className="text-faint ml-1 normal-case">
+                      {r.status === 'error' ? '(err)' : r.status === 'pending' ? '(…)' : '(run)'}
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map(row => {
+              const best = done.length > 1 ? bestIdx(row) : -1
+              return (
+                <tr key={row.label} className="text-ink">
+                  <td className="px-3 py-1.5 text-dim uppercase tracking-wider">{row.label}</td>
+                  {results.map((r, i) => (
+                    <td
+                      key={i}
+                      className={`px-3 py-1.5 text-right ${i === best ? 'text-accent font-medium bg-accent/5' : ''}`}
+                    >
+                      {r.stats ? row.fmt(r.stats) : '—'}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+            {/* Combine pass + MLL breach are optional flags. */}
+            <tr className="text-ink">
+              <td className="px-3 py-1.5 text-dim uppercase tracking-wider">Combine</td>
+              {results.map((r, i) => (
+                <td key={i} className="px-3 py-1.5 text-right">
+                  {r.stats?.passed_combine == null ? '—'
+                    : r.stats.passed_combine ? <span className="text-accent">PASS</span>
+                    : <span className="text-danger">FAIL</span>}
+                </td>
+              ))}
+            </tr>
+            <tr className="text-ink">
+              <td className="px-3 py-1.5 text-dim uppercase tracking-wider">MLL Breach</td>
+              {results.map((r, i) => (
+                <td key={i} className="px-3 py-1.5 text-right">
+                  {r.stats?.mll_breached == null ? '—'
+                    : r.stats.mll_breached ? <span className="text-danger">YES</span>
+                    : <span className="text-accent">no</span>}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Overlay each variant's equity curve on a single chart, one colored line each.
+function ABEquityOverlay({ results }: { results: ABResult[] }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const chart = createChart(el, {
+      autoSize: true,
+      height: 240,
+      layout: {
+        background: { color: 'transparent' },
+        textColor: '#6c82a8',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255,255,255,0.03)' },
+        horzLines: { color: 'rgba(255,255,255,0.03)' },
+      },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)' },
+      timeScale: { borderColor: 'rgba(255,255,255,0.05)', timeVisible: false },
+    })
+
+    results.forEach((r, i) => {
+      const curve = r.stats?.equity_curve
+      if (!curve || curve.length === 0) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const series = chart.addSeries(LineSeries as any, {
+        color: VARIANT_COLORS[i],
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      })
+      // Equity curve timestamps may collide across variants; lightweight-charts
+      // requires strictly ascending unique times, so index by bar ordinal.
+      const data = curve.map(([, eq], j) => ({ time: (j + 1) as never, value: parseFloat(eq) }))
+      series.setData(data)
+    })
+    chart.timeScale().fitContent()
+
+    return () => { chart.remove() }
+  }, [results])
+
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Equity Curves</div>
+      <div className="bg-bg border border-border p-2">
+        <div ref={containerRef} className="w-full" style={{ height: 240 }} />
+        <div className="flex flex-wrap gap-3 mt-2 px-1">
+          {results.map((r, i) => (
+            r.stats?.equity_curve?.length ? (
+              <div key={i} className="flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="inline-block w-3 h-0.5" style={{ background: VARIANT_COLORS[i] }} />
+                <span className="text-dim">
+                  {r.letter}
+                  {r.stats && (
+                    <span className="ml-1 text-faint">
+                      {parseFloat(r.stats.net_pnl) >= 0 ? '+' : ''}${parseFloat(r.stats.net_pnl).toFixed(0)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ) : null
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

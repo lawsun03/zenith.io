@@ -45,6 +45,8 @@ async def _run_backtest(
     timeframe: str,
     starting_balance: Decimal = Decimal("50000"),
     enforce_risk_limits: bool = True,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict:
     t0 = time.time()
     bc = BacktestConfig(
@@ -87,6 +89,8 @@ async def _run_backtest(
         "config": _to_jsonable(config.model_dump()),
         "instrument": instrument,
         "timeframe": timeframe,
+        "start_date": start_date,
+        "end_date": end_date,
         "bars_path": str(bars_path),
         "bars_processed": result.bars_processed,
         "starting_balance": str(starting_balance),
@@ -120,6 +124,8 @@ async def _amain(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", default="backtests")
     parser.add_argument("--id", default=None)
     parser.add_argument("--label", default=None)
+    parser.add_argument("--start-date", default=None)
+    parser.add_argument("--end-date", default=None)
     parser.add_argument("--no-risk-limits", action="store_true",
                         help="Disable MLL/DLL/DPL (exploration only — not representative of live conditions)")
     args = parser.parse_args(argv)
@@ -149,6 +155,8 @@ async def _amain(argv: list[str] | None = None) -> int:
         timeframe=timeframe,
         starting_balance=Decimal(args.starting_balance),
         enforce_risk_limits=not args.no_risk_limits,
+        start_date=args.start_date,
+        end_date=args.end_date,
     )
     completed_at = datetime.now(timezone.utc).isoformat()
 

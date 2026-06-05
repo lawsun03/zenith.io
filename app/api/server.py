@@ -1136,6 +1136,10 @@ def build_app(
         ]
         if req.label:
             cmd += ["--label", req.label]
+        if req.start_date:
+            cmd += ["--start-date", req.start_date]
+        if req.end_date:
+            cmd += ["--end-date", req.end_date]
         if not req.enforce_risk_limits:
             cmd += ["--no-risk-limits"]
         try:
@@ -1330,6 +1334,8 @@ def build_app(
                     "completed_at": data.get("completed_at"),
                     "instrument": data.get("instrument"),
                     "timeframe": data.get("timeframe"),
+                    "start_date": data.get("start_date"),
+                    "end_date": data.get("end_date"),
                     "bars_processed": data.get("bars_processed"),
                     "stats": data.get("stats", {}),
                     "ending_balance": data.get("ending_balance"),
