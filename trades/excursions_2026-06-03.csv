@@ -1,0 +1,5 @@
+key,kind,side,ref,stop,target,mfe,mae,reached_target,stop_hit,outcome
+rej-MGC-htf_bias-1780513321,rejection,long,4469.4,4467.20,4474.900,10.6,0.0,True,False,win
+rej-MGC-grader_B-1780531500,rejection,short,4486.0,4492.20,4470.500,12.1,2.4,False,False,no_resolution
+rej-MGC-vp_filter-1780534980,rejection,short,4476.1,4480.40,4465.350,0.1,24.7,False,True,loss
+rej-MGC-vp_filter-1780536000,rejection,short,4488.6,4493.50,4476.350,3.5,12.2,False,True,loss

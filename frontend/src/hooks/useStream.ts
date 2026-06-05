@@ -10,7 +10,10 @@ export interface ChartCallbacks {
   onVpUpdate?: () => void
 }
 
-export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
+export function useStream(
+  chartCbRef?: React.MutableRefObject<ChartCallbacks>,
+  activeSymbolRef?: React.MutableRefObject<string>,
+) {
   const [status, setStatus] = useState<StatusPayload | null>(null)
   const [signals, setSignals] = useState<JournalItem[]>([])
   const [fills, setFills] = useState<JournalItem[]>([])
@@ -73,6 +76,9 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
         }
         if (msg.kind === 'bar') {
           const p = msg.payload
+          if (activeSymbolRef?.current && p.instrument && p.instrument !== activeSymbolRef.current) {
+            return
+          }
           const barUtcDate = msg.ts.slice(0, 10)
           if (lastBarUtcDate !== null && barUtcDate !== lastBarUtcDate) {
             chartCbRef?.current?.onVpUpdate?.()
@@ -102,7 +108,10 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
           setReconciles(prev => [item, ...prev].slice(0, 20))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
         } else if (msg.kind === 'strategy_state') {
-          setStrategyState(msg.payload as StrategyStatePayload)
+          const p = msg.payload as StrategyStatePayload
+          if (!activeSymbolRef?.current || !p.instrument || p.instrument === activeSymbolRef.current) {
+            setStrategyState(p)
+          }
           return
         }
       }

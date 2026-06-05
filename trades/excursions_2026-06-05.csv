@@ -1,0 +1,2 @@
+key,kind,side,ref,stop,target,mfe,mae,reached_target,stop_hit,outcome
+3080409959,trade,long,4471.1,4468.20,4476.7,25756.9,5.9,True,True,win

@@ -1,0 +1,18 @@
+key,kind,side,ref,stop,target,mfe,mae,reached_target,stop_hit,outcome
+rej-MGC-htf_bias-1780513321,rejection,long,4469.4,4467.20,4474.900,10.6,0.0,True,False,win
+rej-MGC-grader_B-1780531500,rejection,short,4486.0,4492.20,4470.500,12.1,2.4,False,False,no_resolution
+rej-MGC-vp_filter-1780534980,rejection,short,4476.1,4480.40,4465.350,0.1,24.7,False,True,loss
+rej-MGC-vp_filter-1780536000,rejection,short,4488.6,4493.50,4476.350,3.5,12.2,False,True,loss
+rej-MGC-grader_B-1780558200,rejection,long,4491.4,4488.80,4497.900,3.8,5.3,False,True,loss
+3073534337,trade,long,4492.8,4486.70,4511.2,3.7,7.5,False,True,loss
+"rej-MGC-broker rejected: HTTP error during place order: <ConnectionTerminated error_code:0, last_stream_id:553, additional_data:None>-1780568881",rejection,long,4495.3,4491.50,4511.2,5.3,1.4,False,False,no_resolution
+3074096905,trade,short,4515.6,4520.60,4509.1,5.6,26.8,False,True,loss
+rej-MGC-vp_filter-1780578181,rejection,long,4534.5,4527.50,4552.000,2.9,5.3,False,False,no_resolution
+3074995606,trade,short,4533.1,4540.80,4519.4,17.1,10.5,True,True,stopped_then_target
+rej-MGC-grader_B-1780587720,rejection,short,4514.7,4505.20,4538.450,17.3,0.0,True,True,win
+rej-MGC-vp_filter-1780589280,rejection,long,4504.5,4502.80,4508.750,8.5,0.0,True,False,win
+3077317388,trade,short,4508.9,4510.90,4492.2,6.9,2.9,False,True,loss
+3077769870,trade,short,4505.0,4509.20,4492.2,4.9,2.4,False,False,no_resolution
+rej-MES-grader_B-1780633260,rejection,short,7561.75,7560.05,7566.000,3096.45,22642.75,True,True,stopped_then_target
+3080259980,trade,short,4465.9,30191.05,4546.8,2.1,25738.6,True,True,win
+3080409959,trade,long,4471.1,4468.20,4476.7,25756.9,5.9,True,True,win

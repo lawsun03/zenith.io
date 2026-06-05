@@ -1,0 +1,2 @@
+ts,instrument,side,reason,grade,entry,stop,target,killzone,rationale,source
+2026-06-03T03:55:00.447455+00:00,MGC,long,invalidated,A-,4511.9,4510.20,4516.150,All,"All: A_multi_bar sweep of low @ 4511.2, bullish displacement (1.64× ATR), FVG 4511.7–4511.9",runner

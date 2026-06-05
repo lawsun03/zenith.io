@@ -1,0 +1,5 @@
+ts,instrument,side,type,fill_price,size,realized_pnl,broker_order_id,signal_entry,stop,target,killzone,sweep_pattern,sweep_extreme,fvg_low,fvg_high,rationale,contracts,entry_mode,r_multiple,stop_buffer,body_atr_multiple,vp_enabled
+2026-05-29T00:03:00.655690+00:00,CON.F.US.MGC.Q26,short,ENTRY,4524.5,4,0,3044802297,4524.65,4527.50,4513.0,Asia,B_one_bar,4527.2,4524.65,4525.1,"Asia: B_one_bar sweep of high @ 4527.0, bearish displacement (1.21× ATR), FVG 4524.65–4525.1 | HTF: 30min swing @ 4513.0 (4.1R)",4,market,2.5,0.30,1.0,True
+2026-05-29T00:03:01.019693+00:00,CON.F.US.MGC.Q26,long,EXIT,4527.5,4,-120.0,3044802328,,,,,,,,,,,,,,,
+2026-05-29T00:23:02.292132+00:00,CON.F.US.MGC.Q26,short,ENTRY,4526.4,2,0,3044908103,4526.6,4531.70,4513.0,Asia,A_multi_bar,4531.4,4526.6,4528.3,"Asia: A_multi_bar sweep of high @ 4529.1, bearish displacement (1.04× ATR), FVG 4526.6–4528.3 | HTF: 30min swing @ 4513.0 (2.7R)",2,market,2.5,0.30,1.0,True
+2026-05-29T00:23:02.654688+00:00,CON.F.US.MGC.Q26,long,EXIT,4531.5,2,-102.0,3044908134,,,,,,,,,,,,,,,

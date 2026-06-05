@@ -470,6 +470,8 @@ class ExecutionEngine:
         # corresponding strategy_cfg flag is off.
         self.htf_bias = None      # HTFBiasTracker | None
         self.htf_levels = None    # HTFLevelFinder | None
+        # Which instrument's bars htf_levels was built from. Only apply to matching signals.
+        self._htf_instrument: str | None = None
         # One-shot warning guard: fires once if a flag is on but the tracker is
         # None (e.g. rebuild failed). Resets when trackers are successfully wired.
         self._htf_warned: bool = False
@@ -744,7 +746,10 @@ class ExecutionEngine:
         # Part B — target precedence: HTF (4h FVG → 30min swing) wins,
         # VP target is the fallback, fixed r_multiple is the final fallback.
         target_chosen = False
-        if cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None:
+        if (
+            cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None
+            and (self._htf_instrument is None or signal.instrument == self._htf_instrument)
+        ):
             found = self.htf_levels.find_target(
                 signal.side, signal.entry, signal.stop, cfg.htf_target_min_r,
             )

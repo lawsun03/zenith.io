@@ -1,0 +1,15 @@
+ts,instrument,side,reason,grade,entry,stop,target,killzone,rationale,source
+2026-06-03T03:55:00.447455+00:00,MGC,long,invalidated,A-,4511.9,4510.20,4516.150,All,"All: A_multi_bar sweep of low @ 4511.2, bullish displacement (1.64× ATR), FVG 4511.7–4511.9",runner
+2026-06-03T07:48:00.588218+00:00,MGC,short,invalidated,A-,4485.2,4490.40,4472.200,All,"All: B_one_bar sweep of high @ 4489.1, bearish displacement (1.05× ATR), FVG 4485.2–4486.7",runner
+2026-06-03T08:45:00.569878+00:00,MGC,short,grader_B,B,4485.0,4486.90,4480.250,All,"All: B_one_bar sweep of high @ 4486.1, bearish displacement (1.12× ATR), FVG 4485.0–4485.7",runner
+2026-06-03T12:22:00.306775+00:00,MGC,long,premature_liquidity,A-,4488.1,4487.70,4489.7,All,"All: B_one_bar sweep of low @ 4485.2, bullish displacement (2.01× ATR), FVG 4488.0–4488.1",runner
+2026-06-03T19:02:00.592987+00:00,MGC,long,htf_bias,A-,4469.4,4467.20,4474.900,All,"All: B_one_bar sweep of low @ 4467.9, bullish displacement (1.08× ATR), FVG 4468.7–4469.4",engine
+2026-06-04T00:05:00.262799+00:00,MGC,short,grader_B,B,4486.0,4492.20,4470.500,All,"All: B_one_bar sweep of high @ 4491.3, bearish displacement (1.14× ATR), FVG 4486.0–4487.0",runner
+2026-06-04T01:03:00.119124+00:00,MGC,short,vp_filter,A-,4476.1,4480.40,4465.350,All,"All: B_one_bar sweep of high @ 4479.6, bearish displacement (1.15× ATR), FVG 4476.1–4476.7",engine
+2026-06-04T01:20:00.327479+00:00,MGC,short,vp_filter,A-,4488.6,4493.50,4476.350,All,"All: B_one_bar sweep of high @ 4491.9, bearish displacement (1.16× ATR), FVG 4488.6–4490.8",engine
+2026-06-04T07:30:00.142738+00:00,MGC,long,grader_B,B,4491.4,4488.80,4497.900,All,"All: B_one_bar sweep of low @ 4489.7, bullish displacement (1.11× ATR), FVG 4490.5–4491.4",runner
+2026-06-04T10:28:01.315103+00:00,MGC,long,"broker rejected: HTTP error during place order: <ConnectionTerminated error_code:0, last_stream_id:553, additional_data:None>",A-,4495.3,4491.50,4511.2,All,"All: B_one_bar sweep of low @ 4492.1, bullish displacement (1.69× ATR), FVG 4495.0–4495.3 | HTF: 30min swing @ 4511.2 (4.2R)",engine
+2026-06-04T13:03:00.757866+00:00,MGC,long,vp_filter,A-,4534.5,4527.50,4552.000,All,"All: B_one_bar sweep of low @ 4529.6, bullish displacement (1.65× ATR), FVG 4534.3–4534.5",engine
+2026-06-04T15:42:00.277832+00:00,MGC,short,grader_B,B,4514.7,4505.20,4538.450,All,"All: B_one_bar sweep of high @ 4503.0, bearish displacement (1.05× ATR), FVG 4514.7–4514.9",runner
+2026-06-04T16:08:00.391956+00:00,MGC,long,vp_filter,A-,4504.5,4502.80,4508.750,All,"All: B_one_bar sweep of low @ 4503.5, bullish displacement (1.33× ATR), FVG 4504.1–4504.5",engine
+2026-06-05T04:21:00.398683+00:00,MES,short,grader_B,B,7561.75,7560.05,7566.000,All,"All: B_one_bar sweep of high @ 7559.25, bearish displacement (1.12× ATR), FVG 7561.75–7562.0",runner
