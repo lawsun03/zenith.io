@@ -13,6 +13,11 @@ interface BacktestStats {
   avg_loss: string
   profit_factor: number | null
   max_drawdown: string
+  expectancy?: string
+  is_profitable?: boolean
+  passed_combine?: boolean
+  mll_breached?: boolean
+  equity_curve?: [string, string][]
 }
 
 interface BacktestSummary {
@@ -42,7 +47,8 @@ interface Trade {
   entry_price: string
   exit_price: string
   size: number
-  pnl: string
+  realized_pnl: string
+  hold_seconds?: number
   grade?: string
   criteria?: GradeCriteria
 }
@@ -99,6 +105,31 @@ const PARAM_LABELS: Record<string, string> = {
   ifvg_entry_mode: 'iFVG Entry Mode',
   ifvg_rule_f_enabled: 'Rule F',
   target_clarity_mode: 'Target-Clarity Gate',
+  htf_bias_enabled: 'HTF Bias Gate',
+  htf_target_enabled: 'HTF Target Selection',
+  trend_ema_period: 'Trend EMA Filter',
+  vp_enabled: 'VP Filter',
+  ifvg_macro_blackouts_enabled: 'Macro Blackouts',
+  min_atr_filter: 'Min ATR Filter',
+  max_atr_filter: 'Max ATR Filter',
+  cooldown_bars_after_stop: 'Cooldown After Stop',
+  min_penetration_atr_factor: 'Penetration ATR Factor',
+  ifvg_stop_buffer_ticks: 'iFVG Stop Buffer (ticks)',
+  ifvg_sweep_window_bars: 'Sweep Window (bars)',
+  ifvg_min_displacement_mult: 'Min Displacement Mult',
+  ifvg_tp1_fraction: 'TP1 Fraction',
+  ifvg_be_after_tp1: 'BE After TP1',
+  ifvg_session_windows: 'Session Windows',
+  ifvg_news_blackout: 'News Blackout',
+  vp_tick_size: 'VP Tick Size',
+  vp_value_area_pct: 'VP Value Area %',
+  vp_filter_tolerance: 'VP Filter Tolerance',
+  vp_hvn_threshold: 'VP HVN Threshold',
+  vp_min_target_r: 'VP Min Target R',
+  htf_bias_timeframe: 'HTF Bias Timeframe',
+  htf_bias_lookback: 'HTF Bias Lookback',
+  htf_target_min_r: 'HTF Target Min R',
+  htf_swing_timeframe: 'HTF Swing Timeframe',
 }
 
 const TIMEFRAMES = ['1min', '3min', '5min', '15min', '30min', '1h']
@@ -135,8 +166,8 @@ interface StrategyField {
   max?: number
   step?: number
   hint: string
-  kind?: 'number' | 'select' | 'toggle'   // default 'number'
-  options?: string[]                       // for kind 'select'
+  kind?: 'number' | 'select' | 'toggle' | 'list'  // default 'number'
+  options?: string[]                               // for kind 'select'
 }
 
 const STRATEGY_FIELDS: StrategyField[] = [
@@ -194,6 +225,84 @@ const STRATEGY_FIELDS: StrategyField[] = [
     options: ['reject', 'penalty', 'off'],
     hint: 'What to do when a setup has no structural target near an HTF swing. reject = drop it (cut ~85% of candidates). penalty = downgrade one grade notch. off = ignore the gate entirely (most trades).',
   },
+  {
+    key: 'htf_bias_enabled', label: 'HTF Bias Gate', kind: 'toggle',
+    hint: 'When ON, only takes setups that align with the 4h swing-structure bias (bullish = longs only, bearish = shorts only). Cuts trade count significantly but improves with-trend quality.',
+  },
+  {
+    key: 'htf_target_enabled', label: 'HTF Target Selection', kind: 'toggle',
+    hint: 'When ON, uses HTF swing levels as targets instead of a fixed R multiple. Requires HTF structure to be built from replay bars — adds latency to the first few signals.',
+  },
+  {
+    key: 'trend_ema_period', label: 'Trend EMA Filter', min: 0, max: 200, step: 1,
+    hint: '0 = disabled (take all setups, both directions). N = only take signals aligned with the N-bar EMA trend. Your live config is 50 — this alone drops counter-trend setups. Set to 0 to see the full picture.',
+  },
+  {
+    key: 'ifvg_macro_blackouts_enabled', label: 'Macro Blackouts', kind: 'toggle',
+    hint: 'When ON, blocks entries during economic release windows (08:30–09:10, 09:50–10:10, 10:50–11:10, 13:10–13:40, 15:15–15:45 ET). Turn OFF to trade through news windows.',
+  },
+  {
+    key: 'min_atr_filter', label: 'Min ATR Filter', min: 0, max: 20, step: 0.1,
+    hint: '0 = disabled. N = skip setups when the current ATR is below N (avoids entering in dead chop). Useful if your strategy fires junk signals during low-volatility overnight hours.',
+  },
+  {
+    key: 'max_atr_filter', label: 'Max ATR Filter', min: 0, max: 50, step: 0.5,
+    hint: '0 = disabled. N = skip setups when ATR exceeds N (avoids blowout moves where your stop math breaks down). Useful when news spikes inflate ATR well beyond normal range.',
+  },
+  {
+    key: 'cooldown_bars_after_stop', label: 'Cooldown After Stop', min: 0, max: 20, step: 1,
+    hint: '0 = disabled. N = suppress new signals for N bars after taking a stop-loss. Prevents immediately re-entering into the same adverse move.',
+  },
+  {
+    key: 'min_penetration_atr_factor', label: 'Penetration ATR Factor', min: 0, max: 3, step: 0.05,
+    hint: '0 = use the fixed Min Penetration ($) value. >0 = scale the required penetration by factor × ATR, so it tightens in quiet markets and widens in volatile ones.',
+  },
+  {
+    key: 'ifvg_stop_buffer_ticks', label: 'iFVG Stop Buffer (ticks)', min: 0, max: 10, step: 0.5,
+    hint: 'Extra ticks beyond the iFVG extreme when placing the stop. Larger = wider stop, less noise-stopped, worse R/R.',
+  },
+  {
+    key: 'ifvg_sweep_window_bars', label: 'Sweep Window (bars)', min: 1, max: 30, step: 1,
+    hint: 'Rule A: how many bars back we look for a prior swing sweep before the iFVG formed. Larger window = more setups qualify; smaller = only recent, "clean" sweeps pass.',
+  },
+  {
+    key: 'ifvg_min_displacement_mult', label: 'Min Displacement Mult', min: 0, max: 3, step: 0.1,
+    hint: 'Rule E: the displacement candle must be ≥ N × ATR to qualify. 1.0 = needs a full ATR-sized move. Lower = more setups but includes weak displacements. 0 = off.',
+  },
+  {
+    key: 'ifvg_tp1_fraction', label: 'TP1 Fraction', min: 0, max: 1, step: 0.05,
+    hint: 'Fraction of position to close at the structural TP1 level (e.g. 0.5 = close half). Only relevant with multi-contract sizing; BE-only for 1-lots.',
+  },
+  {
+    key: 'ifvg_be_after_tp1', label: 'BE After TP1', kind: 'toggle',
+    hint: 'When ON, moves stop to break-even after TP1 fills. Protects profits on the runner but reduces final win size on strong moves. With partials disabled, has no effect.',
+  },
+  {
+    key: 'ifvg_session_windows', label: 'Session Windows', kind: 'list',
+    hint: 'Comma-separated UTC time ranges (HH:MM-HH:MM) when entries are allowed. Empty = no session filter (trade any time). Example: 09:00-11:00, 02:00-05:00.',
+  },
+  {
+    key: 'ifvg_news_blackout', label: 'News Blackout', kind: 'list',
+    hint: 'Comma-separated ISO date-time ranges to block entirely (e.g. a high-impact event day). Format: YYYY-MM-DDTHH:MM/YYYY-MM-DDTHH:MM. Usually empty.',
+  },
+  {
+    key: 'htf_bias_timeframe', label: 'HTF Bias Timeframe', kind: 'select',
+    options: ['15min', '30min', '1h', '4h'],
+    hint: 'Timeframe used to determine the higher-timeframe swing-structure bias. Only relevant when HTF Bias Gate is ON.',
+  },
+  {
+    key: 'htf_bias_lookback', label: 'HTF Bias Lookback', min: 1, max: 10, step: 1,
+    hint: 'Number of swing points on the HTF chart used to determine trend direction. 3 = last 3 swings. Only relevant when HTF Bias Gate is ON.',
+  },
+  {
+    key: 'htf_target_min_r', label: 'HTF Target Min R', min: 0, max: 5, step: 0.5,
+    hint: 'Minimum R an HTF swing level must deliver as a target to qualify. Lower HTF levels that are too close get skipped. Only relevant when HTF Target Selection is ON.',
+  },
+  {
+    key: 'htf_swing_timeframe', label: 'HTF Swing Timeframe', kind: 'select',
+    options: ['15min', '30min', '1h', '4h'],
+    hint: 'Fallback timeframe for swing-based target selection when HTF Target Selection is ON but no 4h level is available.',
+  },
 ]
 
 const STRATEGY_DEFAULTS: Record<string, string> = {
@@ -210,6 +319,31 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   ifvg_entry_mode:          'close',
   ifvg_rule_f_enabled:      'true',
   target_clarity_mode:      'reject',
+  htf_bias_enabled:              'false',
+  htf_target_enabled:            'false',
+  trend_ema_period:              '50',
+  vp_enabled:                    'false',
+  ifvg_macro_blackouts_enabled:  'true',
+  min_atr_filter:                '0',
+  max_atr_filter:                '0',
+  cooldown_bars_after_stop:      '0',
+  min_penetration_atr_factor:    '0',
+  ifvg_stop_buffer_ticks:        '1.0',
+  ifvg_sweep_window_bars:        '10',
+  ifvg_min_displacement_mult:    '1.0',
+  ifvg_tp1_fraction:             '0.5',
+  ifvg_be_after_tp1:             'true',
+  ifvg_session_windows:          '',
+  ifvg_news_blackout:            '',
+  vp_tick_size:                  '0.10',
+  vp_value_area_pct:             '0.7',
+  vp_filter_tolerance:           '2.0',
+  vp_hvn_threshold:              '1.5',
+  vp_min_target_r:               '1.0',
+  htf_bias_timeframe:            '4h',
+  htf_bias_lookback:             '3',
+  htf_target_min_r:              '2.0',
+  htf_swing_timeframe:           '30min',
 }
 
 type DataSource = 'local' | 'databento'
@@ -235,6 +369,9 @@ export function BacktestsPage() {
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [dataSource, setDataSource] = useState<DataSource>('local')
+  const [bentoStartDate, setBentoStartDate] = useState(daysAgo(365))
+  const [bentoEndDate, setBentoEndDate] = useState(isoDate(new Date()))
+  const [partialR, setPartialR] = useState('0')
   const [bentoMeta, setBentoMeta] = useState<{
     cost: number
     cachedThrough: string | null
@@ -262,10 +399,16 @@ export function BacktestsPage() {
         if (d?.strategy && typeof d.strategy === 'object') {
           const next: Record<string, string> = {}
           for (const k of Object.keys(STRATEGY_DEFAULTS)) {
-            next[k] = String(d.strategy[k] ?? STRATEGY_DEFAULTS[k])
+            if (k === 'ifvg_macro_blackouts_enabled') continue
+            const val = d.strategy[k] ?? STRATEGY_DEFAULTS[k]
+            next[k] = Array.isArray(val) ? val.join(', ') : String(val)
           }
+          // Derive macro toggle from the real list field
+          const mw = d.strategy.ifvg_macro_windows
+          next['ifvg_macro_blackouts_enabled'] = (Array.isArray(mw) && mw.length === 0) ? 'false' : 'true'
           setStrategy(next)
         }
+        if (d?.partial_profit_r != null) setPartialR(String(d.partial_profit_r))
       })
       .catch(() => {})
   }, [])
@@ -281,9 +424,14 @@ export function BacktestsPage() {
       .then(d => {
         const next: Record<string, string> = {}
         for (const k of Object.keys(STRATEGY_DEFAULTS)) {
-          next[k] = String(d.strategy?.[k] ?? STRATEGY_DEFAULTS[k])
+          if (k === 'ifvg_macro_blackouts_enabled') continue
+          const val = d.strategy?.[k] ?? STRATEGY_DEFAULTS[k]
+          next[k] = Array.isArray(val) ? val.join(', ') : String(val)
         }
+        const mw = d.strategy?.ifvg_macro_windows
+        next['ifvg_macro_blackouts_enabled'] = (Array.isArray(mw) && mw.length === 0) ? 'false' : 'true'
         setStrategy(next)
+        if (d?.partial_profit_r != null) setPartialR(String(d.partial_profit_r))
         setStrategyDirty(false)
       })
   }
@@ -298,7 +446,7 @@ export function BacktestsPage() {
       const res = await fetch('/api/databento/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start: startDate, end: endDate, symbol, dry_run: true }),
+        body: JSON.stringify({ start: bentoStartDate, end: bentoEndDate, symbol, dry_run: true }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = await res.json()
@@ -401,16 +549,14 @@ export function BacktestsPage() {
   async function startRun() {
     setRunning(true)
     try {
-      if (dataSource !== 'databento') {
-        setMsg('Fetching historical bars…')
-      }
+      const symbol = await resolveSymbol()
+
       if (dataSource === 'databento') {
         setMsg('Fetching bars from Databento…')
-        const symbol = await resolveSymbol()
         const bentoRes = await fetch('/api/databento/fetch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start: startDate, end: endDate, symbol, dry_run: false }),
+          body: JSON.stringify({ start: bentoStartDate, end: bentoEndDate, symbol, dry_run: false }),
         })
         const bentoBody = await bentoRes.json()
         if (!bentoBody.ok) {
@@ -418,24 +564,43 @@ export function BacktestsPage() {
           setRunning(false)
           return
         }
+      } else {
+        setMsg('Fetching historical bars…')
       }
+
       const beforeCount = list.length
       // Build the strategy override payload. Strings preserve decimal
       // precision; the backend will coerce them through Pydantic.
-      const stratPayload: Record<string, string | number> = {}
+      const stratPayload: Record<string, unknown> = {}
       for (const f of STRATEGY_FIELDS) {
+        if (f.key === 'ifvg_macro_blackouts_enabled') continue
         stratPayload[f.key] = strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]
+      }
+      // Translate synthetic macro toggle -> real list field
+      const macroEnabled = (strategy['ifvg_macro_blackouts_enabled'] ?? 'true') === 'true'
+      if (!macroEnabled) stratPayload['ifvg_macro_windows'] = []
+      // Translate comma-separated text fields -> string arrays
+      const LIST_FIELDS = ['ifvg_session_windows', 'ifvg_news_blackout'] as const
+      for (const lf of LIST_FIELDS) {
+        const raw = String(stratPayload[lf] ?? '').trim()
+        stratPayload[lf] = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []
+      }
+      const runBody: Record<string, unknown> = {
+        label: label || null,
+        timeframe,
+        strategy: stratPayload,
+      }
+      if (partialR !== '0') runBody.partial_profit_r = partialR
+      if (dataSource === 'databento') {
+        runBody.bars_path = `bars/bars_${symbol.toUpperCase()}.csv`
+      } else {
+        runBody.start_date = startDate
+        runBody.end_date = endDate
       }
       const res = await fetch('/api/backtest/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: label || null,
-          timeframe,
-          start_date: startDate,
-          end_date: endDate,
-          strategy: stratPayload,
-        }),
+        body: JSON.stringify(runBody),
       })
       const body = await res.json()
       if (!body.ok) {
@@ -443,7 +608,10 @@ export function BacktestsPage() {
         setRunning(false)
         return
       }
-      setMsg(`Running (pid ${body.pid}) — ${timeframe}  ${startDate} → ${endDate}`)
+      const rangeStr = dataSource === 'databento'
+        ? `${bentoStartDate} → ${bentoEndDate}`
+        : `${startDate} → ${endDate}`
+      setMsg(`Running (pid ${body.pid}) — ${timeframe}  ${rangeStr}`)
       const watch = setInterval(async () => {
         const d = await fetch('/api/backtest/list').then(r => r.json())
         if ((d.backtests?.length ?? 0) > beforeCount) {
@@ -576,10 +744,24 @@ export function BacktestsPage() {
   }, [selected?.id])
 
   useEffect(() => {
-    if (dataSource === 'databento') {
-      setBentoMeta(null)
-    }
-  }, [startDate, endDate])
+    if (dataSource !== 'databento') return
+    setBentoMeta(null)
+    setBentoLoading(true)
+    resolveSymbol().then(symbol =>
+      fetch('/api/databento/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: bentoStartDate, end: bentoEndDate, symbol, dry_run: true }),
+      })
+        .then(r => r.json())
+        .then(body => {
+          if (body.ok) setBentoMeta({ cost: body.cost_estimate ?? 0, cachedThrough: body.cached_through ?? null, willFetch: body.days_fetched ?? 0 })
+        })
+        .catch(() => {})
+        .finally(() => setBentoLoading(false))
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSource, bentoStartDate, bentoEndDate])
 
   // Identify the best backtest from this search (or overall if no search yet).
   const searchLabelSet = new Set(searchProgress?.labels ?? [])
@@ -629,7 +811,7 @@ export function BacktestsPage() {
     type Bucket = { wins: number; grossWin: number; grossLoss: number; count: number }
     const buckets: Record<string, Bucket> = {}
     for (const t of selected?.trades ?? []) {
-      const pnl = parseFloat(t.pnl)
+      const pnl = parseFloat(t.realized_pnl)
       const g = t.grade ?? ''
       const b = buckets[g] ??= { wins: 0, grossWin: 0, grossLoss: 0, count: 0 }
       b.count++
@@ -853,6 +1035,15 @@ export function BacktestsPage() {
                     >
                       {(strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]) === 'true' ? 'ON' : 'OFF'}
                     </button>
+                  ) : f.kind === 'list' ? (
+                    <input
+                      type="text"
+                      value={strategy[f.key] ?? STRATEGY_DEFAULTS[f.key]}
+                      onChange={e => setStratField(f.key, e.target.value)}
+                      disabled={running}
+                      placeholder="comma-separated, or leave blank"
+                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                    />
                   ) : (
                   <div className="flex items-center gap-2">
                     <input
@@ -880,13 +1071,43 @@ export function BacktestsPage() {
                   <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">{f.hint}</p>
                 </div>
               ))}
+              <div>
+                <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                  Partial Profit R
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={5}
+                    step={0.25}
+                    value={Number(partialR)}
+                    onChange={e => setPartialR(e.target.value)}
+                    disabled={running}
+                    className="flex-1 slider-accent"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.25}
+                    value={partialR}
+                    onChange={e => setPartialR(e.target.value)}
+                    disabled={running}
+                    className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <p className="text-[10px] text-dim/70 mt-1 leading-relaxed">
+                  R level to take a partial exit (half position). 0 = disabled. E.g. 1.5 = close half at 1.5R then move stop to break-even.
+                </p>
+              </div>
             </div>
           </details>
 
           {/* Data source toggle */}
           <div className="border border-border bg-bg/30 p-3">
             <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Data Source</div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-3">
               <button
                 onClick={() => switchToDataSource('local')}
                 disabled={running}
@@ -922,6 +1143,33 @@ export function BacktestsPage() {
                 </span>
               )}
             </div>
+            {dataSource === 'databento' && (
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                <div>
+                  <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Databento start</label>
+                  <input
+                    type="date"
+                    value={bentoStartDate}
+                    max={bentoEndDate}
+                    onChange={e => setBentoStartDate(e.target.value)}
+                    disabled={running}
+                    className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Databento end</label>
+                  <input
+                    type="date"
+                    value={bentoEndDate}
+                    min={bentoStartDate}
+                    max={isoDate(new Date())}
+                    onChange={e => setBentoEndDate(e.target.value)}
+                    disabled={running}
+                    className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -1180,11 +1428,19 @@ export function BacktestsPage() {
                   <Stat label="Avg Win" value={`$${selected.stats.avg_win}`} />
                   <Stat label="Avg Loss" value={`$${selected.stats.avg_loss}`} />
                   <Stat label="Max Drawdown" value={`$${selected.stats.max_drawdown}`} />
+                  <Stat label="Expectancy" value={selected.stats.expectancy != null ? `$${parseFloat(selected.stats.expectancy).toFixed(2)}` : '—'} highlight={selected.stats.expectancy != null && parseFloat(selected.stats.expectancy) > 0 ? 'accent' : undefined} />
+                  <Stat label="Combine" value={selected.stats.passed_combine == null ? '—' : selected.stats.passed_combine ? 'PASS' : 'FAIL'} highlight={selected.stats.passed_combine ? 'accent' : selected.stats.passed_combine === false ? 'danger' : undefined} />
+                  <Stat label="MLL Breach" value={selected.stats.mll_breached == null ? '—' : selected.stats.mll_breached ? 'YES' : 'NO'} highlight={selected.stats.mll_breached ? 'danger' : 'accent'} />
                   <Stat label="Bars" value={selected.bars_processed.toString()} />
                   <Stat label="Starting" value={`$${selected.starting_balance}`} />
                   <Stat label="Ending" value={`$${selected.ending_balance}`} />
+                  <Stat label="Timeframe" value={selected.timeframe} />
                   <Stat label="Duration" value={`${selected.duration_seconds}s`} />
                 </div>
+
+                {selected.stats.equity_curve && selected.stats.equity_curve.length > 1 && (
+                  <EquityCurve curve={selected.stats.equity_curve} startingBalance={selected.starting_balance} />
+                )}
 
                 <div>
                   <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
@@ -1287,7 +1543,7 @@ export function BacktestsPage() {
                   </div>
                   <div className="max-h-[40vh] overflow-y-auto feed border border-border divide-y divide-border">
                     {displayedTrades.map((t, i) => {
-                      const pnl = parseFloat(t.pnl)
+                      const pnl = parseFloat(t.realized_pnl)
                       return (
                         <div key={i} className="px-3 py-2 text-[11px] font-mono">
                           <div className="flex items-center justify-between">
@@ -1333,6 +1589,44 @@ export function BacktestsPage() {
           </section>
         </div>
       </main>
+    </div>
+  )
+}
+
+function EquityCurve({ curve, startingBalance }: { curve: [string, string][]; startingBalance: string }) {
+  const start = parseFloat(startingBalance)
+  const equities = curve.map(([, eq]) => parseFloat(eq))
+  const min = Math.min(...equities)
+  const max = Math.max(...equities)
+  const range = max - min || 1
+  const W = 600, H = 80
+  const pts = equities.map((eq, i) => {
+    const x = (i / (equities.length - 1)) * W
+    const y = H - ((eq - min) / range) * (H - 4) - 2
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const zeroY = H - ((start - min) / range) * (H - 4) - 2
+  const finalEq = equities[equities.length - 1]
+  const positive = finalEq >= start
+
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Equity Curve</div>
+      <div className="bg-bg border border-border p-2">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-20" preserveAspectRatio="none">
+          <line x1="0" y1={zeroY.toFixed(1)} x2={W} y2={zeroY.toFixed(1)}
+            stroke="#333" strokeWidth="1" strokeDasharray="4 4" />
+          <polyline points={pts} fill="none"
+            stroke={positive ? '#00ff41' : '#ff4444'} strokeWidth="1.5" />
+        </svg>
+        <div className="flex justify-between text-[9px] text-dim font-mono mt-1">
+          <span>${min.toFixed(0)}</span>
+          <span className={positive ? 'text-accent' : 'text-danger'}>
+            ${finalEq.toFixed(2)} ({positive ? '+' : ''}{(finalEq - start).toFixed(2)})
+          </span>
+          <span>${max.toFixed(0)}</span>
+        </div>
+      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@ Walk-forward optimization CLI.
 
 Usage:
     python scripts/walkforward.py \
-        --bars bars_MGC.csv \
+        --bars bars/bars_MGC.csv \
         --instrument MGC \
         --out-dir walkforward_results/
 
@@ -149,7 +149,7 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Walk-forward optimizer for combine-pass-rate scoring.")
-    parser.add_argument("--bars", default="bars_MGC.csv", help="Path to bars CSV")
+    parser.add_argument("--bars", default="bars/bars_MGC.csv", help="Path to bars CSV")
     parser.add_argument("--instrument", default="MGC")
     parser.add_argument("--config", default="bot_config.json",
                         help="Live config to seed the faithful base config from")

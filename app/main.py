@@ -456,6 +456,10 @@ async def _run_live(
                 s.htf_bias_enabled, s.htf_target_enabled,
                 s.htf_bias_timeframe, s.htf_swing_timeframe,
             )
+        elif engine.runners:
+            # HTF bias/target disabled but still seed delivery FVGs at startup
+            # so grader criterion 5 scores correctly from the first signal.
+            await _refresh_htf_once(broker, s, None, None, engine.runners)
         # Always run the refresh loop so a later PATCH toggle is picked up and
         # trackers stay fresh. It no-ops cheaply while both trackers are None.
         htf_task = asyncio.create_task(_htf_refresh_loop(broker, engine, shutdown))
@@ -651,57 +655,58 @@ async def _refresh_htf_once(
     bias_tracker: "HTFBiasTracker | None", level_finder: "HTFLevelFinder | None",
     runners: "dict | None" = None,
 ) -> None:
-    """Fetch recent 4h + 30min bars and rebuild whichever trackers exist."""
-    if bias_tracker is None and level_finder is None:
+    """Fetch recent 4h + 30min bars and rebuild whichever trackers exist.
+
+    Delivery FVGs (grader criterion 5) are always fed when runners are present,
+    regardless of whether htf_bias_enabled or htf_target_enabled are on.
+    HTF swing levels (for target clarity / premium-discount) only populate
+    when level_finder is not None (i.e. htf_target_enabled=True).
+    """
+    if bias_tracker is None and level_finder is None and not runners:
         return
     try:
-        # Try the native HTF timeframe first — fastest and most accurate when
-        # the broker has the data. Many futures contracts return very few bars
-        # for the active contract (post-roll), so check whether the native
-        # fetch gave us enough structure to confirm swings; if not, aggregate
-        # from 1min (which always has plenty of history).
-        bias_bars = await broker.get_historical_bars(
-            timeframe=s.htf_bias_timeframe, days=90, limit=2000,
-        )
-        # Threshold: we want enough bars that at least a handful of swings
-        # can confirm with the configured lookback. (lookback*2 + 1) is the
-        # bare minimum to confirm ONE swing; we require 5× that for usable
-        # bias signal.
-        min_useful_bars = (s.htf_bias_lookback * 2 + 1) * 5
-        if len(bias_bars) < min_useful_bars:
-            log.info(
-                "HTF: native %s fetch gave only %d bars (< %d needed); "
-                "aggregating from 1min instead",
-                s.htf_bias_timeframe, len(bias_bars), min_useful_bars,
-            )
-            one_min = await broker.get_historical_bars(
-                timeframe="1min", days=30, limit=50000,
-            )
-            target_secs = _tf_to_seconds(s.htf_bias_timeframe)
-            bias_bars = _aggregate_bars(one_min, target_secs, s.htf_bias_timeframe)
-            log.info(
-                "HTF: aggregated %d 1min bars -> %d %s bars",
-                len(one_min), len(bias_bars), s.htf_bias_timeframe,
-            )
+        one_min: list | None = None  # lazy-fetched; reused by swing fallback
 
-        if not bias_bars:
-            log.warning(
-                "HTF: 0 %s bars after fetch+aggregate — bias tracker will "
-                "stay empty (neutral). Check broker connectivity.",
-                s.htf_bias_timeframe,
+        # ── Bias bars (4h) — only needed when bias_tracker or level_finder active ──
+        bias_bars: list = []
+        if bias_tracker is not None or level_finder is not None:
+            bias_bars = await broker.get_historical_bars(
+                timeframe=s.htf_bias_timeframe, days=90, limit=2000,
             )
+            min_useful_bars = (s.htf_bias_lookback * 2 + 1) * 5
+            if len(bias_bars) < min_useful_bars:
+                log.info(
+                    "HTF: native %s fetch gave only %d bars (< %d needed); "
+                    "aggregating from 1min instead",
+                    s.htf_bias_timeframe, len(bias_bars), min_useful_bars,
+                )
+                one_min = await broker.get_historical_bars(
+                    timeframe="1min", days=30, limit=50000,
+                )
+                target_secs = _tf_to_seconds(s.htf_bias_timeframe)
+                bias_bars = _aggregate_bars(one_min, target_secs, s.htf_bias_timeframe)
+                log.info(
+                    "HTF: aggregated %d 1min bars -> %d %s bars",
+                    len(one_min), len(bias_bars), s.htf_bias_timeframe,
+                )
+            if not bias_bars:
+                log.warning(
+                    "HTF: 0 %s bars after fetch+aggregate — bias tracker will "
+                    "stay empty (neutral). Check broker connectivity.",
+                    s.htf_bias_timeframe,
+                )
+
         if bias_tracker is not None:
             bias_tracker.rebuild(bias_bars)
 
-        if level_finder is not None:
+        # ── Swing bars (30min) — needed for delivery FVGs (always) and level_finder ──
+        if level_finder is not None or runners:
             swing_bars = await broker.get_historical_bars(
                 timeframe=s.htf_swing_timeframe, days=10, limit=2000,
             )
             min_useful_swing = (s.htf_bias_lookback * 2 + 1) * 5
             if len(swing_bars) < min_useful_swing:
-                # Reuse the 1min fetch we just did (if available) or pull fresh
-                # if this is a level-finder-only configuration.
-                if 'one_min' not in locals():
+                if one_min is None:
                     one_min = await broker.get_historical_bars(
                         timeframe="1min", days=15, limit=25000,
                     )
@@ -713,18 +718,22 @@ async def _refresh_htf_once(
                 )
             if not swing_bars:
                 log.warning(
-                    "HTF: 0 %s swing bars — target finder fallback will be empty.",
+                    "HTF: 0 %s swing bars — delivery FVGs and target finder will be empty.",
                     s.htf_swing_timeframe,
                 )
-            level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
-            # Feed grader with 30min delivery FVGs and HTF swing levels
+
+            if level_finder is not None:
+                level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
+
+            # Always feed delivery FVGs — criterion 5 is independent of HTF target gate.
             if runners:
                 for runner in runners.values():
                     runner.grader.update_delivery_fvgs(swing_bars)
-                    runner.grader.update_htf_swings(
-                        level_finder.swing_highs,
-                        level_finder.swing_lows,
-                    )
+                    if level_finder is not None:
+                        runner.grader.update_htf_swings(
+                            level_finder.swing_highs,
+                            level_finder.swing_lows,
+                        )
     except Exception:
         log.exception("HTF refresh failed — retaining last-known state")
 

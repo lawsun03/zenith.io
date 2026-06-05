@@ -76,6 +76,7 @@ class StrategyParams(BaseModel):
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
+    instruments: list[str] = Field(default_factory=list)  # if non-empty, supersedes `instrument` for multi-symbol
     signal_instrument: str | None = None   # if set, subscribe to this instrument for signals; execute on `instrument`
     timeframes: list[str] | None = None    # None → fall back to TOPSTEP_BOT_TIMEFRAMES env var
     replay_delay_ms: int = 0        # ms to sleep between bars in paper replay (0 = full speed)
@@ -95,7 +96,7 @@ def load_bot_config(path: Path) -> BotConfig:
     if not path.exists():
         return BotConfig()
     try:
-        return BotConfig.model_validate(json.loads(path.read_text()))
+        return BotConfig.model_validate(json.loads(path.read_text(encoding="utf-8-sig")))
     except Exception:
         return BotConfig()
 
@@ -106,6 +107,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
 
     data = {
         "instrument": config.instrument,
+        "instruments": config.instruments,
         "signal_instrument": config.signal_instrument,
         "timeframes": config.timeframes,
         "replay_delay_ms": config.replay_delay_ms,

@@ -38,7 +38,7 @@ export function MatrixRain({ active = true }: Props) {
         Array.from({ length: rows }, () => ({
           ch:     rch(),
           alpha:  0,
-          target: Math.random() < 0.12 ? 0.08 + Math.random() * 0.18 : 0,
+          target: Math.random() < 0.08 ? 0.05 + Math.random() * 0.13 : 0,
           ttl:    Math.floor(Math.random() * 300),
         }))
       )
@@ -66,8 +66,8 @@ export function MatrixRain({ active = true }: Props) {
 
           if (--cell.ttl <= 0) {
             cell.ch     = rch()
-            cell.target = Math.random() < 0.12
-              ? 0.08 + Math.random() * 0.18
+            cell.target = Math.random() < 0.08
+              ? 0.05 + Math.random() * 0.13
               : 0
             cell.ttl    = 80 + Math.floor(Math.random() * 300)
           }

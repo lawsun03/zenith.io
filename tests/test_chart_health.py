@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-ARCHIVE = Path("bars_1min_MGC.csv")
+ARCHIVE = Path("bars/bars_1min_MGC.csv")
 # ET trading hours where gaps > 5 min are suspicious (excludes daily 4PM-5PM halt)
 _ET = timezone(timedelta(hours=-4))  # EDT
 _TRADING_START = 17  # 5 PM ET (session open, previous day)

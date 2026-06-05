@@ -19,7 +19,7 @@ from app.broker.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
 from app.strategy.grader import SetupGrader
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
-from app.risk.config import fifty_k_combine
+from app.risk.config import fifty_k_combine, TopstepAccountConfig
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
@@ -39,14 +39,20 @@ def _refresh_backtest_htf(bars, s: StrategyParams, level_finder, bias_tracker, g
     """Rebuild HTF trackers + feed each grader from the bars seen so far.
 
     Mirrors main._refresh_htf_once but aggregates the replay stream (the
-    PaperBroker has no get_historical_bars) using only past bars — no lookahead."""
+    PaperBroker has no get_historical_bars) using only past bars — no lookahead.
+
+    Delivery FVGs are always refreshed: the 30min FVG check (criterion 5)
+    is independent of whether HTF target selection is enabled.  Only swing
+    levels (for target clarity / premium-discount) require level_finder."""
     from app.main import _aggregate_bars, _tf_to_seconds  # lazy: avoid import cycle
     bias_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_bias_timeframe), s.htf_bias_timeframe)
+    swing_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_swing_timeframe), s.htf_swing_timeframe)
+    # Always feed delivery FVGs — criterion 5 doesn't require HTF target gate.
+    for g in graders:
+        g.update_delivery_fvgs(swing_bars)
     if level_finder is not None:
-        swing_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_swing_timeframe), s.htf_swing_timeframe)
         level_finder.rebuild(fvg_bars=bias_bars, swing_bars=swing_bars)
         for g in graders:
-            g.update_delivery_fvgs(swing_bars)
             g.update_htf_swings(level_finder.swing_highs, level_finder.swing_lows)
     if bias_tracker is not None:
         bias_tracker.rebuild(bias_bars)
@@ -101,6 +107,7 @@ class BacktestConfig:
     # older tests/scripts. Sweeps target this object via the "strategy" container.
     strategy_params: StrategyParams | None = None
     label: str = ""
+    enforce_risk_limits: bool = True  # False = disable MLL/DLL/DPL (backtest exploration only)
 
 
 @dataclass
@@ -292,6 +299,17 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
     return trades
 
 
+def _no_limits_risk_config(base: TopstepAccountConfig) -> TopstepAccountConfig:
+    import dataclasses
+    return dataclasses.replace(
+        base,
+        mll_initial_offset=Decimal("999999"),
+        daily_loss_limit=Decimal("999999"),
+        soft_buffer=Decimal("0"),
+        daily_profit_limit=None,
+    )
+
+
 async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     """Run one backtest. Returns a BacktestResult."""
     broker = PaperBroker(
@@ -300,7 +318,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         commission_per_side=cfg.commission_per_side,
         partial_profit_r=cfg.partial_profit_r,
     )
-    risk_state = RiskState(config=fifty_k_combine(soft_buffer=cfg.soft_buffer))
+    base_risk = fifty_k_combine(soft_buffer=cfg.soft_buffer)
+    risk_state = RiskState(config=base_risk if cfg.enforce_risk_limits else _no_limits_risk_config(base_risk))
     runner = _build_runner(cfg)
 
     fills_captured: list[dict] = []
@@ -396,7 +415,9 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     bar_count = 0
     for bar in cfg.bars:
         _seen.append(bar)
-        if (htf_bias is not None or htf_levels is not None) \
+        # Refresh every N bars once we have enough history.  Always runs so
+        # delivery FVGs are populated even when HTF bias/target are disabled.
+        if s is not None \
                 and bar_count % _HTF_REFRESH_BARS == 0 and len(_seen) >= _HTF_MIN_BARS:
             _refresh_backtest_htf(list(_seen), s, htf_levels, htf_bias, _graders)
         await broker.inject_bar(bar)

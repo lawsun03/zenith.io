@@ -8,7 +8,7 @@ to run as a subprocess so backtests are fully isolated from the live bot.
 Usage:
     python -m app.backtest \\
         --config bot_config.json \\
-        --bars bars_MGC.csv \\
+        --bars bars/bars_MGC.csv \\
         --instrument MGC \\
         --out-dir backtests \\
         [--id custom-name]

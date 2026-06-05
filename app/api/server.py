@@ -631,13 +631,8 @@ def build_app(
         if get_fb is None:
             return JSONResponse(None)
         cfg = load_bot_config(_bot_config_path)
-        # Forming bar is only tracked for the primary instrument.
-        # Return null when the caller is viewing a different symbol.
-        primary = cfg.instrument or effective_instrument
-        if instrument and instrument != primary:
-            return JSONResponse(None)
         tf = (cfg.timeframes or _effective_timeframes)[0]
-        bar = await get_fb(tf)
+        bar = await get_fb(tf, instrument)
         if bar is None:
             return JSONResponse(None)
         return JSONResponse({
@@ -1141,6 +1136,8 @@ def build_app(
         ]
         if req.label:
             cmd += ["--label", req.label]
+        if not req.enforce_risk_limits:
+            cmd += ["--no-risk-limits"]
         try:
             proc = subprocess.Popen(cmd, cwd=Path.cwd())
         except Exception as e:
