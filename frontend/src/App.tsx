@@ -7,22 +7,15 @@ import { Header } from './components/Header'
 import { LockoutBanner } from './components/LockoutBanner'
 import { MetricsGrid } from './components/MetricsGrid'
 import { BarChart } from './components/BarChart'
-import { FeedSection } from './components/FeedSection'
-import { SignalRow } from './components/SignalRow'
-import { FillRow } from './components/FillRow'
-import { ReconcileRow } from './components/ReconcileRow'
+import { ActivityFeed } from './components/ActivityFeed'
 import { ConfigPanel } from './components/ConfigPanel'
 import { BacktestsPage } from './components/BacktestsPage'
 import { AnalyticsPage } from './pages/Analytics'
 import { ForceSignalPanel } from './components/ForceSignalPanel'
-import { MatrixRain } from './components/MatrixRain'
-import { GlowOverlay } from './components/GlowOverlay'
-import { StrategyDebug } from './components/StrategyDebug'
-import type { JournalItem } from './types'
+import { ZenithBackground } from './components/ZenithBackground'
 
 export default function App() {
-  // Simple path-based router. /backtests opens the standalone page;
-  // anything else is the live dashboard. Open in a new tab to compare.
+  // Path-based router — /backtests and /analytics are standalone pages.
   const path = window.location.pathname
   if (path.startsWith('/backtests')) return <BacktestsPage />
   if (path.startsWith('/analytics')) return <AnalyticsPage />
@@ -37,73 +30,82 @@ export default function App() {
   const activeSymbolRef = useRef(activeSymbol)
   useEffect(() => { activeSymbolRef.current = activeSymbol }, [activeSymbol])
 
-  const { status, signals, fills, reconciles, strategyState, connState } = useStream(chartCbRef, activeSymbolRef)
+  const { status, signals, fills, reconciles, connState } = useStream(chartCbRef, activeSymbolRef)
   const [configOpen, setConfigOpen] = useState(false)
   const activeKillzone = useKillzone(config?.enabled_killzones)
 
-  const isActive =
-    connState === 'connected' &&
-    !!activeKillzone &&
-    !status?.lockout
+  const now = new Date()
+  const dateLabel = now.toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles', weekday: 'long', month: 'long', day: 'numeric',
+  })
+  const yearLabel = now.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' })
+
+  const modeLabel = config?.mode === 'live' ? 'live' : 'paper'
+  const contractsLabel = config ? `${config.entry_mode} · ${config.contracts} contracts` : ''
 
   return (
-    <div className="min-h-screen scanlines">
-      <MatrixRain active={isActive} />
-      <GlowOverlay active={isActive} />
-      {activeKillzone && <div className="h-[2px] bg-accent/50" />}
-      <Header status={status} connState={connState} onConfigOpen={() => setConfigOpen(true)} mode={config?.mode} activeKillzone={activeKillzone} />
-      <LockoutBanner lockout={status?.lockout ?? null} />
-      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto">
-        <MetricsGrid status={status} />
-        {symbols.length > 1 && (
-          <div className="flex gap-2">
-            {symbols.map(sym => (
-              <button
-                key={sym}
-                onClick={() => setActiveSymbol(sym)}
-                className={`text-[10px] tracking-widest uppercase px-3 py-0.5 border transition-colors ${
-                  sym === activeSymbol
-                    ? 'text-accent border-accent/70 bg-accent/5'
-                    : 'text-dim border-dim/30 hover:text-ink hover:border-dim/60'
-                }`}
-              >
-                {sym}
-              </button>
-            ))}
-          </div>
-        )}
-        <BarChart callbacksRef={chartCbRef} timeframe={config?.timeframes?.[0]} activeSymbol={activeSymbol} />
-        {/* Feeds + strategy debug share one frame. On xl the debug panel sits
-            as a 4th column beside the feeds (uses the horizontal space); on lg it
-            drops to a full-width row below them; on mobile everything stacks. */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-px bg-border border border-border">
-          <FeedSection
-            title="Signals"
-            items={signals}
-            renderItem={(item: JournalItem, i: number) => <SignalRow key={i} entry={item} />}
-            empty="Waiting for the first signal"
-          />
-          <FeedSection
-            title="Fills"
-            items={fills}
-            renderItem={(item: JournalItem, i: number) => <FillRow key={i} entry={item} />}
-            empty="No fills yet"
-          />
-          <FeedSection
-            title="Reconcile"
-            items={reconciles}
-            renderItem={(item: JournalItem, i: number) => <ReconcileRow key={i} entry={item} />}
-            empty="Waiting for first reconcile"
-          />
-          <div className="bg-panel lg:col-span-3 xl:col-span-1">
-            <StrategyDebug data={strategyState} />
+    <div className="min-h-screen flex flex-col h-screen overflow-hidden">
+      <ZenithBackground />
+
+      <div className="relative z-10 flex flex-col h-screen">
+        <Header status={status} connState={connState} onConfigOpen={() => setConfigOpen(true)} mode={config?.mode} activeKillzone={activeKillzone} />
+        <LockoutBanner lockout={status?.lockout ?? null} />
+
+        <div className="flex-1 min-h-0 flex justify-center items-center overflow-hidden">
+          <div className="w-full max-w-[1320px] h-full max-h-[820px] px-7 pt-[22px] pb-[26px] flex flex-col min-h-0 overflow-hidden">
+
+            {/* page head */}
+            <div className="flex items-end justify-between px-0.5 pb-5 shrink-0 animate-fade-up">
+              <div>
+                <div className="text-[22px] text-ink tracking-tight">Live Dashboard</div>
+                <div className="text-[11px] text-faint font-mono mt-1">
+                  <span className="text-accent-ink">iFVG · Combined Strategy</span> · {modeLabel}
+                </div>
+              </div>
+              <div className="text-[11px] text-dim font-mono">{dateLabel} <span className="text-faint">·</span> {yearLabel}</div>
+            </div>
+
+            {/* body grid */}
+            <div className="flex-1 min-h-0 grid grid-cols-[1fr_312px] gap-5 overflow-hidden">
+
+              <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
+                {/* symbol row */}
+                <div className="flex items-center justify-between px-0.5 shrink-0 animate-fade-up">
+                  <div className="flex gap-[22px]">
+                    {symbols.map(sym => (
+                      <button
+                        key={sym}
+                        onClick={() => setActiveSymbol(sym)}
+                        className={`text-[13px] tracking-wide pb-0.5 relative transition-colors ${
+                          sym === activeSymbol ? 'text-ink' : 'text-faint hover:text-dim'
+                        }`}
+                      >
+                        {sym}
+                        {sym === activeSymbol && <span className="absolute left-0 right-0 -bottom-[7px] h-0.5 bg-accent rounded" />}
+                      </button>
+                    ))}
+                  </div>
+                  {contractsLabel && <span className="text-[10px] text-faint font-mono">{config?.timeframes?.[0]} · {contractsLabel}</span>}
+                </div>
+
+                <MetricsGrid status={status} />
+
+                <BarChart callbacksRef={chartCbRef} timeframe={config?.timeframes?.[0]} activeSymbol={activeSymbol} />
+              </div>
+
+              <ActivityFeed signals={signals} fills={fills} reconciles={reconciles} activeSymbol={activeSymbol} />
+
+            </div>
           </div>
         </div>
-        {config?.mode === 'live' && <ForceSignalPanel />}
-        <footer className="pt-4 text-[10px] text-dim/60 tracking-widest text-center">
-          READ-ONLY · LOCAL · NO-VPS COMPLIANT
-        </footer>
-      </main>
+
+        {config?.mode === 'live' && (
+          <div className="relative z-10 px-7 pb-4 shrink-0">
+            <ForceSignalPanel />
+          </div>
+        )}
+      </div>
+
       <ConfigPanel
         isOpen={configOpen}
         onClose={() => setConfigOpen(false)}

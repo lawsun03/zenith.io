@@ -7,7 +7,6 @@ export interface ChartCallbacks {
   onBar?: (bar: BarEvent) => void
   onFillMarker?: (time: number, isEntry: boolean, side: 'long' | 'short', pnl: number) => void
   onReset?: () => void
-  onVpUpdate?: () => void
 }
 
 export function useStream(
@@ -51,8 +50,6 @@ export function useStream(
       const ws = new WebSocket(`${proto}//${window.location.host}/api/stream`)
       wsRef.current = ws
 
-      let lastBarUtcDate: string | null = null
-
       ws.onopen = () => setConnState('connected')
       ws.onclose = () => {
         wsRef.current = null
@@ -79,11 +76,6 @@ export function useStream(
           if (activeSymbolRef?.current && p.instrument && p.instrument !== activeSymbolRef.current) {
             return
           }
-          const barUtcDate = msg.ts.slice(0, 10)
-          if (lastBarUtcDate !== null && barUtcDate !== lastBarUtcDate) {
-            chartCbRef?.current?.onVpUpdate?.()
-          }
-          lastBarUtcDate = barUtcDate
           chartCbRef?.current?.onBar?.({
             time: Math.floor(new Date(msg.ts).getTime() / 1000),
             open: Number(p.open), high: Number(p.high),
