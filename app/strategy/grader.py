@@ -1,7 +1,7 @@
 """
 Setup grader — scores an iFVG Signal against Dodgy's 5-criteria rating system.
 
-Grades A+/A/A-/B/B-. Signals below A- are filtered before execution.
+Grades A/B/C/D/F via weighted 0-100 score. passes=True when signal meets execution criteria.
 
 Five criteria:
   1. Momentum quality (from DisplacementEvent body_to_atr)
@@ -14,11 +14,10 @@ Spec corrections applied:
   - Correction 4: Opposite-side FVG overlap = BPR (positive), not singularity fail
   - Correction 5: Same-side stacked FVGs resolve as singular if they fit inside one 30min FVG
   - Correction 6: Delivery FVG requires correct side AND premium/discount alignment
-  - Rule A: Recent sweep within N bars required (else cap at B without delivery FVG)
+  - Rule A: Recent sweep within N bars required (else passes=False without delivery FVG)
   - Rule C: CE-respected flag computed for journaling
   - Rule E: Fibonacci displacement quality (reversal range vs manipulation range)
   - Rule I: Gapping sack — 2+ consecutive same-side FVGs → fail unless 30min rescue
-  - Rule J: BPR auto-A+ when BPR present + correct P/D + recent sweep
 """
 from __future__ import annotations
 
@@ -227,31 +226,30 @@ class SetupGrader:
         # Rule C: CE-respected (only meaningful for retrace_ce mode)
         ce_respected = False  # set by external call if price touched CE
 
-        # Grade assignment
+        # passes logic (unchanged): Rule A — no sweep + no delivery → cap out
         if not recent_sweep_ok and not delivery:
-            # Rule A: no sweep and no delivery → cap at B
-            grade_str: Literal["A+", "A", "A-", "B", "B-"] = "B"
             passes = False
         else:
-            grade_str = "A-"
-            if pd_ok and momentum_quality == "strong":
-                grade_str = "A"
-                if delivery:
-                    grade_str = "A+"
-            # Rule J: BPR auto-A+ when BPR + correct P/D + recent sweep
-            if bpr and pd_ok and recent_sweep_ok:
-                grade_str = "A+"
             passes = True
 
-        # penalty mode: no structural target → downgrade one notch (A+→A, A→A-,
-        # A-→B which then fails). Strong setups still trade; marginal ones don't.
+        # Score + grade (computed independently of passes)
+        score_val = self._compute_score(
+            momentum_quality=momentum_quality,
+            pd_ok=pd_ok,
+            delivery=delivery,
+            delivery_in_pd=delivery_in_pd,
+            bpr=bpr,
+            target_clear=target_clear,
+            fib_ext=fib_ext,
+        )
+        grade_letter = self._score_to_grade(score_val)
+
+        # penalty mode: no structural target → require C or better to trade
         if target_penalty:
-            _DOWN = {"A+": "A", "A": "A-", "A-": "B", "B": "B-", "B-": "B-"}
-            grade_str = _DOWN[grade_str]
-            passes = grade_str in ("A+", "A", "A-")
+            passes = score_val >= 35
 
         reason = (
-            f"{signal.killzone}: grade {grade_str} — "
+            f"{signal.killzone}: grade {grade_letter} ({score_val}) — "
             f"momentum={momentum_quality}, P/D={'ok' if pd_ok else 'off'}, "
             f"delivery={'yes' if delivery else 'no'}, "
             f"BPR={'yes' if bpr else 'no'}, "
@@ -261,8 +259,8 @@ class SetupGrader:
         log.info(reason)
 
         grade = SetupGrade(
-            grade=grade_str,
-            score=0,
+            grade=grade_letter,
+            score=score_val,
             passes=passes,
             has_delivery_fvg=delivery,
             delivery_fvg_side=delivery_side,
@@ -510,7 +508,7 @@ class SetupGrader:
 
     def _make_grade(
         self,
-        grade: Literal["A+", "A", "A-", "B", "B-"],
+        grade_str: str,           # ignored — grade derived from score
         passes: bool,
         momentum_quality: MomentumQuality = "decent",
         target_clear: bool = True,
@@ -533,8 +531,18 @@ class SetupGrader:
             fib_ok, fib_ext = self._check_fib_displacement(
                 signal, disp, min_displacement_mult
             )
+        score = self._compute_score(
+            momentum_quality=momentum_quality,
+            pd_ok=False,
+            delivery=False,
+            delivery_in_pd=False,
+            bpr=bpr_confluence,
+            target_clear=target_clear,
+            fib_ext=fib_ext,
+        )
+        letter = self._score_to_grade(score)
         return SetupGrade(
-            grade=grade, score=0,
+            grade=letter, score=score,
             passes=passes,
             has_delivery_fvg=False,
             delivery_fvg_side=None,
