@@ -43,7 +43,8 @@ MomentumQuality = Literal["strong", "decent", "weak"]
 @dataclass(frozen=True)
 class SetupGrade:
     """Result of grading one signal candidate against Dodgy's 5 criteria."""
-    grade: Literal["A+", "A", "A-", "B", "B-"]
+    grade: Literal["A", "B", "C", "D", "F"]
+    score: int                          # 0-100 weighted scorecard
     passes: bool                        # True if grade >= A-
     has_delivery_fvg: bool              # directional delivery (Correction 6)
     delivery_fvg_side: str | None       # "bullish" | "bearish" | None
@@ -261,6 +262,7 @@ class SetupGrader:
 
         grade = SetupGrade(
             grade=grade_str,
+            score=0,
             passes=passes,
             has_delivery_fvg=delivery,
             delivery_fvg_side=delivery_side,
@@ -458,6 +460,54 @@ class SetupGrader:
         ok = extension >= min_mult
         return ok, extension
 
+    def _compute_score(
+        self,
+        momentum_quality: MomentumQuality,
+        pd_ok: bool,
+        delivery: bool,
+        delivery_in_pd: bool,
+        bpr: bool,
+        target_clear: bool,
+        fib_ext: Decimal,
+    ) -> int:
+        """Weighted scorecard 0-100. Independent of passes logic."""
+        score = 0
+        # Fib extension (0-30)
+        if fib_ext >= Decimal("1.5"):
+            score += 30
+        elif fib_ext >= Decimal("1.0"):
+            score += 15
+        # P/D (0-20)
+        if pd_ok:
+            score += 20
+        # Delivery FVG (0-20): correct side + in P/D = 20, correct side only = 10
+        if delivery:
+            score += 20 if delivery_in_pd else 10
+        # Momentum (0-15)
+        if momentum_quality == "strong":
+            score += 15
+        elif momentum_quality == "decent":
+            score += 7
+        # BPR (0-10)
+        if bpr:
+            score += 10
+        # Target clarity (0-5)
+        if target_clear:
+            score += 5
+        return score
+
+    @staticmethod
+    def _score_to_grade(score: int) -> Literal["A", "B", "C", "D", "F"]:
+        if score >= 75:
+            return "A"
+        if score >= 55:
+            return "B"
+        if score >= 35:
+            return "C"
+        if score >= 15:
+            return "D"
+        return "F"
+
     def _make_grade(
         self,
         grade: Literal["A+", "A", "A-", "B", "B-"],
@@ -484,7 +534,8 @@ class SetupGrader:
                 signal, disp, min_displacement_mult
             )
         return SetupGrade(
-            grade=grade, passes=passes,
+            grade=grade, score=0,
+            passes=passes,
             has_delivery_fvg=False,
             delivery_fvg_side=None,
             delivery_fvg_in_pd=False,
