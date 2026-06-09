@@ -25,7 +25,7 @@ from typing import (
     runtime_checkable,
 )
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 
 
 # Callback type aliases. Keep these explicit — the strategy and engine
@@ -53,6 +53,33 @@ class Broker(Protocol):
 
     async def get_positions(self) -> list[BrokerPosition]:
         """Snapshot of all open positions. Used by the reconciler."""
+        ...
+
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        """Working-order coverage for the open position in `instrument`.
+
+        Queries the exchange for live stop/target orders on the closing side.
+        Used by the reconciler to detect positions with no protective exit.
+        """
+        ...
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        """Place a plain protective stop on the closing side of the current
+        position at `price`, sized `size`. Returns True on success.
+
+        Emergency use only — NOT registered in the bracket/partial state
+        machine. If the position is already flat, no-ops and returns True.
+        """
+        ...
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        """Place a plain protective limit (take-profit) on the closing side
+        of the current position at `price`, sized `size`. Returns True on
+        success. Emergency use only — not registered in the state machine."""
         ...
 
     # ------------------------------------------------------------------
