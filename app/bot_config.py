@@ -91,6 +91,17 @@ class BotConfig(BaseModel):
     )
     strategy: StrategyParams = Field(default_factory=StrategyParams)
 
+    # --- Exit-coverage monitor (naked-position protection) ---
+    emergency_stop_distance: dict[str, Decimal] = Field(
+        default_factory=lambda: {
+            "MGC": Decimal("3.0"),
+            "MNQ": Decimal("40.0"),
+            "MES": Decimal("5.0"),
+        }
+    )  # price points from broker avg entry for an emergency re-attached stop
+    emergency_target_r: Decimal = Decimal("2.0")   # target dist = R × stop dist
+    naked_grace_seconds: float = 15.0              # suppress fill→bracket race
+
 
 def load_bot_config(path: Path) -> BotConfig:
     if not path.exists():

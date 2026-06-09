@@ -204,3 +204,27 @@ async def test_paper_broker_reports_full_coverage():
 
     assert await broker.place_protective_stop("MES", 3, Decimal("5295.0")) is True
     assert await broker.place_protective_target("MES", 3, Decimal("5310.0")) is True
+
+
+# ---------------------------------------------------------------------------
+# Task 6: BotConfig emergency fields
+# ---------------------------------------------------------------------------
+
+def test_botconfig_emergency_defaults():
+    from app.bot_config import BotConfig
+
+    cfg = BotConfig()
+    assert cfg.emergency_stop_distance["MGC"] == Decimal("3.0")
+    assert cfg.emergency_stop_distance["MNQ"] == Decimal("40.0")
+    assert cfg.emergency_stop_distance["MES"] == Decimal("5.0")
+    assert cfg.emergency_target_r == Decimal("2.0")
+    assert cfg.naked_grace_seconds == 15.0
+
+
+def test_botconfig_emergency_roundtrips_json():
+    from app.bot_config import BotConfig
+
+    cfg = BotConfig(emergency_target_r=Decimal("1.5"), naked_grace_seconds=20.0)
+    restored = BotConfig.model_validate_json(cfg.model_dump_json())
+    assert restored.emergency_target_r == Decimal("1.5")
+    assert restored.naked_grace_seconds == 20.0
