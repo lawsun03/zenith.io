@@ -1,9 +1,15 @@
 title: Reconciler naked position detection
 priority: medium
-status: planned
+status: done
 category: risk
 created: 2026-06-08
 ---
+DONE 2026-06-09: shipped as the exit-coverage monitor on branch feat/exit-coverage-monitor.
+The reconciler now verifies every open contract has a working stop+target on the exchange
+each tick (when contract counts match) and escalates grace -> re-attach missing leg ->
+flatten if the stop can't be restored. Plan: docs/superpowers/plans/2026-06-08-exit-coverage-monitor.md
+Design: docs/superpowers/specs/2026-06-08-exit-coverage-monitor-design.md
+
 SUPERSEDED 2026-06-08: persistence approach rejected. Reframed as an exit-coverage
 monitor (every open contract must have a working stop+target on the exchange; escalating
 grace -> re-attach missing leg -> flatten if stop unrecoverable). See design:
