@@ -180,3 +180,27 @@ async def test_place_protective_target_uses_close_side_for_short():
     args = broker._suite.orders.place_limit_order.call_args.args
     assert args[1] == 0            # SIDE_BUY closes a short
     assert args[2] == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 5: PaperBroker implementations
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_paper_broker_reports_full_coverage():
+    """Paper brackets are simulated and never naked — backtests must not
+    trigger emergency remediation."""
+    from app.broker.paper import PaperBroker
+
+    broker = PaperBroker.__new__(PaperBroker)
+    pos = BrokerPosition(
+        instrument="MES", side="long", size=3,
+        average_price=Decimal("5300.0"), unrealized_pnl=Decimal("0"),
+    )
+    broker.get_positions = AsyncMock(return_value=[pos])
+    cov = await broker.exit_coverage("MES")
+    assert cov.position_size == 3
+    assert cov.fully_covered is True
+
+    assert await broker.place_protective_stop("MES", 3, Decimal("5295.0")) is True
+    assert await broker.place_protective_target("MES", 3, Decimal("5310.0")) is True

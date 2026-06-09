@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 from .protocol import BarHandler, EquityHandler, FillHandler
 
 log = logging.getLogger(__name__)
@@ -164,6 +164,31 @@ class PaperBroker:
             )
             for b in self._open.values()
         ]
+
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        """Paper positions carry simulated brackets — always fully covered."""
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return ExitCoverage(
+                instrument=instrument, position_size=0, side="",
+                avg_price=Decimal("0"), covered_stop=0, covered_target=0,
+            )
+        size = int(pos.size)
+        return ExitCoverage(
+            instrument=instrument, position_size=size, side=pos.side,
+            avg_price=pos.average_price, covered_stop=size, covered_target=size,
+        )
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        return True
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        return True
 
     # ------------------------------------------------------------------
     # Order placement
