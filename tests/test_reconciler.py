@@ -776,3 +776,16 @@ async def test_contract_drift_takes_precedence_over_naked():
     report = await rec.tick()
     assert report.drift_kind == "contract_count"
     broker.place_protective_stop.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_missing_target_no_distance_does_not_flatten_or_place():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=2, covered_target=0,
+    )
+    rec.config.emergency_stop_distance = {}   # no distance for MGC
+    await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.place_protective_target.assert_not_called()
+    broker.flatten.assert_not_called()   # missing target alone is not a capital risk

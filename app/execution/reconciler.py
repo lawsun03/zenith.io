@@ -56,6 +56,7 @@ from app.broker.protocol import Broker
 from app.risk.state import LockoutReason, RiskState
 
 if TYPE_CHECKING:
+    from app.broker.events import ExitCoverage
     from app.notifications.email import EmailNotifier
 
 log = logging.getLogger(__name__)
@@ -643,7 +644,7 @@ class Reconciler:
             notes=f"emergency exit re-attach for {acted}",
         )
 
-    async def _remediate_naked(self, cov) -> None:
+    async def _remediate_naked(self, cov: "ExitCoverage") -> None:
         """Re-attach only the missing leg(s). Flatten ONLY if the stop cannot
         be restored — a missing target is not a capital risk."""
         stop_gap = cov.position_size - cov.covered_stop
@@ -674,25 +675,42 @@ class Reconciler:
                 self._notify_naked(cov, action="flattened (stop re-attach failed)")
                 return
 
-        if target_gap > 0 and dist is not None:
-            target_price = (
-                cov.avg_price + self.config.emergency_target_r * dist
-                if cov.side == "long"
-                else cov.avg_price - self.config.emergency_target_r * dist
-            )
-            ok = await self.broker.place_protective_target(
-                cov.instrument, target_gap, target_price
-            )
-            if not ok:
-                # No capital risk — log + notify, do NOT flatten.
+        actions: list[str] = []
+        if stop_gap > 0:
+            actions.append(f"re-attached stop x{stop_gap}")
+
+        if target_gap > 0:
+            if dist is None:
+                # Missing target with no distance to price it — not a capital
+                # risk, so we don't flatten, but be honest that nothing was done.
                 log.error(
-                    "Exit-coverage: emergency target re-attach failed on %s "
-                    "(non-fatal).", cov.instrument,
+                    "Exit-coverage: %s missing target and no emergency distance "
+                    "configured — left without a target (no capital risk).",
+                    cov.instrument,
                 )
+                actions.append("target still missing (no distance configured)")
+            else:
+                target_price = (
+                    cov.avg_price + self.config.emergency_target_r * dist
+                    if cov.side == "long"
+                    else cov.avg_price - self.config.emergency_target_r * dist
+                )
+                ok = await self.broker.place_protective_target(
+                    cov.instrument, target_gap, target_price
+                )
+                if ok:
+                    actions.append(f"re-attached target x{target_gap}")
+                else:
+                    # No capital risk — log, do NOT flatten.
+                    log.error(
+                        "Exit-coverage: emergency target re-attach failed on %s "
+                        "(non-fatal).", cov.instrument,
+                    )
+                    actions.append("target re-attach FAILED")
 
-        self._notify_naked(cov, action="re-attached missing exit leg(s)")
+        self._notify_naked(cov, action="; ".join(actions) if actions else "no action")
 
-    def _notify_naked(self, cov, action: str) -> None:
+    def _notify_naked(self, cov: "ExitCoverage", action: str) -> None:
         if self.notifier is not None and self.notifier.enabled:
             asyncio.create_task(self.notifier.send(
                 subject=f"NAKED POSITION on {cov.instrument} — {action}",
