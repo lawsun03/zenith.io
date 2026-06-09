@@ -223,6 +223,11 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [enabledKillzones, setEnabledKillzones] = useState<string[]>(['london', 'ny_am', 'ny_pm'])
 
+  const emergencyInstruments: string[] =
+    config?.instruments && config.instruments.length > 0
+      ? config.instruments
+      : Object.keys(config?.emergency_stop_distance ?? { MGC: 0, MNQ: 0, MES: 0 })
+
   const isLive = config?.mode === 'live'
 
   useEffect(() => {
@@ -237,9 +242,12 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
-      emergency_stop_distance_MGC: String(config.emergency_stop_distance?.MGC ?? 3.0),
-      emergency_stop_distance_MNQ: String(config.emergency_stop_distance?.MNQ ?? 40.0),
-      emergency_stop_distance_MES: String(config.emergency_stop_distance?.MES ?? 5.0),
+      ...Object.fromEntries(
+        emergencyInstruments.map(sym => [
+          `emergency_stop_distance_${sym}`,
+          String(config.emergency_stop_distance?.[sym] ?? 0),
+        ])
+      ),
       emergency_target_r:   String(config.emergency_target_r ?? 2.0),
       naked_grace_seconds:  String(config.naked_grace_seconds ?? 15.0),
       signal_instrument:    config.signal_instrument ?? '',
@@ -312,11 +320,12 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
-      emergency_stop_distance: {
-        MGC: parseFloat(form.emergency_stop_distance_MGC) || 3.0,
-        MNQ: parseFloat(form.emergency_stop_distance_MNQ) || 40.0,
-        MES: parseFloat(form.emergency_stop_distance_MES) || 5.0,
-      },
+      emergency_stop_distance: Object.fromEntries(
+        emergencyInstruments.map(sym => [
+          sym,
+          parseFloat(form[`emergency_stop_distance_${sym}`]) || 0,
+        ])
+      ),
       emergency_target_r:   parseFloat(form.emergency_target_r) || 2.0,
       naked_grace_seconds:  parseFloat(form.naked_grace_seconds) || 15.0,
       enabled_killzones:    enabledKillzones,
@@ -587,7 +596,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                         Emergency Stop Distance (pts)
                       </label>
                       <div className="space-y-2">
-                        {(['MGC', 'MNQ', 'MES'] as const).map(sym => (
+                        {emergencyInstruments.map(sym => (
                           <div key={sym} className="flex items-center gap-2">
                             <span className="text-[10px] text-dim font-mono w-10">{sym}</span>
                             <input
