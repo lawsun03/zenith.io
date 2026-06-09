@@ -214,7 +214,6 @@ class RiskState:
         self.daily_pnl = Decimal("0")
         if self.locked_out and self.locked_out.code in {
             "DLL_HIT",
-            "DLL_SOFT_BUFFER",
             "DPL_HIT",
         }:
             self.locked_out = None
@@ -259,16 +258,6 @@ class RiskState:
             self.locked_out = LockoutReason(
                 code="DLL_HIT",
                 message=f"Daily loss limit hit: {self.daily_pnl}.",
-            )
-            return
-
-        # Soft DLL buffer.
-        if self.buffer_to_dll <= self.config.soft_buffer:
-            self.locked_out = LockoutReason(
-                code="DLL_SOFT_BUFFER",
-                message=(
-                    f"Soft DLL buffer hit: {self.buffer_to_dll} room remaining."
-                ),
             )
             return
 

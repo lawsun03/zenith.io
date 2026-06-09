@@ -148,6 +148,7 @@ def _make_broker_stub(entry_mode: str = "market"):
     broker.partial_profit_r = Decimal("0")
     broker.entry_mode = entry_mode
     broker._instruments = ["MGC"]
+    broker._extra_suites = {}  # multi-instrument refactor: _get_suite_for() reads this
     # Fake suite + orders
     mock_resp = MagicMock()
     mock_resp.success = True
@@ -438,3 +439,128 @@ async def test_premature_liquidity_no_cancel_when_tp1_not_hit():
     assert "MGC" in engine._pending_entry_tp1, (
         "_pending_entry_tp1 must remain when TP1 is not hit"
     )
+
+
+# ---------------------------------------------------------------------------
+# Partial-beyond-target guard
+# ---------------------------------------------------------------------------
+
+def _make_partial_broker_stub():
+    """Broker stub wired for _place_partial_bracket_after_fill tests."""
+    from app.broker.topstepx import TopstepXBroker
+
+    broker = object.__new__(TopstepXBroker)
+    broker._connected = True
+    broker._pending_brackets = {}
+    broker._exit_groups = {}
+    broker._be_watches = {}
+    broker._early_fills = {}
+    broker._extra_suites = {}
+    broker._fill_handlers = []
+    broker.partial_profit_r = Decimal("1.5")
+    broker.entry_mode = "market"
+    broker._instruments = ["MNQ"]
+
+    mock_resp = MagicMock()
+    mock_resp.success = True
+    mock_resp.orderId = "order_stop"
+    mock_suite = MagicMock()
+    mock_suite.instrument_id = "1"
+    mock_suite.orders.place_stop_order = AsyncMock(return_value=mock_resp)
+    mock_suite.orders.place_limit_order = AsyncMock(return_value=mock_resp)
+    mock_suite.client.account_info = MagicMock(id=42)
+    broker._suite = mock_suite
+    return broker
+
+
+# (instrument, entry, stop_offset) at each symbol's real price scale. The guard
+# is pure price arithmetic, so it must hold at MGC's ~2400, MNQ's ~29000, and
+# MES's ~5300 — not just the MNQ scale of the original 2026-06-08 incident.
+# All cases are SHORT (matching the incident): stop above entry, target below.
+_GUARD_SYMBOLS = [
+    ("MGC", Decimal("2400.0"), Decimal("3.0")),
+    ("MNQ", Decimal("29409.25"), Decimal("55.05")),
+    ("MES", Decimal("5300.0"), Decimal("5.0")),
+]
+
+
+def _short_partial_bracket(instrument, entry, stop_offset, target_r):
+    """Build a SHORT partial bracket with target at `target_r` * R below entry.
+
+    target_r < 1.5 (partial_r) puts the target closer than the partial → beyond.
+    target_r > 1.5 leaves the partial safely between entry and target.
+    """
+    return {
+        "instrument": instrument,
+        "fill_price": entry,
+        "stop_offset": stop_offset,          # stop above entry for short
+        "target_offset": -(stop_offset * target_r),  # target below entry
+        "close_sdk_side": 1,
+        "size": 2,
+        "account_id": 42,
+        "entry_side": "short",
+        "partial_r": Decimal("1.5"),
+        "tp1_price": None,
+        "tp1_fraction": Decimal("0.5"),
+        "be_after_tp1": True,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("instrument,entry,stop_offset", _GUARD_SYMBOLS)
+async def test_partial_beyond_target_falls_back_to_plain_bracket(instrument, entry, stop_offset):
+    """When partial_price is beyond the signal target, must use plain bracket.
+
+    Business reason: if target_r < partial_r, the target leg fires first, cancels
+    the stop and partial, and leaves partial-size contracts stranded with no
+    protection. The 2026-06-08 MNQ incident: SHORT @ 29409, target at 0.72R but
+    partial_r=1.5 — target fired first, orphaning 1 contract. Parametrized across
+    MGC/MNQ/MES so the guard is proven at every traded symbol's price scale.
+    """
+    from unittest.mock import patch
+
+    broker = _make_partial_broker_stub()
+    # target at 0.72R — closer than the 1.5R partial → partial is beyond target.
+    bracket = _short_partial_bracket(instrument, entry, stop_offset, Decimal("0.72"))
+
+    plain_called = []
+    async def fake_plain(b):
+        plain_called.append(True)
+
+    with patch.object(broker, "_place_bracket_after_fill", side_effect=fake_plain):
+        await broker._place_partial_bracket_after_fill(bracket)
+
+    assert plain_called, (
+        f"[{instrument}] Must fall back to plain bracket when partial_price is "
+        "beyond target — otherwise target fires first and orphans the partial-size "
+        "contracts."
+    )
+    # No stop or partial/target limit orders should have been placed directly
+    broker._suite.orders.place_stop_order.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("instrument,entry,stop_offset", _GUARD_SYMBOLS)
+async def test_partial_within_target_uses_group_path(instrument, entry, stop_offset):
+    """When partial_price is between entry and target, partial group should be used.
+
+    Normal case: target_r > partial_r (e.g. target at 3R, partial at 1.5R).
+    Parametrized across MGC/MNQ/MES — the happy path must also hold per symbol.
+    """
+    from unittest.mock import patch
+
+    broker = _make_partial_broker_stub()
+    # target at 3R — well beyond the 1.5R partial → group path is safe.
+    bracket = _short_partial_bracket(instrument, entry, stop_offset, Decimal("3.0"))
+
+    plain_called = []
+    async def fake_plain(b):
+        plain_called.append(True)
+
+    with patch.object(broker, "_place_bracket_after_fill", side_effect=fake_plain):
+        await broker._place_partial_bracket_after_fill(bracket)
+
+    assert not plain_called, (
+        f"[{instrument}] Should use group path when partial is within target range."
+    )
+    broker._suite.orders.place_stop_order.assert_called_once()

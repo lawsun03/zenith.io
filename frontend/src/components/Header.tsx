@@ -164,6 +164,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
         )}
         <a href="/analytics" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open analytics">Analytics ↗</a>
         <a href="/backtests" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open backtests">Backtests ↗</a>
+        <a href="/todos" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Backlog">Backlog ↗</a>
         <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Export trades CSV">↓ CSV</a>
         <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/5 hover:text-ink" title="Configuration">⚙</button>
       </div>

@@ -50,6 +50,7 @@ _STOP_ORDER_TYPES = frozenset({3, 4, 5})
 _LIMIT_ORDER_TYPE = 1
 _OPEN_ORDER_STATUS = 1  # SDK OrderStatus.OPEN
 
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -738,6 +739,7 @@ class TopstepXBroker:
                 "entry_price": fill_price,
                 "entry_side": entry_side,
                 "size": size,
+                "instrument": bracket.get("instrument", ""),
             }
             self._exit_pairs[stop_id]   = {**ctx, "paired_id": target_id}
             self._exit_pairs[target_id] = {**ctx, "paired_id": stop_id}
@@ -792,6 +794,22 @@ class TopstepXBroker:
             tp1_fraction=bracket.get("tp1_fraction", Decimal("0.5")),
         )
         if plan is None:
+            await self._place_bracket_after_fill(bracket)
+            return
+
+        # Guard: partial_price must be between entry and target. If the signal
+        # target is closer than partial_price (target_r < partial_r), the target
+        # leg fires first, cancels the stop and partial, and orphans the
+        # partial-size contracts with no protection. Fall back to plain bracket.
+        partial_beyond_target = (
+            (entry_side == "long" and plan.partial_price >= target)
+            or (entry_side != "long" and plan.partial_price <= target)
+        )
+        if partial_beyond_target:
+            log.info(
+                "partial_price %s is beyond target %s (%s) — falling back to plain bracket",
+                plan.partial_price, target, entry_side,
+            )
             await self._place_bracket_after_fill(bracket)
             return
 
@@ -941,8 +959,19 @@ class TopstepXBroker:
         if is_target:
             qty = group["remaining_size"]
             await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
+            # If partial never filled, target fired first (partial_price was beyond target).
+            # Cancel siblings (oversized stop + partial) then flatten the stranded contracts.
+            partial_still_open = not group["partial_filled"] and group.get("partial_size", 0) > 0
+            if partial_still_open:
+                log.error(
+                    "Target filled before partial on %s — partial_price likely beyond target. "
+                    "Flattening %d stranded contracts.",
+                    fill.instrument, group["partial_size"],
+                )
             await self._cancel_group_siblings(group, filled_id=order_id)
             self._clear_group(group)
+            if partial_still_open:
+                asyncio.create_task(self.flatten(fill.instrument))
             return
 
     async def _emit_group_exit(self, fill: Fill, pnl: Decimal, qty: int, is_stop: bool) -> None:
@@ -985,10 +1014,11 @@ class TopstepXBroker:
         stop_id = group["stop_id"]
         be = float(group["be_price"])
         remaining = group["remaining_size"]
+        _suite = self._get_suite_for(group.get("instrument", ""))
 
         for attempt in (1, 2):
             try:
-                ok = await self._suite.orders.modify_order(
+                ok = await _suite.orders.modify_order(
                     order_id=stop_id, stop_price=be, size=remaining)
                 if ok:
                     log.info("Stop moved to BE: order=%s be=%s size=%d", stop_id, be, remaining)
@@ -1036,8 +1066,9 @@ class TopstepXBroker:
         if not crossed:
             return
         watch["armed"] = False
+        _suite = self._get_suite_for(instrument)
         try:
-            ok = await self._suite.orders.modify_order(
+            ok = await _suite.orders.modify_order(
                 order_id=watch["stop_id"], stop_price=float(watch["be_price"]))
             if ok:
                 log.info("BE move (1-lot): stop=%s -> %s", watch["stop_id"], watch["be_price"])
@@ -1096,7 +1127,9 @@ class TopstepXBroker:
         """Cancel a single order by ID. Used for OCO cancellation."""
         try:
             resp = await self._suite.orders.cancel_order(int(order_id))
-            if getattr(resp, "success", False):
+            # SDK returns True (bool) on success in some versions; others return an
+            # object with .success. Accept either.
+            if resp is True or getattr(resp, "success", False):
                 log.info("OCO cancel confirmed: order=%s", order_id)
             else:
                 log.error("OCO cancel rejected: order=%s resp=%s", order_id, resp)
@@ -1246,15 +1279,20 @@ class TopstepXBroker:
 
     async def flatten(self, instrument: str) -> bool:
         """
-        Close all open positions at market.
+        Close the open position for `instrument` at market.
 
-        Reads positions directly from the SDK (which uses contract IDs, not
-        symbol names) so the instrument string is only used for logging —
-        no name-matching that can silently miss positions.
+        Filters by contract_id so that flatten("MGC") never touches
+        MNQ/MES positions (multi-instrument safety).
         """
         self._require_connected()
         raw = await self._raw_positions()
-        open_positions = [p for p in raw if int(p.get("size", 0) or 0) > 0]
+        _suite = self._get_suite_for(instrument)
+        target_contract_id = _suite.instrument_id
+        open_positions = [
+            p for p in raw
+            if int(p.get("size", 0) or 0) > 0
+            and str(p.get("contractId", "")) == target_contract_id
+        ]
         if not open_positions:
             return True
 
@@ -1271,7 +1309,6 @@ class TopstepXBroker:
             }
             self._exit_pairs.clear()
 
-        _suite = self._get_suite_for(instrument)
         success = True
         for pos in open_positions:
             ptype = int(pos.get("type", 0))
@@ -1302,13 +1339,41 @@ class TopstepXBroker:
 
     async def cancel_all(self, instrument: str | None = None) -> int:
         self._require_connected()
-        try:
-            # SDK signature varies; this is the common shape.
-            result = await self._suite.orders.cancel_all_orders()
-            return int(getattr(result, "cancelled_count", 0))
-        except Exception as e:
-            log.exception("cancel_all failed: %s", e)
-            return 0
+        if instrument is None:
+            # Account-wide cancel (engine.stop() / lockout across all instruments).
+            self._be_watches.clear()
+            try:
+                result = await self._suite.orders.cancel_all_orders()
+                return int(getattr(result, "cancelled_count", 0))
+            except Exception as e:
+                log.exception("cancel_all failed: %s", e)
+                return 0
+
+        # Per-instrument cancel: only touch orders belonging to `instrument`.
+        # account-wide cancel_all_orders() is NOT safe here — it also cancels
+        # brackets on other open positions (e.g. cancelling MNQ orders when
+        # reversing MGC; 2026-06-08 incident where both TP and SL disappeared).
+        order_ids: set[str] = set()
+        for oid, group in list(self._exit_groups.items()):
+            if group.get("instrument") == instrument:
+                order_ids.add(oid)
+        for oid, pair_info in list(self._exit_pairs.items()):
+            if pair_info.get("instrument") == instrument:
+                order_ids.add(oid)
+        for oid, bracket in list(self._pending_brackets.items()):
+            if bracket.get("instrument") == instrument:
+                order_ids.add(oid)
+
+        for oid in order_ids:
+            await self._cancel_order(oid)
+        for oid in order_ids:
+            self._exit_groups.pop(oid, None)
+            self._exit_pairs.pop(oid, None)
+            self._pending_brackets.pop(oid, None)
+        self._be_watches.pop(instrument, None)
+
+        log.info("cancel_all(%s): cancelled %d orders", instrument, len(order_ids))
+        return len(order_ids)
 
     # ------------------------------------------------------------------
     # Handler registration

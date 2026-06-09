@@ -426,6 +426,50 @@ async def test_signal_denied_when_already_at_max_contracts():
     await engine.stop()
 
 
+async def test_opposite_signal_reverses_even_with_headroom():
+    """
+    Regression for the 2026-06-07 stacked-bracket incident.
+
+    The flatten-before-reverse machinery used to trigger ONLY on a
+    MAX_CONTRACTS denial. With max_contracts=30 and a small open position,
+    an opposite-side signal does NOT exhaust headroom, so the pretrade gate
+    Allows it — and the engine placed a SECOND, opposing bracket that netted
+    against the existing position (long 5 + short 6 -> tangled net -1 with two
+    live brackets, leaving an orphan). The engine must reverse, not stack.
+    """
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())  # max_contracts=30
+    engine = ExecutionEngine(broker, state, [make_runner()], replay_mode=True)
+    await broker.connect()
+    await engine.start()
+
+    # Open LONG 5 — far under the 30 cap, so plenty of headroom remains.
+    state.record_fill(
+        realized_pnl_delta=Decimal("0"),
+        contracts_delta=5,
+        ts=in_ny_am(0),
+    )
+
+    placed: list[dict] = []
+    orig_place = broker.place_bracket
+    async def spy_place(**kw):
+        placed.append(kw)
+        return await orig_place(**kw)
+    broker.place_bracket = spy_place
+
+    # Opposite-side (short) signal while long. Gate would Allow it (headroom).
+    short_sig = _signal("1900", "1905", "1890", side="short")
+    outcome = await engine._act_on_signal(short_sig)
+
+    # Must defer to a reversal flatten, NOT place a stacked opposing bracket.
+    assert outcome.placed is False
+    assert outcome.reason == "reversal_pending"
+    assert "MGC" in engine._pending_reversal
+    assert placed == [], "must not stack a second bracket on the open position"
+
+    await engine.stop()
+
+
 # =====================================================================
 # VP disabled bypasses gate
 # =====================================================================

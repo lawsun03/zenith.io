@@ -35,8 +35,8 @@ export function ActivityRow({ item }: { item: JournalItem }) {
     return (
       <Shell
         dot={DOT.signal} type="Signal" ts={ts}
-        main={`${s.side === 'long' ? 'Long' : 'Short'} · ${s.killzone}`}
-        sub={s.rationale}
+        main={`${s.instrument} · ${s.side === 'long' ? 'Long' : 'Short'} · ${s.killzone}`}
+        sub={`entry ${s.entry} · stop ${s.stop} · tgt ${s.target}${s.rationale ? `  ${s.rationale}` : ''}`}
         amt={s.outcome.placed ? `×${s.outcome.allowed_size}` : s.outcome.reason}
         amtCls={s.outcome.placed ? 'text-accent-ink' : 'text-faint'}
       />
@@ -51,9 +51,9 @@ export function ActivityRow({ item }: { item: JournalItem }) {
       <Shell
         dot={f.is_entry ? 'bg-good' : pnl < 0 ? 'bg-danger' : 'bg-good'}
         type={f.is_entry ? 'Entry' : 'Exit'} ts={ts}
-        main={`${f.side === 'long' ? 'Long' : 'Short'} ×${f.size}`}
+        main={`${f.instrument} · ${f.side === 'long' ? 'Long' : 'Short'} ×${f.size}`}
         mainCls={f.is_entry ? 'text-good' : pnl < 0 ? 'text-danger' : 'text-ink'}
-        sub={`@ ${f.fill_price}`}
+        sub={`${f.is_entry ? 'entry' : 'exit'} @ ${f.fill_price}`}
         amt={f.is_entry ? f.fill_price : fmtMoney(f.realized_pnl_delta, { signed: true })}
         amtCls={amtCls}
       />

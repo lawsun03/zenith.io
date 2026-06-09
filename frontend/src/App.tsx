@@ -11,6 +11,7 @@ import { ActivityFeed } from './components/ActivityFeed'
 import { ConfigPanel } from './components/ConfigPanel'
 import { BacktestsPage } from './components/BacktestsPage'
 import { AnalyticsPage } from './pages/Analytics'
+import { TodosPage } from './pages/Todos'
 import { ForceSignalPanel } from './components/ForceSignalPanel'
 import { ZenithBackground } from './components/ZenithBackground'
 
@@ -19,6 +20,7 @@ export default function App() {
   const path = window.location.pathname
   if (path.startsWith('/backtests')) return <BacktestsPage />
   if (path.startsWith('/analytics')) return <AnalyticsPage />
+  if (path.startsWith('/todos')) return <TodosPage />
 
   const chartCbRef = useRef<ChartCallbacks>({})
   const { config, saveConfig, saving, saveError } = useConfig()

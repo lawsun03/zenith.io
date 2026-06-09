@@ -288,12 +288,17 @@ class Reconciler:
             self._last_report = report
             return report
 
+        # Signed net contracts: long = +size, short = -size. The comparison
+        # MUST be signed, not magnitude. A sign-flipped/orphaned position
+        # (internal short 3 vs broker long 3) has equal magnitude but is a
+        # genuine drift — comparing abs() values silently missed it and left
+        # an unprotected position open on a live account (2026-06-07 incident).
         broker_contracts = sum(
-            p.size for p in broker_positions
+            (p.size if p.side == "long" else -p.size) for p in broker_positions
         )
 
-        # open_contracts is signed (negative = short); broker sizes are unsigned.
-        internal_contracts = abs(self.risk_state.open_contracts)
+        # open_contracts is already signed (negative = short).
+        internal_contracts = self.risk_state.open_contracts
         internal_balance = self.risk_state.realized_balance
 
         # First-tick grace: silently accept whatever we find, but mark

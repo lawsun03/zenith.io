@@ -285,6 +285,7 @@ def build_app(
                 if risk_state.locked_out is not None
                 else None
             ),
+
             "last_reconcile": (
                 _serialize_report(reconciler.last_report)
                 if reconciler.last_report is not None
@@ -1424,6 +1425,61 @@ def build_app(
         except Exception as e:
             log.exception("bookmark toggle failed")
             return JSONResponse({"ok": False, "reason": str(e)}, status_code=500)
+
+    # ------------------------------------------------------------------
+    # A/B TP variants — serve ab_tp_variants.json for the backtests page
+    # ------------------------------------------------------------------
+
+    _AB_VARIANTS_FILE = Path(__file__).parent.parent.parent / "ab_tp_variants.json"
+
+    @app.get("/api/ab-variants")
+    async def get_ab_variants():
+        if not _AB_VARIANTS_FILE.exists():
+            return JSONResponse([])
+        try:
+            data = json.loads(_AB_VARIANTS_FILE.read_text(encoding="utf-8"))
+            return JSONResponse(data.get("variants", []))
+        except Exception as e:
+            log.warning("Failed to read ab_tp_variants.json: %s", e)
+            return JSONResponse([], status_code=500)
+
+    # ------------------------------------------------------------------
+    # Todos — backlog items from todos/ directory
+    # ------------------------------------------------------------------
+
+    _TODOS_DIR = Path(__file__).parent.parent.parent / "todos"
+
+    @app.get("/api/todos")
+    async def get_todos():
+        items = []
+        if _TODOS_DIR.exists():
+            for f in sorted(_TODOS_DIR.glob("*.md")):
+                try:
+                    text = f.read_text(encoding="utf-8")
+                    # Split frontmatter (key: value lines) from body (after ---)
+                    parts = text.split("---", 1)
+                    meta_text = parts[0].strip()
+                    body = parts[1].strip() if len(parts) > 1 else ""
+                    meta: dict = {}
+                    for line in meta_text.splitlines():
+                        if ":" in line:
+                            k, _, v = line.partition(":")
+                            meta[k.strip()] = v.strip()
+                    items.append({
+                        "id": f.stem,
+                        "title": meta.get("title", f.stem),
+                        "priority": meta.get("priority", "medium"),
+                        "status": meta.get("status", "open"),
+                        "category": meta.get("category", ""),
+                        "created": meta.get("created", ""),
+                        "body": body,
+                    })
+                except Exception:
+                    log.warning("Failed to parse todo file: %s", f.name)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        status_order = {"in-progress": 0, "open": 1, "done": 2}
+        items.sort(key=lambda x: (status_order.get(x["status"], 9), priority_order.get(x["priority"], 9)))
+        return items
 
     # ------------------------------------------------------------------
     # WebSocket — live event feed

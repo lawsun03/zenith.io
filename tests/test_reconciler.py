@@ -220,6 +220,46 @@ async def test_contract_drift_other_direction():
     assert state.locked_out is not None
 
 
+async def test_sign_flipped_position_is_drift():
+    """
+    Regression for the 2026-06-07 orphan: internal short 3, broker long 3.
+    Same magnitude, opposite sign. The old magnitude-only comparison
+    (abs(-3) == 3 == broker 3) reported NO drift, so a real orphaned/
+    sign-flipped position sat open and unprotected on a live account and
+    the reconciler never flattened it. Signed comparison must flag it.
+    """
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    await broker.connect()
+    # Broker is actually LONG 3.
+    await broker.place_bracket(
+        instrument="MGC",
+        side="long",
+        size=3,
+        entry=Decimal("2400"),
+        stop=Decimal("2390"),
+        target=Decimal("2410"),
+    )
+    state = fresh_state()
+    # Internal thinks we are SHORT 3 — opposite sign, same magnitude.
+    state.record_fill(
+        realized_pnl_delta=Decimal("0"),
+        contracts_delta=-3,
+        ts=datetime.now(timezone.utc),
+    )
+
+    rec = Reconciler(broker, state, no_grace())
+    report = await rec.tick()
+
+    assert report.drift_detected is True
+    assert report.drift_kind == "contract_count"
+    assert report.broker_open_contracts == 3   # signed: long 3 = +3
+    assert report.internal_open_contracts == -3
+    assert state.locked_out is not None
+    assert state.locked_out.code == "RECONCILE_DRIFT"
+    # The orphan must be gone after the emergency flatten.
+    assert await broker.get_positions() == []
+
+
 # =====================================================================
 # Balance drift
 # =====================================================================

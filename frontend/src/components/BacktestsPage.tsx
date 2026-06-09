@@ -413,6 +413,8 @@ const VARIANT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 interface ABVariant {
   // Overrides for TP_AB_FIELDS only; absent keys inherit the base form value.
   overrides: Record<string, string>
+  name?: string
+  rationale?: string
 }
 
 interface ABResult {
@@ -779,6 +781,17 @@ export function BacktestsPage() {
 
   function removeVariant(idx: number) {
     setAbVariants(vs => vs.length <= 2 ? vs : vs.filter((_, i) => i !== idx))
+  }
+
+  async function loadTJRVariants() {
+    try {
+      const res = await fetch('/api/ab-variants')
+      if (!res.ok) throw new Error(await res.text())
+      const data: Array<{ name: string; rationale: string; overrides: Record<string, string> }> = await res.json()
+      setAbVariants(data.map(v => ({ overrides: v.overrides, name: v.name, rationale: v.rationale })))
+    } catch (e) {
+      setMsg(`Failed to load TJR variants: ${e}`)
+    }
   }
 
   // Resolve the effective TP value a variant will run with (override or base form).
@@ -1533,6 +1546,7 @@ export function BacktestsPage() {
               onClearOverride={clearVariantOverride}
               variantTpValue={variantTpValue}
               onRun={runABTest}
+              onLoadPreset={loadTJRVariants}
             />
           )}
 
@@ -2115,6 +2129,7 @@ interface ABPanelProps {
   onClearOverride: (idx: number, key: string) => void
   variantTpValue: (v: ABVariant, key: string) => string
   onRun: () => void
+  onLoadPreset: () => void
 }
 
 function ABPanel({
@@ -2122,7 +2137,7 @@ function ABPanel({
   startDate, endDate, onStartDate, onEndDate,
   supportedSymbols, selectedInstruments, onToggleInstrument,
   onAddVariant, onRemoveVariant, onSetOverride, onClearOverride,
-  variantTpValue, onRun,
+  variantTpValue, onRun, onLoadPreset,
 }: ABPanelProps) {
   const combos = selectedInstruments.length * variants.length
   return (
@@ -2203,28 +2218,45 @@ function ABPanel({
               base config from form above · blank = inherit
             </span>
           </div>
-          <button
-            onClick={onAddVariant}
-            disabled={running || variants.length >= VARIANT_LETTERS.length}
-            className="text-[10px] tracking-widest uppercase px-3 py-1 border border-border text-dim hover:text-ink disabled:opacity-40"
-          >
-            + Variant
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onLoadPreset}
+              disabled={running}
+              className="text-[10px] tracking-widest uppercase px-3 py-1 border border-accent/40 text-accent/80 hover:text-accent hover:border-accent disabled:opacity-40"
+              title="Load the 6 TJR-derived TP variant presets"
+            >
+              Load TJR Variants
+            </button>
+            <button
+              onClick={onAddVariant}
+              disabled={running || variants.length >= VARIANT_LETTERS.length}
+              className="text-[10px] tracking-widest uppercase px-3 py-1 border border-border text-dim hover:text-ink disabled:opacity-40"
+            >
+              + Variant
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[11px] font-mono">
             <thead>
               <tr className="text-[9px] tracking-widest text-dim uppercase">
                 <th className="text-left px-2 py-1 font-normal">TP Param</th>
-                {variants.map((_, i) => (
+                {variants.map((v, i) => (
                   <th key={i} className="text-left px-2 py-1 font-normal" style={{ color: VARIANT_COLORS[i] }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>Variant {VARIANT_LETTERS[i]}</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div>{v.name ?? `Variant ${VARIANT_LETTERS[i]}`}</div>
+                        {v.rationale && (
+                          <div className="text-[8px] text-faint normal-case tracking-normal font-sans mt-0.5 max-w-[160px] leading-tight" title={v.rationale}>
+                            {v.rationale.length > 60 ? v.rationale.slice(0, 57) + '…' : v.rationale}
+                          </div>
+                        )}
+                      </div>
                       {variants.length > 2 && (
                         <button
                           onClick={() => onRemoveVariant(i)}
                           disabled={running}
-                          className="text-faint hover:text-danger normal-case"
+                          className="text-faint hover:text-danger normal-case shrink-0"
                           title="Remove variant"
                         >
                           ✕
