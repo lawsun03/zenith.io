@@ -174,12 +174,12 @@ class TestDeliveryFVG:
 
 class TestGradeAssignment:
     def test_grade_b_minus_when_momentum_weak(self):
-        """body_to_atr < 1.0 → B-, fails."""
+        """body_to_atr < 1.0 → weak momentum (0pts), score too low → F, fails."""
         g = grader_with_htf()
         sig = make_signal()
         disp = make_disp(body_to_atr="0.8")
         grade = g.score(sig, disp, active_fvgs=[])
-        assert grade.grade == "B-"
+        assert grade.grade == "F"
         assert grade.passes is False
         assert grade.momentum_quality == "weak"
 
@@ -200,7 +200,7 @@ class TestGradeAssignment:
         sig = make_signal(target="2350", rationale="NY AM: no structural target")
         disp = make_disp(body_to_atr="1.8")
         grade = g.score(sig, disp, active_fvgs=[])
-        assert grade.grade == "B"
+        assert grade.grade == "F"
         assert grade.passes is False
         assert grade.target_clear is False
 
@@ -213,7 +213,7 @@ class TestGradeAssignment:
         # Short signal → iFVG side = "bearish"
         overlapping = fvg("bearish", "2402", "2404")  # overlaps [2401,2403]
         grade = g.score(sig, disp, active_fvgs=[overlapping])
-        assert grade.grade == "B"
+        assert grade.grade == "F"
         assert grade.passes is False
         assert grade.fvg_singular is False
 
@@ -243,7 +243,7 @@ class TestGradeAssignment:
         assert grade.passes is True
 
     def test_grade_a_minus_when_wrong_premium_discount(self):
-        """Entry not in correct P/D → A- (passes; P/D is relaxed at A-)."""
+        """Entry not in correct P/D → pd=False (20pts lost); score 20 → D, passes."""
         g = SetupGrader()
         # Short entry 2395 below session mid 2402 → discount (wrong for short)
         g.update_htf_swings(highs=[Decimal("2420")], lows=[Decimal("2380")])
@@ -253,25 +253,28 @@ class TestGradeAssignment:
                           rationale="NY AM: HTF: 30min swing @ 2382")
         disp = make_disp(body_to_atr="1.8")
         grade = g.score(sig, disp, active_fvgs=[])
-        assert grade.grade == "A-"
+        assert grade.grade == "D"
         assert grade.passes is True
         assert grade.premium_discount_ok is False
 
     def test_grade_a_when_correct_pd_and_strong_momentum(self):
-        """Correct P/D + strong momentum → A."""
+        """Correct P/D + strong momentum, no fib/delivery/bpr → score 40 → C."""
         # Short: session [2390,2415] mid=2402.5; entry=2405 > mid → premium ✓
         # HTF swings: high=2420 above entry, low=2385 below → mid=2402.5; 2405 > 2402.5 ✓
+        # fib_ext≈0.7 (<1.0→0pts), pd=True(20pts), delivery=False(0pts),
+        # strong(15pts), bpr=False(0pts), target=True(5pts) → 40 → C
         g = grader_with_htf(sess_high="2415", sess_low="2390",
                              swing_highs=["2420"], swing_lows=["2385"])
         sig = make_signal(entry="2405", rationale="NY AM: HTF: 4h FVG @ 2395")
         disp = make_disp(body_to_atr="1.8", body_to_range="0.7")
         grade = g.score(sig, disp, active_fvgs=[])
-        assert grade.grade == "A"
+        assert grade.grade == "C"
         assert grade.passes is True
         assert grade.premium_discount_ok is True
 
     def test_grade_a_plus_with_delivery_fvg(self):
-        """Grade A + directional delivery FVG → A+."""
+        """Delivery FVG in P/D adds 20pts: score 60 → B."""
+        # fib_ext≈0.7(0pts)+pd=True(20pts)+delivery+pd(20pts)+strong(15pts)+bpr=False(0pts)+target(5pts)=60
         g = grader_with_htf(sess_high="2415", sess_low="2390",
                              swing_highs=["2420"], swing_lows=["2385"])
         # Add bearish 30min delivery FVG at sweep (2408) in premium (mid=2402.5)
@@ -280,11 +283,12 @@ class TestGradeAssignment:
                           rationale="NY AM: HTF: 4h FVG @ 2395")
         disp = make_disp(body_to_atr="1.8", body_to_range="0.7", atr="2.0")
         grade = g.score(sig, disp, active_fvgs=[])
-        assert grade.grade == "A+"
+        assert grade.grade == "B"
         assert grade.has_delivery_fvg is True
 
     def test_bpr_auto_a_plus_when_bpr_and_correct_pd(self):
-        """BPR confluence + correct P/D + recent sweep → A+ (Rule J)."""
+        """BPR confluence + correct P/D + decent momentum: score 42 → C."""
+        # fib_ext≈0.7(0pts)+pd=True(20pts)+delivery=False(0pts)+decent(7pts)+bpr(10pts)+target(5pts)=42
         g = grader_with_htf(sess_high="2415", sess_low="2390",
                              swing_highs=["2420"], swing_lows=["2385"])
         sig = make_signal(entry="2405", rationale="NY AM: HTF: 4h FVG @ 2395")
@@ -292,16 +296,16 @@ class TestGradeAssignment:
         # Opposite-side FVG = BPR
         opp = fvg("bullish", "2402", "2404")
         grade = g.score(sig, disp, active_fvgs=[opp], bars_since_sweep=5)
-        assert grade.grade == "A+"
+        assert grade.grade == "C"
         assert grade.bpr_confluence is True
 
     def test_no_recent_sweep_caps_at_b_without_delivery(self):
-        """bars_since_sweep > window AND no delivery FVG → cap at B (Rule A)."""
+        """bars_since_sweep > window AND no delivery FVG → passes=False (Rule A); score still computed → C."""
         g = grader_with_htf()
         sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395")
         disp = make_disp(body_to_atr="1.8")
         grade = g.score(sig, disp, active_fvgs=[], bars_since_sweep=15, sweep_window_bars=10)
-        assert grade.grade == "B"
+        assert grade.grade == "C"
         assert grade.passes is False
         assert grade.recent_sweep_ok is False
 
@@ -323,25 +327,28 @@ class TestGradeAssignment:
         assert grade.fib_displacement_ok is False
 
 
-_DOWNGRADE = {"A+": "A", "A": "A-", "A-": "B", "B": "B-", "B-": "B-"}
-
-
 class TestTargetClarityMode:
     """no-structural-target behavior is config-gated: reject (default) /
     penalty (downgrade one notch) / off (ignore)."""
 
-    def test_penalty_downgrades_instead_of_rejecting(self):
+    def test_penalty_mode_uses_score_threshold_not_letter_downgrade(self):
+        """Penalty mode: missing target doesn't reject (step-2) — it lowers score and may affect passes."""
         disp = make_disp()
-        # Baseline: clear target (== session low 2390) → normal grade.
+        # Baseline: clear target → target_clear=True, passes=True
         base = grader_with_htf().score(make_signal(target="2390"), disp, active_fvgs=[])
         assert base.target_clear is True
-        # Penalty mode: target far from all structure → downgraded, NOT hard-rejected.
+        assert base.passes is True
+
+        # Penalty mode: target far from all structure → not hard-rejected at step 2
         g = grader_with_htf()
         g._target_clarity_mode = "penalty"
         pen = g.score(make_signal(target="2300"), disp, active_fvgs=[])
         assert pen.target_clear is False
-        assert "no structural target" not in pen.reason       # not the step-2 hard reject
-        assert pen.grade == _DOWNGRADE[base.grade]            # exactly one notch below
+        assert "no structural target" not in pen.reason    # not the step-2 hard reject path
+        # Grade is NOT downgraded — it is score-derived (loses 5 target pts but letter unchanged)
+        assert pen.grade == base.grade
+        # passes reflects score >= 35 threshold (this setup scores 35 without target → still passes)
+        assert pen.passes is True
 
     def test_off_mode_ignores_missing_target(self):
         g = grader_with_htf()

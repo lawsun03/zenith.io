@@ -160,7 +160,7 @@ def test_reconstruct_trades_includes_grade():
         "realized_pnl_delta": "-0.74",
         "killzone": "NY AM",
         "order_id": "abc123",
-        "grade": "A+",
+        "grade": "A",
         "criteria": {"mom": True, "tgt": True, "fvg": True, "pd": True, "del": True},
     }
     exit_fill = {
@@ -176,7 +176,7 @@ def test_reconstruct_trades_includes_grade():
     }
     trades = _reconstruct_trades([entry, exit_fill])
     assert len(trades) == 1
-    assert trades[0]["grade"] == "A+"
+    assert trades[0]["grade"] == "A"
     assert trades[0]["criteria"] == {"mom": True, "tgt": True, "fvg": True, "pd": True, "del": True}
 
 
