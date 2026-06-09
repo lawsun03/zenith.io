@@ -111,3 +111,30 @@ class BrokerPosition:
     size: int                # mini-equivalent
     average_price: Decimal
     unrealized_pnl: Decimal
+
+
+@dataclass(frozen=True)
+class ExitCoverage:
+    """How well an open position is protected by working exchange orders.
+
+    Ground-truth snapshot used by the reconciler's exit-coverage monitor.
+    Sizes are summed across all working orders on the closing side, so the
+    check is robust to the partial-exit ladder (partial + final legs sum to
+    full size).
+    """
+
+    instrument: str
+    position_size: int      # absolute contracts open; 0 = flat
+    side: str               # "long" | "short" | "" when flat
+    avg_price: Decimal      # broker average entry; basis for emergency prices
+    covered_stop: int       # Σ size of working stop orders on the closing side
+    covered_target: int     # Σ size of working limit orders on the closing side
+
+    @property
+    def fully_covered(self) -> bool:
+        if self.position_size == 0:
+            return True
+        return (
+            self.covered_stop >= self.position_size
+            and self.covered_target >= self.position_size
+        )
