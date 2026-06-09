@@ -31,7 +31,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 from .pricing import (
     SIDE_BUY,
     SIDE_SELL,
@@ -44,6 +44,11 @@ from .protocol import BarHandler, EquityHandler, FillHandler
 
 log = logging.getLogger(__name__)
 
+# SDK OrderType codes: 1=Limit, 2=Market, 3=StopLimit, 4=Stop, 5=TrailingStop.
+# Any stop variant protects the downside; a plain limit is a take-profit.
+_STOP_ORDER_TYPES = frozenset({3, 4, 5})
+_LIMIT_ORDER_TYPE = 1
+_OPEN_ORDER_STATUS = 1  # SDK OrderStatus.OPEN
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -268,6 +273,104 @@ class TopstepXBroker:
                 unrealized_pnl=Decimal(str(p.get("unrealizedPnl") or 0)),
             ))
         return positions
+
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        self._require_connected()
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return ExitCoverage(
+                instrument=instrument, position_size=0, side="",
+                avg_price=Decimal("0"), covered_stop=0, covered_target=0,
+            )
+
+        # Closing side: a long is closed by SELL, a short by BUY. Working
+        # exit orders must be on that side to actually protect the position.
+        close_sdk_side = SIDE_SELL if pos.side == "long" else SIDE_BUY
+
+        suite = self._get_suite_for(instrument)
+        orders = await suite.orders.search_open_orders(
+            contract_id=suite.instrument_id
+        )
+
+        covered_stop = 0
+        covered_target = 0
+        for o in orders:
+            if getattr(o, "status", None) != _OPEN_ORDER_STATUS:
+                continue
+            if getattr(o, "side", None) != close_sdk_side:
+                continue
+            otype = getattr(o, "type", None)
+            osize = int(getattr(o, "size", 0) or 0)
+            if otype in _STOP_ORDER_TYPES:
+                covered_stop += osize
+            elif otype == _LIMIT_ORDER_TYPE:
+                covered_target += osize
+
+        return ExitCoverage(
+            instrument=instrument,
+            position_size=int(pos.size),
+            side=pos.side,
+            avg_price=pos.average_price,
+            covered_stop=covered_stop,
+            covered_target=covered_target,
+        )
+
+    async def _close_side_for(self, instrument: str) -> "int | None":
+        """SDK side that CLOSES the current position, or None if flat."""
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return None
+        return SIDE_SELL if pos.side == "long" else SIDE_BUY
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        self._require_connected()
+        close_sdk_side = await self._close_side_for(instrument)
+        if close_sdk_side is None:
+            log.info("place_protective_stop(%s): position flat — no-op", instrument)
+            return True
+        suite = self._get_suite_for(instrument)
+        oid = await self._place_stop(
+            close_sdk_side, size, price, self._get_account_id(), suite=suite
+        )
+        if oid is None:
+            log.error(
+                "place_protective_stop(%s): stop REJECTED size=%d price=%s",
+                instrument, size, price,
+            )
+            return False
+        log.error(
+            "EMERGENCY protective stop placed on %s: order=%s size=%d price=%s",
+            instrument, oid, size, price,
+        )
+        return True
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        self._require_connected()
+        close_sdk_side = await self._close_side_for(instrument)
+        if close_sdk_side is None:
+            log.info("place_protective_target(%s): position flat — no-op", instrument)
+            return True
+        suite = self._get_suite_for(instrument)
+        oid = await self._place_limit(
+            close_sdk_side, size, price, self._get_account_id(), suite=suite
+        )
+        if oid is None:
+            log.error(
+                "place_protective_target(%s): target REJECTED size=%d price=%s",
+                instrument, size, price,
+            )
+            return False
+        log.error(
+            "EMERGENCY protective target placed on %s: order=%s size=%d price=%s",
+            instrument, oid, size, price,
+        )
+        return True
 
     async def _raw_positions(self) -> list[dict]:
         """Call the positions API directly, tolerating extra fields the SDK rejects.
