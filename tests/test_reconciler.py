@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import BrokerPosition
+from app.broker.events import BrokerPosition, ExitCoverage
 from app.broker.paper import PaperBroker
 from app.execution.reconciler import (
     ReconcileReport,
@@ -570,3 +570,47 @@ async def test_failed_tick_does_not_kill_loop():
 
     # We should have made it past the failure.
     assert call_count >= 2
+
+
+# =====================================================================
+# Exit-coverage / naked-position detection
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_first_naked_tick_is_grace_no_action():
+    from unittest.mock import AsyncMock, MagicMock
+
+    pos = BrokerPosition(
+        instrument="MGC", side="long", size=2,
+        average_price=Decimal("2400.0"), unrealized_pnl=Decimal("0"),
+    )
+    # covered_stop=0: stop is missing; covered_target=2: target is present.
+    # fully_covered is False (stop missing).
+    cov = ExitCoverage("MGC", 2, "long", Decimal("2400.0"), covered_stop=0, covered_target=2)
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[pos])
+    broker.account_balance = AsyncMock(return_value=Decimal("50000"))
+    broker.exit_coverage = AsyncMock(return_value=cov)
+    broker.place_protective_stop = AsyncMock(return_value=True)
+    broker.place_protective_target = AsyncMock(return_value=True)
+    broker.flatten = AsyncMock(return_value=True)
+
+    risk = RiskState(config=fifty_k_combine())
+    risk.realized_balance = Decimal("50000")
+    risk.open_contracts = 2
+
+    rec = Reconciler(
+        broker=broker, risk_state=risk,
+        config=ReconcilerConfig(
+            grace_first_tick=False, grace_period_after_order_seconds=0,
+            naked_grace_seconds=15.0,
+            emergency_stop_distance={"MGC": Decimal("3.0")},
+            emergency_target_r=Decimal("2.0"),
+        ),
+    )
+    rec._first_tick_done = True
+    report = await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.flatten.assert_not_called()
+    assert "MGC" in rec._naked_since
+    assert report.drift_kind != "naked_position"

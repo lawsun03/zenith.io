@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
@@ -82,9 +82,10 @@ class ReconcileReport:
 
     # Did we take any action?
     drift_detected: bool
-    drift_kind: Optional[str]  # "contract_count" | "balance" | None
+    drift_kind: Optional[str]  # "contract_count" | "balance" | "naked_position" | None
     flattened: bool
     notes: str = ""
+    naked_instruments: list = field(default_factory=list)
 
 
 @dataclass
@@ -124,6 +125,17 @@ class ReconcilerConfig:
     # guard; this is the backstop when feed_is_healthy is unavailable.
     min_flat_after_drift_seconds: float = 120.0
 
+    # --- Exit-coverage monitor ---
+    # How long a naked position is tolerated before emergency remediation fires.
+    # First sighting → grace started (log + record timestamp, no action).
+    # Past this window → _remediate_naked() is called.
+    naked_grace_seconds: float = 15.0
+    # Per-instrument emergency stop distance in price points (instrument → Decimal).
+    # Used by _remediate_naked to place a protective stop at avg_price ± distance.
+    emergency_stop_distance: dict = field(default_factory=dict)
+    # Emergency target expressed as a multiple of the stop distance (R-multiple).
+    emergency_target_r: Decimal = Decimal("2.0")
+
 
 class Reconciler:
     """
@@ -162,6 +174,10 @@ class Reconciler:
 
         # Last report kept for dashboard inspection.
         self._last_report: Optional[ReconcileReport] = None
+
+        # Per-instrument timestamp of when a position was first seen naked.
+        # Drives the grace window before emergency remediation.
+        self._naked_since: dict[str, datetime] = {}
 
     # ------------------------------------------------------------------
     # Read-only views
@@ -395,6 +411,12 @@ class Reconciler:
             self._last_report = report
             return report
 
+        # ----- Exit-coverage: counts match, but is every contract protected? -----
+        naked_report = await self._check_exit_coverage(ts, broker_positions, broker_balance)
+        if naked_report is not None:
+            self._last_report = naked_report
+            return naked_report
+
         # ----- Balance drift: tolerated up to threshold. -----
         balance_delta = broker_balance - internal_balance
         if abs(balance_delta) > self.config.balance_tolerance:
@@ -558,6 +580,64 @@ class Reconciler:
             flattened=False,
             notes=f"balance delta {delta}, adopted broker truth (no lockout)",
         )
+
+    async def _check_exit_coverage(
+        self, ts: datetime, broker_positions: list, broker_balance: Decimal
+    ) -> "Optional[ReconcileReport]":
+        """For each open position, verify exchange exit coverage. Grace on first
+        sighting; remediate once past naked_grace_seconds. Returns a naked report
+        if any instrument was remediated this tick, else None."""
+        acted: list[str] = []
+        for p in broker_positions:
+            if p.size == 0:
+                continue
+            cov = await self.broker.exit_coverage(p.instrument)
+            if cov.fully_covered:
+                self._naked_since.pop(p.instrument, None)
+                continue
+            first = self._naked_since.get(p.instrument)
+            if first is None:
+                self._naked_since[p.instrument] = ts
+                log.warning(
+                    "Exit-coverage: %s NAKED (stop %d/%d, target %d/%d) — "
+                    "grace started (%.0fs).",
+                    p.instrument, cov.covered_stop, cov.position_size,
+                    cov.covered_target, cov.position_size,
+                    self.config.naked_grace_seconds,
+                )
+                continue
+            if (ts - first).total_seconds() < self.config.naked_grace_seconds:
+                continue
+            log.error(
+                "Exit-coverage: %s STILL NAKED past grace — remediating "
+                "(stop %d/%d, target %d/%d).",
+                p.instrument, cov.covered_stop, cov.position_size,
+                cov.covered_target, cov.position_size,
+            )
+            await self._remediate_naked(cov)
+            self._naked_since.pop(p.instrument, None)
+            acted.append(p.instrument)
+
+        if not acted:
+            return None
+        return ReconcileReport(
+            ts=ts,
+            broker_open_contracts=sum(
+                (p.size if p.side == "long" else -p.size) for p in broker_positions
+            ),
+            broker_balance=broker_balance,
+            internal_open_contracts=self.risk_state.open_contracts,
+            internal_balance=self.risk_state.realized_balance,
+            drift_detected=True,
+            drift_kind="naked_position",
+            flattened=False,
+            naked_instruments=acted,
+            notes=f"emergency exit re-attach for {acted}",
+        )
+
+    async def _remediate_naked(self, cov) -> None:
+        """Filled in the next task."""
+        return None
 
     async def _emergency_flatten(self) -> bool:
         """
