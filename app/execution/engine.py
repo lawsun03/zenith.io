@@ -110,8 +110,9 @@ class RejectInfo:
     stop: Decimal | None
     target: Decimal | None
     grade: str
-    killzone: str
-    rationale: str
+    score: int = 0
+    killzone: str = ""
+    rationale: str = ""
 
 
 @dataclass
@@ -170,6 +171,7 @@ class StrategyRunner:
                         reason="premature_liquidity", side="long",
                         entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
                         grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
                         killzone=(_ps.killzone if _ps else "") or "",
                         rationale=(_ps.rationale if _ps else "") or "",
                     )
@@ -186,6 +188,7 @@ class StrategyRunner:
                         reason="premature_liquidity", side="short",
                         entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
                         grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
                         killzone=(_ps.killzone if _ps else "") or "",
                         rationale=(_ps.rationale if _ps else "") or "",
                     )
@@ -218,6 +221,7 @@ class StrategyRunner:
                     entry=(_ps.entry if _ps else None), stop=(_ps.stop if _ps else None),
                     target=(_ps.target if _ps else None),
                     grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                    score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
                     killzone=(_ps.killzone if _ps else "") or "",
                     rationale=(_ps.rationale if _ps else "") or "",
                 )
@@ -261,6 +265,7 @@ class StrategyRunner:
                             reason=f"grader_{grade.grade}", side=candidate.side,
                             entry=candidate.entry, stop=candidate.stop,
                             target=candidate.target, grade=grade.grade,
+                            score=grade.score,
                             killzone=candidate.killzone or "",
                             rationale=candidate.rationale or "",
                         )
@@ -795,6 +800,26 @@ class ExecutionEngine:
 
     async def _act_on_signal(self, signal: Signal) -> OrderOutcome:
         """Run the pretrade gate and place if allowed. Caller holds the lock."""
+        # Opposite-side signal while holding a position: flatten first, then
+        # reverse. This MUST be checked before the pretrade gate. The gate only
+        # denies (MAX_CONTRACTS) when headroom is exhausted, but max_contracts
+        # (30) far exceeds the traded size, so the gate would Allow the opposing
+        # entry and stack a second, conflicting bracket on a netted position
+        # (2026-06-07 incident: long 5 + short 6 -> tangled net -1, orphan left
+        # open). Routing here restores the intended flatten-before-reverse flow.
+        if (
+            self.risk_state.open_contracts != 0
+            and _is_opposite_side(signal.side, self.risk_state.open_contracts)
+            and signal.instrument not in self._reversal_flatten_active
+        ):
+            log.info(
+                "Opposite-side signal while in position — flattening for reversal: %s",
+                signal.rationale,
+            )
+            self._pending_reversal[signal.instrument] = signal
+            asyncio.create_task(self._flatten_for_reversal(signal.instrument))
+            return OrderOutcome(placed=False, reason="reversal_pending")
+
         order = ProposedOrder(
             instrument=signal.instrument,
             side=signal.side,

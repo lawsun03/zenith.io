@@ -127,6 +127,7 @@ def _make_signal_journaler(
                 ts=datetime.now(timezone.utc).isoformat(),
                 instrument=signal.instrument, side=signal.side,
                 reason=outcome.reason or "", grade=(_g.grade if _g else ""),
+                score=(str(_g.score) if _g else ""),
                 entry=str(signal.entry), stop=str(signal.stop),
                 target=str(signal.target), killzone=signal.killzone or "",
                 rationale=signal.rationale or "", source="engine",
@@ -261,7 +262,7 @@ def _append_fill_csv(fill: Fill) -> None:
 
 _REJECTIONS_CSV = Path("trades/rejections.csv")
 _REJECTIONS_HEADERS = [
-    "ts", "instrument", "side", "reason", "grade",
+    "ts", "instrument", "side", "reason", "grade", "score",
     "entry", "stop", "target", "killzone", "rationale", "source",
 ]
 
@@ -274,11 +275,11 @@ def _daily_rejections_path() -> Path:
 
 def _append_rejection_csv(
     *, ts: str, instrument: str, side: str, reason: str, grade: str = "",
-    entry: str = "", stop: str = "", target: str = "", killzone: str = "",
-    rationale: str = "", source: str = "",
+    score: str = "", entry: str = "", stop: str = "", target: str = "",
+    killzone: str = "", rationale: str = "", source: str = "",
 ) -> None:
     """Append one rejected/missed setup. source = 'engine' (vp/bias deny) or 'runner'."""
-    row = [ts, instrument, side, reason, grade, entry, stop, target,
+    row = [ts, instrument, side, reason, grade, score, entry, stop, target,
            killzone, rationale, source]
     for path in (_REJECTIONS_CSV, _daily_rejections_path()):
         try:
@@ -333,6 +334,7 @@ def _make_reject_journaler(excursion_tracker=None):
         _append_rejection_csv(
             ts=datetime.now(timezone.utc).isoformat(), instrument=instrument,
             side=info.side, reason=info.reason, grade=info.grade,
+            score=str(info.score),
             entry=str(info.entry) if info.entry is not None else "",
             stop=str(info.stop) if info.stop is not None else "",
             target=str(info.target) if info.target is not None else "",
