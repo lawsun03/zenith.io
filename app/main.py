@@ -899,6 +899,9 @@ async def _async_main() -> int:
             balance_tolerance=Decimal("50"),
             grace_first_tick=True,
             grace_period_after_order_seconds=60.0,
+            naked_grace_seconds=bot_cfg.naked_grace_seconds,
+            emergency_stop_distance=dict(bot_cfg.emergency_stop_distance),
+            emergency_target_r=bot_cfg.emergency_target_r,
         ),
         notifier=notifier,
     )

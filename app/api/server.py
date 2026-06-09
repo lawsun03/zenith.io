@@ -478,6 +478,9 @@ def build_app(
             "signal_instrument": cfg.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
+            "emergency_stop_distance": {k: float(v) for k, v in cfg.emergency_stop_distance.items()},
+            "emergency_target_r": float(cfg.emergency_target_r),
+            "naked_grace_seconds": cfg.naked_grace_seconds,
         })
 
     @app.patch("/api/config")
@@ -504,6 +507,11 @@ def build_app(
                 await _htf_rebuild(body)
             except Exception:
                 log.exception("PATCH /api/config: HTF tracker rebuild failed")
+        # Hot-apply exit-coverage settings to the running reconciler so naked
+        # remediation distances/grace change without a restart (Rule 10).
+        reconciler.config.naked_grace_seconds = body.naked_grace_seconds
+        reconciler.config.emergency_stop_distance = dict(body.emergency_stop_distance)
+        reconciler.config.emergency_target_r = body.emergency_target_r
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
@@ -518,6 +526,9 @@ def build_app(
             "signal_instrument": body.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
+            "emergency_stop_distance": {k: float(v) for k, v in body.emergency_stop_distance.items()},
+            "emergency_target_r": float(body.emergency_target_r),
+            "naked_grace_seconds": body.naked_grace_seconds,
         })
 
     @app.get("/api/accounts")

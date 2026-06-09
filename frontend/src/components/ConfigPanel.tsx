@@ -237,6 +237,11 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
+      emergency_stop_distance_MGC: String(config.emergency_stop_distance?.MGC ?? 3.0),
+      emergency_stop_distance_MNQ: String(config.emergency_stop_distance?.MNQ ?? 40.0),
+      emergency_stop_distance_MES: String(config.emergency_stop_distance?.MES ?? 5.0),
+      emergency_target_r:   String(config.emergency_target_r ?? 2.0),
+      naked_grace_seconds:  String(config.naked_grace_seconds ?? 15.0),
       signal_instrument:    config.signal_instrument ?? '',
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
@@ -307,6 +312,13 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
+      emergency_stop_distance: {
+        MGC: parseFloat(form.emergency_stop_distance_MGC) || 3.0,
+        MNQ: parseFloat(form.emergency_stop_distance_MNQ) || 40.0,
+        MES: parseFloat(form.emergency_stop_distance_MES) || 5.0,
+      },
+      emergency_target_r:   parseFloat(form.emergency_target_r) || 2.0,
+      naked_grace_seconds:  parseFloat(form.naked_grace_seconds) || 15.0,
       enabled_killzones:    enabledKillzones,
       signal_instrument:    form.signal_instrument?.trim().toUpperCase() || null,
       strategy,
@@ -534,6 +546,64 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                       />
                       <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Take half off at this R-multiple then move the stop to break-even. For 1-contract entries, the scale-out is skipped but the stop still moves to break-even at this level. 0 disables. Hot-applied — affects the next entry.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Naked Grace Period (s)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        step={1}
+                        value={form.naked_grace_seconds ?? '15'}
+                        onChange={e => set('naked_grace_seconds', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Seconds a position may be naked (no stop/target) before the reconciler places emergency protection. Suppresses false alarms during the fill→bracket race. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Emergency Target R
+                      </label>
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={10}
+                        step={0.5}
+                        value={form.emergency_target_r ?? '2.0'}
+                        onChange={e => set('emergency_target_r', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Target distance for an emergency bracket = this R × emergency stop distance. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                        Emergency Stop Distance (pts)
+                      </label>
+                      <div className="space-y-2">
+                        {(['MGC', 'MNQ', 'MES'] as const).map(sym => (
+                          <div key={sym} className="flex items-center gap-2">
+                            <span className="text-[10px] text-dim font-mono w-10">{sym}</span>
+                            <input
+                              type="number"
+                              min={0.1}
+                              max={200}
+                              step={0.1}
+                              value={form[`emergency_stop_distance_${sym}`] ?? ''}
+                              onChange={e => set(`emergency_stop_distance_${sym}`, e.target.value)}
+                              className="flex-1 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Price points from broker avg entry for an emergency re-attached stop, per instrument. Hot-applied.
                       </p>
                     </div>
                   </>

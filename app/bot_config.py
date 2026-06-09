@@ -130,5 +130,8 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "partial_profit_r": _conv(config.partial_profit_r),
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
+        "emergency_stop_distance": {k: _conv(v) for k, v in config.emergency_stop_distance.items()},
+        "emergency_target_r": _conv(config.emergency_target_r),
+        "naked_grace_seconds": config.naked_grace_seconds,
     }
     path.write_text(json.dumps(data, indent=2))

@@ -55,6 +55,9 @@ export interface BotConfig {
   contracts: number
   risk_per_trade_pct: number
   partial_profit_r: number
+  emergency_stop_distance?: Record<string, number>
+  emergency_target_r?: number
+  naked_grace_seconds?: number
   mode?: string
   strategy: StrategyConfig
 }
