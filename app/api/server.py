@@ -1570,5 +1570,6 @@ def _serialize_report(report: Any) -> dict:
         "drift_detected": report.drift_detected,
         "drift_kind": report.drift_kind,
         "flattened": report.flattened,
+        "naked_instruments": getattr(report, "naked_instruments", []),
         "notes": report.notes,
     })
