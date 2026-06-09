@@ -125,7 +125,7 @@ class ExitCoverage:
 
     instrument: str
     position_size: int      # absolute contracts open; 0 = flat
-    side: str               # "long" | "short" | "" when flat
+    side: Literal["long", "short", ""]  # "long" | "short" | "" when flat
     avg_price: Decimal      # broker average entry; basis for emergency prices
     covered_stop: int       # Σ size of working stop orders on the closing side
     covered_target: int     # Σ size of working limit orders on the closing side

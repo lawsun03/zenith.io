@@ -79,7 +79,7 @@ class Broker(Protocol):
     ) -> bool:
         """Place a plain protective limit (take-profit) on the closing side
         of the current position at `price`, sized `size`. Returns True on
-        success. Emergency use only — not registered in the state machine."""
+        success. Emergency use only — NOT registered in the state machine."""
         ...
 
     # ------------------------------------------------------------------
