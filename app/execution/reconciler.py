@@ -85,7 +85,7 @@ class ReconcileReport:
     drift_kind: Optional[str]  # "contract_count" | "balance" | "naked_position" | None
     flattened: bool
     notes: str = ""
-    naked_instruments: list = field(default_factory=list)
+    naked_instruments: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -132,7 +132,7 @@ class ReconcilerConfig:
     naked_grace_seconds: float = 15.0
     # Per-instrument emergency stop distance in price points (instrument → Decimal).
     # Used by _remediate_naked to place a protective stop at avg_price ± distance.
-    emergency_stop_distance: dict = field(default_factory=dict)
+    emergency_stop_distance: dict[str, Decimal] = field(default_factory=dict)
     # Emergency target expressed as a multiple of the stop distance (R-multiple).
     emergency_target_r: Decimal = Decimal("2.0")
 
@@ -586,7 +586,10 @@ class Reconciler:
     ) -> "Optional[ReconcileReport]":
         """For each open position, verify exchange exit coverage. Grace on first
         sighting; remediate once past naked_grace_seconds. Returns a naked report
-        if any instrument was remediated this tick, else None."""
+        if any instrument was remediated this tick, else None.
+
+        Ticks within the grace window are silent — no action is taken until
+        naked_grace_seconds has elapsed since first sighting."""
         acted: list[str] = []
         for p in broker_positions:
             if p.size == 0:
@@ -617,6 +620,11 @@ class Reconciler:
             await self._remediate_naked(cov)
             self._naked_since.pop(p.instrument, None)
             acted.append(p.instrument)
+
+        # Prune naked-state for instruments no longer open (position closed) so a
+        # stale timestamp can't skip the grace window on a future re-entry.
+        seen = {p.instrument for p in broker_positions if p.size > 0}
+        self._naked_since = {k: v for k, v in self._naked_since.items() if k in seen}
 
         if not acted:
             return None

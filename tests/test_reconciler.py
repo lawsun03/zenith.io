@@ -614,3 +614,30 @@ async def test_first_naked_tick_is_grace_no_action():
     broker.flatten.assert_not_called()
     assert "MGC" in rec._naked_since
     assert report.drift_kind != "naked_position"
+
+
+@pytest.mark.asyncio
+async def test_naked_since_pruned_when_position_closes():
+    from app.broker.events import BrokerPosition, ExitCoverage
+    from app.execution.reconciler import Reconciler, ReconcilerConfig
+    from app.risk.state import RiskState
+    from app.risk.config import fifty_k_combine
+    from unittest.mock import AsyncMock, MagicMock
+
+    broker = MagicMock()
+    broker.account_balance = AsyncMock(return_value=Decimal("50000"))
+    broker.exit_coverage = AsyncMock(return_value=ExitCoverage("MGC", 2, "long", Decimal("2400.0"), 0, 2))
+    risk = RiskState(config=fifty_k_combine())
+    risk.realized_balance = Decimal("50000")
+
+    rec = Reconciler(broker=broker, risk_state=risk,
+                     config=ReconcilerConfig(grace_first_tick=False, grace_period_after_order_seconds=0,
+                                             naked_grace_seconds=15.0))
+    rec._first_tick_done = True
+    # Seed a stale naked timestamp, then tick with NO open positions.
+    from datetime import datetime, timezone
+    rec._naked_since["MGC"] = datetime.now(timezone.utc)
+    broker.get_positions = AsyncMock(return_value=[])
+    risk.open_contracts = 0
+    await rec.tick()
+    assert "MGC" not in rec._naked_since, "stale naked entry must be pruned when position is gone"
