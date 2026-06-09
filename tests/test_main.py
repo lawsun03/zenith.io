@@ -158,7 +158,7 @@ def test_pre_place_captures_grade_into_meta(monkeypatch):
     from types import SimpleNamespace
     from app.journaling import _make_pre_place, _pending_signal_meta
     _pending_signal_meta.clear()
-    grade = SimpleNamespace(grade="A", reason="All: grade A - momentum=strong, P/D=ok")
+    grade = SimpleNamespace(grade="A", reason="All: grade A - momentum=strong, P/D=ok", score=87)
     signal = SimpleNamespace(
         instrument="MGC", side="long", entry=Decimal("4556.4"),
         stop=Decimal("4555.5"), target=Decimal("4561.0"), killzone="All",
@@ -171,6 +171,7 @@ def test_pre_place_captures_grade_into_meta(monkeypatch):
     meta = _pending_signal_meta["MGC"]
     assert meta["grade"] == "A"
     assert meta["grade_reason"] == "All: grade A - momentum=strong, P/D=ok"
+    assert meta["score"] == "87"
 
 
 def test_append_rejection_csv_writes_row(tmp_path: Path, monkeypatch):

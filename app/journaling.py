@@ -65,6 +65,7 @@ def _make_pre_place(config_path: Path | None = None):
             "vp_enabled":        str(cfg_snap.strategy.vp_enabled),
             "grade":             signal.setup_grade.grade if signal.setup_grade else "",
             "grade_reason":      signal.setup_grade.reason if signal.setup_grade else "",
+            "score":             str(signal.setup_grade.score) if signal.setup_grade else "",
         }
 
     return pre_place
@@ -157,7 +158,7 @@ _TRADES_HEADERS = [
     "contracts", "entry_mode", "r_multiple", "stop_buffer",
     "body_atr_multiple", "vp_enabled",
     # Grade + execution quality (ENTRY rows)
-    "grade", "grade_reason", "slippage",
+    "grade", "grade_reason", "score", "slippage",
 ]
 
 # Keyed by instrument (written in on_pre_place, before HTTP round-trip) then
@@ -238,6 +239,7 @@ def _append_fill_csv(fill: Fill) -> None:
         # Grade + slippage
         meta.get("grade", ""),
         meta.get("grade_reason", ""),
+        meta.get("score", ""),
         _entry_slippage(fill, meta),
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
