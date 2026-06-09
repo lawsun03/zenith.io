@@ -140,7 +140,7 @@ export interface VpProfile {
 
 export interface StrategyStatePayload {
   instrument: string
-  grade?: string                  // "A+" | "A" | "A-" | "B" | "B-"
+  grade?: string                  // "A" | "B" | "C" | "D" | "F"
   passes?: boolean
   has_delivery_fvg?: boolean
   delivery_fvg_side?: string | null

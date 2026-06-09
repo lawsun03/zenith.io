@@ -65,7 +65,7 @@ interface Trade {
   criteria?: GradeCriteria
 }
 
-const GRADE_TIERS = ['A+', 'A', 'A-', 'B', 'B-'] as const
+const GRADE_TIERS = ['A', 'B', 'C', 'D', 'F'] as const
 type GradeTier = typeof GRADE_TIERS[number]
 
 const CRITERIA_KEYS: Array<keyof GradeCriteria> = ['mom', 'tgt', 'fvg', 'pd', 'del']
@@ -609,11 +609,11 @@ export function BacktestsPage() {
   }
 
   const GRADE_STYLES: Record<string, { color: string; badge: string }> = {
-    'A+': { color: 'ring-1 ring-accent text-accent bg-accent/10',       badge: 'bg-accent text-bg' },
-    'A':  { color: 'ring-1 ring-accent/60 text-accent/80 bg-accent/5',  badge: 'bg-accent/70 text-bg' },
-    'A-': { color: 'ring-1 ring-warn/60 text-warn bg-warn/5',           badge: 'bg-warn text-bg' },
-    'B':  { color: 'ring-1 ring-warn/30 text-warn/60 bg-warn/5',        badge: 'bg-warn/60 text-bg' },
-    'B-': { color: 'ring-1 ring-danger/40 text-danger/70 bg-danger/5',  badge: 'bg-danger/70 text-bg' },
+    'A': { color: 'ring-1 ring-accent text-accent bg-accent/10',        badge: 'bg-accent text-bg' },
+    'B': { color: 'ring-1 ring-accent/60 text-accent/80 bg-accent/5',   badge: 'bg-accent/70 text-bg' },
+    'C': { color: 'ring-1 ring-warn/60 text-warn bg-warn/5',            badge: 'bg-warn text-bg' },
+    'D': { color: 'ring-1 ring-danger/50 text-danger/70 bg-danger/5',   badge: 'bg-danger/60 text-bg' },
+    'F': { color: 'ring-1 ring-danger/70 text-danger bg-danger/10',     badge: 'bg-danger text-bg' },
   }
   function gradeColor(g: string): string {
     return GRADE_STYLES[g]?.color ?? 'ring-1 ring-border text-dim'
