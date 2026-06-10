@@ -213,10 +213,21 @@ class PaperBroker:
         order_id = f"PAPER-{self._next_order_id}"
         self._next_order_id += 1
 
-        # Apply market-order slippage: shift entry price against the trader.
+        # Market-order semantics: fill at the current market (last bar close),
+        # NOT at the signal's entry price — stale iFVG signals carry entries far
+        # off-market and used to "fill" there, then instantly "win" (2026-06-10
+        # parity post-mortem). Falls back to `entry` before any bar is seen.
+        market = self._last_bar_close.get(instrument, entry)
+
+        # Apply market-order slippage: shift fill price against the trader.
         tick = TICK_SIZE.get(instrument, Decimal("0.10"))
         slip = tick * self._slippage_ticks_market
-        slipped_entry = entry + slip if side == "long" else entry - slip
+        slipped_entry = market + slip if side == "long" else market - slip
+
+        # Re-anchor stop/target as signal-relative offsets from the actual fill,
+        # matching the live broker's _place_bracket_after_fill (fill + offset).
+        stop = slipped_entry + (stop - entry)
+        target = slipped_entry + (target - entry)
 
         commission = self._commission_for(instrument)
 

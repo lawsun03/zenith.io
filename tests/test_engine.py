@@ -265,9 +265,10 @@ async def test_full_replay_short_signal_to_target_hit():
     assert captured_outcomes[0].placed is True
     assert captured_outcomes[0].reason == "allowed"
 
-    # We're SHORT now. Feed a bar that hits the target.
-    sig = captured_signals[0]
-    target = sig.target
+    # We're SHORT now. Feed a bar that hits the target. The broker fills at
+    # market (last close) and re-anchors the bracket to the fill, so read the
+    # actual placed target rather than the signal's.
+    target = Decimal(str(broker.open_brackets()[0]["target"]))
     # Bar that prints below target → take-profit fills.
     target_hit_bar = bar(
         in_ny_am(len(SHORT_SIGNAL_BARS)),

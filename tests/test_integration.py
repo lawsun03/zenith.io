@@ -149,6 +149,14 @@ async def test_losing_streak_triggers_dll_lockout():
 
     ts = base_ts()
     for i in range(5):
+        # The broker fills entries at the current market (last bar close), so
+        # put the market at 2400 before each placement.
+        await broker.inject_bar(make_bar(
+            ts + timedelta(minutes=2 * i),
+            "2400", "2400.5", "2399", "2400",
+        ))
+        await asyncio.sleep(0)
+
         # 20-point stop on /MGC = $200 loss per trade.
         order = ProposedOrder(
             instrument="MGC",
@@ -174,7 +182,7 @@ async def test_losing_streak_triggers_dll_lockout():
         await asyncio.sleep(0)
 
         bar = make_bar(
-            ts + timedelta(minutes=i),
+            ts + timedelta(minutes=2 * i + 1),
             "2400", "2400.5", "2378", "2380",
         )
         await broker.inject_bar(bar)
