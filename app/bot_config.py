@@ -101,6 +101,8 @@ class BotConfig(BaseModel):
     )  # price points from broker avg entry for an emergency re-attached stop
     emergency_target_r: Decimal = Decimal("2.0")   # target dist = R × stop dist
     naked_grace_seconds: float = 15.0              # suppress fill→bracket race
+    commission_per_contract: float = 0.0           # deducted from realized P&L on every fill (per side)
+    max_contracts_override: int | None = None     # hard cap on risk-sized contracts (None = use account limit)
 
 
 def load_bot_config(path: Path) -> BotConfig:
@@ -133,5 +135,6 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "emergency_stop_distance": {k: _conv(v) for k, v in config.emergency_stop_distance.items()},
         "emergency_target_r": _conv(config.emergency_target_r),
         "naked_grace_seconds": config.naked_grace_seconds,
+        "max_contracts_override": config.max_contracts_override,
     }
     path.write_text(json.dumps(data, indent=2))

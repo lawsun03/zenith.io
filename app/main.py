@@ -149,17 +149,50 @@ _CT = ZoneInfo("America/Chicago")
 HTF_REFRESH_SECONDS = 60  # 4h/30min structure barely moves intraday; 60s is ample
 
 
-async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Decimal]:
+def _daily_pnl_from_csv(session_start: "datetime") -> Decimal:
     """
-    Authenticate and return (balance, resolved_account_name, session_daily_pnl).
+    Fallback: derive session P&L from the local trades CSV when the TopstepX
+    API call fails. Reads EXIT rows whose timestamp falls within the session window.
+    """
+    import csv as _csv
+    from pathlib import Path as _Path
+    total = Decimal("0")
+    csv_path = _Path("trades/trades.csv")
+    if not csv_path.exists():
+        return total
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as fh:
+            for row in _csv.DictReader(fh):
+                if row.get("type") != "EXIT":
+                    continue
+                try:
+                    ts = datetime.fromisoformat(row["ts"])
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts >= session_start:
+                        total += Decimal(str(row.get("realized_pnl") or "0"))
+                except Exception:
+                    continue
+        log.info("Daily P&L bootstrapped from CSV: $%s", total)
+    except Exception as e:
+        log.warning("CSV daily P&L fallback failed: %s", e)
+    return total
+
+
+async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Decimal, int]:
+    """
+    Authenticate and return (balance, resolved_account_name, session_daily_pnl, open_contracts).
 
     session_daily_pnl is the sum of realized P&L from all closed trades since
     the start of the current Topstep trading session (5 PM CT). This lets the
     bot pick up the correct daily P&L if it restarts mid-session rather than
     resetting to $0 and making the DLL gate too lenient.
 
-    If the trade-search call fails (endpoint unavailable, auth issue, etc.)
-    we fall back to $0 and log a warning — same as the old behavior.
+    open_contracts is the net signed position size at the time of the call
+    (positive = long, negative = short). Bootstrapped so a mid-session restart
+    doesn't zero out the position count and confuse the reconciler.
+
+    If either fetch fails we fall back to safe defaults and log a warning.
     """
     from project_x_py import ProjectX  # type: ignore
 
@@ -197,12 +230,12 @@ async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Dec
                         "Available accounts: %s",
                         account_name, [a.name for a in accounts],
                     )
-                    return Decimal("50000"), "", Decimal("0")
+                    return Decimal("50000"), "", Decimal("0"), 0
         else:
             account = next((a for a in accounts if a.canTrade), None)
 
         if account is None:
-            return Decimal("50000"), "", Decimal("0")
+            return Decimal("50000"), "", Decimal("0"), 0
 
         balance = Decimal(str(account.balance))
         name    = account.name
@@ -227,11 +260,31 @@ async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Dec
             )
         except Exception:
             log.warning(
-                "Could not fetch session trades for daily P&L bootstrap — starting at $0. "
-                "DLL gate will be correct only after the first fill this session."
+                "Could not fetch session trades for daily P&L bootstrap — falling back to CSV."
+            )
+            daily_pnl = _daily_pnl_from_csv(session_start)
+
+        # Bootstrap open contracts from live positions so a mid-session restart
+        # doesn't zero out the position count.
+        open_contracts = 0
+        try:
+            positions = await client.search_open_positions(account_id=account.id)
+            for p in positions:
+                if p.type == 1:    # LONG
+                    open_contracts += p.size
+                elif p.type == 2:  # SHORT
+                    open_contracts -= p.size
+            log.info(
+                "Open contracts bootstrapped from %d position(s): %d",
+                len(positions), open_contracts,
+            )
+        except Exception:
+            log.warning(
+                "Could not fetch open positions for bootstrap — starting at 0. "
+                "open_contracts will be correct after the first fill this session."
             )
 
-    return balance, name, daily_pnl
+    return balance, name, daily_pnl, open_contracts
 
 
 async def _build_broker(cfg: AppConfig) -> Broker:
@@ -808,7 +861,7 @@ async def _async_main() -> int:
 
     if cfg.mode == "live":
         log.info("Fetching live account state...")
-        live_balance, live_account, live_daily_pnl = await _fetch_live_state(bot_cfg.account_name)
+        live_balance, live_account, live_daily_pnl, live_open_contracts = await _fetch_live_state(bot_cfg.account_name)
         # If _fetch_live_state fell back to a different account (stale config),
         # push the resolved name into the broker so subscribe() authenticates correctly.
         if live_account and hasattr(broker, '_account_name') and broker._account_name != live_account:
@@ -827,6 +880,7 @@ async def _async_main() -> int:
         live_balance = risk_cfg.starting_balance
         live_account = ""
         live_daily_pnl = Decimal("0")
+        live_open_contracts = 0
 
     risk_state = RiskState(config=risk_cfg)
 
@@ -835,8 +889,10 @@ async def _async_main() -> int:
         risk_state.realized_balance = live_balance
         risk_state.equity_high_water = live_balance
         risk_state._current_equity = live_balance
-        # Bootstrap daily P&L so a mid-session restart doesn't reset the DLL gate.
+        # Bootstrap daily P&L and open position count so a mid-session restart
+        # doesn't reset the DLL gate or lose track of open contracts.
         risk_state.daily_pnl = live_daily_pnl
+        risk_state.open_contracts = live_open_contracts
     instruments_list = bot_cfg.instruments if bot_cfg.instruments else [cfg.instrument]
     if len(instruments_list) > 1:
         log.info("Multi-symbol mode: %d instruments: %s", len(instruments_list), instruments_list)
@@ -921,6 +977,8 @@ async def _async_main() -> int:
         contracts=bot_cfg.contracts,
         risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
         strategy_cfg=bot_cfg.strategy,
+        commission_per_contract=Decimal(str(bot_cfg.commission_per_contract)),
+        max_contracts_override=bot_cfg.max_contracts_override,
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))

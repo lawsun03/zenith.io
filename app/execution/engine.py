@@ -403,6 +403,8 @@ class ExecutionEngine:
         contracts: int = 1,
         risk_per_trade_pct: Decimal = Decimal("0"),
         strategy_cfg: "StrategyParams | None" = None,
+        commission_per_contract: Decimal = Decimal("0"),
+        max_contracts_override: int | None = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -418,6 +420,8 @@ class ExecutionEngine:
         self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
         self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
         self.strategy_cfg = strategy_cfg
+        self.commission_per_contract = commission_per_contract  # deducted per fill side; hot-applied
+        self.max_contracts_override = max_contracts_override  # None = use account-level cap; hot-applied
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
@@ -644,8 +648,9 @@ class ExecutionEngine:
         if fill.is_entry:
             # Entry confirmed — TP1 premature-liquidity watch is no longer needed.
             self._pending_entry_tp1.pop(fill.instrument, None)
+        commission = self.commission_per_contract * fill.size if self.commission_per_contract else Decimal("0")
         self.risk_state.record_fill(
-            realized_pnl_delta=fill.realized_pnl_delta,
+            realized_pnl_delta=fill.realized_pnl_delta - commission,
             contracts_delta=fill.contracts_delta,
             ts=fill.ts,
         )
@@ -785,9 +790,15 @@ class ExecutionEngine:
             return self.contracts  # degenerate signal; fall back rather than divide by zero
 
         pv = _point_value(signal.instrument)
+        account_max = self.risk_state.config.max_contracts
+        effective_max = (
+            min(account_max, self.max_contracts_override)
+            if self.max_contracts_override is not None
+            else account_max
+        )
         size = risk_based_size(
             equity, self.risk_per_trade_pct, stop_distance, pv,
-            max_size=self.risk_state.config.max_contracts,
+            max_size=effective_max,
         )
         budget = equity * (self.risk_per_trade_pct / Decimal("100"))
         risk_per_contract = stop_distance * pv

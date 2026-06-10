@@ -60,6 +60,7 @@ class _OpenBracket:
     partial_target: Decimal | None = None  # price to take partial profit
     partial_size: int = 0                  # contracts to exit at partial_target
     partial_filled: bool = False           # True once the partial fill has been emitted
+    entry_time: float = 0.0               # Unix timestamp of fill, for chart marker
 
 
 # Per-instrument tick value. Verified against CME contract specs:
@@ -238,9 +239,10 @@ class PaperBroker:
             bracket.partial_target = pt
             bracket.partial_size = size // 2
 
+        fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
+        bracket.entry_time = fill_ts.timestamp()
         self._open[order_id] = bracket
 
-        fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
         await self._fanout(
             self._fill_handlers,
             Fill(
@@ -263,6 +265,22 @@ class PaperBroker:
             stop_order_id=f"{order_id}-S",
             target_order_id=f"{order_id}-T",
         )
+
+    def open_brackets(self) -> list[dict]:
+        """Return live open positions with entry/stop/target for the dashboard."""
+        result = []
+        for b in self._open.values():
+            result.append({
+                "instrument": b.instrument,
+                "side": b.side,
+                "size": b.size,
+                "entry": str(b.entry),
+                "stop": str(b.stop),
+                "target": str(b.target),
+                "partial": str(b.partial_target) if b.partial_target else None,
+                "entry_time": b.entry_time or None,
+            })
+        return result
 
     async def flatten(self, instrument: str) -> bool:
         """Close all open brackets in `instrument` at last bar close."""

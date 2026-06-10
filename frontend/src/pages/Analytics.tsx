@@ -52,6 +52,12 @@ export function AnalyticsPage() {
         <span className="text-xs tracking-[0.4em] text-dim">TOPSTEP-BOT · ANALYTICS</span>
         <div className="flex items-center gap-4">
           <a
+            href="/trade-analysis"
+            className="text-dim hover:text-ink text-xs tracking-widest uppercase"
+          >
+            Trade Analysis
+          </a>
+          <a
             href="/"
             className="text-dim hover:text-ink text-xs tracking-widest uppercase"
           >

@@ -26,7 +26,7 @@ interface Props {
 
 export function MetricCard({ label, primary, secondary, tone = 'neutral' }: Props) {
   return (
-    <div className="bg-panel backdrop-blur-md border border-border rounded-[10px] px-[18px] py-4 hover:border-border-hi transition-colors">
+    <div className="bg-panel border border-border px-[18px] py-4 hover:border-border-hi transition-colors">
       <div className="flex items-center gap-[7px] mb-[9px]">
         <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${DOT_CLS[tone]}`} />
         <span className="text-[9px] tracking-[0.1em] text-faint uppercase font-mono">{label}</span>

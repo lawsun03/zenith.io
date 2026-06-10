@@ -1,0 +1,90 @@
+{
+  "_about": "A/B take-profit variants derived from the Revelio Trading TJR backtest findings (https://www.youtube.com/watch?v=4uqeKO6KcJk). Each variant is an `overrides` dict keyed on the 7 TP A/B fields used by BacktestsPage.tsx (TP_AB_FIELDS). Only these keys differ between variants; every other strategy param is inherited from your base form (i.e. your live config). Paste the `overrides` of each into a variant slot, or load this file. partial_profit_r: 0 = disabled (single target). ifvg_tp1_fraction = fraction taken at TP1. ifvg_be_after_tp1 = move stop to breakeven after TP1. htf_target_enabled = use structural HTF target instead of fixed r_multiple. Compare variants on TOTAL REALIZED R, not hit rate.",
+  "tp_ab_fields": ["r_multiple", "partial_profit_r", "ifvg_tp1_fraction", "ifvg_be_after_tp1", "htf_target_enabled", "htf_target_min_r", "target_clarity_mode"],
+  "variants": [
+    {
+      "letter": "A",
+      "name": "Baseline 3-tier partials + BE (the structure under critique)",
+      "rationale": "Replicates the TJR-style partial-scaling-with-breakeven the video shows quietly damages payoff. This is your control.",
+      "overrides": {
+        "partial_profit_r": "1.0",
+        "ifvg_tp1_fraction": "0.5",
+        "ifvg_be_after_tp1": "true",
+        "r_multiple": "3.0",
+        "htf_target_enabled": "false",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    },
+    {
+      "letter": "B",
+      "name": "Single fixed target, no partials, no BE (full-size winners)",
+      "rationale": "Directly tests the video's core claim: letting the full position run to one target beats fractioning winners while losers stay full -1R. Pure single-R exit.",
+      "overrides": {
+        "partial_profit_r": "0",
+        "ifvg_tp1_fraction": "0",
+        "ifvg_be_after_tp1": "false",
+        "r_multiple": "2.0",
+        "htf_target_enabled": "false",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    },
+    {
+      "letter": "C",
+      "name": "Single fixed target 3R, no partials (higher fixed R)",
+      "rationale": "Tests whether a wider single target (no scaling) captures the runners the partial structure gives away. Same family as B but more aggressive R.",
+      "overrides": {
+        "partial_profit_r": "0",
+        "ifvg_tp1_fraction": "0",
+        "ifvg_be_after_tp1": "false",
+        "r_multiple": "3.0",
+        "htf_target_enabled": "false",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    },
+    {
+      "letter": "D",
+      "name": "Runner-weighted partials (small TP1, let most ride)",
+      "rationale": "If partials help psychologically, take only a SMALL fraction at TP1 and let the majority run, instead of equal thirds. Tests whether reducing the cut-fraction fixes the payoff asymmetry.",
+      "overrides": {
+        "partial_profit_r": "1.0",
+        "ifvg_tp1_fraction": "0.25",
+        "ifvg_be_after_tp1": "true",
+        "r_multiple": "3.0",
+        "htf_target_enabled": "false",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    },
+    {
+      "letter": "E",
+      "name": "Partials WITHOUT breakeven move",
+      "rationale": "Isolates the cost of the breakeven-after-TP1 rule. Same partials as A but the stop does NOT trail to BE, so winners aren't choked off by noise stop-outs.",
+      "overrides": {
+        "partial_profit_r": "1.0",
+        "ifvg_tp1_fraction": "0.5",
+        "ifvg_be_after_tp1": "false",
+        "r_multiple": "3.0",
+        "htf_target_enabled": "false",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    },
+    {
+      "letter": "F",
+      "name": "Structural HTF target, no fixed-R cap, no partials",
+      "rationale": "Tests target placement at real structure (HTF) vs a fixed R-multiple, with full-size position. The video argues fixed multi-tier targets are arbitrary; structural targets may capture the true move.",
+      "overrides": {
+        "partial_profit_r": "0",
+        "ifvg_tp1_fraction": "0",
+        "ifvg_be_after_tp1": "false",
+        "r_multiple": "2.0",
+        "htf_target_enabled": "true",
+        "htf_target_min_r": "2.0",
+        "target_clarity_mode": "off"
+      }
+    }
+  ]
+}

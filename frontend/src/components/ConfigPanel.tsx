@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BotConfig, StrategyConfig } from '../types'
+import { useConfirm } from '../hooks/useConfirm'
 
 interface AccountInfo {
   name: string
@@ -214,6 +215,7 @@ const KILLZONES: { name: string; label: string; window: string }[] = [
 ]
 
 export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError }: Props) {
+  const { confirm, modal } = useConfirm()
   const [form, setForm] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
   const [restarting, setRestarting] = useState(false)
@@ -222,6 +224,12 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const [reloadMsg, setReloadMsg] = useState<string | null>(null)
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [enabledKillzones, setEnabledKillzones] = useState<string[]>(['london', 'ny_am', 'ny_pm'])
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [presets, setPresets] = useState<{ name: string; saved_at: string }[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [savePresetName, setSavePresetName] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [savingPreset, setSavingPreset] = useState(false)
 
   const emergencyInstruments: string[] =
     config?.instruments && config.instruments.length > 0
@@ -250,6 +258,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       ),
       emergency_target_r:   String(config.emergency_target_r ?? 2.0),
       naked_grace_seconds:  String(config.naked_grace_seconds ?? 15.0),
+      commission_per_contract: String(config.commission_per_contract ?? 0.0),
       signal_instrument:    config.signal_instrument ?? '',
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
@@ -265,6 +274,39 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       .then(d => setAccounts(d.accounts ?? []))
       .catch(() => setAccounts([]))
   }, [isLive, isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/api/config/presets')
+      .then(r => r.json())
+      .then(setPresets)
+      .catch(() => setPresets([]))
+  }, [isOpen])
+
+  async function handleSavePreset() {
+    const name = savePresetName.trim()
+    if (!name) return
+    setSavingPreset(true)
+    try {
+      await fetch('/api/config/presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+      const updated = await fetch('/api/config/presets').then(r => r.json())
+      setPresets(updated)
+      setSavePresetName('')
+    } finally {
+      setSavingPreset(false)
+    }
+  }
+
+  async function handleApplyPreset(name: string) {
+    if (!await confirm(`Load preset "${name}"? This will overwrite current config.`, { title: 'Load Preset', variant: 'accent', confirmLabel: 'Load' })) return
+    await fetch(`/api/config/presets/${encodeURIComponent(name)}/apply`, { method: 'POST' })
+    onClose()
+  }
+
+  async function handleDeletePreset(name: string) {
+    await fetch(`/api/config/presets/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    setPresets(ps => ps.filter(p => p.name !== name))
+  }
 
   const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
 
@@ -307,6 +349,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                                   .split(',').map((s: string) => s.trim()).filter(Boolean),
       ifvg_news_blackout:       (form.ifvg_news_blackout || '')
                                   .split(',').map((s: string) => s.trim()).filter(Boolean),
+      ifvg_rule_f_enabled:      form.ifvg_rule_f_enabled !== 'false',
       ifvg_tp1_fraction:        form.ifvg_tp1_fraction                   || '0.5',
       ifvg_be_after_tp1:        form.ifvg_be_after_tp1 !== 'false',
     }
@@ -328,6 +371,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       ),
       emergency_target_r:   parseFloat(form.emergency_target_r) || 2.0,
       naked_grace_seconds:  parseFloat(form.naked_grace_seconds) || 15.0,
+      commission_per_contract: parseFloat(form.commission_per_contract) || 0.0,
       enabled_killzones:    enabledKillzones,
       signal_instrument:    form.signal_instrument?.trim().toUpperCase() || null,
       strategy,
@@ -380,6 +424,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
 
   return (
     <>
+      {modal}
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
       <aside className="fixed right-0 top-0 h-full w-[22rem] bg-panel border-l border-border z-50 flex flex-col">
         <header className="bg-panel border-b border-border px-5 py-4 flex items-center justify-between flex-shrink-0">
@@ -388,6 +433,45 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
         </header>
 
         <div className="flex-1 overflow-y-auto bg-panel p-5 space-y-7">
+          {/* Presets */}
+          <section>
+            <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-3">Presets</h3>
+            {presets.length === 0 && (
+              <p className="text-[10px] text-faint mb-3">No presets saved yet.</p>
+            )}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {presets.map(p => (
+                <div key={p.name} className="flex items-center gap-1 border border-border px-2 py-1 text-[10px]">
+                  <button
+                    onClick={() => handleApplyPreset(p.name)}
+                    className="text-dim hover:text-ink tracking-wide"
+                    title={`Saved ${new Date(p.saved_at).toLocaleDateString()}`}
+                  >
+                    {p.name}
+                  </button>
+                  <button onClick={() => handleDeletePreset(p.name)} className="text-faint hover:text-danger ml-1">×</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Preset name..."
+                value={savePresetName}
+                onChange={e => setSavePresetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                className="flex-1 bg-bg border border-border text-ink text-[10px] px-2 py-1.5 font-mono focus:outline-none focus:border-accent"
+              />
+              <button
+                onClick={handleSavePreset}
+                disabled={!savePresetName.trim() || savingPreset}
+                className="border border-border text-dim text-[10px] tracking-widest uppercase px-3 py-1.5 hover:text-ink disabled:opacity-40"
+              >
+                Save
+              </button>
+            </div>
+          </section>
+
           {isLive && (
             <section>
               <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-4">Account</h3>
@@ -572,6 +656,22 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                       />
                       <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Seconds a position may be naked (no stop/target) before the reconciler places emergency protection. Suppresses false alarms during the fill→bracket race. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Commission / Contract
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={form.commission_per_contract ?? '0'}
+                        onChange={e => set('commission_per_contract', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Cost per contract per fill side (entry + exit charged separately). Deducted from realized P&amp;L so daily P&amp;L matches broker net. Hot-applied.
                       </p>
                     </div>
                     <div>

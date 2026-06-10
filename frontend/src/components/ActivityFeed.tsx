@@ -35,7 +35,7 @@ export function ActivityFeed({ signals, fills, reconciles, activeSymbol }: Props
     : []
 
   return (
-    <div className="bg-panel backdrop-blur-xl border border-border rounded-[10px] flex flex-col overflow-hidden animate-fade-up">
+    <div className="bg-panel border border-border flex flex-col overflow-hidden animate-fade-up">
       <div className="px-4 pt-4 shrink-0">
         <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-faint mb-3">Activity</div>
         <div className="flex gap-4 border-b border-border">

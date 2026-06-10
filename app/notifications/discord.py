@@ -157,39 +157,27 @@ class DiscordNotifier:
 
     async def send_fill(self, fill: "Fill") -> None:
         """
-        Post an entry or exit fill. Provisional fills (early-arrival fanout
-        before order_id is registered) are skipped — a corrected fanout
-        with the real classification and P&L follows.
+        Post exit fills only. Entry fills are already covered by send_signal
+        (which fires when the order is placed), so posting a second message
+        when the entry confirms is redundant noise.
+        Provisional fills are skipped — the corrected fanout follows.
         """
-        if not self.enabled or getattr(fill, "is_provisional", False):
+        if not self.enabled or getattr(fill, "is_provisional", False) or fill.is_entry:
             return
-
-        if fill.is_entry:
-            side = fill.side.upper()
-            color = _COLOR_LONG if fill.side == "long" else _COLOR_SHORT
-            embed = {
-                "title": f"ENTRY {side} {fill.instrument} x{fill.size} @ {fill.fill_price}",
-                "color": color,
-                "fields": [
-                    {"name": "Order ID", "value": str(fill.broker_order_id or "—"), "inline": True},
-                ],
-                "timestamp": fill.ts.isoformat(),
-            }
-        else:
-            pnl = Decimal(fill.realized_pnl_delta)
-            sign = "+" if pnl > 0 else ("-" if pnl < 0 else "")
-            color = _COLOR_WIN if pnl > 0 else (_COLOR_LOSS if pnl < 0 else _COLOR_FLAT)
-            embed = {
-                "title": f"EXIT {fill.instrument} {sign}${abs(pnl)}",
-                "color": color,
-                "fields": [
-                    {"name": "Price",    "value": str(fill.fill_price), "inline": True},
-                    {"name": "Size",     "value": str(fill.size),       "inline": True},
-                    {"name": "P&L",      "value": f"{sign}${abs(pnl)}", "inline": True},
-                    {"name": "Order ID", "value": str(fill.broker_order_id or "—"), "inline": True},
-                ],
-                "timestamp": fill.ts.isoformat(),
-            }
+        pnl = Decimal(fill.realized_pnl_delta)
+        sign = "+" if pnl > 0 else ("-" if pnl < 0 else "")
+        color = _COLOR_WIN if pnl > 0 else (_COLOR_LOSS if pnl < 0 else _COLOR_FLAT)
+        embed = {
+            "title": f"EXIT {fill.instrument} {sign}${abs(pnl)}",
+            "color": color,
+            "fields": [
+                {"name": "Price",    "value": str(fill.fill_price), "inline": True},
+                {"name": "Size",     "value": str(fill.size),       "inline": True},
+                {"name": "P&L",      "value": f"{sign}${abs(pnl)}", "inline": True},
+                {"name": "Order ID", "value": str(fill.broker_order_id or "—"), "inline": True},
+            ],
+            "timestamp": fill.ts.isoformat(),
+        }
         await self._post({"embeds": [embed]})
 
     async def send_eod_summary(

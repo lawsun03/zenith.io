@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
+import { useConfirm } from '../hooks/useConfirm'
 
 interface KillzoneStat {
   trades: number
@@ -380,7 +381,15 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   htf_swing_timeframe:           '30min',
 }
 
-type DataSource = 'local' | 'databento'
+type DataSource = 'local' | 'databento' | 'static'
+
+// Standard 2-year Databento CSV files per instrument (constant reference dataset).
+const STATIC_BARS_MAP: Record<string, string> = {
+  MGC: 'bars/bars_MGC_GCv_2024_2026.csv',
+  MNQ: 'bars/bars_MNQ_NQv_2024_2026.csv',
+  MES: 'bars/bars_MES_ESv_2024_2026.csv',
+  MCL: 'bars/bars_MCL_CLv_2024_2026.csv',
+}
 
 // TP-system params varied in A/B comparison. partial_profit_r is a top-level
 // config field; the rest live in the strategy dict. Both are sent on the run
@@ -432,6 +441,7 @@ interface ABResult {
 const DEFAULT_AB_INSTRUMENTS = ['MES', 'MGC', 'MNQ']
 
 export function BacktestsPage() {
+  const { confirm, modal } = useConfirm()
   const [list, setList] = useState<BacktestSummary[]>([])
   const [selected, setSelected] = useState<BacktestDetail | null>(null)
   const [running, setRunning] = useState(false)
@@ -725,6 +735,8 @@ export function BacktestsPage() {
       if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
       if (dataSource === 'databento') {
         runBody.bars_path = `bars/bars_${symbol.toUpperCase()}.csv`
+      } else if (dataSource === 'static') {
+        runBody.bars_path = STATIC_BARS_MAP[symbol.toUpperCase()] ?? `bars/bars_${symbol.toUpperCase()}.csv`
       } else {
         runBody.start_date = startDate
         runBody.end_date = endDate
@@ -742,6 +754,8 @@ export function BacktestsPage() {
       }
       const rangeStr = dataSource === 'databento'
         ? `${bentoStartDate} → ${bentoEndDate}`
+        : dataSource === 'static'
+        ? '2024 → 2026 (static)'
         : `${startDate} → ${endDate}`
       setMsg(`Running (pid ${body.pid}) — ${timeframe}  ${rangeStr}`)
       const watch = setInterval(async () => {
@@ -980,7 +994,7 @@ export function BacktestsPage() {
   }
 
   async function clearUnbookmarked() {
-    if (!confirm('Delete all unbookmarked runs? This cannot be undone.')) return
+    if (!await confirm('Delete all unbookmarked runs? This cannot be undone.', { title: 'Clear Runs', variant: 'danger', confirmLabel: 'Delete' })) return
     const res = await fetch('/api/backtest/clear-unbookmarked', { method: 'DELETE' })
     const body = await res.json()
     if (body.ok) {
@@ -1159,9 +1173,9 @@ export function BacktestsPage() {
 
   async function applyConfig() {
     if (!selected) return
-    const ok = window.confirm(
-      'Apply this backtest’s strategy parameters to the live bot config and hot-reload the strategy?\n\n' +
-      'The bot keeps running; the strategy runner is rebuilt with the new params. Open positions, risk state, and broker connection are untouched. The strategy\'s internal state (ATR window, recent swings) resets — next bar rebuilds it.'
+    const ok = await confirm(
+      'Apply strategy params to live bot and hot-reload? The bot keeps running; open positions, risk state, and broker connection are untouched. Strategy internal state resets — next bar rebuilds it.',
+      { title: 'Apply Config', variant: 'warn', confirmLabel: 'Apply' }
     )
     if (!ok) return
     setMsg('Saving config and reloading strategy...')
@@ -1196,6 +1210,8 @@ export function BacktestsPage() {
   }
 
   return (
+    <>
+    {modal}
     <div className="min-h-screen bg-bg scanlines">
       <header className="border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-baseline gap-4">
@@ -1436,6 +1452,17 @@ export function BacktestsPage() {
               >
                 Databento
               </button>
+              <button
+                onClick={() => switchToDataSource('static')}
+                disabled={running}
+                className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
+                  dataSource === 'static'
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-border text-dim hover:text-ink'
+                }`}
+              >
+                2yr Static
+              </button>
               {bentoLoading && <span className="text-[10px] text-dim ml-2">probing…</span>}
               {dataSource === 'databento' && bentoMeta && !bentoLoading && (
                 <span className="text-[10px] text-dim ml-2 font-mono">
@@ -1449,6 +1476,13 @@ export function BacktestsPage() {
                 </span>
               )}
             </div>
+            {dataSource === 'static' && (
+              <div className="pt-2 border-t border-border/50">
+                <p className="text-[10px] font-mono text-dim">
+                  Uses pre-downloaded 2yr CSV · Jan 2024 – May 2026
+                </p>
+              </div>
+            )}
             {dataSource === 'databento' && (
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
                 <div>
@@ -1928,6 +1962,7 @@ export function BacktestsPage() {
         </div>
       </main>
     </div>
+    </>
   )
 }
 

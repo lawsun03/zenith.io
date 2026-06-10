@@ -4,21 +4,21 @@
 
 @layer base {
   html, body {
-    background-color: #070b14;
-    font-family: 'Barlow', sans-serif;
+    background-color: #070c1a;
+    font-family: 'Space Grotesk', sans-serif;
     font-weight: 400;
     font-feature-settings: "tnum" 1;
-    color: #e9f1ff;
+    color: #f0f0f0;
   }
 }
 
 @layer utilities {
-  /* danger hatch (used by LockoutBanner) — re-tinted to the new danger red */
+  /* danger hatch (used by LockoutBanner) */
   .hatch {
     background-image: repeating-linear-gradient(
       45deg,
-      rgba(248,113,113,0.08) 0,
-      rgba(248,113,113,0.08) 4px,
+      rgba(252,165,165,0.06) 0,
+      rgba(252,165,165,0.06) 4px,
       transparent 4px,
       transparent 12px
     );
@@ -26,19 +26,19 @@
 
   .feed::-webkit-scrollbar        { width: 3px; }
   .feed::-webkit-scrollbar-track  { background: transparent; }
-  .feed::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.08); border-radius: 2px; }
+  .feed::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.06); border-radius: 2px; }
 
   .slider-accent {
     -webkit-appearance: none; appearance: none;
-    height: 4px; background: rgba(37,99,235,0.15); border-radius: 2px; outline: none;
+    height: 4px; background: rgba(110,231,183,0.12); border-radius: 2px; outline: none;
   }
   .slider-accent::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 14px; height: 14px; border-radius: 50%;
-    background: #2563eb; cursor: pointer; border: 2px solid #070b14;
+    background: #6ee7b7; cursor: pointer; border: 2px solid #0f0f0f;
   }
   .slider-accent::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%;
-    background: #2563eb; cursor: pointer; border: 2px solid #070b14;
+    background: #6ee7b7; cursor: pointer; border: 2px solid #0f0f0f;
   }
 }

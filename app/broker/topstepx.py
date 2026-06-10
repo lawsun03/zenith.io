@@ -236,7 +236,24 @@ class TopstepXBroker:
 
     async def account_balance(self) -> Decimal:
         self._require_connected()
-        # SDK returns a float — convert at the boundary.
+        # account_info.balance is set once at auth time and never updated by the SDK.
+        # Fetch fresh from the REST API so equity reflects closed trades and account
+        # switches (via hot-apply) correctly.
+        try:
+            accounts = await self._suite.client.list_accounts()
+            # Prefer the currently-configured account name; fall back to the
+            # account the broker originally connected with.
+            target = self._account_name or (
+                self._suite.client.account_info.name
+                if self._suite.client.account_info else None
+            )
+            acct = next((a for a in accounts if a.name == target), None) if target else None
+            if acct is None and accounts:
+                acct = accounts[0]
+            if acct is not None:
+                return Decimal(str(acct.balance))
+        except Exception as e:
+            log.warning("account_balance REST refresh failed, falling back to cached: %s", e)
         return Decimal(str(self._suite.client.account_info.balance))
 
     async def get_positions(self) -> list[BrokerPosition]:
@@ -409,6 +426,45 @@ class TopstepXBroker:
             return info.id if info else None
         except Exception:
             return None
+
+    def open_brackets(self) -> list[dict]:
+        """Return live open positions with entry/stop/target for the dashboard."""
+        result = []
+        seen_pairs: set[int] = set()
+        for ctx in self._exit_pairs.values():
+            cid = id(ctx)
+            if cid in seen_pairs:
+                continue
+            seen_pairs.add(cid)
+            result.append({
+                "instrument": ctx["instrument"],
+                "side": ctx["entry_side"],
+                "size": ctx["size"],
+                "entry": str(ctx["entry_price"]),
+                "stop": str(ctx.get("stop_price", "")),
+                "target": str(ctx.get("target_price", "")),
+                "partial": None,
+                "entry_time": ctx.get("entry_time"),
+            })
+        seen_groups: set[int] = set()
+        for group in self._exit_groups.values():
+            gid = id(group)
+            if gid in seen_groups:
+                continue
+            seen_groups.add(gid)
+            total = group.get("partial_size", 0) + group.get("remaining_size", 0)
+            pp = group.get("partial_price")
+            result.append({
+                "instrument": group["instrument"],
+                "side": group["entry_side"],
+                "size": total,
+                "entry": str(group["entry_price"]),
+                "stop": str(group.get("stop_price", "")),
+                "target": str(group.get("target_price", "")),
+                "partial": str(pp) if pp else None,
+                "entry_time": group.get("entry_time"),
+            })
+        return result
 
     async def place_bracket(
         self,
@@ -740,6 +796,9 @@ class TopstepXBroker:
                 "entry_side": entry_side,
                 "size": size,
                 "instrument": bracket.get("instrument", ""),
+                "stop_price": stop,
+                "target_price": target,
+                "entry_time": bracket.get("entry_time"),
             }
             self._exit_pairs[stop_id]   = {**ctx, "paired_id": target_id}
             self._exit_pairs[target_id] = {**ctx, "paired_id": stop_id}
@@ -854,6 +913,10 @@ class TopstepXBroker:
             "close_sdk_side": close_sdk_side,
             "account_id": account_id,
             "be_after_tp1": bracket.get("be_after_tp1", True),
+            "stop_price": stop,
+            "target_price": target,
+            "partial_price": plan.partial_price if plan else None,
+            "entry_time": bracket.get("entry_time"),
         }
         for oid in (stop_id, partial_id, target_id):
             if oid is not None:
@@ -1601,6 +1664,7 @@ class TopstepXBroker:
                     # Definitive entry fill — bracket registered, place stop+target.
                     bracket_data = self._pending_brackets.pop(order_id)
                     bracket_data["fill_price"] = fill.fill_price
+                    bracket_data["entry_time"] = fill.ts.timestamp()
                     log.info(
                         "Entry fill confirmed order=%s @ %s — placing stop+target",
                         order_id, fill.fill_price,

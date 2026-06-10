@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
+import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
 import type { ChartCallbacks } from '../hooks/useStream'
+import type { Position } from '../types'
 
 const TF_SECONDS: Record<string, number> = {
   '1min': 60, '3min': 180, '5min': 300,
@@ -23,6 +24,7 @@ interface Props {
   callbacksRef: React.MutableRefObject<ChartCallbacks>
   timeframe?: string
   activeSymbol?: string
+  position?: Position | null
 }
 
 function isValidBar(b: { time: number; open: number; high: number; low: number; close: number }): boolean {
@@ -35,7 +37,7 @@ function isValidBar(b: { time: number; open: number; high: number; low: number; 
   )
 }
 
-export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
+export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastBarTimeRef = useRef<number | null>(null)
   const [countdown, setCountdown] = useState<string | null>(null)
@@ -50,6 +52,11 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
   const seriesRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef = useRef<any>(null)
+  // Exposes setPositionMarkers so the position useEffect can inject an entry marker
+  // alongside the SSE-driven fill markers without owning the full markers state.
+  const markersPluginRef = useRef<{
+    setPositionMarkers: (m: unknown[]) => void
+  } | null>(null)
 
   // Keep viewTfRef in sync so the chart useEffect closure reads fresh values.
   useEffect(() => { viewTfRef.current = viewTf }, [viewTf])
@@ -148,17 +155,28 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
     seriesRef.current = series
     chartRef.current = chart
 
-    // Use legacy setMarkers API — createSeriesMarkers (v5 plugin) hooks into the
-    // bar colorer during positioning and crashes when marker times have no bar.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const seriesAny = series as any
+    const markersApi = createSeriesMarkers(series as any)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let currentMarkers: any[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let positionMarkers: any[] = []
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const applyMarkers = (ssm: any[], pm: any[]) => {
+      const combined = [...ssm, ...pm]
+      combined.sort((a, b) => (a.time as number) - (b.time as number))
+      try { markersApi.setMarkers(combined) } catch {}
+    }
+
     const markersPlugin = {
       markers: () => currentMarkers,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setMarkers: (m: any[]) => { currentMarkers = m; seriesAny.setMarkers(m) },
+      setMarkers: (m: any[]) => { currentMarkers = m; applyMarkers(m, positionMarkers) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setPositionMarkers: (m: any[]) => { positionMarkers = m; applyMarkers(currentMarkers, m) },
     }
+    markersPluginRef.current = markersPlugin
 
     // Pre-populate the chart with historical bars so it's not empty on connect.
     // Initial bar load — the [viewTf] effect can't do this because seriesRef
@@ -232,6 +250,7 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
       onReset() {
         series.setData([])
         markersPlugin.setMarkers([])
+        markersPlugin.setPositionMarkers([])
       },
     }
 
@@ -240,6 +259,7 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
       callbacksRef.current = {}
       seriesRef.current = null
       chartRef.current = null
+      markersPluginRef.current = null
       chart.remove()
     }
   }, [callbacksRef])
@@ -261,6 +281,58 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol }: Props) {
       })
       .catch(() => {})
   }, [viewTf, activeSymbol])
+
+  // Manage TP/SL/entry price lines and entry bar marker for the active position.
+  useEffect(() => {
+    const series = seriesRef.current
+    if (!series) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pl: Record<string, any> = {}
+
+    if (!position) {
+      markersPluginRef.current?.setPositionMarkers([])
+      return
+    }
+
+    const stopPrice   = parseFloat(position.stop)
+    const targetPrice = parseFloat(position.target)
+    const entryPrice  = parseFloat(position.entry)
+
+    if (!isNaN(stopPrice))
+      pl.stop = series.createPriceLine({ price: stopPrice, color: '#f87171', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' })
+    if (!isNaN(targetPrice))
+      pl.target = series.createPriceLine({ price: targetPrice, color: '#3ee0a5', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' })
+    if (!isNaN(entryPrice))
+      pl.entry = series.createPriceLine({ price: entryPrice, color: 'rgba(255,255,255,0.35)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'E' })
+    if (position.partial) {
+      const partialPrice = parseFloat(position.partial)
+      if (!isNaN(partialPrice))
+        pl.partial = series.createPriceLine({ price: partialPrice, color: '#f59e0b', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'P1' })
+    }
+
+    // Amber arrow showing which bar the position was opened on.
+    if (position.entry_time) {
+      const tfSecs = TF_SECONDS[viewTfRef.current] ?? 60
+      const barTime = Math.floor(position.entry_time / tfSecs) * tfSecs
+      const isLong = position.side === 'long'
+      markersPluginRef.current?.setPositionMarkers([{
+        time: barTime,
+        position: isLong ? 'belowBar' : 'aboveBar',
+        shape:    isLong ? 'arrowUp'  : 'arrowDown',
+        color:    '#f59e0b',
+        text:     'OPEN',
+        size: 1.5,
+      }])
+    }
+
+    return () => {
+      for (const line of Object.values(pl)) {
+        try { series.removePriceLine(line) } catch {}
+      }
+      markersPluginRef.current?.setPositionMarkers([])
+    }
+  }, [position])
 
   const instLabel = activeSymbol ? (INSTRUMENT_NAMES[activeSymbol] ?? activeSymbol) : ''
   return (

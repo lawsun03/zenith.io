@@ -37,6 +37,8 @@ export interface StrategyConfig {
   ifvg_session_windows: string[]
   ifvg_macro_windows: string[]
   ifvg_news_blackout: string[]
+  // iFVG rule flags
+  ifvg_rule_f_enabled: boolean  // cancel armed zone if target hit before fill
   // iFVG exit ladder
   ifvg_tp1_fraction: string    // fraction of position to close at structural TP1 (0–1)
   ifvg_be_after_tp1: boolean   // move stop to breakeven when structural TP1 fills
@@ -58,6 +60,8 @@ export interface BotConfig {
   emergency_stop_distance?: Record<string, number>
   emergency_target_r?: number
   naked_grace_seconds?: number
+  commission_per_contract?: number
+  max_contracts_override?: number | null
   mode?: string
   strategy: StrategyConfig
 }
@@ -87,6 +91,13 @@ export interface StatusPayload {
   }
   lockout: { code: string; message: string } | null
   sync: { pending: number; poisoned: number; sent: number } | null
+  daily_trades: {
+    trades: number
+    wins: number
+    losses: number
+    win_rate: number | null
+    avg_pnl: number | null
+  } | null
 }
 
 export interface SignalPayload {
@@ -121,6 +132,17 @@ export interface JournalItem {
   ts: string
   kind: string
   payload: SignalPayload | FillPayload | ReconcilePayload
+}
+
+export interface Position {
+  instrument: string
+  side: string
+  size: number
+  entry: string
+  stop: string
+  target: string
+  partial: string | null
+  entry_time: number | null
 }
 
 export interface BarEvent {

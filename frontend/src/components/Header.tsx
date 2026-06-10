@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { StatusPayload } from '../types'
 import type { ConnState } from '../hooks/useStream'
+import { useConfirm } from '../hooks/useConfirm'
 
 interface Props {
   status: StatusPayload | null
@@ -17,6 +18,7 @@ const LABEL: Record<ConnState, string> = {
 }
 
 export function Header({ status, connState, onConfigOpen, mode, activeKillzone }: Props) {
+  const { confirm, modal } = useConfirm()
   const [now, setNow] = useState(new Date())
   const [testMsg, setTestMsg] = useState<string | null>(null)
   const [flattenMsg, setFlattenMsg] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
   }
 
   async function handleFlatten() {
-    if (!confirm('Flatten all open positions now?')) return
+    if (!await confirm('Flatten all open positions now?', { title: 'Flatten Positions', variant: 'danger', confirmLabel: 'Flatten' })) return
     setFlattenMsg('flattening...')
     try {
       const res = await fetch('/api/risk/flatten', { method: 'POST' })
@@ -58,7 +60,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
 
   const [restartMsg, setRestartMsg] = useState<string | null>(null)
   async function handleRestart() {
-    if (!confirm('Restart the bot? Open positions will remain on TopstepX. Any unsaved bot state will be lost.')) return
+    if (!await confirm('Restart the bot? Open positions will remain on TopstepX. Any unsaved bot state will be lost.', { title: 'Restart Bot', variant: 'warn', confirmLabel: 'Restart' })) return
     setRestartMsg('restarting...')
     try {
       await fetch('/api/restart', { method: 'POST' })
@@ -79,13 +81,12 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
   }
 
   return (
-    <header className="flex items-center px-7 h-[54px] shrink-0 bg-[rgba(7,11,22,0.85)] backdrop-blur-xl border-b border-border animate-fade-up">
+    <>
+    {modal}
+    <header className="flex items-center px-7 h-[54px] shrink-0 bg-bg border-b border-border animate-fade-up">
       {/* identity */}
       <div className="flex items-center gap-3 pr-5 border-r border-border">
-        <div
-          className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-medium text-white shrink-0"
-          style={{ background: 'linear-gradient(135deg,#2563eb 0%,#7c3aed 100%)', boxShadow: '0 0 16px rgba(37,99,235,0.4)' }}
-        >
+        <div className="w-7 h-7 border border-border-hi flex items-center justify-center text-xs font-medium text-ink shrink-0">
           Z
         </div>
         <div className="leading-none">
@@ -100,7 +101,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
 
       {/* live status pills */}
       <div className="flex-1 flex items-center gap-3.5 px-5 min-w-0">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border text-[11px] ${
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-[3px] border text-[11px] ${
           connState === 'connected'
             ? 'border-good/30 bg-good/[0.07] text-good'
             : connState === 'connecting'
@@ -112,7 +113,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
         </span>
         {activeKillzone && (
           <span
-            className="inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full border border-accent/30 bg-accent/[0.12] text-[11px] text-accent-ink"
+            className="inline-flex items-center gap-1.5 px-2.5 py-[3px] border border-accent/30 bg-accent/[0.12] text-[11px] text-accent-ink"
             title="Bot is inside a killzone window — entry signals are active"
           >
             ▶ {activeKillzone}
@@ -128,11 +129,11 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
         </span>
         {isLocked && (
           <span className="inline-flex items-center gap-2">
-            <span className="text-[10px] tracking-wider text-danger border border-danger/40 px-2 py-0.5 rounded" title={status?.lockout?.message ?? ''}>
+            <span className="text-[10px] tracking-wider text-danger border border-danger/40 px-2 py-0.5" title={status?.lockout?.message ?? ''}>
               LOCKED: {status?.lockout?.code}
             </span>
             {isDriftLock && (
-              <button onClick={handleClearLockout} className="text-[10px] tracking-wider uppercase border border-danger/30 text-danger/80 px-2 py-0.5 rounded hover:bg-danger/10">
+              <button onClick={handleClearLockout} className="text-[10px] tracking-wider uppercase border border-danger/30 text-danger/80 px-2 py-0.5 hover:bg-danger/10">
                 Clear
               </button>
             )}
@@ -162,12 +163,13 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
             <span className="w-px h-4 bg-border mx-1.5" />
           </>
         )}
-        <a href="/analytics" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open analytics">Analytics ↗</a>
-        <a href="/backtests" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Open backtests">Backtests ↗</a>
-        <a href="/todos" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Backlog">Backlog ↗</a>
-        <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/5 hover:text-ink" title="Export trades CSV">↓ CSV</a>
-        <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/5 hover:text-ink" title="Configuration">⚙</button>
+        <a href="/analytics" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open analytics">Analytics ↗</a>
+        <a href="/backtests" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open backtests">Backtests ↗</a>
+        <a href="/todos" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Backlog">Backlog ↗</a>
+        <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Export trades CSV">↓ CSV</a>
+        <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Configuration">⚙</button>
       </div>
     </header>
+    </>
   )
 }

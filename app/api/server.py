@@ -39,7 +39,7 @@ import os
 import sys
 import uuid
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -249,6 +249,26 @@ def build_app(
     # /api/status — the four numbers that matter, plus context
     # ------------------------------------------------------------------
 
+    def _today_trade_stats() -> dict:
+        try:
+            from app.analytics.loader import load_all_trades
+            today = date.today().isoformat()
+            exits = [
+                t for t in load_all_trades()
+                if t["type"] == "EXIT" and t["realized_pnl"] is not None and t["ts"].startswith(today)
+            ]
+            n = len(exits)
+            wins = sum(1 for t in exits if t["realized_pnl"] > 0)
+            return {
+                "trades": n,
+                "wins": wins,
+                "losses": n - wins,
+                "win_rate": round(wins / n, 4) if n else None,
+                "avg_pnl": round(sum(t["realized_pnl"] for t in exits) / n, 2) if n else None,
+            }
+        except Exception:
+            return {"trades": 0, "wins": 0, "losses": 0, "win_rate": None, "avg_pnl": None}
+
     @app.get("/api/status")
     async def status() -> JSONResponse:
         cfg = risk_state.config
@@ -296,6 +316,7 @@ def build_app(
                 if outbox is not None
                 else None
             ),
+            "daily_trades": _today_trade_stats(),
         }))
 
     # ------------------------------------------------------------------
@@ -313,6 +334,17 @@ def build_app(
     @app.get("/api/reconciles")
     async def reconciles(limit: int = 20) -> JSONResponse:
         return JSONResponse({"items": await journal.recent_reconciles(limit)})
+
+    @app.get("/api/positions")
+    async def get_open_positions() -> JSONResponse:
+        """Open brackets with entry/stop/target for the dashboard positions panel."""
+        if _broker is None:
+            return JSONResponse({"positions": []})
+        try:
+            return JSONResponse({"positions": _broker.open_brackets()})
+        except Exception:
+            log.exception("get_open_positions failed")
+            return JSONResponse({"positions": []})
 
     @app.get("/api/setup_state")
     async def setup_state() -> JSONResponse:
@@ -483,35 +515,44 @@ def build_app(
             "naked_grace_seconds": cfg.naked_grace_seconds,
         })
 
-    @app.patch("/api/config")
-    async def patch_config(body: BotConfig) -> JSONResponse:
+    async def _hot_apply(body: BotConfig) -> None:
+        """Save config to disk and hot-apply all fields to the running bot."""
         save_bot_config(body, _bot_config_path)
-        # Hot-apply entry_mode to the running broker so the next signal
-        # uses the new mode without requiring a restart.
         if _broker is not None and hasattr(_broker, "entry_mode"):
             _broker.entry_mode = body.entry_mode
+        if _broker is not None and hasattr(_broker, "_account_name"):
+            _broker._account_name = body.account_name
         if _broker is not None and hasattr(_broker, "partial_profit_r"):
             _broker.partial_profit_r = body.partial_profit_r
         if _engine is not None:
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
             _engine.strategy_cfg = body.strategy
-            # Reset the fail-loud warning so a fresh enable+rebuild can re-warn
-            # if the rebuild leaves trackers None.
+            _engine.commission_per_contract = Decimal(str(body.commission_per_contract))
+            _engine.max_contracts_override = body.max_contracts_override
             _engine._htf_warned = False
-        # Hot-apply HTF: (re)build trackers to match the new flags. Without
-        # this, toggling htf_bias_enabled / htf_target_enabled on via the
-        # dashboard would silently no-op until restart (Rule 10).
         if _htf_rebuild is not None:
             try:
                 await _htf_rebuild(body)
             except Exception:
-                log.exception("PATCH /api/config: HTF tracker rebuild failed")
-        # Hot-apply exit-coverage settings to the running reconciler so naked
-        # remediation distances/grace change without a restart (Rule 10).
+                log.exception("_hot_apply: HTF tracker rebuild failed")
         reconciler.config.naked_grace_seconds = body.naked_grace_seconds
         reconciler.config.emergency_stop_distance = dict(body.emergency_stop_distance)
         reconciler.config.emergency_target_r = body.emergency_target_r
+
+    @app.patch("/api/config")
+    async def patch_config(request: Request) -> JSONResponse:
+        updates = await request.json()
+        # Merge onto the current saved config so partial patches (e.g. only
+        # changing account_name) don't clobber every other field with defaults.
+        current = load_bot_config(_bot_config_path)
+        base = current.model_dump()
+        if "strategy" in updates and isinstance(updates["strategy"], dict):
+            base["strategy"].update(updates["strategy"])
+            updates = {k: v for k, v in updates.items() if k != "strategy"}
+        base.update(updates)
+        body = BotConfig.model_validate(base)
+        await _hot_apply(body)
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
@@ -530,6 +571,58 @@ def build_app(
             "emergency_target_r": float(body.emergency_target_r),
             "naked_grace_seconds": body.naked_grace_seconds,
         })
+
+    # ------------------------------------------------------------------
+    # Config presets — named snapshots of bot_config.json
+    # ------------------------------------------------------------------
+
+    _PRESETS_FILE = Path(__file__).parent.parent.parent / "config_presets.json"
+
+    def _load_presets() -> list:
+        if not _PRESETS_FILE.exists():
+            return []
+        try:
+            return json.loads(_PRESETS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+
+    def _save_presets(presets: list) -> None:
+        _PRESETS_FILE.write_text(json.dumps(presets, indent=2), encoding="utf-8")
+
+    @app.get("/api/config/presets")
+    async def get_presets() -> JSONResponse:
+        return JSONResponse([{"name": p["name"], "saved_at": p.get("saved_at", "")} for p in _load_presets()])
+
+    @app.post("/api/config/presets")
+    async def save_preset(request: Request) -> JSONResponse:
+        body = await request.json()
+        name = (body.get("name") or "").strip()
+        if not name:
+            return JSONResponse({"error": "name required"}, status_code=400)
+        cfg = load_bot_config(_bot_config_path)
+        presets = [p for p in _load_presets() if p["name"] != name]
+        presets.append({
+            "name": name,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "config": json.loads(cfg.model_dump_json()),
+        })
+        _save_presets(presets)
+        return JSONResponse({"ok": True})
+
+    @app.delete("/api/config/presets/{name}")
+    async def delete_preset(name: str) -> JSONResponse:
+        presets = [p for p in _load_presets() if p["name"] != name]
+        _save_presets(presets)
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/config/presets/{name}/apply")
+    async def apply_preset(name: str) -> JSONResponse:
+        preset = next((p for p in _load_presets() if p["name"] == name), None)
+        if not preset:
+            return JSONResponse({"error": "preset not found"}, status_code=404)
+        body = BotConfig.model_validate(preset["config"])
+        await _hot_apply(body)
+        return JSONResponse({"ok": True, "name": name})
 
     @app.get("/api/accounts")
     async def list_accounts() -> JSONResponse:
@@ -690,6 +783,175 @@ def build_app(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ── Trade Analysis endpoints ─────────────────────────────────────────────
+
+    def _scan_trade_analysis_dates() -> list[dict]:
+        trades_dir = Path("trades")
+        analysis_dir = Path("trade_analysis")
+        dates: set[str] = set()
+        for prefix in ("trades", "excursions", "rejections"):
+            for f in trades_dir.glob(f"{prefix}_*.csv"):
+                m = re.match(rf"{prefix}_(\d{{4}}-\d{{2}}-\d{{2}})\.csv", f.name)
+                if m:
+                    dates.add(m.group(1))
+        results = []
+        for dt in sorted(dates, reverse=True):
+            trades_path = trades_dir / f"trades_{dt}.csv"
+            exc_path = trades_dir / f"excursions_{dt}.csv"
+            rej_path = trades_dir / f"rejections_{dt}.csv"
+            report_path = analysis_dir / f"{dt}.md"
+            trade_count = wins = losses = 0
+            net_pnl = 0.0
+            if trades_path.exists():
+                with open(trades_path, newline="", encoding="utf-8") as fh:
+                    for row in csv.DictReader(fh):
+                        if row.get("type") == "EXIT":
+                            trade_count += 1
+                            pnl = float(row.get("realized_pnl") or 0)
+                            net_pnl += pnl
+                            if pnl > 0:
+                                wins += 1
+                            else:
+                                losses += 1
+            results.append({
+                "date": dt,
+                "has_trades": trades_path.exists(),
+                "has_excursions": exc_path.exists(),
+                "has_rejections": rej_path.exists(),
+                "has_report": report_path.exists(),
+                "trade_count": trade_count,
+                "win_count": wins,
+                "loss_count": losses,
+                "net_pnl": round(net_pnl, 2),
+            })
+        return results
+
+    @app.get("/api/trade-analysis")
+    async def list_trade_analysis() -> JSONResponse:
+        return JSONResponse(_scan_trade_analysis_dates())
+
+    @app.get("/api/trade-analysis/{date}/report")
+    async def get_trade_analysis_report(date: str) -> JSONResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return JSONResponse({"error": "invalid date"}, status_code=400)
+        path = Path("trade_analysis") / f"{date}.md"
+        if not path.exists():
+            return JSONResponse({"error": "report not found"}, status_code=404)
+        return JSONResponse({"date": date, "content": path.read_text(encoding="utf-8")})
+
+    @app.get("/api/trade-analysis/{date}/csv/{csv_type}")
+    async def get_trade_analysis_csv(date: str, csv_type: str) -> StreamingResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            from fastapi import HTTPException
+            raise HTTPException(400, "invalid date")
+        if csv_type not in ("trades", "excursions", "rejections"):
+            from fastapi import HTTPException
+            raise HTTPException(400, "invalid csv_type")
+        path = Path("trades") / f"{csv_type}_{date}.csv"
+        if not path.exists():
+            from fastapi import HTTPException
+            raise HTTPException(404, "file not found")
+        return StreamingResponse(
+            open(path, "rb"),  # noqa: SIM115
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{csv_type}_{date}.csv"'},
+        )
+
+    @app.post("/api/trade-analysis/{date}/run")
+    async def run_trade_analysis(date: str) -> StreamingResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return JSONResponse({"error": "invalid date"}, status_code=400)
+
+        async def _stream() -> AsyncIterator[str]:
+            import anthropic as _anthropic
+
+            def _sse_ta(event_type: str, data: dict) -> str:
+                return f"data: {json.dumps({'type': event_type, **data})}\n\n"
+
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                yield _sse_ta("error", {"message": "ANTHROPIC_API_KEY not set in .env"})
+                return
+
+            trades_dir = Path("trades")
+
+            def _read_csv(name: str) -> str:
+                p = trades_dir / f"{name}_{date}.csv"
+                if not p.exists():
+                    return ""
+                return p.read_text(encoding="utf-8")
+
+            trades_csv = _read_csv("trades")
+            excursions_csv = _read_csv("excursions")
+            rejections_csv = _read_csv("rejections")
+
+            if not trades_csv and not excursions_csv:
+                yield _sse_ta("error", {"message": f"No trade data found for {date}"})
+                return
+
+            prompt = f"""Analyze the bot's trades for {date}. Produce a structured markdown report with:
+
+1. **Headline** — net P&L, trade count, win rate, dominant failure mode
+2. **Session Structure** — time windows visible in the data
+3. **Per-Trade Breakdown** — table with: ET time, symbol, side, grade/score, slippage, contracts, outcome, P&L
+4. **Pattern Summary** — grade distribution, win rate by grade, slippage stats, excursion outcomes
+5. **Dominant Failure Modes** — top 2 with mechanistic explanation
+6. **Prioritized Actions** — 3-4 concrete, evidence-backed fixes
+
+**Trades CSV (all fills):**
+```
+{trades_csv[:8000]}
+```
+
+**Excursions CSV (MFE/MAE/outcome per trade):**
+```
+{excursions_csv[:4000]}
+```
+
+**Rejections CSV (filtered signals):**
+```
+{rejections_csv[:3000]}
+```
+
+Notes:
+- Log timestamps are system-local (CDT = UTC-5); convert to ET for the report
+- `slippage` column in trades CSV = fill - signal_entry (positive = adverse for longs, favorable for shorts — check sign per side)
+- EXIT rows carry realized_pnl; ENTRY rows have pnl=0
+- excursions `outcome`: win/stopped/stopped_then_target/partial_win
+- Grade A-/A/A+ = passes filter; B/C/D/F = would previously have been rejected
+"""
+
+            client = _anthropic.AsyncAnthropic(api_key=api_key)
+            full_text = ""
+
+            yield _sse_ta("status", {"message": f"Generating analysis for {date}…"})
+
+            async with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                async for chunk in stream.text_stream:
+                    full_text += chunk
+                    yield _sse_ta("text_delta", {"delta": chunk})
+
+            # Save report
+            analysis_dir = Path("trade_analysis")
+            analysis_dir.mkdir(exist_ok=True)
+            out_path = analysis_dir / f"{date}.md"
+            header = f"# Trade Analysis — {date}\n\n"
+            out_path.write_text(header + full_text, encoding="utf-8")
+            yield _sse_ta("done", {"saved_to": str(out_path)})
+
+        from collections.abc import AsyncIterator
+        return StreamingResponse(
+            _stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── End Trade Analysis endpoints ──────────────────────────────────────────
 
     @app.post("/api/test-trade")
     async def test_trade() -> JSONResponse:
