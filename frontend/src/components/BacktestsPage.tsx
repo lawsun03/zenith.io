@@ -440,6 +440,16 @@ interface ABResult {
 // (/api/databento/symbols); this is the fallback if that call fails.
 const DEFAULT_AB_INSTRUMENTS = ['MES', 'MGC', 'MNQ']
 
+const FONTS_ID = 'bt-grotesk-fonts'
+function injectFonts() {
+  if (document.getElementById(FONTS_ID)) return
+  const link = document.createElement('link')
+  link.id = FONTS_ID
+  link.rel = 'stylesheet'
+  link.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap'
+  document.head.appendChild(link)
+}
+
 export function BacktestsPage() {
   const { confirm, modal } = useConfirm()
   const [list, setList] = useState<BacktestSummary[]>([])
@@ -493,6 +503,8 @@ export function BacktestsPage() {
   const [onlyProfitable, setOnlyProfitable] = useState<boolean>(false)
   const [balancedPreset, setBalancedPreset] = useState<boolean>(false)
   const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(false)
+
+  useEffect(() => { injectFonts() }, [])
 
   // Load the live bot's current strategy as the initial set, so the page
   // opens with the "match my config" baseline rather than dataclass defaults.
@@ -1212,18 +1224,39 @@ export function BacktestsPage() {
   return (
     <>
     {modal}
-    <div className="min-h-screen bg-bg scanlines">
-      <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-baseline gap-4">
-          <span className="text-xs tracking-[0.4em] text-dim">TOPSTEP-BOT</span>
-          <span className="text-xs tracking-[0.3em] text-accent">BACKTESTS</span>
+    <div className="min-h-screen bg-bg scanlines" style={{ fontFamily: 'inherit' }}>
+      {/* Nav */}
+      <div style={{
+        borderBottom: '1px solid #1d2a42', padding: '20px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: '#6a85b0' }}>TOPSTEP-BOT</span>
+        <div style={{ display: 'flex', gap: 24 }}>
+          <a href="/analytics"
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
+            ANALYTICS
+          </a>
+          <a href="/"
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
+            ← LIVE
+          </a>
         </div>
-        <a href="/" className="text-xs tracking-widest text-dim hover:text-ink uppercase">
-          ← Dashboard
-        </a>
-      </header>
+      </div>
 
       <main className="p-6 max-w-[1400px] mx-auto space-y-6">
+        {/* Title */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 60, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', marginBottom: 10, color: '#e8f0ff' }}>
+            BACKTEST<br />ENGINE
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6a85b0', letterSpacing: '0.15em' }}>
+            STRATEGY SIMULATION · PARAMETER SEARCH
+          </div>
+        </div>
         <section className="bg-panel border border-border p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[10px] tracking-[0.3em] text-accent uppercase">

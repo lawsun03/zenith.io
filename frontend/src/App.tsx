@@ -100,8 +100,8 @@ export default function App() {
             {/* page head */}
             <div className="flex items-end justify-between px-0.5 pb-5 shrink-0 animate-fade-up">
               <div>
-                <div className="text-[22px] text-ink tracking-tight">Live Dashboard</div>
-                <div className="text-[11px] text-faint font-mono mt-1">
+                <div className="text-[36px] font-extrabold text-ink tracking-tight leading-none">LIVE DASHBOARD</div>
+                <div className="text-[11px] text-faint font-mono mt-2">
                   <span className="text-accent-ink">iFVG · Combined Strategy</span> · {modeLabel}
                 </div>
               </div>

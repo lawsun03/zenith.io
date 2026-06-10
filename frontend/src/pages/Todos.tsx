@@ -1,4 +1,27 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
+
+const FONTS_ID = 'todos-grotesk-fonts'
+function injectFonts() {
+  if (document.getElementById(FONTS_ID)) return
+  const link = document.createElement('link')
+  link.id = FONTS_ID
+  link.rel = 'stylesheet'
+  link.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap'
+  document.head.appendChild(link)
+}
+
+const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" }
+const sans: CSSProperties = { fontFamily: "'Space Grotesk', sans-serif" }
+
+const C = {
+  bg:    '#070c1a',
+  bd:    '#1d2a42',
+  bdh:   '#2c3e5c',
+  ink:   '#e8f0ff',
+  dim:   '#6a85b0',
+  faint: '#3d5070',
+}
 
 interface Todo {
   id: string
@@ -33,6 +56,7 @@ export function TodosPage() {
   const [filter, setFilter] = useState<string>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  useEffect(() => { injectFonts() }, [])
   useEffect(() => {
     fetch('/api/todos').then(r => r.json()).then(setTodos).catch(() => {})
   }, [])
@@ -44,13 +68,37 @@ export function TodosPage() {
   const done = filtered.filter(t => t.status === 'done')
 
   return (
-    <div className="min-h-screen bg-bg text-ink font-sans">
-      <div className="max-w-[860px] mx-auto px-8 py-10">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.ink }}>
+      {/* Nav */}
+      <div style={{
+        borderBottom: `1px solid ${C.bd}`, padding: '20px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>TOPSTEP-BOT</span>
+        <div style={{ display: 'flex', gap: 24 }}>
+          <a href="/analytics"
+            style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.ink)}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}>
+            ANALYTICS
+          </a>
+          <a href="/"
+            style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.ink)}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}>
+            ← LIVE
+          </a>
+        </div>
+      </div>
 
-        <div className="mb-8">
-          <div className="text-[22px] tracking-tight mb-1">Backlog</div>
-          <div className="text-[11px] text-faint font-mono">
-            {open.length} open · {done.length} done · edit <span className="text-dim">todos/*.md</span> to add items
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px' }}>
+
+        <div style={{ marginBottom: 48 }}>
+          <div style={{ ...sans, fontSize: 60, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', marginBottom: 10 }}>
+            STRATEGY<br />BACKLOG
+          </div>
+          <div style={{ ...mono, fontSize: 11, color: C.dim, letterSpacing: '0.15em' }}>
+            {open.length} OPEN · {done.length} DONE · EDIT <span style={{ color: C.dim }}>todos/*.md</span> TO ADD ITEMS
           </div>
         </div>
 
