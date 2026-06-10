@@ -1,66 +1,105 @@
-interface PerformanceStats {
-  total_trades: number
-  winners?: number
-  losers?: number
-  win_rate: number
-  net_pnl: number
-  profit_factor: number | null
-  expectancy: number
-  max_drawdown: number
-  error?: string
+import type { CSSProperties } from 'react'
+import type { AnalyticsPerf } from '../pages/Analytics'
+
+const C = {
+  bg:    '#070c1a',
+  surf:  '#0d1628',
+  bd:    '#1d2a42',
+  bdh:   '#2c3e5c',
+  ink:   '#e8f0ff',
+  dim:   '#6a85b0',
+  faint: '#3d5070',
+  green: '#6ee7b7',
+  red:   '#fca5a5',
 }
 
-interface Props {
-  perf: PerformanceStats | null
-}
+const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatCard({
+  label, value, sub, tone = 'neutral',
+}: {
+  label: string
+  value: string
+  sub?: string
+  tone?: 'green' | 'red' | 'neutral'
+}) {
+  const valueColor = tone === 'green' ? C.green : tone === 'red' ? C.red : C.ink
   return (
-    <div className="bg-panel border border-border px-4 py-3">
-      <div className="text-[9px] tracking-[0.25em] text-dim uppercase mb-1">{label}</div>
-      <div className="text-xl font-mono text-ink tabular-nums">{value}</div>
-      {sub && <div className="text-[9px] text-dim mt-0.5">{sub}</div>}
+    <div style={{ background: C.surf, padding: '20px 20px 16px' }}>
+      <div style={{ ...mono, fontSize: 9, letterSpacing: '0.25em', color: C.faint, textTransform: 'uppercase' as const, marginBottom: 10 }}>
+        {label}
+      </div>
+      <div style={{ ...mono, fontSize: 22, fontWeight: 500, color: valueColor, letterSpacing: '-0.02em', lineHeight: 1 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ ...mono, fontSize: 10, color: C.dim, marginTop: 6 }}>{sub}</div>
+      )}
     </div>
   )
 }
 
-export function StatsRow({ perf }: Props) {
+export function StatsRow({ perf }: { perf: AnalyticsPerf | null }) {
+  const gridStyle: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
+    gap: 1,
+    background: C.bd,
+    border: `1px solid ${C.bd}`,
+  }
+
   if (!perf || perf.error) {
     return (
-      <div className="grid grid-cols-5 gap-px bg-border border border-border">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="bg-panel px-4 py-3 h-16 animate-pulse" />
+      <div style={gridStyle}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} style={{ background: C.surf, height: 88 }} />
         ))}
       </div>
     )
   }
 
+  const netTone = perf.net_pnl >= 0 ? 'green' : 'red'
+  const rateTone = perf.win_rate >= 0.5 ? 'green' : 'red'
+  const pfTone   = (perf.profit_factor ?? 0) >= 1 ? 'green' : 'red'
+  const expTone  = perf.expectancy >= 0 ? 'green' : 'red'
+
   return (
-    <div className="grid grid-cols-5 gap-px bg-border border border-border">
+    <div style={gridStyle}>
       <StatCard
         label="Net P&L"
         value={`${perf.net_pnl >= 0 ? '+' : ''}$${perf.net_pnl.toFixed(0)}`}
-        sub="all sessions"
+        sub="all time"
+        tone={netTone}
       />
       <StatCard
         label="Win Rate"
         value={`${(perf.win_rate * 100).toFixed(1)}%`}
-        sub={`${perf.winners ?? '?'} / ${perf.total_trades} trades`}
+        sub={`${perf.winners ?? '?'}W / ${perf.losers ?? '?'}L`}
+        tone={rateTone}
       />
       <StatCard
         label="Profit Factor"
         value={perf.profit_factor != null ? perf.profit_factor.toFixed(2) : '—'}
         sub="gross win / loss"
+        tone={pfTone}
       />
       <StatCard
         label="Expectancy"
         value={`${perf.expectancy >= 0 ? '+' : ''}$${perf.expectancy.toFixed(1)}`}
         sub="per trade"
+        tone={expTone}
       />
       <StatCard
-        label="Max Drawdown"
-        value={`$${perf.max_drawdown.toFixed(0)}`}
-        sub="from peak"
+        label="Avg Winner"
+        value={perf.avg_winner != null ? `+$${perf.avg_winner.toFixed(0)}` : '—'}
+        sub={`${perf.winners ?? 0} wins`}
+        tone="green"
+      />
+      <StatCard
+        label="Avg Loser"
+        value={perf.avg_loser != null ? `-$${Math.abs(perf.avg_loser).toFixed(0)}` : '—'}
+        sub={`${perf.losers ?? 0} losses`}
+        tone="red"
       />
     </div>
   )

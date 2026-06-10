@@ -1,4 +1,20 @@
 import { useState, useRef } from 'react'
+import type { CSSProperties } from 'react'
+
+const C = {
+  bg:    '#070c1a',
+  surf:  '#0d1628',
+  bd:    '#1d2a42',
+  bdh:   '#2c3e5c',
+  ink:   '#e8f0ff',
+  dim:   '#6a85b0',
+  faint: '#3d5070',
+  green: '#6ee7b7',
+  red:   '#fca5a5',
+  warn:  '#fbbf24',
+}
+
+const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" }
 
 type Phase = 'idle' | 'investigating' | 'responding' | 'done' | 'error'
 
@@ -8,11 +24,11 @@ interface ToolEvent {
 }
 
 export function ClaudeAdvisor() {
-  const [phase, setPhase]         = useState<Phase>('idle')
-  const [question, setQuestion]   = useState('')
-  const [toolLog, setToolLog]     = useState<ToolEvent[]>([])
-  const [response, setResponse]   = useState('')
-  const [errorMsg, setErrorMsg]   = useState('')
+  const [phase, setPhase]       = useState<Phase>('idle')
+  const [question, setQuestion] = useState('')
+  const [toolLog, setToolLog]   = useState<ToolEvent[]>([])
+  const [response, setResponse] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
   async function handleAsk() {
@@ -32,11 +48,7 @@ export function ClaudeAdvisor() {
         signal: abort.signal,
       })
 
-      if (!res.body) {
-        setPhase('error')
-        setErrorMsg('No response body from server.')
-        return
-      }
+      if (!res.body) { setPhase('error'); setErrorMsg('No response body.'); return }
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -46,8 +58,6 @@ export function ClaudeAdvisor() {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
-
-        // SSE events are delimited by double newlines
         const parts = buffer.split('\n\n')
         buffer = parts.pop() ?? ''
 
@@ -55,19 +65,13 @@ export function ClaudeAdvisor() {
           for (const line of part.split('\n')) {
             if (!line.startsWith('data: ')) continue
             let event: Record<string, unknown>
-            try {
-              event = JSON.parse(line.slice(6))
-            } catch {
-              continue
-            }
+            try { event = JSON.parse(line.slice(6)) } catch { continue }
 
             if (event.type === 'tool_call') {
               setPhase('investigating')
               setToolLog(prev => [...prev, { name: event.name as string, done: false }])
             } else if (event.type === 'tool_result') {
-              setToolLog(prev =>
-                prev.map(t => t.name === event.name ? { ...t, done: true } : t)
-              )
+              setToolLog(prev => prev.map(t => t.name === event.name ? { ...t, done: true } : t))
             } else if (event.type === 'text_delta') {
               setPhase('responding')
               setResponse(prev => prev + (event.delta as string))
@@ -80,7 +84,6 @@ export function ClaudeAdvisor() {
           }
         }
       }
-      // Only set done if we didn't already transition to error via an event
       setPhase(prev => (prev === 'investigating' || prev === 'responding') ? 'done' : prev)
     } catch (err: unknown) {
       if ((err as Error).name === 'AbortError') return
@@ -97,92 +100,126 @@ export function ClaudeAdvisor() {
     setErrorMsg('')
   }
 
-  return (
-    <div className="bg-panel border border-border">
-      {/* Header */}
-      <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-        <span className="text-[10px] tracking-[0.3em] text-dim uppercase">◈ Claude Advisor</span>
-        {phase !== 'idle' && (
-          <button
-            onClick={handleReset}
-            className="text-[9px] tracking-widest uppercase text-dim hover:text-ink border border-border px-2 py-0.5"
-          >
-            Reset
-          </button>
-        )}
+  const sectionHeader = (
+    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ ...mono, fontSize: 10, letterSpacing: '0.3em', color: C.faint, textTransform: 'uppercase' as const }}>
+        ◈ CLAUDE ADVISOR
       </div>
+      {phase !== 'idle' && (
+        <button
+          onClick={handleReset}
+          style={{ ...mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase' as const, color: C.faint, border: `1px solid ${C.bd}`, padding: '4px 10px', background: 'none', cursor: 'pointer' }}
+          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color = C.ink; b.style.borderColor = C.bdh }}
+          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color = C.faint; b.style.borderColor = C.bd }}
+        >
+          RESET
+        </button>
+      )}
+    </div>
+  )
 
-      <div className="p-4 flex flex-col gap-3">
+  return (
+    <div>
+      {sectionHeader}
+      <div style={{ border: `1px solid ${C.bd}` }}>
         {/* Input row */}
         {phase === 'idle' && (
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', borderBottom: `1px solid ${C.bd}` }}>
             <input
               type="text"
               value={question}
               onChange={e => setQuestion(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAsk()}
               placeholder="e.g. Why is NY AM underperforming? (leave blank for full analysis)"
-              className="flex-1 bg-bg border border-border text-ink font-mono text-xs px-3 py-2 placeholder:text-dim focus:outline-none focus:border-accent/50"
+              style={{
+                flex: 1, background: 'transparent', border: 'none',
+                ...mono, fontSize: 12, color: C.ink,
+                padding: '14px 20px', outline: 'none',
+              }}
             />
             <button
               onClick={handleAsk}
-              className="text-[10px] tracking-widest uppercase border border-accent/60 text-accent px-4 py-2 hover:bg-accent/10"
+              style={{
+                ...mono, fontSize: 10, letterSpacing: '0.2em',
+                textTransform: 'uppercase' as const,
+                color: C.green, borderLeft: `1px solid ${C.bd}`,
+                padding: '0 20px', background: 'none', cursor: 'pointer',
+              }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(110,231,183,0.06)')}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = 'none')}
             >
-              Ask Claude
+              ASK
             </button>
           </div>
         )}
 
-        {/* Investigation log */}
+        {/* Tool log */}
         {(phase === 'investigating' || phase === 'responding' || phase === 'done') && toolLog.length > 0 && (
-          <div className="border border-border/50 bg-bg p-3">
-            <div className="text-[9px] tracking-[0.25em] text-dim uppercase mb-2">
-              {phase === 'investigating' ? 'Investigating...' : 'Investigation complete'}
+          <div style={{ borderBottom: `1px solid ${C.bd}`, padding: '14px 20px' }}>
+            <div style={{ ...mono, fontSize: 9, letterSpacing: '0.25em', color: C.faint, textTransform: 'uppercase' as const, marginBottom: 10 }}>
+              {phase === 'investigating' ? 'INVESTIGATING…' : 'ANALYSIS COMPLETE'}
             </div>
-            <div className="flex flex-col gap-1">
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
               {toolLog.map((t, i) => (
-                <div key={i} className="flex items-center gap-2 text-[10px] font-mono">
-                  <span className={t.done ? 'text-accent' : 'text-warn animate-pulse'}>▶</span>
-                  <span className="text-ink">{t.name}()</span>
-                  <span className="text-dim">{t.done ? '· done' : '· running...'}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, ...mono, fontSize: 11 }}>
+                  <span style={{ color: t.done ? C.green : C.warn }}>
+                    {t.done ? '✓' : '▶'}
+                  </span>
+                  <span style={{ color: C.ink }}>{t.name}()</span>
+                  <span style={{ color: C.faint }}>{t.done ? '· done' : '· running…'}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Streaming response */}
+        {/* Response */}
         {(phase === 'responding' || phase === 'done') && response && (
-          <div className="border border-border/50 bg-bg p-3">
-            <div className="text-[9px] tracking-[0.25em] text-dim uppercase mb-2">Recommendation</div>
-            <pre className="text-ink text-xs font-mono whitespace-pre-wrap leading-relaxed">
+          <div style={{ padding: '20px' }}>
+            <div style={{ ...mono, fontSize: 9, letterSpacing: '0.25em', color: C.faint, textTransform: 'uppercase' as const, marginBottom: 14 }}>
+              RECOMMENDATION
+            </div>
+            <pre style={{ ...mono, fontSize: 12, color: C.ink, whiteSpace: 'pre-wrap', lineHeight: 1.7, margin: 0 }}>
               {response}
-              {phase === 'responding' && <span className="animate-pulse">▌</span>}
+              {phase === 'responding' && <span style={{ color: C.green }}>▌</span>}
             </pre>
           </div>
         )}
 
         {/* Done: ask again */}
         {phase === 'done' && (
-          <button
-            onClick={handleReset}
-            className="self-start text-[9px] tracking-widest uppercase border border-border text-dim px-3 py-1 hover:text-ink hover:border-ink"
-          >
-            Ask Again
-          </button>
+          <div style={{ borderTop: `1px solid ${C.bd}`, padding: '14px 20px' }}>
+            <button
+              onClick={handleReset}
+              style={{ ...mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase' as const, color: C.faint, border: `1px solid ${C.bd}`, padding: '6px 14px', background: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color = C.ink; b.style.borderColor = C.bdh }}
+              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color = C.faint; b.style.borderColor = C.bd }}
+            >
+              ASK AGAIN
+            </button>
+          </div>
         )}
 
         {/* Error */}
         {phase === 'error' && (
-          <div className="border border-danger/40 bg-bg p-3">
-            <div className="text-[9px] tracking-[0.25em] text-danger uppercase mb-1">Error</div>
-            <p className="text-danger text-xs font-mono">{errorMsg}</p>
+          <div style={{ padding: '20px' }}>
+            <div style={{ ...mono, fontSize: 9, letterSpacing: '0.25em', color: C.red, textTransform: 'uppercase' as const, marginBottom: 10 }}>
+              ERROR
+            </div>
+            <div style={{ ...mono, fontSize: 12, color: C.red, marginBottom: 14 }}>{errorMsg}</div>
             <button
               onClick={handleReset}
-              className="mt-2 text-[9px] tracking-widest uppercase border border-danger/40 text-danger/70 px-3 py-1 hover:bg-danger/10"
+              style={{ ...mono, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase' as const, color: C.faint, border: `1px solid ${C.bd}`, padding: '6px 14px', background: 'none', cursor: 'pointer' }}
             >
-              Retry
+              RETRY
             </button>
+          </div>
+        )}
+
+        {/* Empty prompt in non-idle phases */}
+        {(phase === 'investigating' && toolLog.length === 0) && (
+          <div style={{ padding: '20px', ...mono, fontSize: 11, color: C.faint }}>
+            Connecting…
           </div>
         )}
       </div>

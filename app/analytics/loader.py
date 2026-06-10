@@ -15,9 +15,12 @@ def load_all_trades() -> list[dict]:
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                raw_instr = row.get("instrument", "")
+                parts = raw_instr.split(".")
+                short_instr = parts[-2] if len(parts) >= 2 else raw_instr
                 rows.append({
                     "ts": row.get("ts", ""),
-                    "instrument": row.get("instrument", ""),
+                    "instrument": short_instr,
                     "side": row.get("side", ""),
                     "type": row.get("type", ""),
                     "fill_price": _float(row.get("fill_price")),
