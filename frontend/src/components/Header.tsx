@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { StatusPayload } from '../types'
 import type { ConnState } from '../hooks/useStream'
 import { useConfirm } from '../hooks/useConfirm'
@@ -163,9 +164,9 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
             <span className="w-px h-4 bg-border mx-1.5" />
           </>
         )}
-        <a href="/analytics" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open analytics">Analytics ↗</a>
-        <a href="/backtests" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open backtests">Backtests ↗</a>
-        <a href="/todos" target="_blank" rel="noreferrer" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Backlog">Backlog ↗</a>
+        <Link to="/analytics" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open analytics">Analytics</Link>
+        <Link to="/backtests" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open backtests">Backtests</Link>
+        <Link to="/todos" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Backlog">Backlog</Link>
         <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Export trades CSV">↓ CSV</a>
         <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Configuration">⚙</button>
       </div>

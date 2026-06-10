@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 
 const FONTS_ID = 'todos-grotesk-fonts'
 function injectFonts() {
@@ -76,18 +77,18 @@ export function TodosPage() {
       }}>
         <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>TOPSTEP-BOT</span>
         <div style={{ display: 'flex', gap: 24 }}>
-          <a href="/analytics"
+          <Link to="/analytics"
             style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}
             onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.ink)}
             onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}>
             ANALYTICS
-          </a>
-          <a href="/"
+          </Link>
+          <Link to="/"
             style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}
             onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.ink)}
             onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}>
             ← LIVE
-          </a>
+          </Link>
         </div>
       </div>
 

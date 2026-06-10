@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
 import { useConfirm } from '../hooks/useConfirm'
@@ -1232,18 +1233,18 @@ export function BacktestsPage() {
       }}>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: '#6a85b0' }}>TOPSTEP-BOT</span>
         <div style={{ display: 'flex', gap: 24 }}>
-          <a href="/analytics"
+          <Link to="/analytics"
             style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
             onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
             onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
             ANALYTICS
-          </a>
-          <a href="/"
+          </Link>
+          <Link to="/"
             style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
             onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
             onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
             ← LIVE
-          </a>
+          </Link>
         </div>
       </div>
 

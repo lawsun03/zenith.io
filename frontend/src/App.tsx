@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
 import { useStream } from './hooks/useStream'
 import type { ChartCallbacks } from './hooks/useStream'
 import { useConfig } from './hooks/useConfig'
@@ -40,16 +41,7 @@ import { TradeAnalysisPage } from './pages/TradeAnalysis'
 import { TradeAnalysisDetailPage } from './pages/TradeAnalysisDetail'
 import { OpenPositions } from './components/OpenPositions'
 
-export default function App() {
-  // Path-based router — /backtests and /analytics are standalone pages.
-  const path = window.location.pathname
-  if (path.startsWith('/backtests')) return <BacktestsPage />
-  if (path.startsWith('/analytics')) return <AnalyticsPage />
-  if (path.startsWith('/todos')) return <TodosPage />
-  const taDetail = path.match(/^\/trade-analysis\/(\d{4}-\d{2}-\d{2})$/)
-  if (taDetail) return <TradeAnalysisDetailPage date={taDetail[1]} />
-  if (path.startsWith('/trade-analysis')) return <TradeAnalysisPage />
-
+function LiveDashboard() {
   const chartCbRef = useRef<ChartCallbacks>({})
   const { config, saveConfig, saving, saveError } = useConfig()
 
@@ -159,5 +151,25 @@ export default function App() {
         saveError={saveError}
       />
     </div>
+  )
+}
+
+function TADetail() {
+  const { date } = useParams<{ date: string }>()
+  return <TradeAnalysisDetailPage date={date ?? ''} />
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/backtests" element={<BacktestsPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/todos" element={<TodosPage />} />
+        <Route path="/trade-analysis/:date" element={<TADetail />} />
+        <Route path="/trade-analysis" element={<TradeAnalysisPage />} />
+        <Route path="/*" element={<LiveDashboard />} />
+      </Routes>
+    </BrowserRouter>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 import { StatsRow } from '../components/StatsRow'
 import { KillzoneTable } from '../components/KillzoneTable'
 import { TradesTable } from '../components/TradesTable'
@@ -57,16 +58,16 @@ interface AnalyticsStats {
   }>
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (
-    <a
-      href={href}
+    <Link
+      to={to}
       style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}
       onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.ink)}
       onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}
     >
       {children}
-    </a>
+    </Link>
   )
 }
 
@@ -103,8 +104,8 @@ export function AnalyticsPage() {
       }}>
         <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>TOPSTEP-BOT</span>
         <div style={{ display: 'flex', gap: 24 }}>
-          <NavLink href="/trade-analysis">TRADE ANALYSIS</NavLink>
-          <NavLink href="/">← LIVE</NavLink>
+          <NavLink to="/trade-analysis">TRADE ANALYSIS</NavLink>
+          <NavLink to="/">← LIVE</NavLink>
         </div>
       </div>
 
