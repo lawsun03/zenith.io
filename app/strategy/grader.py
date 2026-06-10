@@ -445,14 +445,17 @@ class SetupGrader:
     ) -> tuple[bool, Decimal]:
         """
         Rule E: Fibonacci displacement quality.
-        Manipulation leg = sweep bar body range (b2 = displacement_bar approximation).
+        Manipulation leg = sweep bar full range (signal.sweep_bar_range).
         Reversal leg = displacement bar body.
-        Extension = reversal_body / manipulation_body.
+        Extension = reversal_body / manipulation_range.
         Returns (ok, extension_multiple).
+
+        Signals without sweep context (DEBUG force-signal) grade fib=0 —
+        no fallback to the displacement bar, whose body/range is capped
+        at 1.0 and says nothing about the manipulation leg.
         """
-        b2 = disp.displacement_bar
-        manip_range = b2.high - b2.low  # sweep bar range as proxy
-        if manip_range == 0:
+        manip_range = signal.sweep_bar_range
+        if not manip_range:
             return False, Decimal("0")
         extension = disp.body_size / manip_range
         ok = extension >= min_mult

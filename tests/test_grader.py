@@ -42,6 +42,7 @@ def make_signal(
     fvg_high: str = "2403",
     rationale: str = "NY AM: test signal",
     killzone: str = "NY AM",
+    sweep_bar_range: str | None = None,
 ):
     from app.strategy.composer import Signal
     return Signal(
@@ -57,6 +58,7 @@ def make_signal(
         fvg_low=Decimal(fvg_low),
         fvg_high=Decimal(fvg_high),
         rationale=rationale,
+        sweep_bar_range=Decimal(sweep_bar_range) if sweep_bar_range else None,
     )
 
 
@@ -310,21 +312,44 @@ class TestGradeAssignment:
         assert grade.recent_sweep_ok is False
 
     def test_fib_displacement_ok_when_reversal_exceeds_multiplier(self):
-        """Rule E: body / bar_range >= min_mult → fib_displacement_ok=True."""
+        """Rule E: displacement body / sweep bar range >= min_mult → fib_displacement_ok=True."""
         g = grader_with_htf()
-        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395")
-        # body_to_range=0.8 means body is 80% of bar range → extension = 0.8
-        disp = make_disp(body_to_atr="1.8", body_to_range="0.8", atr="2.0")
-        grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("0.7"))
+        # disp body = 1.8 × 2.0 = 3.6; sweep bar range 3.0 → extension 1.2
+        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395", sweep_bar_range="3.0")
+        disp = make_disp(body_to_atr="1.8", atr="2.0")
+        grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("1.0"))
         assert grade.fib_displacement_ok is True
 
     def test_fib_displacement_fail_when_under_multiplier(self):
-        """Rule E: body / bar_range < min_mult → fib_displacement_ok=False."""
+        """Rule E: displacement body / sweep bar range < min_mult → fib_displacement_ok=False."""
         g = grader_with_htf()
-        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395")
-        disp = make_disp(body_to_atr="1.8", body_to_range="0.4", atr="2.0")
+        # disp body = 3.6; sweep bar range 6.0 → extension 0.6
+        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395", sweep_bar_range="6.0")
+        disp = make_disp(body_to_atr="1.8", atr="2.0")
+        grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("1.0"))
+        assert grade.fib_displacement_ok is False
+
+    def test_fib_can_exceed_one(self):
+        """The old computation divided the displacement bar's body by its own
+        range, capping fib at 1.0 forever — a fib>=1.0 gate was an off switch.
+        A reversal body larger than the sweep bar's range must yield > 1.0x."""
+        g = grader_with_htf()
+        # disp body = 3.6; sweep (manipulation) bar range 2.0 → extension 1.8
+        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395", sweep_bar_range="2.0")
+        disp = make_disp(body_to_atr="1.8", atr="2.0")
+        grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("1.0"))
+        assert grade.fib_extension == Decimal("1.8")
+        assert grade.fib_displacement_ok is True
+
+    def test_fib_fails_without_sweep_bar_range(self):
+        """A signal with no sweep bar context (e.g. DEBUG force-signal) must
+        not silently fall back to the broken displacement-bar proxy."""
+        g = grader_with_htf()
+        sig = make_signal(rationale="NY AM: HTF: 4h FVG @ 2395")  # sweep_bar_range=None
+        disp = make_disp(body_to_atr="1.8", body_to_range="0.8", atr="2.0")
         grade = g.score(sig, disp, active_fvgs=[], min_displacement_mult=Decimal("0.7"))
         assert grade.fib_displacement_ok is False
+        assert grade.fib_extension == Decimal("0")
 
 
 class TestTargetClarityMode:

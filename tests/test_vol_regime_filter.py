@@ -51,6 +51,7 @@ def _composer_with_sweep(cfg: ComposerConfig) -> SweepDisplacementComposer:
         pattern="B_one_bar",
         sweep_extreme=Decimal("98.5"),
         completed_at=datetime(2026, 1, 2, 9, 59, tzinfo=timezone.utc),
+        sweep_bar=_bar(0),
     )
     # Use a bar in NY AM killzone (13:00 UTC = 08:00 ET)
     composer.on_sweep(_bar(0), sweep)

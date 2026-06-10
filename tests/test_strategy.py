@@ -225,6 +225,59 @@ class TestLiquidityTracker:
         assert a_sweeps[0].side == "high"
         assert a_sweeps[0].swept_swing.price == Decimal("2403")
 
+    def test_pattern_b_sweep_carries_sweep_bar(self):
+        """The grader's fib extension needs the manipulation bar's range —
+        a Pattern B event must carry the bar that pierced and closed back."""
+        cfg = LiquidityConfig(swing_lookback=2, min_penetration=Decimal("0.20"))
+        tracker = LiquidityTracker(cfg)
+        prices = [
+            ("2400", "2400.5", "2399.8", "2400.2"),
+            ("2400.2", "2401", "2400", "2400.8"),
+            ("2400.8", "2403", "2400.5", "2401.5"),  # swing high candidate
+            ("2401.5", "2402", "2401", "2401.2"),
+            ("2401.2", "2401.5", "2400", "2400.5"),  # confirms swing high
+            ("2400.5", "2403.5", "2400", "2401"),    # sweep bar
+        ]
+        events: list[SweepEvent] = []
+        for b in make_session_bars(prices):
+            events.extend(tracker.on_bar(b))
+
+        assert len(events) == 1
+        assert events[0].sweep_bar.high == Decimal("2403.5")
+        assert events[0].sweep_bar.low == Decimal("2400")
+
+    def test_pattern_a_sweep_bar_is_the_extreme_setting_bar(self):
+        """For a multi-bar sweep, the manipulation bar is the one that set
+        the final extreme — not the tag bar, not the close-back bar."""
+        cfg = LiquidityConfig(
+            swing_lookback=2,
+            min_penetration=Decimal("0.20"),
+            multi_bar_window=4,
+        )
+        tracker = LiquidityTracker(cfg)
+        prices = [
+            ("2400", "2400.5", "2399.8", "2400.2"),
+            ("2400.2", "2401", "2400", "2400.8"),
+            ("2400.8", "2403", "2400.5", "2401.5"),  # swing high candidate
+            ("2401.5", "2402", "2401", "2401.2"),
+            ("2401.2", "2401.5", "2400", "2400.5"),  # confirms swing high
+            # Tag bar: pierces 2403, closes above.
+            ("2400.5", "2403.5", "2400.5", "2403.2"),
+            # Pushes the extreme higher — this is the manipulation bar.
+            ("2403.2", "2404.1", "2403.0", "2403.3"),
+            # Close-back bar → Pattern A emit.
+            ("2403.3", "2403.4", "2402", "2402.5"),
+        ]
+        events: list[SweepEvent] = []
+        for b in make_session_bars(prices):
+            events.extend(tracker.on_bar(b))
+
+        a_sweeps = [e for e in events if e.pattern == "A_multi_bar"]
+        assert len(a_sweeps) == 1
+        assert a_sweeps[0].sweep_extreme == Decimal("2404.1")
+        assert a_sweeps[0].sweep_bar.high == Decimal("2404.1")
+        assert a_sweeps[0].sweep_bar.low == Decimal("2403.0")
+
     def test_pattern_a_expires_without_emitting(self):
         """
         Tag a swing, then never close back within the window. No event.
@@ -493,6 +546,9 @@ class TestComposer:
         # Entry below stop. Target below entry.
         assert sig.entry < sig.stop
         assert sig.target < sig.entry
+        # Manipulation context for the grader's fib extension:
+        # sweep bar idx 12 = high 2403.5, low 2401 → range 2.5.
+        assert sig.sweep_bar_range == Decimal("2.5")
 
     def test_no_signal_outside_killzone(self):
         """
@@ -555,6 +611,7 @@ class TestComposer:
         # Manually build a sweep + bullish displacement.
         from app.strategy.liquidity import Swing
         ts1 = in_ny_am(1)
+        b_sweep = bar(ts1, "2401", "2403.5", "2401", "2401.5")
         sweep = SweepEvent(
             side="high",
             swept_swing=Swing(
@@ -564,8 +621,8 @@ class TestComposer:
             pattern="B_one_bar",
             sweep_extreme=Decimal("2403.5"),
             completed_at=ts1,
+            sweep_bar=b_sweep,
         )
-        b_sweep = bar(ts1, "2401", "2403.5", "2401", "2401.5")
         composer.on_sweep(b_sweep, sweep)
         composer.on_bar_close(b_sweep)
 
@@ -602,6 +659,7 @@ class TestComposer:
 
         from app.strategy.liquidity import Swing
         ts0 = in_ny_am(0)
+        b_sweep = bar(ts0, "2401", "2403.5", "2401", "2401.5")
         sweep = SweepEvent(
             side="high",
             swept_swing=Swing(
@@ -611,8 +669,8 @@ class TestComposer:
             pattern="B_one_bar",
             sweep_extreme=Decimal("2403.5"),
             completed_at=ts0,
+            sweep_bar=b_sweep,
         )
-        b_sweep = bar(ts0, "2401", "2403.5", "2401", "2401.5")
         composer.on_sweep(b_sweep, sweep)
         composer.on_bar_close(b_sweep)
 

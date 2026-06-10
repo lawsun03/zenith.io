@@ -81,6 +81,7 @@ class SweepEvent:
     pattern: Literal["A_multi_bar", "B_one_bar"]
     sweep_extreme: Decimal     # the highest high (or lowest low) that took the level
     completed_at: datetime     # bar ts when the close-back confirmed the sweep
+    sweep_bar: Bar             # the bar that reached sweep_extreme (manipulation bar)
 
 
 @dataclass
@@ -115,6 +116,7 @@ class _PendingSweep:
     side: SweepSide
     tagged_at_bar_idx: int       # bar index when tag occurred
     sweep_extreme: Decimal       # extreme reached during the pending window
+    sweep_bar: Bar               # the bar that set the current extreme
 
 
 class LiquidityTracker:
@@ -304,6 +306,7 @@ class LiquidityTracker:
                     pattern="B_one_bar",
                     sweep_extreme=bar.high,
                     completed_at=bar.ts,
+                    sweep_bar=bar,
                 ))
                 self._used_swings.add(swing)
                 break  # one sweep per bar per side; nearest swing wins
@@ -323,6 +326,7 @@ class LiquidityTracker:
                     pattern="B_one_bar",
                     sweep_extreme=bar.low,
                     completed_at=bar.ts,
+                    sweep_bar=bar,
                 ))
                 self._used_swings.add(swing)
                 break
@@ -359,6 +363,7 @@ class LiquidityTracker:
                     side="high",
                     tagged_at_bar_idx=self._bar_idx,
                     sweep_extreme=bar.high,
+                    sweep_bar=bar,
                 ))
                 break
 
@@ -379,6 +384,7 @@ class LiquidityTracker:
                     side="low",
                     tagged_at_bar_idx=self._bar_idx,
                     sweep_extreme=bar.low,
+                    sweep_bar=bar,
                 ))
                 break
 
@@ -401,10 +407,13 @@ class LiquidityTracker:
             # Update the running extreme even before resolution.
             if p.side == "high" and bar.high > p.sweep_extreme:
                 p_extreme = bar.high
+                p_bar = bar
             elif p.side == "low" and bar.low < p.sweep_extreme:
                 p_extreme = bar.low
+                p_bar = bar
             else:
                 p_extreme = p.sweep_extreme
+                p_bar = p.sweep_bar
 
             if p.side == "high" and bar.close < p.swing.price:
                 events.append(SweepEvent(
@@ -413,6 +422,7 @@ class LiquidityTracker:
                     pattern="A_multi_bar",
                     sweep_extreme=p_extreme,
                     completed_at=bar.ts,
+                    sweep_bar=p_bar,
                 ))
                 self._used_swings.add(p.swing)
                 continue  # resolved, drop from pending
@@ -424,6 +434,7 @@ class LiquidityTracker:
                     pattern="A_multi_bar",
                     sweep_extreme=p_extreme,
                     completed_at=bar.ts,
+                    sweep_bar=p_bar,
                 ))
                 self._used_swings.add(p.swing)
                 continue
@@ -440,6 +451,7 @@ class LiquidityTracker:
                 side=p.side,
                 tagged_at_bar_idx=p.tagged_at_bar_idx,
                 sweep_extreme=p_extreme,
+                sweep_bar=p_bar,
             ))
 
         self._pending = still_pending

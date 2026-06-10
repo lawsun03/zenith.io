@@ -78,6 +78,10 @@ class Signal:
     fvg_low: Decimal | None      # for the dashboard / journal
     fvg_high: Decimal | None
     rationale: str               # human-readable, one line
+    # Manipulation bar range (high - low of the bar that set the sweep
+    # extreme) — the grader's fib-extension denominator. None only for
+    # hand-built signals (e.g. DEBUG force-signal), which then grade fib=0.
+    sweep_bar_range: Decimal | None = None
     setup_grade: "SetupGrade | None" = None
     armed_zone: "ArmedZone | None" = None
     ce: Decimal | None = None
@@ -359,4 +363,5 @@ class SweepDisplacementComposer:
             fvg_low=fvg.low,
             fvg_high=fvg.high,
             rationale=rationale,
+            sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
         )
