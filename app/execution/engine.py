@@ -785,6 +785,9 @@ class ExecutionEngine:
         equity = self.risk_state.current_equity
         if equity <= 0:  # before the first mark-to-market tick of the session
             equity = self.risk_state.realized_balance
+        offset = self.risk_state.config.risk_sizing_equity_offset
+        if offset > 0:
+            equity = max(equity - offset, Decimal("1"))
         stop_distance = abs(signal.entry - signal.stop)
         if stop_distance <= 0:
             return self.contracts  # degenerate signal; fall back rather than divide by zero
@@ -803,9 +806,10 @@ class ExecutionEngine:
         budget = equity * (self.risk_per_trade_pct / Decimal("100"))
         risk_per_contract = stop_distance * pv
         over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
+        offset_note = f" (profit-above-base; offset={offset})" if offset > 0 else ""
         log.info(
-            "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s",
-            equity, budget, stop_distance, risk_per_contract, size, over,
+            "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s%s",
+            equity, budget, stop_distance, risk_per_contract, size, over, offset_note,
         )
         return size
 

@@ -89,13 +89,16 @@ export function useStream(
         } else if (msg.kind === 'fill') {
           setFills(prev => [item, ...prev].slice(0, 50))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
-          const p = msg.payload as { is_entry: boolean; side: 'long' | 'short'; realized_pnl_delta: string }
-          chartCbRef?.current?.onFillMarker?.(
-            Math.floor(new Date(msg.ts).getTime() / 1000),
-            p.is_entry,
-            p.side,
-            Number(p.realized_pnl_delta),
-          )
+          const p = msg.payload as { is_entry: boolean; side: 'long' | 'short'; realized_pnl_delta: string; instrument?: string }
+          const fillIsActiveSymbol = !activeSymbolRef?.current || !p.instrument || p.instrument === activeSymbolRef.current
+          if (fillIsActiveSymbol) {
+            chartCbRef?.current?.onFillMarker?.(
+              Math.floor(new Date(msg.ts).getTime() / 1000),
+              p.is_entry,
+              p.side,
+              Number(p.realized_pnl_delta),
+            )
+          }
         } else if (msg.kind === 'reconcile') {
           setReconciles(prev => [item, ...prev].slice(0, 20))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})

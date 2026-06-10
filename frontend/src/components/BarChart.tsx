@@ -55,6 +55,7 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
   // Exposes setPositionMarkers so the position useEffect can inject an entry marker
   // alongside the SSE-driven fill markers without owning the full markers state.
   const markersPluginRef = useRef<{
+    setMarkers: (m: unknown[]) => void
     setPositionMarkers: (m: unknown[]) => void
   } | null>(null)
 
@@ -264,9 +265,19 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
     }
   }, [callbacksRef])
 
+  // Track previous symbol to detect switches vs TF-only changes.
+  const prevActiveSymbolRef = useRef<string | undefined>(undefined)
+
   // Re-populate the chart whenever the viewed timeframe or active symbol changes.
   useEffect(() => {
     if (!seriesRef.current || !chartRef.current) return
+
+    // Symbol changed — clear fill markers so the old instrument's marks don't show.
+    if (activeSymbol !== prevActiveSymbolRef.current) {
+      markersPluginRef.current?.setMarkers([])
+      prevActiveSymbolRef.current = activeSymbol
+    }
+
     const instrParam = activeSymbol ? `&instrument=${activeSymbol}` : ''
     fetch(`/api/bars?timeframe=${viewTf}&limit=500${instrParam}`)
       .then(r => r.json())
@@ -277,7 +288,8 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
         seriesRef.current.setData(validBars.length > 0 ? validBars as any : [])
         // Reset forming-bar anchor so off-TF/off-symbol bars don't show stale data.
         lastBarTimeRef.current = null
-        if (validBars.length > 0) chartRef.current.timeScale().fitContent()
+        // Always fit on symbol switch; also fit on TF change when bars are present.
+        chartRef.current.timeScale().fitContent()
       })
       .catch(() => {})
   }, [viewTf, activeSymbol])

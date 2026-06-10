@@ -9,9 +9,9 @@ _ROOT = Path(__file__).parent.parent.parent  # project root
 
 
 def load_all_trades() -> list[dict]:
-    """Merge all trades*.csv files from project root."""
+    """Merge all trades*.csv files from the trades/ directory."""
     rows: list[dict] = []
-    for path in sorted(_ROOT.glob("trades*.csv")):
+    for path in sorted((_ROOT / "trades").glob("trades*.csv")):
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
