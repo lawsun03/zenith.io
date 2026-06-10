@@ -155,6 +155,44 @@ def test_market_entry_fills_at_market_not_signal_price():
     assert all(f.is_entry for f in fills), f"Unexpected exit fill: {fills}"
 
 
+def test_cancel_all_does_not_vaporize_positions():
+    """cancel_all must NOT delete filled positions — in live it cancels resting
+    protective orders only; the position survives until flatten() closes it
+    with a real exit fill.
+
+    Why: the engine's reversal path is cancel_all() then flatten(). The old
+    paper semantics dropped the bracket (position and all) on cancel_all, so
+    flatten found nothing, no exit fill ever fired, and RiskState contracts
+    leaked — a 2.5y MNQ backtest deadlocked at MAX_CONTRACTS (-30/30) on
+    2024-01-25 and traded nothing for the remaining 2.4 years."""
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=0,
+        commission_per_side=Decimal("0"),
+    )
+    fills = []
+
+    async def collect(f: Fill):
+        fills.append(f)
+
+    async def go():
+        broker.on_fill(collect)
+        await broker.connect()
+        await broker.inject_bar(_bar(_now(), 100, 101, 99, 100))
+        await broker.place_bracket("MGC", "long", 2,
+                                   Decimal("100"), Decimal("95"), Decimal("110"))
+        await broker.cancel_all("MGC")
+        assert len(broker.open_brackets()) == 1, "cancel_all must keep the position"
+        await broker.flatten("MGC")
+
+    asyncio.run(go())
+    exit_fills = [f for f in fills if not f.is_entry]
+    assert len(exit_fills) == 1, "flatten after cancel_all must emit an exit fill"
+    # Net contracts return to zero: +2 on entry, -2 on the flatten exit.
+    assert sum(f.contracts_delta for f in fills) == 0
+    assert broker.open_brackets() == []
+
+
 def test_stop_slippage_worsens_exit():
     """Stop-loss fills should slip adversely (long stop slips down)."""
     broker = PaperBroker(

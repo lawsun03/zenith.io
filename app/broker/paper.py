@@ -312,13 +312,13 @@ class PaperBroker:
         return True
 
     async def cancel_all(self, instrument: str | None = None) -> int:
-        """In paper, cancel = drop the bracket without filling. No fees."""
-        ids = list(self._open.keys())
-        if instrument:
-            ids = [i for i in ids if self._open[i].instrument == instrument]
-        for oid in ids:
-            del self._open[oid]
-        return len(ids)
+        """No-op in paper. Live cancel_all cancels resting protective ORDERS;
+        the position survives until flatten() closes it with a real exit fill.
+        Paper entries fill instantly, so every open bracket IS a position —
+        dropping it here destroyed positions without exit fills and leaked
+        RiskState contracts (2.5y MNQ run deadlocked at MAX_CONTRACTS after
+        the first reversal flatten)."""
+        return 0
 
     # ------------------------------------------------------------------
     # Handler registration

@@ -357,7 +357,9 @@ async def test_lockout_mid_position_triggers_flatten():
     )
     await asyncio.sleep(0)
 
-    # Manually open a position via the broker.
+    # Seed a bar so the broker has a market price (fills anchor to last close,
+    # and flatten() needs it to price the exit), then open a position.
+    await broker.inject_bar(bar(in_ny_am(0), "2400", "2401", "2399", "2400"))
     await broker.place_bracket(
         instrument="MGC",
         side="long",

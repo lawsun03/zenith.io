@@ -20,8 +20,19 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import BrokerPosition, ExitCoverage
+from app.broker.events import Bar, BrokerPosition, ExitCoverage
 from app.broker.paper import PaperBroker
+
+
+def _seed_bar(price: str = "2400") -> Bar:
+    """Give the PaperBroker a market price — fills anchor to last close and
+    flatten() needs it to price exits."""
+    return Bar(
+        instrument="MGC", timeframe="1min",
+        ts=datetime(2026, 1, 2, 10, 0, tzinfo=timezone.utc),
+        open=Decimal(price), high=Decimal(price), low=Decimal(price),
+        close=Decimal(price), volume=1,
+    )
 from app.execution.reconciler import (
     ReconcileReport,
     Reconciler,
@@ -169,6 +180,7 @@ async def test_contract_drift_locks_and_flattens():
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     await broker.connect()
+    await broker.inject_bar(_seed_bar())
     # Three open contracts the bot doesn't know about.
     await broker.place_bracket(
         instrument="MGC",
@@ -230,6 +242,7 @@ async def test_sign_flipped_position_is_drift():
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     await broker.connect()
+    await broker.inject_bar(_seed_bar())
     # Broker is actually LONG 3.
     await broker.place_bracket(
         instrument="MGC",
