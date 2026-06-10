@@ -361,6 +361,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
                         "fvg": g.fvg_singular,
                         "pd": g.premium_discount_ok,
                         "del": g.has_delivery_fvg,
+                        "fib": str(g.fib_extension),
                     },
                 }
 
