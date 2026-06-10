@@ -5,6 +5,7 @@ import { StatsRow } from '../components/StatsRow'
 import { KillzoneTable } from '../components/KillzoneTable'
 import { TradesTable } from '../components/TradesTable'
 import { ClaudeAdvisor } from '../components/ClaudeAdvisor'
+import { Logo } from '../components/Logo'
 
 const C = {
   bg:    '#070c1a',
@@ -102,7 +103,10 @@ export function AnalyticsPage() {
         borderBottom: `1px solid ${C.bd}`, padding: '20px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>TOPSTEP-BOT</span>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Logo size={16} />
+          <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>ZENITH</span>
+        </Link>
         <div style={{ display: 'flex', gap: 24 }}>
           <NavLink to="/trade-analysis">TRADE ANALYSIS</NavLink>
           <NavLink to="/">← LIVE</NavLink>

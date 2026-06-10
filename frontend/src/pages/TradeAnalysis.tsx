@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { Logo } from '../components/Logo'
 
 const FONTS_ID = 'ta-grotesk-fonts'
 function injectFonts() {
@@ -120,7 +121,10 @@ export function TradeAnalysisPage() {
         borderBottom: `1px solid ${C.bd}`, padding: '20px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>TOPSTEP-BOT</span>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Logo size={16} />
+          <span style={{ ...mono, fontSize: 11, letterSpacing: '0.3em', color: C.dim }}>ZENITH</span>
+        </Link>
         <div style={{ display: 'flex', gap: 24 }}>
           <Link to="/analytics"
             style={{ ...mono, fontSize: 11, letterSpacing: '0.2em', color: C.dim, textDecoration: 'none' }}

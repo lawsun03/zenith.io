@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { Logo } from '../components/Logo'
 
 const FONTS_ID = 'ta-grotesk-fonts'
 function injectFonts() {
@@ -355,7 +356,10 @@ export function TradeAnalysisDetailPage({ date }: { date: string }) {
           onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = C.dim)}>
           ← TRADE ANALYSIS
         </Link>
-        <span style={{ ...mono, fontSize: 10, letterSpacing: '0.3em', color: C.faint }}>TOPSTEP-BOT</span>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Logo size={16} />
+          <span style={{ ...mono, fontSize: 10, letterSpacing: '0.3em', color: C.faint }}>ZENITH</span>
+        </Link>
       </div>
 
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '56px 24px' }}>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { StatusPayload } from '../types'
 import type { ConnState } from '../hooks/useStream'
 import { useConfirm } from '../hooks/useConfirm'
+import { Logo } from './Logo'
 
 interface Props {
   status: StatusPayload | null
@@ -87,8 +88,8 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
     <header className="flex items-center px-7 h-[54px] shrink-0 bg-bg border-b border-border animate-fade-up">
       {/* identity */}
       <div className="flex items-center gap-3 pr-5 border-r border-border">
-        <div className="w-7 h-7 border border-border-hi flex items-center justify-center text-xs font-medium text-ink shrink-0">
-          Z
+        <div className="w-7 h-7 border border-border-hi flex items-center justify-center shrink-0">
+          <Logo size={18} />
         </div>
         <div className="leading-none">
           <div className="text-[15px] font-medium text-ink tracking-tight">Zenith</div>

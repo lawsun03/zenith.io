@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Logo } from './Logo'
 import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
 import { useConfirm } from '../hooks/useConfirm'
@@ -1231,7 +1232,10 @@ export function BacktestsPage() {
         borderBottom: '1px solid #1d2a42', padding: '20px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: '#6a85b0' }}>TOPSTEP-BOT</span>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Logo size={16} />
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: '#6a85b0' }}>ZENITH</span>
+        </Link>
         <div style={{ display: 'flex', gap: 24 }}>
           <Link to="/analytics"
             style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
