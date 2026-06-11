@@ -134,7 +134,6 @@ const PARAM_LABELS: Record<string, string> = {
   ifvg_min_displacement_mult: 'Min Displacement Mult',
   ifvg_tp1_fraction: 'TP1 Fraction',
   ifvg_be_after_tp1: 'BE After TP1',
-  ifvg_session_windows: 'Session Windows',
   ifvg_news_blackout: 'News Blackout',
   vp_tick_size: 'VP Tick Size',
   vp_value_area_pct: 'VP Value Area %',
@@ -315,10 +314,6 @@ const STRATEGY_FIELDS: StrategyField[] = [
     hint: 'When ON, moves stop to break-even after TP1 fills. Protects profits on the runner but reduces final win size on strong moves. With partials disabled, has no effect.',
   },
   {
-    key: 'ifvg_session_windows', label: 'Session Windows', section: 'Killzones', kind: 'list',
-    hint: 'Comma-separated UTC time ranges (HH:MM-HH:MM) when entries are allowed. Empty = no session filter (trade any time). Example: 09:00-11:00, 02:00-05:00.',
-  },
-  {
     key: 'ifvg_news_blackout', label: 'News Blackout', section: 'Killzones', kind: 'list',
     hint: 'Comma-separated ISO date-time ranges to block entirely (e.g. a high-impact event day). Format: YYYY-MM-DDTHH:MM/YYYY-MM-DDTHH:MM. Usually empty.',
   },
@@ -370,7 +365,6 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   ifvg_min_displacement_mult:    '1.0',
   ifvg_tp1_fraction:             '0.5',
   ifvg_be_after_tp1:             'true',
-  ifvg_session_windows:          '',
   ifvg_news_blackout:            '',
   vp_tick_size:                  '0.10',
   vp_value_area_pct:             '0.7',
@@ -578,7 +572,7 @@ export function BacktestsPage() {
     }
     const macroEnabled = eff('ifvg_macro_blackouts_enabled') === 'true'
     if (!macroEnabled) stratPayload['ifvg_macro_windows'] = []
-    const LIST_FIELDS = ['ifvg_session_windows', 'ifvg_news_blackout'] as const
+    const LIST_FIELDS = ['ifvg_news_blackout'] as const
     for (const lf of LIST_FIELDS) {
       const raw = String(stratPayload[lf] ?? '').trim()
       stratPayload[lf] = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []

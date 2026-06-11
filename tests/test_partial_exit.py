@@ -146,6 +146,7 @@ def _make_broker_stub(entry_mode: str = "market"):
     broker._known_order_ids = set()
     broker._early_fills = {}
     broker.partial_profit_r = Decimal("0")
+    broker.max_entry_slippage_frac = Decimal("0")
     broker.entry_mode = entry_mode
     broker._instruments = ["MGC"]
     broker._extra_suites = {}  # multi-instrument refactor: _get_suite_for() reads this
@@ -458,6 +459,7 @@ def _make_partial_broker_stub():
     broker._extra_suites = {}
     broker._fill_handlers = []
     broker.partial_profit_r = Decimal("1.5")
+    broker.max_entry_slippage_frac = Decimal("0")
     broker.entry_mode = "market"
     broker._instruments = ["MNQ"]
 

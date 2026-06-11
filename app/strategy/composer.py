@@ -36,6 +36,7 @@ What this module does NOT do:
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -122,6 +123,10 @@ class ComposerConfig:
     min_atr_filter: Decimal = Decimal("0")
     max_atr_filter: Decimal = Decimal("0")
 
+    # Swing stop: look back N bars and use min-low / max-high as stop anchor
+    # instead of the immediate sweep extreme. 0 = disabled.
+    swing_stop_lookback: int = 0
+
 
 @dataclass
 class _Awaiting:
@@ -165,6 +170,9 @@ class SweepDisplacementComposer:
         self._ema: Decimal | None = None
         self._ema_bars: int = 0
         self._cooldown_remaining: int = 0
+        _buf = max(1, config.swing_stop_lookback) if config.swing_stop_lookback > 0 else 1
+        self._bar_lows: deque[Decimal] = deque(maxlen=_buf)
+        self._bar_highs: deque[Decimal] = deque(maxlen=_buf)
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -286,6 +294,9 @@ class SweepDisplacementComposer:
         Call this AFTER on_sweep/on_displacement for the bar — otherwise
         a sweep that fires on bar N would be aged by 1 immediately.
         """
+        self._bar_lows.append(bar.low)
+        self._bar_highs.append(bar.high)
+
         if self._cooldown_remaining > 0:
             self._cooldown_remaining -= 1
 
@@ -324,20 +335,27 @@ class SweepDisplacementComposer:
         fvg = event.fvg
         assert fvg is not None  # guarded by caller
 
+        lookback = cfg.swing_stop_lookback
         if event.side == "bullish":
-            # LONG. Entry on retrace into the FVG; we use the upper
-            # edge so a market entry at the bar after gets us in
-            # immediately if price is at or above. Stop just below the
-            # sweep extreme (the low that took liquidity).
             side: Side = "long"
             entry = fvg.high
-            stop = awaiting.sweep.sweep_extreme - cfg.stop_buffer
+            if lookback > 0 and self._bar_lows:
+                swing_anchor = min(self._bar_lows)
+                stop_anchor = min(swing_anchor, awaiting.sweep.sweep_extreme)
+            else:
+                stop_anchor = awaiting.sweep.sweep_extreme
+            stop = stop_anchor - cfg.stop_buffer
             r = entry - stop
             target = entry + r * cfg.r_multiple
         else:
             side = "short"
             entry = fvg.low
-            stop = awaiting.sweep.sweep_extreme + cfg.stop_buffer
+            if lookback > 0 and self._bar_highs:
+                swing_anchor = max(self._bar_highs)
+                stop_anchor = max(swing_anchor, awaiting.sweep.sweep_extreme)
+            else:
+                stop_anchor = awaiting.sweep.sweep_extreme
+            stop = stop_anchor + cfg.stop_buffer
             r = stop - entry
             target = entry - r * cfg.r_multiple
 

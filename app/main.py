@@ -137,6 +137,7 @@ def _build_runner(
             cooldown_bars_after_stop=s.cooldown_bars_after_stop,
             min_atr_filter=s.min_atr_filter,
             max_atr_filter=s.max_atr_filter,
+            swing_stop_lookback=s.swing_stop_lookback,
         )),
         grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,
@@ -297,7 +298,7 @@ async def _build_broker(cfg: AppConfig) -> Broker:
 
     from app.broker.topstepx import TopstepXBroker
     bot_cfg = load_bot_config(Path(os.environ.get("BOT_CONFIG_PATH", "bot_config.json")))
-    return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode, partial_profit_r=bot_cfg.partial_profit_r)
+    return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode, partial_profit_r=bot_cfg.partial_profit_r, max_entry_slippage_frac=bot_cfg.max_entry_slippage_frac)
 
 
 def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
@@ -319,7 +320,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
     Pure observability: never affects trade decisions.
     """
     from app.broker.events import Bar as BarEvent
-    from app.strategy.killzone import in_session_window, in_macro_window, in_news_blackout
+    from app.strategy.killzone import in_macro_window, in_news_blackout
 
     async def on_bar(bar: BarEvent) -> None:
         runner = engine.runners.get(bar.instrument) or (
@@ -341,11 +342,9 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             kz = in_killzone(bar.ts, runner.composer._zones)
         sr = runner.grader.session_range(kz.name if kz else "") if kz else None
 
-        in_session = True
         in_macro = False
         news_block = False
         if cfg is not None:
-            in_session = in_session_window(bar.ts, cfg.ifvg_session_windows)
             in_macro = in_macro_window(bar.ts, cfg.ifvg_macro_windows)
             news_block = in_news_blackout(bar.ts, cfg.ifvg_news_blackout)
 
@@ -355,7 +354,6 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             active_fvgs_count=active_fvgs_count,
             session_high=sr[0] if sr else None,
             session_low=sr[1] if sr else None,
-            in_session=in_session,
             in_macro=in_macro,
             news_blackout=news_block,
         )
@@ -925,8 +923,11 @@ async def _async_main() -> int:
         ))
 
     journal = Journal(outbox=outbox)
-    # Load any fills already written to today's CSV so a mid-session restart
-    # doesn't blank out the EOD summary.
+    # Load fills already written to the daily CSVs so a mid-session restart
+    # doesn't blank out the dashboard or EOD summary. Yesterday's file is
+    # included because a restart after midnight CT would otherwise lose the
+    # whole prior session (the EOD scheduler applies its own 24h cutoff).
+    journal.bootstrap_fills_from_csv(_daily_csv_path(offset_days=-1))
     journal.bootstrap_fills_from_csv(_daily_csv_path())
 
     # Email notifier — no-ops if SMTP env vars are missing.

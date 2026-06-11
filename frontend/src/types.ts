@@ -34,7 +34,8 @@ export interface StrategyConfig {
   // iFVG grader / session filters
   ifvg_sweep_window_bars: number
   ifvg_min_displacement_mult: string
-  ifvg_session_windows: string[]
+  grader_min_grade: string  // "A".."F"; "F" = no floor
+  ifvg_gapping_sack_enabled: boolean  // Rule I: reject stacked same-side FVGs
   ifvg_macro_windows: string[]
   ifvg_news_blackout: string[]
   // iFVG rule flags
@@ -57,6 +58,7 @@ export interface BotConfig {
   contracts: number
   risk_per_trade_pct: number
   partial_profit_r: number
+  max_entry_slippage_frac: number  // 0 = off; abort entry if adverse slip > frac × stop distance
   emergency_stop_distance?: Record<string, number>
   emergency_target_r?: number
   naked_grace_seconds?: number

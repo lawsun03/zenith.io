@@ -119,12 +119,13 @@ class TopstepXBroker:
         await broker.disconnect()
     """
 
-    def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0")) -> None:
+    def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0"), max_entry_slippage_frac: Decimal = Decimal("0")) -> None:
         self._suite = None  # project_x_py.TradingSuite, lazily imported
         self._extra_suites: dict[str, Any] = {}  # secondary instrument suites
         self._account_name = account_name
         self.entry_mode = entry_mode  # "market" or "limit"
         self.partial_profit_r = partial_profit_r  # 0 = disabled; >0 = take half at NxR then BE (hot-applied via PATCH /api/config)
+        self.max_entry_slippage_frac = max_entry_slippage_frac  # 0 = disabled; >0 = abort entry if adverse slip > frac × stop distance (hot-applied)
         self._bar_handlers: list[BarHandler] = []
         self._fill_handlers: list[FillHandler] = []
         self._equity_handlers: list[EquityHandler] = []
@@ -570,6 +571,7 @@ class TopstepXBroker:
             "tp1_price": tp1_price,
             "tp1_fraction": tp1_fraction,
             "be_after_tp1": be_after_tp1,
+            "signal_entry": entry,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -693,6 +695,7 @@ class TopstepXBroker:
             "tp1_price": tp1_price,
             "tp1_fraction": tp1_fraction,
             "be_after_tp1": be_after_tp1,
+            "signal_entry": entry,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -707,6 +710,56 @@ class TopstepXBroker:
             target_order_id=None,
             error=None,
         )
+
+    async def _abort_if_slipped(self, bracket: dict, fill_price: Decimal) -> bool:
+        """Slippage guard (abort mode). Returns True if the entry was flattened.
+
+        If the fill chased more than max_entry_slippage_frac × planned stop
+        distance beyond the signal entry, the fill-relative stop would land
+        inside the retrace zone the setup expects price to pass through
+        (2026-06-10 MNQ post-mortem: 13pt chase on a 9.8pt stop → stopped in
+        4s). The graded setup no longer exists at this price — flatten at
+        market instead of bracketing a broken trade.
+
+        Fail-safe: if the flatten order fails, returns False so the caller
+        proceeds to place brackets — never leave the position naked.
+        """
+        frac = self.max_entry_slippage_frac
+        signal_entry = bracket.get("signal_entry")
+        stop_dist = abs(bracket["stop_offset"])
+        if frac <= 0 or signal_entry is None or stop_dist <= 0:
+            return False
+        is_long = bracket["close_sdk_side"] == SIDE_SELL
+        adverse = (fill_price - signal_entry) if is_long else (signal_entry - fill_price)
+        if adverse <= stop_dist * frac:
+            return False
+        log.warning(
+            "SLIPPAGE ABORT: %s %s planned_entry=%s fill=%s adverse=%s "
+            "(%.0f%% of stop dist %s, max %.0f%%) — flattening instead of bracketing",
+            bracket.get("instrument", "?"), "long" if is_long else "short",
+            signal_entry, fill_price, adverse,
+            float(adverse / stop_dist * 100), stop_dist, float(frac * 100),
+        )
+        suite = self._get_suite_for(bracket.get("instrument", ""))
+        try:
+            resp = await suite.orders.place_market_order(
+                suite.instrument_id,
+                bracket["close_sdk_side"],
+                bracket["size"],
+                bracket["account_id"],
+            )
+            if not getattr(resp, "success", False):
+                log.error(
+                    "SLIPPAGE ABORT: flatten order rejected resp=%s — "
+                    "falling back to bracket placement so position is protected", resp,
+                )
+                return False
+        except Exception:
+            log.exception(
+                "SLIPPAGE ABORT: flatten failed — falling back to bracket placement"
+            )
+            return False
+        return True
 
     async def _place_bracket_after_fill(self, bracket: dict) -> None:
         """Invoked via create_task when a pending entry fills."""
@@ -736,6 +789,9 @@ class TopstepXBroker:
                     "cannot place bracket, position is unprotected"
                 )
                 return
+
+        if await self._abort_if_slipped(bracket, fill_price):
+            return
 
         stop = fill_price + bracket["stop_offset"]
         target = fill_price + bracket["target_offset"]
@@ -838,6 +894,9 @@ class TopstepXBroker:
                 log.error("_place_partial_bracket_after_fill: fill_price still zero — falling back to plain bracket")
                 await self._place_bracket_after_fill(bracket)
                 return
+
+        if await self._abort_if_slipped(bracket, fill_price):
+            return
 
         stop = fill_price + bracket["stop_offset"]
         target = fill_price + bracket["target_offset"]

@@ -168,6 +168,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 cooldown_bars_after_stop=s.cooldown_bars_after_stop,
                 min_atr_filter=s.min_atr_filter,
                 max_atr_filter=s.max_atr_filter,
+                swing_stop_lookback=s.swing_stop_lookback,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,

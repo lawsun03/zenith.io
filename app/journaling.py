@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import csv
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -169,9 +169,9 @@ _TRADES_HEADERS = [
 _pending_signal_meta: dict[str, dict] = {}
 
 
-def _daily_csv_path() -> Path:
+def _daily_csv_path(offset_days: int = 0) -> Path:
     """Today's trading-day CSV path (CT date, matches Topstep session boundary)."""
-    ct_date = datetime.now(_CT).strftime("%Y-%m-%d")
+    ct_date = (datetime.now(_CT) + timedelta(days=offset_days)).strftime("%Y-%m-%d")
     return Path("trades") / f"trades_{ct_date}.csv"
 
 

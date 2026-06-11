@@ -301,7 +301,6 @@ class Journal:
         active_fvgs_count: int = 0,
         session_high: "Decimal | None" = None,
         session_low: "Decimal | None" = None,
-        in_session: bool = True,
         in_macro: bool = False,
         news_blackout: bool = False,
     ) -> None:
@@ -334,7 +333,6 @@ class Journal:
             payload["session_high"] = str(session_high)
         if session_low is not None:
             payload["session_low"] = str(session_low)
-        payload["in_session_window"] = in_session
         payload["in_macro_window"] = in_macro
         payload["news_blackout"] = news_blackout
 

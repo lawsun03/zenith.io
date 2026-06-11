@@ -177,6 +177,16 @@ const FIELDS: FieldDef[] = [
     hint: 'Fibonacci displacement quality (Rule E): reversal leg must be ≥ this multiple of the manipulation leg. 0 = disabled.',
   },
   {
+    key: 'grader_min_grade', label: 'Grade Floor', type: 'select', section: 'strategy',
+    options: ['F', 'D', 'C', 'B', 'A'],
+    hint: 'Minimum setup grade required to trade. F = no floor (all structural-pass setups trade). C blocks D/F-grade setups. Today\'s scorecard: A≥75, B≥55, C≥35, D≥15.',
+  },
+  {
+    key: 'ifvg_gapping_sack_enabled', label: 'Gapping-Sack Rule (Rule I)', type: 'select', section: 'strategy',
+    options: ['true', 'false'],
+    hint: 'Reject setups whose displacement printed 2+ overlapping same-side FVGs unless a 30min FVG contains them. Trend legs print exactly this pattern — false allows with-trend continuation entries.',
+  },
+  {
     key: 'ifvg_tp1_fraction', label: 'iFVG TP1 Fraction', type: 'slider', section: 'strategy',
     min: 0, max: 1, step: 0.05,
     hint: 'Fraction of position to close at the structural TP1 (nearest HTF swing in trade direction). 0.5 = half off. 0 = skip partial, hold full size to final target.',
@@ -250,6 +260,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
+      max_entry_slippage_frac: String(config.max_entry_slippage_frac ?? 0),
       ...Object.fromEntries(
         emergencyInstruments.map(sym => [
           `emergency_stop_distance_${sym}`,
@@ -343,8 +354,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       ifvg_stop_buffer_ticks:   form.ifvg_stop_buffer_ticks             || '1.0',
       ifvg_sweep_window_bars:   parseInt(form.ifvg_sweep_window_bars)   || 10,
       ifvg_min_displacement_mult: form.ifvg_min_displacement_mult       || '1.0',
-      ifvg_session_windows:     (form.ifvg_session_windows || '09:00-11:00,02:00-05:00')
-                                  .split(',').map((s: string) => s.trim()).filter(Boolean),
+      grader_min_grade:         form.grader_min_grade                   || 'F',
+      ifvg_gapping_sack_enabled: form.ifvg_gapping_sack_enabled !== 'false',
       ifvg_macro_windows:       (form.ifvg_macro_windows || '')
                                   .split(',').map((s: string) => s.trim()).filter(Boolean),
       ifvg_news_blackout:       (form.ifvg_news_blackout || '')
@@ -363,6 +374,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
+      max_entry_slippage_frac: parseFloat(form.max_entry_slippage_frac) || 0,
       emergency_stop_distance: Object.fromEntries(
         emergencyInstruments.map(sym => [
           sym,
@@ -643,6 +655,23 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                     </div>
                     <div>
                       <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Max Entry Slippage (× stop dist, 0 = off)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        value={form.max_entry_slippage_frac ?? '0'}
+                        onChange={e => set('max_entry_slippage_frac', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Abort guard: if a market entry fills beyond this fraction of the stop distance past the signal price, flatten immediately instead of bracketing (the tightened stop would sit inside the retrace zone). 0.5 = abort when slip exceeds half the stop. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
                         Naked Grace Period (s)
                       </label>
                       <input
@@ -719,20 +748,6 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                 )}
                 {section === 'strategy' && (
                   <>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Session Windows (NY time, comma-separated)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={form.ifvg_session_windows ?? '09:00-11:00,02:00-05:00'}
-                        onChange={e => set('ifvg_session_windows', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        NY local time ranges that allow entry signals (e.g. 09:00-11:00). Empty = allow all times.
-                      </p>
-                    </div>
                     <div>
                       <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
                         Macro Windows (NY time, comma-separated)

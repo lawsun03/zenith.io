@@ -506,6 +506,7 @@ def build_app(
             "contracts": cfg.contracts,
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "partial_profit_r": float(cfg.partial_profit_r),
+            "max_entry_slippage_frac": float(cfg.max_entry_slippage_frac),
             "enabled_killzones": cfg.enabled_killzones,
             "signal_instrument": cfg.signal_instrument,
             "mode": _mode,
@@ -524,6 +525,8 @@ def build_app(
             _broker._account_name = body.account_name
         if _broker is not None and hasattr(_broker, "partial_profit_r"):
             _broker.partial_profit_r = body.partial_profit_r
+        if _broker is not None and hasattr(_broker, "max_entry_slippage_frac"):
+            _broker.max_entry_slippage_frac = body.max_entry_slippage_frac
         if _engine is not None:
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
@@ -563,6 +566,7 @@ def build_app(
             "contracts": body.contracts,
             "risk_per_trade_pct": float(body.risk_per_trade_pct),
             "partial_profit_r": float(body.partial_profit_r),
+            "max_entry_slippage_frac": float(body.max_entry_slippage_frac),
             "enabled_killzones": body.enabled_killzones,
             "signal_instrument": body.signal_instrument,
             "mode": _mode,

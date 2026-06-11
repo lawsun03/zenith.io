@@ -43,15 +43,14 @@ class StrategyParams(BaseModel):
     ifvg_sweep_window_bars: int = 10                   # bars since sweep for Rule A
     ifvg_min_displacement_mult: Decimal = Decimal("1.0")  # Fibonacci displacement quality (Rule E)
     # iFVG session / news filters (Rule G, H)
-    ifvg_session_windows: list[str] = Field(
-        default_factory=lambda: ["09:00-11:00", "02:00-05:00"],
-    )
-    ifvg_macro_windows: list[str] = Field(
-        default_factory=lambda: ["08:30-09:10", "09:50-10:10", "10:50-11:10", "13:10-13:40", "15:15-15:45"],
-    )
+    ifvg_macro_windows: list[str] = Field(default_factory=list)
     ifvg_news_blackout: list[str] = Field(default_factory=list)  # UTC ISO ranges "YYYY-MM-DDTHH:MM/..."
     ifvg_tp1_fraction: Decimal = Decimal("0.5")   # fraction of position to close at structural TP1
     ifvg_be_after_tp1: bool = True                 # move stop to breakeven when structural TP1 fills
+    # Rule I: reject setups whose displacement printed 2+ overlapping same-side
+    # FVGs ("gapping sack") unless a 30min FVG contains them. Trend legs print
+    # exactly this pattern, so disabling allows with-trend continuation entries.
+    ifvg_gapping_sack_enabled: bool = True
 
     # Volume profile filter + target
     vp_enabled: bool = True
@@ -73,6 +72,16 @@ class StrategyParams(BaseModel):
     # (downgrade one notch so strong setups still trade), or "off" (ignore).
     target_clarity_mode: str = "reject"
 
+    # Minimum letter grade a setup must score to trade ("A".."F"; "F" = no floor).
+    # The scorecard refactor decoupled passes from the letter grade — this
+    # re-attaches a configurable floor. Default "F" = off.
+    grader_min_grade: str = "F"
+
+    # Stop placement: look back N bars and use min-low (long) / max-high (short)
+    # as the stop anchor instead of the immediate sweep extreme. 0 = disabled
+    # (current behavior: stop just past sweep_extreme).
+    swing_stop_lookback: int = 0
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
@@ -86,6 +95,11 @@ class BotConfig(BaseModel):
     contracts: int = 1              # number of contracts per signal
     risk_per_trade_pct: Decimal = Decimal("0.25")  # 0 = disabled (use fixed contracts); else % of equity risked per trade
     partial_profit_r: Decimal = Decimal("0")  # 0 = disabled; e.g. 1.5 = take half at 1.5R then move stop to break-even (BE-only for 1-lots)
+    # Slippage guard (abort mode): if a market entry fills more than this
+    # fraction of the planned stop distance beyond the signal entry, the fill's
+    # geometry is broken (fill-relative stop would sit inside the retrace zone)
+    # — flatten immediately instead of placing brackets. 0 = disabled.
+    max_entry_slippage_frac: Decimal = Decimal("0")
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
@@ -130,6 +144,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "contracts": config.contracts,
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "partial_profit_r": _conv(config.partial_profit_r),
+        "max_entry_slippage_frac": _conv(config.max_entry_slippage_frac),
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
         "emergency_stop_distance": {k: _conv(v) for k, v in config.emergency_stop_distance.items()},

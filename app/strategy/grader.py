@@ -38,13 +38,16 @@ log = logging.getLogger(__name__)
 
 MomentumQuality = Literal["strong", "decent", "weak"]
 
+# Ordering for the configurable grade floor (grader_min_grade).
+_GRADE_RANK = {"F": 0, "D": 1, "C": 2, "B": 3, "A": 4}
+
 
 @dataclass(frozen=True)
 class SetupGrade:
     """Result of grading one signal candidate against Dodgy's 5 criteria."""
     grade: Literal["A", "B", "C", "D", "F"]
     score: int                          # 0-100 weighted scorecard
-    passes: bool                        # True if grade >= A-
+    passes: bool                        # True if structural rules pass AND grade >= min_grade floor
     has_delivery_fvg: bool              # directional delivery (Correction 6)
     delivery_fvg_side: str | None       # "bullish" | "bearish" | None
     delivery_fvg_in_pd: bool            # delivery FVG in correct P/D zone
@@ -136,6 +139,8 @@ class SetupGrader:
         bars_since_sweep: int = 0,
         sweep_window_bars: int = 10,
         min_displacement_mult: Decimal = Decimal("1.0"),
+        min_grade: str = "F",
+        gapping_sack_enabled: bool = True,
     ) -> SetupGrade:
         """
         Score a signal against all 5 Dodgy criteria.
@@ -186,7 +191,7 @@ class SetupGrader:
         singular, sing_tf, bpr, bpr_tf = self._check_fvg_singular(
             signal, active_fvgs
         )
-        if not singular:
+        if not singular and gapping_sack_enabled:
             grade = self._make_grade(
                 "B", False,
                 momentum_quality="decent",
@@ -248,6 +253,11 @@ class SetupGrader:
         if target_penalty:
             passes = score_val >= 35
 
+        # Configurable letter-grade floor (grader_min_grade)
+        below_floor = _GRADE_RANK[grade_letter] < _GRADE_RANK.get(min_grade, 0)
+        if below_floor:
+            passes = False
+
         reason = (
             f"{signal.killzone}: grade {grade_letter} ({score_val}) — "
             f"momentum={momentum_quality}, P/D={'ok' if pd_ok else 'off'}, "
@@ -255,6 +265,7 @@ class SetupGrader:
             f"BPR={'yes' if bpr else 'no'}, "
             f"fib={'ok' if fib_ok else 'low'} ({fib_ext:.2f}x)"
             + (" [no-struct-target penalty]" if target_penalty else "")
+            + (f" [below min grade {min_grade}]" if below_floor else "")
         )
         log.info(reason)
 

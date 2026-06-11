@@ -55,7 +55,7 @@ from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
 from app.strategy.grader import SetupGrader
-from app.strategy.killzone import in_killzone, in_session_window, in_macro_window, in_news_blackout
+from app.strategy.killzone import in_killzone, in_macro_window, in_news_blackout
 from app.strategy.liquidity import LiquidityTracker
 from app.strategy.volume_profile import VolumeProfileTracker
 
@@ -148,9 +148,6 @@ class StrategyRunner:
         if in_news_blackout(bar.ts, self.strategy_cfg.ifvg_news_blackout):
             log.info("Signal blocked: news blackout at %s", bar.ts)
             return None
-        if not in_session_window(bar.ts, self.strategy_cfg.ifvg_session_windows):
-            return None  # outside configured session windows — silent skip
-
         signal: Optional[Signal] = None
 
         # ── Armed zone path ──────────────────────────────────────────────
@@ -252,6 +249,8 @@ class StrategyRunner:
                         bars_since_sweep=0,  # sweep tracking deferred — always 0 for now
                         sweep_window_bars=self.strategy_cfg.ifvg_sweep_window_bars,
                         min_displacement_mult=self.strategy_cfg.ifvg_min_displacement_mult,
+                        min_grade=self.strategy_cfg.grader_min_grade,
+                        gapping_sack_enabled=self.strategy_cfg.ifvg_gapping_sack_enabled,
                     )
                     if grade.passes:
                         graded = dc_replace(candidate, setup_grade=grade)
@@ -374,7 +373,11 @@ class StrategyRunner:
         candidate = self.composer.on_displacement(forming_bar, event)
         if candidate is None:
             return None
-        grade = self.grader.score(candidate, event, self.displacement.active_fvgs)
+        grade = self.grader.score(
+            candidate, event, self.displacement.active_fvgs,
+            min_grade=self.strategy_cfg.grader_min_grade,
+            gapping_sack_enabled=self.strategy_cfg.ifvg_gapping_sack_enabled,
+        )
         if not grade.passes:
             log.info("Forming-bar signal filtered: %s — %s", grade.grade, grade.reason)
             return None
