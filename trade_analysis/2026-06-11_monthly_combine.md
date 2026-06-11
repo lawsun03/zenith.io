@@ -117,6 +117,30 @@ month → 50%+ forever). Bigger sizing (1.0%) *helps* under this rule:
 totals overshoot $3k enough to dilute the best day — it even gains
 2024-10 and 2025-12 as passes. Worst min-equity at 1.0%: $48,220.
 
+## Round 4 — strategy switches (armed-zone entries, BE-off) at 1.0% r3.5
+
+| variant | passed | note |
+|---|---|---|
+| retrace_ce limit entries | 1/17 (6%) | trades collapse to 3–39/mo; adverse selection — runaway winners never retrace to fill |
+| ifvg_edge limit entries | 2/17 (12%) | same mechanism |
+| ifvg_be_after_tp1 off | 6/17 (35%) | identical pass months — neutral |
+
+Caveat: the sim is biased against limit modes (PaperBroker fills at bar
+close; live market-entry slippage of +13–43 pts is NOT modeled), so they
+may still be worth testing live for the slippage benefit — but they cannot
+fix the Combine math, which is driven by trade volume. The passing months
+are precisely the 70–90-trade months.
+
+Strategy-level paths that could beat ~31% (not param work):
+1. MFE/MAE excursion tracking in the backtest → data-driven exit ladder
+   (top of the monitoring backlog).
+2. A second, uncorrelated setup engine to fill the dead months (3–19
+   trades/mo) — the combined-strategy bot plan; failures are quiet months,
+   not blow-ups.
+3. Live slippage reduction on the market path (real
+   max_entry_slippage_frac, smarter order placement) — protects the edge
+   the sim assumes.
+
 ## Recommendation (not applied)
 
 `risk_per_trade_pct: 1.0` (from 0.25) and `r_multiple: 3.5` (from 2.5,
