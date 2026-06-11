@@ -93,6 +93,11 @@ class BotConfig(BaseModel):
     replay_start_delay_s: int = 5   # seconds to wait before replay begins (lets browser connect)
     account_name: str | None = None  # live mode: TopstepX account name to trade on
     entry_mode: str = "market"      # "market" or "limit" (custom limit+bracket-after-fill)
+    # Mid-bar entries via the forming-bar poller. False (default) = the b3
+    # confirmation bar must CLOSE before entry — the only behavior the
+    # backtest/walk-forward validates. True = enter the moment the forming
+    # bar satisfies the inversion price (touch, not close) — unvalidated.
+    forming_bar_entries: bool = False
     contracts: int = 1              # number of contracts per signal
     risk_per_trade_pct: Decimal = Decimal("0.25")  # 0 = disabled (use fixed contracts); else % of equity risked per trade
     partial_profit_r: Decimal = Decimal("0")  # 0 = disabled; e.g. 1.5 = take half at 1.5R then move stop to break-even (BE-only for 1-lots)
@@ -166,6 +171,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "replay_start_delay_s": config.replay_start_delay_s,
         "account_name": config.account_name,
         "entry_mode": config.entry_mode,
+        "forming_bar_entries": config.forming_bar_entries,
         "contracts": config.contracts,
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "partial_profit_r": _conv(config.partial_profit_r),

@@ -259,6 +259,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       replay_start_delay_s: String(config.replay_start_delay_s ?? 5),
       account_name:         config.account_name ?? '',
       entry_mode:           config.entry_mode ?? 'market',
+      forming_bar_entries:  String(config.forming_bar_entries ?? false),
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
@@ -379,6 +380,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       replay_start_delay_s: parseInt(form.replay_start_delay_s) || 5,
       account_name:         form.account_name?.trim() || null,
       entry_mode:           form.entry_mode || 'market',
+      forming_bar_entries:  form.forming_bar_entries === 'true',
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
@@ -605,6 +607,32 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                         {form.entry_mode === 'limit'
                           ? 'Limit order at the FVG level. Stop + target placed after fill. Stays working until cancelled — no timeout.'
                           : 'Market order fills immediately. Stop + target placed after fill is confirmed. No SDK bracket wrapper.'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                        Entry Confirmation
+                      </label>
+                      <div className="flex gap-0">
+                        {(['false', 'true'] as const).map(v => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => set('forming_bar_entries', v)}
+                            className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
+                              (form.forming_bar_entries ?? 'false') === v
+                                ? 'border-accent bg-accent/10 text-accent'
+                                : 'border-border text-dim hover:text-ink'
+                            } ${v === 'false' ? 'border-r-0' : ''}`}
+                          >
+                            {v === 'false' ? 'Closed Bar' : 'Forming Bar'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        {form.forming_bar_entries === 'true'
+                          ? 'Enters mid-bar the moment the forming bar touches the inversion price. NOT covered by the backtest validation.'
+                          : 'Waits for the confirmation bar to close before entering — the path the walk-forward validated. Hot-applied.'}
                       </p>
                     </div>
                     <div>

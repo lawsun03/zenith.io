@@ -408,6 +408,7 @@ class ExecutionEngine:
         strategy_cfg: "StrategyParams | None" = None,
         commission_per_contract: Decimal = Decimal("0"),
         max_contracts_override: int | None = None,
+        forming_bar_entries: bool = False,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -425,6 +426,10 @@ class ExecutionEngine:
         self.strategy_cfg = strategy_cfg
         self.commission_per_contract = commission_per_contract  # deducted per fill side; hot-applied
         self.max_contracts_override = max_contracts_override  # None = use account-level cap; hot-applied
+        # Mid-bar entries: when False (default), the b3 confirmation must come
+        # from a CLOSED bar — the only path the backtest validates. The poll
+        # task always runs; it checks this flag per tick so PATCH hot-applies.
+        self.forming_bar_entries = forming_bar_entries
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
@@ -502,8 +507,8 @@ class ExecutionEngine:
         if not self._replay_mode:
             self._poll_task = asyncio.create_task(self._poll_forming_bars())
         log.info(
-            "ExecutionEngine started: %d instruments tracked",
-            len(self.runners),
+            "ExecutionEngine started: %d instruments tracked, forming_bar_entries=%s",
+            len(self.runners), self.forming_bar_entries,
         )
 
     async def stop(self) -> None:
@@ -974,6 +979,8 @@ class ExecutionEngine:
         """
         while True:
             await asyncio.sleep(1)
+            if not self.forming_bar_entries:
+                continue
             for instrument, runner in self.runners.items():
                 try:
                     get_fb = getattr(self.broker, "get_forming_bar", None)

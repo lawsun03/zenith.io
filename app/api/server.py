@@ -503,6 +503,7 @@ def build_app(
             "replay_start_delay_s": cfg.replay_start_delay_s,
             "account_name": cfg.account_name,
             "entry_mode": cfg.entry_mode,
+            "forming_bar_entries": cfg.forming_bar_entries,
             "contracts": cfg.contracts,
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "partial_profit_r": float(cfg.partial_profit_r),
@@ -531,6 +532,7 @@ def build_app(
         if _engine is not None:
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
+            _engine.forming_bar_entries = body.forming_bar_entries
             _engine.strategy_cfg = body.strategy
             _engine.commission_per_contract = Decimal(str(body.commission_per_contract))
             _engine.max_contracts_override = body.max_contracts_override
@@ -573,6 +575,7 @@ def build_app(
             "replay_start_delay_s": body.replay_start_delay_s,
             "account_name": body.account_name,
             "entry_mode": body.entry_mode,
+            "forming_bar_entries": body.forming_bar_entries,
             "contracts": body.contracts,
             "risk_per_trade_pct": float(body.risk_per_trade_pct),
             "partial_profit_r": float(body.partial_profit_r),

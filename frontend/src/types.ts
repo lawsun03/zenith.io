@@ -53,6 +53,7 @@ export interface BotConfig {
   replay_start_delay_s: number
   account_name: string | null
   entry_mode: string
+  forming_bar_entries?: boolean  // false = closed-bar confirmation only (validated path)
   enabled_killzones: string[]
   signal_instrument: string | null
   contracts: number
