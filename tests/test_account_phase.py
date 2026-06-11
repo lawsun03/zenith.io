@@ -102,3 +102,47 @@ class TestXFA:
         assert amount == D("1750")          # 50% of balance, under cap
         assert t.balance == D("1750")
         assert t.winning_days == 0          # counter resets each cycle
+
+
+class TestReviewGaps:
+    """Cases the first review found unfalsifiable or unpinned."""
+
+    def test_payout_cap_binds(self):
+        """payout_cap must clamp the 50% fraction - a cap regression would
+        otherwise pay out unbounded amounts."""
+        t = xfa_tracker()
+        t.on_pnl(D("12000"), day(0)); t.roll_day(day(1))
+        for n in range(1, 5):
+            t.on_pnl(D("200"), day(n)); t.roll_day(day(n + 1))
+        assert t.payout_eligible()
+        amount = t.request_payout()
+        assert amount == D("5000")          # min(12800/2=6400, cap 5000)
+        assert t.balance == D("7800")
+
+    def test_post_payout_account_survives(self):
+        """After a payout halves the balance, the $0-locked MLL must not
+        insta-kill the account (floor 3000 > lock_at 2000 guarantees the
+        lock fired before any payout)."""
+        t = xfa_tracker()
+        for n in range(5):
+            t.on_pnl(D("700"), day(n)); t.roll_day(day(n + 1))
+        t.request_payout()
+        assert t.mll == D("0")
+        assert not t.is_dead()
+
+    def test_eod_trailing_intraday_dip_survives(self):
+        """With mll_trailing=eod, an intraday dip below the would-be
+        intraday floor does NOT kill - that is the entire point of the
+        EOD/intraday config switch."""
+        t = combine_tracker("eod")
+        t.on_pnl(D("1500"), day(0)); t.roll_day(day(1))   # EOD anchor 51500 -> MLL 49500
+        t.on_pnl(D("-1900"), day(1))                       # balance 49600, above 49500
+        assert not t.is_dead()
+        t.on_pnl(D("-150"), day(1))                        # balance 49450 <= 49500
+        assert t.is_dead()
+
+    def test_practice_phase_has_no_mll(self):
+        t = PhaseTracker(phase="practice", combine=CombineRules(), xfa=XfaRules())
+        assert t.mll is None and t.cushion is None
+        t.on_pnl(D("-10000"), day(0))
+        assert not t.is_dead()

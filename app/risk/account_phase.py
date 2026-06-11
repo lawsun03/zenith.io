@@ -134,6 +134,9 @@ class PhaseTracker:
         if self.phase != "combine":
             return False
         profit = self.total_profit
+        # The /2 here is TOPSTEP'S consistency rule (fixed 50%). It is
+        # deliberately separate from best_day_cap_frac (0.45), which is the
+        # bot's own tighter intraday throttle, read only by the governor.
         return (profit >= self.combine.profit_target
                 and self.best_day_live < profit / 2)
 
