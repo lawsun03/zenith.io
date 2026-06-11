@@ -42,8 +42,13 @@ class XfaRules:
     winning_day_threshold: Decimal = Decimal("150")
     payout_path: str = "standard"           # "standard" | "consistency"
     payout_winning_days: int = 5
+    # Self-imposed floor (not a Topstep rule): guarantees the post-payout
+    # half stays a meaningful cushion above the $0-locked MLL.
     payout_request_floor: Decimal = Decimal("3000")
-    payout_cap: Decimal = Decimal("5000")
+    # 50K Standard path cap — CUT to $2,000 on 2026-04-28 (was $5,000);
+    # verified vs help.topstep.com payout policy 2026-06-11. Consistency
+    # path would be $3,000.
+    payout_cap: Decimal = Decimal("2000")
     payout_fraction: Decimal = Decimal("0.5")
     trader_profit_share: Decimal = Decimal("0.90")  # 90/10 split (accounts after 2026-01-12)
 
@@ -193,10 +198,66 @@ def tracker_from_config(cfg) -> "PhaseTracker":
 
     combine = _conv(CombineRules, dict(cfg.phase_rules.get("combine", {})))
     xfa = _conv(XfaRules, dict(cfg.phase_rules.get("xfa", {})))
+    state_seed = dict(cfg.phase_rules.get("state", {}))
     if xfa.payout_request_floor < xfa.mll_lock_at:
         raise ValueError(
             f"phase_rules.xfa.payout_request_floor ({xfa.payout_request_floor}) must be "
             f">= mll_lock_at ({xfa.mll_lock_at}): a payout before the $0 MLL lock can "
             f"leave the trailing MLL above the post-payout balance (instant account death)."
         )
-    return PhaseTracker(phase=cfg.account_phase, combine=combine, xfa=xfa)
+    tracker = PhaseTracker(phase=cfg.account_phase, combine=combine, xfa=xfa)
+    if state_seed:
+        _apply_state_seed(tracker, state_seed)
+    return tracker
+
+
+_SEEDABLE = {
+    "balance": Decimal, "high_water": Decimal, "eod_high_water": Decimal,
+    "best_day": Decimal, "winning_days": int, "mll_locked_at_zero": bool,
+}
+
+
+def _apply_state_seed(tracker: PhaseTracker, seed: dict) -> None:
+    """Manually seed mid-account state across restarts (phase_rules["state"]).
+
+    The tracker can't recover high-water / best-day / winning-day history
+    from a balance alone, so a restart mid-Combine/XFA needs these copied
+    from the TopstepX dashboard. Unknown keys fail loud.
+    """
+    unknown = set(seed) - set(_SEEDABLE)
+    if unknown:
+        raise ValueError(f"phase_rules.state: unknown field(s): {sorted(unknown)}")
+    for name, typ in _SEEDABLE.items():
+        if name in seed:
+            v = seed[name]
+            setattr(tracker, name,
+                    Decimal(str(v)) if typ is Decimal else typ(v))
+    log.warning("PhaseTracker state seeded from config: %s", sorted(seed))
+
+
+def reconcile_with_broker(tracker: PhaseTracker, broker_balance: Decimal) -> bool:
+    """Adopt the broker's balance as truth at startup. Returns True if drifted.
+
+    XFA NOTE: TopstepX reports the funded account's cash balance, which for
+    an XFA matches the tracker's profit-based balance (both start at 0).
+    For a Combine the dashboard balance is starting_balance + P&L. The
+    high-water anchors are ratcheted to at least the adopted balance, but a
+    HIGHER historical high-water (= tighter real MLL) cannot be recovered
+    from balance alone — seed it via phase_rules["state"] or the governor's
+    cushion runs OPTIMISTIC after a mid-account restart.
+    """
+    drift = broker_balance - tracker.balance
+    if drift == 0:
+        return False
+    log.warning(
+        "PhaseTracker reconcile: adopting broker balance %s (local %s, drift %s). "
+        "high_water/best_day/winning_days are NOT recoverable from balance — "
+        "seed phase_rules[\"state\"] if this account has prior history.",
+        broker_balance, tracker.balance, drift,
+    )
+    tracker.balance = broker_balance
+    if broker_balance > tracker.high_water:
+        tracker.high_water = broker_balance
+    if broker_balance > tracker.eod_high_water:
+        tracker.eod_high_water = broker_balance
+    return True

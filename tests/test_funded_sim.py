@@ -87,3 +87,14 @@ def test_unsorted_equity_curve_is_handled():
     curve_sorted = [(a, D("50000")), (b, D("50300"))]
     curve_unsorted = [(b, D("50300")), (a, D("50000"))]
     assert daily_pnls_from_equity(curve_sorted) == daily_pnls_from_equity(curve_unsorted)
+
+
+def test_haircut_turns_near_miss_into_bust():
+    """The adverse-excursion haircut models intraday dips the daily curve
+    cannot see: a day that CLOSES just above the MLL busts once the assumed
+    excursion is applied."""
+    days = ["-1900", "1400", "1400", "400"]
+    no_haircut = simulate_combines(daily(days))
+    assert no_haircut["busts"] == 0         # -1900 close survives (MLL -2000)
+    with_haircut = simulate_combines(daily(days), haircut=D("200"))
+    assert with_haircut["busts"] == 1       # -1900 - 200 excursion <= -2000

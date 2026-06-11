@@ -1085,11 +1085,23 @@ async def _async_main() -> int:
     try:
         await broker.connect()
         await engine.start()
-        if bot_cfg.account_phase != "practice":
+        if bot_cfg.account_phase != "practice" and engine.phase is not None:
+            from app.risk.account_phase import reconcile_with_broker
+            try:
+                broker_bal = await broker.account_balance()
+                reconcile_with_broker(engine.phase, broker_bal)
+            except Exception:
+                log.exception(
+                    "ACCOUNT PHASE %s: broker-balance reconcile FAILED — tracker is "
+                    "running on configured starting_balance; verify vs TopstepX "
+                    "dashboard before trusting governor gates.", bot_cfg.account_phase,
+                )
             log.warning(
-                "ACCOUNT PHASE %s: tracker starts from configured starting_balance — "
-                "verify against the TopstepX dashboard before trusting governor gates "
-                "(broker-truth reconciliation is a follow-up).", bot_cfg.account_phase,
+                "ACCOUNT PHASE %s active: balance %s, MLL %s, cushion %s — confirm "
+                "these match the TopstepX dashboard (high-water/best-day history "
+                "needs phase_rules['state'] seeding after a mid-account restart).",
+                bot_cfg.account_phase, engine.phase.balance,
+                engine.phase.mll, engine.phase.cushion,
             )
         await reconciler.start()
         if notifier.enabled or discord.enabled:

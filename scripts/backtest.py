@@ -235,7 +235,7 @@ async def run_sweep_cmd(
     print()
     print(f"Total runs: {len(results)}")
     print(f"Profitable: {sum(1 for r in results if r.stats.is_profitable)}")
-    print(f"Passed Combine target: {sum(1 for r in results if r.stats.passed_combine)}")
+    print(f"Period net >= +$3k (NOT a Combine verdict; see per-run funded-pipeline summary): {sum(1 for r in results if r.stats.passed_combine)}")
 
     if args.output_dir:
         out = Path(args.output_dir)
@@ -287,7 +287,7 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
         print(format_sweep_table(all_results))
         print(f"\nTotal runs: {len(all_results)}")
         print(f"Profitable: {sum(1 for r in all_results if r.stats.is_profitable)}")
-        print(f"Passed Combine target: {sum(1 for r in all_results if r.stats.passed_combine)}")
+        print(f"Period net >= +$3k (NOT a Combine verdict; see per-run funded-pipeline summary): {sum(1 for r in all_results if r.stats.passed_combine)}")
 
     return 0
 

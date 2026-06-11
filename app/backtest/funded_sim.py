@@ -47,9 +47,18 @@ def daily_pnls_from_equity(
     return [(ts, days[d]) for d, ts in order]
 
 
+def _dead_with_haircut(tracker: PhaseTracker, haircut: Decimal) -> bool:
+    """is_dead() with an assumed intraday adverse excursion of `haircut`
+    below the day's closing balance — a conservative proxy until the
+    intrabar recorder can measure real MLL touches."""
+    m = tracker.mll
+    return m is not None and tracker.balance - haircut <= m
+
+
 def simulate_combines(
     daily_pnl: list[tuple[datetime, Decimal]],
     rules: CombineRules | None = None,
+    haircut: Decimal = Decimal("0"),
 ) -> dict:
     """Sequential Combine attempts over the series. Bust -> new attempt next day.
 
@@ -74,8 +83,8 @@ def simulate_combines(
         days_in_attempt += 1
         # Daily granularity: this only sees the day's CLOSING balance — an
         # intraday MLL touch that recovered by close is invisible (busts
-        # understated, per module caveat).
-        if tracker.is_dead():
+        # understated, per module caveat; `haircut` partially compensates).
+        if _dead_with_haircut(tracker, haircut):
             busts += 1
             tracker = None
             continue
@@ -93,6 +102,7 @@ def simulate_combines(
 def simulate_xfa_chain(
     daily_pnl: list[tuple[datetime, Decimal]],
     rules: XfaRules | None = None,
+    haircut: Decimal = Decimal("0"),
 ) -> dict:
     """Sequential XFA accounts: bust -> next account starts the following day."""
     rules = rules or XfaRules()
@@ -110,7 +120,7 @@ def simulate_xfa_chain(
             had_payout = False
         tracker.on_pnl(pnl, ts)
         days_in_account += 1
-        if tracker.is_dead():
+        if _dead_with_haircut(tracker, haircut):
             busts += 1
             tracker = None
             continue
@@ -128,14 +138,18 @@ def simulate_xfa_chain(
     }
 
 
-def format_pipeline_summary(equity_curve: list[tuple[datetime, Decimal]]) -> str:
+def format_pipeline_summary(
+    equity_curve: list[tuple[datetime, Decimal]],
+    haircut: Decimal = Decimal("0"),
+) -> str:
     daily = daily_pnls_from_equity(equity_curve)
-    c = simulate_combines(daily)
-    x = simulate_xfa_chain(daily)
+    c = simulate_combines(daily, haircut=haircut)
+    x = simulate_xfa_chain(daily, haircut=haircut)
+    haircut_note = f", haircut ${haircut:.0f}" if haircut else ""
     return (
         f"COMBINE: attempts {c['attempts']} | passes {c['passes']} | "
         f"busts {c['busts']} | median days-to-pass {c['median_days_to_pass']}\n"
         f"XFA:     accounts {x['accounts']} | busts {x['busts']} | "
         f"payouts ${x['gross_payouts']:.0f} gross / ${x['net_payouts']:.0f} net (90%)\n"
-        f"(daily granularity — intraday MLL touches understated)"
+        f"(daily granularity — intraday MLL touches understated{haircut_note})"
     )

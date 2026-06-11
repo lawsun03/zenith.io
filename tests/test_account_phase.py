@@ -116,8 +116,10 @@ class TestReviewGaps:
             t.on_pnl(D("200"), day(n)); t.roll_day(day(n + 1))
         assert t.payout_eligible()
         amount = t.request_payout()
-        assert amount == D("5000")          # min(12800/2=6400, cap 5000)
-        assert t.balance == D("7800")
+        # 50K Standard cap is $2,000 since 2026-04-28 (verified vs
+        # help.topstep.com payout policy 2026-06-11; was $5,000 before).
+        assert amount == D("2000")          # min(12800/2=6400, cap 2000)
+        assert t.balance == D("10800")
 
     def test_post_payout_account_survives(self):
         """After a payout halves the balance, the $0-locked MLL must not
@@ -256,3 +258,48 @@ def test_engine_rolls_phase_day_at_5pm_ct():
     asyncio.run(go())
     assert tracker.today_pnl == D("0")
     assert tracker.best_day == D("700")
+
+
+class TestReconcileAndSeed:
+    """Broker-truth reconciliation + manual state seeding across restarts.
+
+    Why: the tracker cannot recover high-water/best-day/winning-day history
+    from a balance alone; a mid-account restart without these runs the
+    governor on an OPTIMISTIC cushion."""
+
+    def test_reconcile_adopts_broker_balance_and_ratchets_hwm(self):
+        from app.risk.account_phase import reconcile_with_broker
+        t = combine_tracker()
+        drifted = reconcile_with_broker(t, D("51200"))
+        assert drifted
+        assert t.balance == D("51200")
+        assert t.high_water == D("51200")
+        assert t.mll == D("49200")          # trails the adopted balance
+
+    def test_reconcile_no_drift_returns_false(self):
+        from app.risk.account_phase import reconcile_with_broker
+        t = combine_tracker()
+        assert not reconcile_with_broker(t, D("50000"))
+
+    def test_state_seed_from_phase_rules(self):
+        from app.bot_config import BotConfig
+        from app.risk.account_phase import tracker_from_config
+        cfg = BotConfig(account_phase="combine", phase_rules={
+            "state": {"balance": "51500", "high_water": "52000",
+                      "best_day": "900", "winning_days": 2},
+        })
+        t = tracker_from_config(cfg)
+        assert t.balance == D("51500")
+        assert t.high_water == D("52000")
+        assert t.mll == D("50000")          # hwm 52000 - 2000, capped at start
+        assert t.best_day == D("900")
+        assert t.winning_days == 2
+
+    def test_state_seed_unknown_key_fails_loud(self):
+        import pytest
+        from app.bot_config import BotConfig
+        from app.risk.account_phase import tracker_from_config
+        cfg = BotConfig(account_phase="combine",
+                        phase_rules={"state": {"balnce": "51500"}})
+        with pytest.raises(ValueError, match="balnce"):
+            tracker_from_config(cfg)
