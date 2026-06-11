@@ -107,6 +107,12 @@ class BotConfig(BaseModel):
     # geometry is broken (fill-relative stop would sit inside the retrace zone)
     # — flatten immediately instead of placing brackets. 0 = disabled.
     max_entry_slippage_frac: Decimal = Decimal("0")
+    # Topstep flatten rule: must be flat by 3:10 PM CT (4:10 PM ET).
+    # flatten_time_ct = hard-flatten time with buffer; entry_cutoff_time_ct =
+    # no new entries after this. Strings "HH:MM" in America/Chicago local time.
+    flatten_enabled: bool = True
+    flatten_time_ct: str = "15:05"
+    entry_cutoff_time_ct: str = "14:30"
     enabled_killzones: list[str] = Field(
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
@@ -177,6 +183,9 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "partial_profit_r": _conv(config.partial_profit_r),
         "max_entry_slippage_frac": _conv(config.max_entry_slippage_frac),
+        "flatten_enabled": config.flatten_enabled,
+        "flatten_time_ct": config.flatten_time_ct,
+        "entry_cutoff_time_ct": config.entry_cutoff_time_ct,
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
         "strategy_overrides": {
