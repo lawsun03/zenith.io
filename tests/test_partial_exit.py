@@ -366,6 +366,7 @@ def _make_engine_with_tp1(tp1_price: Decimal, side: str, instrument: str = "MGC"
     engine.flatten_enabled = False  # not under test here; disable to avoid interfering
     engine.flatten_time_ct = "15:05"
     engine.entry_cutoff_time_ct = "14:30"
+    engine.phase = None
     engine._flatten_task = None
     engine._flattened_today = None
     return engine

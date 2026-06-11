@@ -17,9 +17,12 @@ Design notes:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Union
 
+from app.broker.pricing import _point_value
+from app.risk.account_phase import PhaseTracker
 from .config import Money
 from .state import RiskState
 
@@ -37,6 +40,7 @@ class ProposedOrder:
     stop: Money              # protective stop price
     target: Money            # take-profit price
     is_entry: bool = True    # False for exit/flatten orders
+    setup_grade: str = ""    # "A".."F" or "" when ungraded
 
 
 @dataclass(frozen=True)
@@ -53,7 +57,12 @@ class Deny:
 Decision = Union[Allow, Deny]
 
 
-def check(order: ProposedOrder, state: RiskState) -> Decision:
+def check(
+    order: ProposedOrder,
+    state: RiskState,
+    phase: PhaseTracker | None = None,
+    ts: datetime | None = None,
+) -> Decision:
     """
     Run every gate in priority order. First failing gate decides.
 
@@ -72,6 +81,32 @@ def check(order: ProposedOrder, state: RiskState) -> Decision:
                 message=f"Account locked: {state.locked_out.message}",
             )
         # Fall through for exit orders — closing a position is never blocked.
+
+    # ------------------------------------------------------------
+    # 1b. Phase governor (combine/xfa only; practice/live skip).
+    #     Deterministic hard gates — no overrides (Rule 5).
+    # ------------------------------------------------------------
+    if phase is not None and phase.phase in ("combine", "xfa") and order.is_entry:
+        cushion = phase.cushion
+        if cushion is not None and cushion < Decimal("500"):
+            return Deny(reason_code="MLL_CUSHION",
+                        message=f"Cushion {cushion} < $500 — surviving to next ratchet.")
+        if phase.phase == "combine":
+            if phase.combine.stop_at_target and phase.target_reached():
+                return Deny(reason_code="TARGET_REACHED",
+                            message="Combine passed — stop trading, do not give it back.")
+            denom = phase.total_profit
+            if denom > 0 and phase.today_pnl > 0 \
+                    and phase.today_pnl >= phase.combine.best_day_cap_frac * denom:
+                return Deny(reason_code="BEST_DAY_CAP",
+                            message=f"Today {phase.today_pnl} would breach the "
+                                    f"consistency cap — done for the day.")
+        if phase.phase == "xfa":
+            if (phase.today_pnl >= 2 * phase.xfa.winning_day_threshold
+                    and order.setup_grade not in ("A",)):
+                return Deny(reason_code="WINNING_DAY_LOCK",
+                            message=f"Today {phase.today_pnl} — protecting the "
+                                    f"winning day; A-grade setups only.")
 
     # ------------------------------------------------------------
     # 2. Sanity: stop must actually be protective relative to entry.
@@ -104,6 +139,19 @@ def check(order: ProposedOrder, state: RiskState) -> Decision:
                     f"({state.open_contracts}/{max_contracts})."
                 ),
             )
+        if phase is not None and phase.cushion is not None and phase.phase in ("combine", "xfa"):
+            cushion = phase.cushion
+            stop_dist = abs(order.entry - order.stop)
+            pv = _point_value(order.instrument)
+            if stop_dist > 0 and pv > 0:
+                # Worst-case single-trade loss must be <= 40% of cushion.
+                cap = int((Decimal("0.40") * cushion) / (stop_dist * pv))
+                if cushion <= Decimal("1000") or phase.post_payout_half_risk:
+                    cap = cap // 2
+                if cap <= 0:
+                    return Deny(reason_code="MLL_CUSHION",
+                                message=f"No size fits 40% of cushion {cushion}.")
+                headroom = min(headroom, cap)
         allowed = min(order.size, headroom)
         if allowed <= 0:
             return Deny(

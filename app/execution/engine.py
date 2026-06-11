@@ -50,6 +50,7 @@ from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
 from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
+from app.risk.account_phase import PhaseTracker
 from app.risk.flatten import in_flatten_window, past_entry_cutoff
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
@@ -417,6 +418,7 @@ class ExecutionEngine:
         flatten_enabled: bool = True,
         flatten_time_ct: str = "15:05",
         entry_cutoff_time_ct: str = "14:30",
+        phase: "PhaseTracker | None" = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -441,6 +443,7 @@ class ExecutionEngine:
         self.flatten_enabled = flatten_enabled            # hot-applied via PATCH /api/config
         self.flatten_time_ct = flatten_time_ct
         self.entry_cutoff_time_ct = entry_cutoff_time_ct
+        self.phase = phase  # hot-applied via PATCH /api/config
         self._flatten_task: asyncio.Task | None = None
         self._flattened_today: str | None = None  # trading-day key, avoid re-flatten spam
         # Called immediately after broker.place_bracket() succeeds so the
@@ -942,8 +945,9 @@ class ExecutionEngine:
             stop=signal.stop,
             target=signal.target,
             is_entry=True,
+            setup_grade=(signal.setup_grade.grade if signal.setup_grade else ""),
         )
-        decision = check(order, self.risk_state)
+        decision = check(order, self.risk_state, phase=self.phase, ts=signal.created_at)
 
         if isinstance(decision, Deny):
             if (
