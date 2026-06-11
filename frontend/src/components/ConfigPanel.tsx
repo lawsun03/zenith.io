@@ -269,6 +269,9 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
       max_entry_slippage_frac: String(config.max_entry_slippage_frac ?? 0),
+      flatten_enabled:         String(config.flatten_enabled ?? true),
+      flatten_time_ct:         config.flatten_time_ct ?? '15:05',
+      entry_cutoff_time_ct:    config.entry_cutoff_time_ct ?? '14:30',
       ...Object.fromEntries(
         emergencyInstruments.map(sym => [
           `emergency_stop_distance_${sym}`,
@@ -392,6 +395,9 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
       max_entry_slippage_frac: parseFloat(form.max_entry_slippage_frac) || 0,
+      flatten_enabled:         form.flatten_enabled !== 'false',
+      flatten_time_ct:         form.flatten_time_ct || '15:05',
+      entry_cutoff_time_ct:    form.entry_cutoff_time_ct || '14:30',
       emergency_stop_distance: Object.fromEntries(
         emergencyInstruments.map(sym => [
           sym,
@@ -719,6 +725,50 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                       />
                       <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
                         Abort guard: if a market entry fills beyond this fraction of the stop distance past the signal price, flatten immediately instead of bracketing (the tightened stop would sit inside the retrace zone). 0.5 = abort when slip exceeds half the stop. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Flatten Rule
+                      </label>
+                      <select
+                        value={form.flatten_enabled ?? 'true'}
+                        onChange={e => set('flatten_enabled', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                      >
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                      </select>
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Topstep requires flat by 3:10 PM CT. When enabled, the engine cancels all orders and flattens at flatten time. Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Flatten Time (CT, HH:MM)
+                      </label>
+                      <input
+                        type="text"
+                        value={form.flatten_time_ct ?? '15:05'}
+                        onChange={e => set('flatten_time_ct', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Time (HH:MM, CT) at which the engine flattens all open positions. Default 15:05 (5 min before the 3:10 PM Topstep deadline). Hot-applied.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                        Entry Cutoff Time (CT, HH:MM)
+                      </label>
+                      <input
+                        type="text"
+                        value={form.entry_cutoff_time_ct ?? '14:30'}
+                        onChange={e => set('entry_cutoff_time_ct', e.target.value)}
+                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        No new entries after this time (HH:MM, CT). Prevents opening trades that would hold past the flatten window. Hot-applied.
                       </p>
                     </div>
                     <div>

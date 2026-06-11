@@ -61,6 +61,9 @@ export interface BotConfig {
   risk_per_trade_pct: number
   partial_profit_r: number
   max_entry_slippage_frac: number  // 0 = off; abort entry if adverse slip > frac × stop distance
+  flatten_enabled: boolean
+  flatten_time_ct: string
+  entry_cutoff_time_ct: string
   emergency_stop_distance?: Record<string, number>
   emergency_target_r?: number
   naked_grace_seconds?: number

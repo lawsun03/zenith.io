@@ -537,6 +537,9 @@ def build_app(
             _engine.commission_per_contract = Decimal(str(body.commission_per_contract))
             _engine.max_contracts_override = body.max_contracts_override
             _engine._htf_warned = False
+            _engine.flatten_enabled = body.flatten_enabled
+            _engine.flatten_time_ct = body.flatten_time_ct
+            _engine.entry_cutoff_time_ct = body.entry_cutoff_time_ct
         if _htf_rebuild is not None:
             try:
                 await _htf_rebuild(body)

@@ -48,6 +48,7 @@ from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
 from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
+from app.risk.flatten import in_flatten_window, past_entry_cutoff
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
 from app.risk.state import RiskState
@@ -411,6 +412,9 @@ class ExecutionEngine:
         commission_per_contract: Decimal = Decimal("0"),
         max_contracts_override: int | None = None,
         forming_bar_entries: bool = False,
+        flatten_enabled: bool = True,
+        flatten_time_ct: str = "15:05",
+        entry_cutoff_time_ct: str = "14:30",
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -432,6 +436,11 @@ class ExecutionEngine:
         # from a CLOSED bar — the only path the backtest validates. The poll
         # task always runs; it checks this flag per tick so PATCH hot-applies.
         self.forming_bar_entries = forming_bar_entries
+        self.flatten_enabled = flatten_enabled            # hot-applied via PATCH /api/config
+        self.flatten_time_ct = flatten_time_ct
+        self.entry_cutoff_time_ct = entry_cutoff_time_ct
+        self._flatten_task: asyncio.Task | None = None
+        self._flattened_today: str | None = None  # trading-day key, avoid re-flatten spam
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
@@ -508,6 +517,8 @@ class ExecutionEngine:
         self._started = True
         if not self._replay_mode:
             self._poll_task = asyncio.create_task(self._poll_forming_bars())
+            if self._flatten_task is None:
+                self._flatten_task = asyncio.create_task(self._flatten_clock())
         log.info(
             "ExecutionEngine started: %d instruments tracked, forming_bar_entries=%s",
             len(self.runners), self.forming_bar_entries,
@@ -524,6 +535,13 @@ class ExecutionEngine:
             except asyncio.CancelledError:
                 pass
             self._poll_task = None
+        if self._flatten_task is not None:
+            self._flatten_task.cancel()
+            try:
+                await self._flatten_task
+            except asyncio.CancelledError:
+                pass
+            self._flatten_task = None
         # Cancel only — we do NOT flatten on stop. The operator may be
         # restarting the bot mid-position; auto-flattening would be
         # surprising. The kill-switch endpoint is for that.
@@ -532,6 +550,53 @@ class ExecutionEngine:
         except Exception as e:
             log.warning("cancel_all on stop failed: %s", e)
         self._started = False
+
+    # ------------------------------------------------------------------
+    # Flatten-rule enforcement
+    # ------------------------------------------------------------------
+
+    async def _enforce_flatten(self, ts: datetime) -> None:
+        """Topstep flatten rule: flat by 3:10 PM CT — we act at flatten_time_ct.
+
+        Bar-driven so it works identically in replay and live; live also has
+        a wall-clock task because 5min bars can arrive late.
+        """
+        if not self.flatten_enabled:
+            return
+        if not in_flatten_window(ts, self.flatten_time_ct):
+            return
+        day_key = ts.astimezone(timezone.utc).date().isoformat()
+        if self._flattened_today == day_key:
+            return
+        open_insts = self._open_instruments()
+        if not open_insts:
+            self._flattened_today = day_key
+            return
+        log.warning("FLATTEN WINDOW: closing all positions at %s (rule: flat by 3:10 PM CT)", ts)
+        for inst in open_insts:
+            try:
+                await self.broker.cancel_all(inst)
+                await self.broker.flatten(inst)
+            except Exception:
+                log.exception("flatten-window close failed for %s", inst)
+        self._flattened_today = day_key
+
+    def _open_instruments(self) -> list[str]:
+        """Instruments with open positions, per broker truth where available."""
+        if callable(getattr(self.broker, "open_brackets", None)):
+            return sorted({b["instrument"] for b in self.broker.open_brackets()})
+        if self.risk_state.open_contracts != 0:
+            return [r.instrument for r in self.runners.values()]
+        return []
+
+    async def _flatten_clock(self) -> None:
+        """Live backup for bar-driven flatten: check every 30s of wall time."""
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await self._enforce_flatten(datetime.now(timezone.utc))
+            except Exception:
+                log.exception("flatten clock check failed")
 
     # ------------------------------------------------------------------
     # Event handlers — registered with the broker
@@ -548,6 +613,7 @@ class ExecutionEngine:
         and a fill arriving during that window only changes state
         the NEXT signal will see — which is correct behavior.
         """
+        await self._enforce_flatten(bar.ts)
         # Resolve: a GC bar routes to the MGC runner via _bar_router.
         execution_key = self._bar_router.get(bar.instrument, bar.instrument)
 
@@ -848,6 +914,10 @@ class ExecutionEngine:
             self._pending_reversal[signal.instrument] = signal
             asyncio.create_task(self._flatten_for_reversal(signal.instrument))
             return OrderOutcome(placed=False, reason="reversal_pending")
+
+        if self.flatten_enabled and past_entry_cutoff(signal.created_at, self.entry_cutoff_time_ct):
+            log.info("Entry blocked: past %s CT entry cutoff (flatten rule)", self.entry_cutoff_time_ct)
+            return OrderOutcome(placed=False, reason="entry_cutoff")
 
         order = ProposedOrder(
             instrument=signal.instrument,

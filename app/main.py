@@ -981,6 +981,9 @@ async def _async_main() -> int:
         commission_per_contract=Decimal(str(bot_cfg.commission_per_contract)),
         max_contracts_override=bot_cfg.max_contracts_override,
         forming_bar_entries=bot_cfg.forming_bar_entries,
+        flatten_enabled=bot_cfg.flatten_enabled,
+        flatten_time_ct=bot_cfg.flatten_time_ct,
+        entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))

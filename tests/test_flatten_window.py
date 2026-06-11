@@ -54,3 +54,54 @@ class TestEntryCutoff:
     def test_evening_session_after_5pm_ct_allowed(self):
         # 18:00 CT = new trading day, overnight trading is allowed
         assert not past_entry_cutoff(_utc(2026, 1, 16, 0, 0), "14:30")
+
+
+# ---------------------------------------------------------------------------
+# Engine integration tests
+# ---------------------------------------------------------------------------
+import asyncio
+from decimal import Decimal
+
+from app.broker.paper import PaperBroker
+from app.broker.events import Bar
+
+
+def _bar(ts, price=100.0):
+    return Bar(
+        instrument="MGC", timeframe="1min", ts=ts,
+        open=Decimal(str(price)), high=Decimal(str(price + 1)),
+        low=Decimal(str(price - 1)), close=Decimal(str(price)), volume=10,
+    )
+
+
+def test_engine_flattens_open_position_in_window():
+    """A position open at 15:05 CT must be flattened by the next bar.
+
+    Why: 66 trades in the 2025-26 data were held through the 4:10 PM ET
+    close — a Topstep rule violation that fails real accounts.
+    """
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=Decimal("0"))
+    engine = ExecutionEngine(
+        broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+        runners=[], replay_mode=True,
+        flatten_enabled=True, flatten_time_ct="15:05", entry_cutoff_time_ct="14:30",
+    )
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        # Open a position at 20:00 UTC (14:00 CT, before cutoff)
+        await broker.inject_bar(_bar(_utc(2026, 1, 15, 20, 0)))
+        await broker.place_bracket("MGC", "long", 1,
+                                   Decimal("100"), Decimal("95"), Decimal("110"))
+        assert len(broker.open_brackets()) == 1
+        # Bar lands inside the flatten window: 21:06 UTC == 15:06 CT
+        await broker.inject_bar(_bar(_utc(2026, 1, 15, 21, 6)))
+        return broker.open_brackets()
+
+    remaining = asyncio.run(go())
+    assert remaining == [], "engine must flatten open positions in the window"
