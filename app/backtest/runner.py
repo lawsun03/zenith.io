@@ -7,9 +7,10 @@ import dataclasses
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable, Iterator
+from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,19 @@ from app.strategy.volume_profile import VolumeProfileTracker
 _HTF_REFRESH_BARS = 60     # rebuild once per ~hour of replay (HTF structure barely moves intraday)
 _HTF_WINDOW_BARS = 12000   # trailing 1min bars to aggregate (bounds cost; ~enough for 4h swings)
 _HTF_MIN_BARS = 480        # need several aggregated HTF bars before swings can confirm
+
+
+_CT = ZoneInfo("America/Chicago")
+
+
+def _trading_day_ct(ts: datetime) -> date:
+    """Topstep trading day: rolls at 5:00 PM CT, so a 6 PM CT bar belongs
+    to the NEXT calendar day's session."""
+    ct = ts.astimezone(_CT)
+    d = ct.date()
+    if ct.hour >= 17:
+        d += timedelta(days=1)
+    return d
 
 
 def _refresh_backtest_htf(bars, s: StrategyParams, level_finder, bias_tracker, graders) -> None:
@@ -417,7 +431,18 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     await engine.start()
 
     bar_count = 0
+    # Roll the trading day at 5pm CT so daily counters (DLL/DPL lockouts,
+    # daily_pnl) reset like live. Without this the first DLL hit locked out
+    # every remaining day of the replay — a one-day rule violation became a
+    # dead run (the "risk-limit artifacts" noted in the 06-10 parity doc).
+    last_trading_day: date | None = None
     for bar in cfg.bars:
+        td = _trading_day_ct(bar.ts)
+        if last_trading_day is None:
+            last_trading_day = td
+        elif td != last_trading_day:
+            risk_state.roll_trading_day(bar.ts)
+            last_trading_day = td
         _seen.append(bar)
         # Refresh every N bars once we have enough history.  Always runs so
         # delivery FVGs are populated even when HTF bias/target are disabled.
