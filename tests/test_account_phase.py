@@ -176,3 +176,16 @@ class TestTrackerFromConfig:
                         phase_rules={"xfa": {"payout_request_floor": "1500"}})
         with pytest.raises(ValueError, match="payout_request_floor"):
             tracker_from_config(cfg)
+
+
+def test_tracker_from_config_rejects_unknown_keys():
+    """A typo'd rule name must raise, not silently keep the default -
+    a misconfigured MLL/payout number is an account violation waiting."""
+    import pytest
+    from app.bot_config import BotConfig
+    from app.risk.account_phase import tracker_from_config
+
+    cfg = BotConfig(account_phase="combine",
+                    phase_rules={"combine": {"proft_target": "4000"}})
+    with pytest.raises(ValueError, match="proft_target"):
+        tracker_from_config(cfg)

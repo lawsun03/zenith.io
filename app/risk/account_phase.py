@@ -165,6 +165,14 @@ def tracker_from_config(cfg) -> "PhaseTracker":
     mid-session).
     """
     def _conv(rules_cls, raw: dict):
+        # Typo'd rule names must raise, not silently keep the default —
+        # these are real-money account limits (same precedent as
+        # strategy_overrides validation in bot_config.strategy_for).
+        unknown = set(raw) - set(rules_cls.__dataclass_fields__)
+        if unknown:
+            raise ValueError(
+                f"phase_rules: unknown {rules_cls.__name__} field(s): {sorted(unknown)}"
+            )
         kwargs = {}
         for f in rules_cls.__dataclass_fields__.values():
             if f.name not in raw:
