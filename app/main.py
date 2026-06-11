@@ -49,7 +49,7 @@ from zoneinfo import ZoneInfo
 
 from app.api.journal import Journal
 from app.api.server import build_app
-from app.bot_config import BotConfig, StrategyParams, load_bot_config
+from app.bot_config import BotConfig, StrategyParams, load_bot_config, strategy_for
 from app.broker.events import Fill
 from app.broker.paper import PaperBroker
 from app.broker.protocol import Broker
@@ -459,7 +459,7 @@ async def _run_paper(
             new_instr_list = new_cfg.instruments if new_cfg.instruments else [cfg.instrument]
             new_runners = [
                 _build_runner(
-                    inst, new_cfg.strategy, new_cfg.enabled_killzones,
+                    inst, strategy_for(new_cfg, inst), new_cfg.enabled_killzones,
                     timeframe=new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
                     signal_instrument=new_cfg.signal_instrument if len(new_instr_list) == 1 else None,
                 )
@@ -897,7 +897,7 @@ async def _async_main() -> int:
     runners = [
         _build_runner(
             instrument=inst,
-            s=bot_cfg.strategy,
+            s=strategy_for(bot_cfg, inst),
             enabled_killzones=bot_cfg.enabled_killzones,
             timeframe=bot_cfg.timeframes[0] if bot_cfg.timeframes else "1min",
             signal_instrument=bot_cfg.signal_instrument if len(instruments_list) == 1 else None,

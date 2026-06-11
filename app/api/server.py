@@ -44,7 +44,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from app.bot_config import BotConfig, load_bot_config, save_bot_config
+from app.bot_config import BotConfig, load_bot_config, save_bot_config, strategy_for
 from app.execution.reconciler import Reconciler
 from app.risk.state import RiskState
 from app.strategy.composer import Signal
@@ -511,6 +511,7 @@ def build_app(
             "signal_instrument": cfg.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
+            "strategy_overrides": cfg.strategy_overrides,
             "emergency_stop_distance": {k: float(v) for k, v in cfg.emergency_stop_distance.items()},
             "emergency_target_r": float(cfg.emergency_target_r),
             "naked_grace_seconds": cfg.naked_grace_seconds,
@@ -555,6 +556,15 @@ def build_app(
             updates = {k: v for k, v in updates.items() if k != "strategy"}
         base.update(updates)
         body = BotConfig.model_validate(base)
+        # Validate overrides eagerly: a typo'd field or bad value must 400 here,
+        # not blow up later inside a runner rebuild.
+        try:
+            for inst in body.strategy_overrides:
+                strategy_for(body, inst)
+        except Exception as e:
+            return JSONResponse(
+                {"error": f"invalid strategy_overrides: {e}"}, status_code=400,
+            )
         await _hot_apply(body)
         return JSONResponse({
             "instrument": body.instrument,
@@ -571,6 +581,7 @@ def build_app(
             "signal_instrument": body.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
+            "strategy_overrides": body.strategy_overrides,
             "emergency_stop_distance": {k: float(v) for k, v in body.emergency_stop_distance.items()},
             "emergency_target_r": float(body.emergency_target_r),
             "naked_grace_seconds": body.naked_grace_seconds,
@@ -1122,16 +1133,23 @@ Notes:
             )
         try:
             new_cfg = load_bot_config(_bot_config_path)
-            instrument = (new_cfg.instrument or effective_instrument).upper()
-            new_runner = _runner_factory(
-                instrument, new_cfg.strategy, new_cfg.enabled_killzones,
-                new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
-                signal_instrument=new_cfg.signal_instrument,
-            )
-            _engine.runners = {instrument: new_runner}
+            instruments = new_cfg.instruments or [
+                (new_cfg.instrument or effective_instrument).upper()
+            ]
+            instrument = instruments[0]
+            new_runners = [
+                _runner_factory(
+                    inst, strategy_for(new_cfg, inst), new_cfg.enabled_killzones,
+                    new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+                    signal_instrument=new_cfg.signal_instrument if len(instruments) == 1 else None,
+                )
+                for inst in instruments
+            ]
+            new_runner = new_runners[0]
+            _engine.runners = {r.instrument: r for r in new_runners}
             _engine._bar_router = {
                 new_runner.signal_instrument: new_runner.instrument
-            } if new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
+            } if len(instruments) == 1 and new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
             _engine.strategy_cfg = new_cfg.strategy
             # Reset HTF fail-loud guard so a fresh rebuild can re-warn if needed.
             _engine._htf_warned = False
@@ -1149,8 +1167,9 @@ Notes:
             vp_warmed = None
             if _vp_warmup is not None and new_cfg.strategy.vp_enabled:
                 try:
-                    await _vp_warmup(new_runner, new_cfg)
-                    vp_warmed = bool(new_runner.vp and new_runner.vp.has_prior_profile())
+                    for r in new_runners:
+                        await _vp_warmup(r, new_cfg)
+                    vp_warmed = all(bool(r.vp and r.vp.has_prior_profile()) for r in new_runners)
                 except Exception:
                     log.exception("strategy/reload: VP re-warm failed — filter inactive until session boundary")
                     vp_warmed = False

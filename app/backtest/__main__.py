@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from app.backtest.runner import BacktestConfig, run_backtest as _runner_backtest
-from app.bot_config import BotConfig, load_bot_config
+from app.bot_config import BotConfig, load_bot_config, strategy_for
 from app.replay import load_bars_csv
 
 log = logging.getLogger("topstep_bot.backtest")
@@ -58,7 +58,7 @@ async def _run_backtest(
         risk_per_trade_pct=config.risk_per_trade_pct,
         partial_profit_r=config.partial_profit_r,
         enabled_killzones=config.enabled_killzones,
-        strategy_params=config.strategy,
+        strategy_params=strategy_for(config, instrument),
         enforce_risk_limits=enforce_risk_limits,
     )
     result = await _runner_backtest(bc)

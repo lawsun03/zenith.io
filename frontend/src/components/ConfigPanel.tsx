@@ -234,6 +234,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const [reloadMsg, setReloadMsg] = useState<string | null>(null)
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [enabledKillzones, setEnabledKillzones] = useState<string[]>(['london', 'ny_am', 'ny_pm'])
+  // instrument → field → value (strings; the backend coerces on validation)
+  const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({})
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [presets, setPresets] = useState<{ name: string; saved_at: string }[]>([])
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -276,6 +278,12 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       ),
     })
     setEnabledKillzones(config.enabled_killzones ?? ['london', 'ny_am', 'ny_pm'])
+    setOverrides(Object.fromEntries(
+      Object.entries(config.strategy_overrides ?? {}).map(([inst, ov]) => [
+        inst,
+        Object.fromEntries(Object.entries(ov).map(([k, v]) => [k, String(v)])),
+      ])
+    ))
   }, [config])
 
   useEffect(() => {
@@ -387,6 +395,14 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       enabled_killzones:    enabledKillzones,
       signal_instrument:    form.signal_instrument?.trim().toUpperCase() || null,
       strategy,
+      strategy_overrides: Object.fromEntries(
+        Object.entries(overrides)
+          .map(([inst, ov]) => [
+            inst,
+            Object.fromEntries(Object.entries(ov).filter(([k, v]) => k && v !== '')),
+          ])
+          .filter(([, ov]) => Object.keys(ov as object).length > 0)
+      ),
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -839,6 +855,82 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
               </div>
             </section>
           ))}
+
+          {(config?.instruments?.length ?? 0) > 0 && (
+            <section>
+              <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-3">
+                Per-Instrument Overrides
+              </h3>
+              <p className="text-[10px] text-dim/80 mb-3 leading-relaxed">
+                Override individual strategy parameters for one instrument (e.g. a wider stop buffer on MNQ).
+                Unset fields use the base strategy values above. Applied on Save &amp; Reload Strategy.
+              </p>
+              <div className="space-y-4">
+                {config!.instruments!.map(sym => {
+                  const ov = overrides[sym] ?? {}
+                  const usedKeys = Object.keys(ov)
+                  const strategyKeys = FIELDS.filter(f => f.section === 'strategy').map(f => f.key)
+                  return (
+                    <div key={sym}>
+                      <div className="text-[10px] tracking-wider text-ink uppercase mb-1.5">{sym}</div>
+                      {usedKeys.length === 0 && (
+                        <p className="text-[10px] text-faint mb-1.5">No overrides — uses base strategy.</p>
+                      )}
+                      <div className="space-y-1.5">
+                        {usedKeys.map(key => (
+                          <div key={key} className="flex items-center gap-1.5">
+                            <select
+                              value={key}
+                              onChange={e => setOverrides(o => {
+                                const next = { ...(o[sym] ?? {}) }
+                                const val = next[key]
+                                delete next[key]
+                                next[e.target.value] = val
+                                return { ...o, [sym]: next }
+                              })}
+                              className="flex-1 bg-bg border border-border text-ink text-[10px] px-2 py-1.5 font-mono focus:outline-none focus:border-accent cursor-pointer"
+                            >
+                              {strategyKeys.map(k => (
+                                <option key={k} value={k} className="bg-panel" disabled={k !== key && k in ov}>{k}</option>
+                              ))}
+                            </select>
+                            <input
+                              value={ov[key]}
+                              onChange={e => setOverrides(o => ({
+                                ...o, [sym]: { ...(o[sym] ?? {}), [key]: e.target.value },
+                              }))}
+                              className="w-20 bg-bg border border-border text-ink text-[10px] px-2 py-1.5 font-mono tabular-nums focus:outline-none focus:border-accent"
+                            />
+                            <button
+                              onClick={() => setOverrides(o => {
+                                const next = { ...(o[sym] ?? {}) }
+                                delete next[key]
+                                return { ...o, [sym]: next }
+                              })}
+                              className="text-faint hover:text-danger text-sm leading-none px-1"
+                              title="Remove override"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const free = strategyKeys.find(k => !(k in ov))
+                          if (!free) return
+                          setOverrides(o => ({ ...o, [sym]: { ...(o[sym] ?? {}), [free]: '' } }))
+                        }}
+                        className="mt-1.5 border border-border text-dim text-[10px] tracking-widest uppercase px-2 py-1 hover:text-ink"
+                      >
+                        + Override
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
         </div>
 
         <footer className="bg-panel border-t border-border p-5 flex-shrink-0 space-y-3">

@@ -66,6 +66,8 @@ export interface BotConfig {
   max_contracts_override?: number | null
   mode?: string
   strategy: StrategyConfig
+  // Per-instrument partial overrides of `strategy`, e.g. {MNQ: {stop_buffer: "3.0"}}
+  strategy_overrides?: Record<string, Partial<StrategyConfig>>
 }
 
 export interface StatusPayload {

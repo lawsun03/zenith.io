@@ -709,6 +709,10 @@ class ExecutionEngine:
         target. Returns (None, reason) if a gate blocks it, where reason is
         "htf_bias" or "vp_filter". Pure decision: does not call on_signal.
         """
+        # Engine-level strategy_cfg on purpose: VP/HTF confluence toggles are
+        # hot-applied here by PATCH /api/config without a runner rebuild.
+        # Per-instrument overrides live on runner.strategy_cfg (runner-level
+        # fields only — composer/displacement/liquidity/grader/iFVG).
         cfg = self.strategy_cfg
         if cfg is not None and not self._htf_warned:
             if (cfg.htf_bias_enabled and self.htf_bias is None) or (

@@ -56,7 +56,7 @@ from app.backtest.runner import (
     run_backtest,
     run_sweep,
 )
-from app.bot_config import load_bot_config
+from app.bot_config import load_bot_config, strategy_for
 from app.replay import load_bars_csv
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
@@ -149,7 +149,7 @@ def build_base_config(args: argparse.Namespace) -> BacktestConfig:
             bars=iter([]),  # filled in per-run
             starting_balance=Decimal(args.starting_balance),
             soft_buffer=Decimal(args.soft_buffer),
-            strategy_params=bot_cfg.strategy,
+            strategy_params=strategy_for(bot_cfg, instrument),
             enabled_killzones=bot_cfg.enabled_killzones,
             contracts=bot_cfg.contracts,
             risk_per_trade_pct=bot_cfg.risk_per_trade_pct,

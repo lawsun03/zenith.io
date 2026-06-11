@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -104,6 +105,13 @@ class BotConfig(BaseModel):
         default_factory=lambda: ["london", "ny_am", "ny_pm"],
     )
     strategy: StrategyParams = Field(default_factory=StrategyParams)
+    # Per-instrument partial overrides of `strategy`, keyed by symbol, e.g.
+    # {"MNQ": {"stop_buffer": "3.0"}}. Merged via strategy_for(); unknown keys
+    # or bad values fail validation there (fail loud, not silently inert).
+    # Scope: runner-level fields (composer/displacement/liquidity/grader/iFVG).
+    # Engine-level confluence fields (vp_*, htf_*, ifvg_tp1_*) stay global —
+    # the engine reads them from its own strategy_cfg for hot-apply.
+    strategy_overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     # --- Exit-coverage monitor (naked-position protection) ---
     emergency_stop_distance: dict[str, Decimal] = Field(
@@ -117,6 +125,23 @@ class BotConfig(BaseModel):
     naked_grace_seconds: float = 15.0              # suppress fill→bracket race
     commission_per_contract: float = 0.0           # deducted from realized P&L on every fill (per side)
     max_contracts_override: int | None = None     # hard cap on risk-sized contracts (None = use account limit)
+
+
+def strategy_for(config: BotConfig, instrument: str) -> StrategyParams:
+    """
+    StrategyParams for one instrument: base `strategy` with that instrument's
+    `strategy_overrides` entry merged on top. Re-validates through the model so
+    a typo'd field name or invalid value raises instead of being ignored.
+    """
+    overrides = config.strategy_overrides.get(instrument)
+    if not overrides:
+        return config.strategy
+    unknown = set(overrides) - set(StrategyParams.model_fields)
+    if unknown:
+        raise ValueError(
+            f"strategy_overrides[{instrument!r}] has unknown fields: {sorted(unknown)}"
+        )
+    return StrategyParams(**{**config.strategy.model_dump(), **overrides})
 
 
 def load_bot_config(path: Path) -> BotConfig:
@@ -147,6 +172,10 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "max_entry_slippage_frac": _conv(config.max_entry_slippage_frac),
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
+        "strategy_overrides": {
+            inst: {k: _conv(v) for k, v in ov.items()}
+            for inst, ov in config.strategy_overrides.items()
+        },
         "emergency_stop_distance": {k: _conv(v) for k, v in config.emergency_stop_distance.items()},
         "emergency_target_r": _conv(config.emergency_target_r),
         "naked_grace_seconds": config.naked_grace_seconds,
