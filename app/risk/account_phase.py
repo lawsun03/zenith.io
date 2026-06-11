@@ -45,6 +45,7 @@ class XfaRules:
     payout_request_floor: Decimal = Decimal("3000")
     payout_cap: Decimal = Decimal("5000")
     payout_fraction: Decimal = Decimal("0.5")
+    trader_profit_share: Decimal = Decimal("0.90")  # 90/10 split (accounts after 2026-01-12)
 
 
 @dataclass

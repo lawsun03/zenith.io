@@ -33,6 +33,9 @@ def daily_pnls_from_equity(
     days: dict = {}
     order: list = []
     prev: Decimal | None = None
+    # Day attribution silently corrupts on unsorted input — enforce the
+    # chronological-order precondition rather than trust callers.
+    equity_curve = sorted(equity_curve, key=lambda p: p[0])
     for ts, eq in equity_curve:
         d = trading_day_ct(ts)
         if d not in days:
@@ -48,7 +51,15 @@ def simulate_combines(
     daily_pnl: list[tuple[datetime, Decimal]],
     rules: CombineRules | None = None,
 ) -> dict:
-    """Sequential Combine attempts over the series. Bust -> new attempt next day."""
+    """Sequential Combine attempts over the series. Bust -> new attempt next day.
+
+    Modeling choices:
+    - A PASS also restarts a fresh attempt the next day. This measures
+      pass-rate DENSITY across the whole series (how often the strategy can
+      clear a Combine), not a single account lifecycle — Combine->XFA
+      progression is modeled separately by simulate_xfa_chain.
+    - Bust wins over pass when one daily delta implies both.
+    """
     rules = rules or CombineRules()
     attempts = passes = busts = 0
     days_to_pass: list[int] = []
@@ -61,6 +72,9 @@ def simulate_combines(
             days_in_attempt = 0
         tracker.on_pnl(pnl, ts)
         days_in_attempt += 1
+        # Daily granularity: this only sees the day's CLOSING balance — an
+        # intraday MLL touch that recovered by close is invisible (busts
+        # understated, per module caveat).
         if tracker.is_dead():
             busts += 1
             tracker = None
@@ -109,7 +123,7 @@ def simulate_xfa_chain(
     return {
         "accounts": accounts, "busts": busts,
         "gross_payouts": gross_payouts,
-        "net_payouts": gross_payouts * Decimal("0.90"),
+        "net_payouts": gross_payouts * rules.trader_profit_share,
         "median_days_to_first_payout": (median(first_payout_days) if first_payout_days else None),
     }
 

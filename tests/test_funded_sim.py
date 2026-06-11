@@ -66,3 +66,24 @@ def test_daily_pnls_from_equity_groups_by_trading_day():
     assert len(days) == 2
     assert days[0][1] == D("300")    # +300 on day 1
     assert days[1][1] == D("300")    # -200 then +500 on day 2
+
+
+def test_median_days_to_pass_counted_from_attempt_start():
+    """days-to-pass is per-ATTEMPT, not per-series - an off-by-one here
+    skews the headline metric the go/no-go decision reads."""
+    days = ["1400", "1400", "400"] + ["0"] * 5
+    res = simulate_combines(daily(days))
+    assert res["median_days_to_pass"] == 3
+    # bust on day 1, attempt 2 passes on its own days 1-3 (series days 2-4)
+    days2 = ["-2000", "1400", "1400", "400"]
+    res2 = simulate_combines(daily(days2))
+    assert res2["median_days_to_pass"] == 3
+
+
+def test_unsorted_equity_curve_is_handled():
+    """Day attribution must not depend on caller-supplied ordering."""
+    a = datetime(2026, 1, 5, 18, 0, tzinfo=timezone.utc)
+    b = datetime(2026, 1, 5, 20, 0, tzinfo=timezone.utc)
+    curve_sorted = [(a, D("50000")), (b, D("50300"))]
+    curve_unsorted = [(b, D("50300")), (a, D("50000"))]
+    assert daily_pnls_from_equity(curve_sorted) == daily_pnls_from_equity(curve_unsorted)
