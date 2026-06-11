@@ -38,15 +38,9 @@ _HTF_MIN_BARS = 480        # need several aggregated HTF bars before swings can 
 
 _CT = ZoneInfo("America/Chicago")
 
-
-def _trading_day_ct(ts: datetime) -> date:
-    """Topstep trading day: rolls at 5:00 PM CT, so a 6 PM CT bar belongs
-    to the NEXT calendar day's session."""
-    ct = ts.astimezone(_CT)
-    d = ct.date()
-    if ct.hour >= 17:
-        d += timedelta(days=1)
-    return d
+from app.risk.flatten import trading_day_ct  # noqa: E402 — after _CT for clarity
+# Thin alias so existing callers (tests/test_backtest_rollover.py, scripts/) keep working.
+_trading_day_ct = trading_day_ct
 
 
 def _refresh_backtest_htf(bars, s: StrategyParams, level_finder, bias_tracker, graders) -> None:

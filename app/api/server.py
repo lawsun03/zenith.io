@@ -46,6 +46,7 @@ from pydantic import BaseModel
 
 from app.bot_config import BotConfig, load_bot_config, save_bot_config, strategy_for
 from app.execution.reconciler import Reconciler
+from app.risk.account_phase import tracker_from_config
 from app.risk.state import RiskState
 from app.strategy.composer import Signal
 from app.strategy.killzone import in_killzone, killzones_from_names
@@ -540,6 +541,12 @@ def build_app(
             _engine.flatten_enabled = body.flatten_enabled
             _engine.flatten_time_ct = body.flatten_time_ct
             _engine.entry_cutoff_time_ct = body.entry_cutoff_time_ct
+            if body.account_phase != "practice":
+                if _engine.phase is None or _engine.phase.phase != body.account_phase:
+                    _engine.phase = tracker_from_config(body)  # fresh tracker on phase change
+                    log.warning("Account phase changed to %s — fresh tracker; verify balance vs TopstepX", body.account_phase)
+            else:
+                _engine.phase = None
         if _htf_rebuild is not None:
             try:
                 await _htf_rebuild(body)

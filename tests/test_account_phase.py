@@ -189,3 +189,70 @@ def test_tracker_from_config_rejects_unknown_keys():
                     phase_rules={"combine": {"proft_target": "4000"}})
     with pytest.raises(ValueError, match="proft_target"):
         tracker_from_config(cfg)
+
+
+def test_engine_feeds_fills_to_phase_tracker():
+    """Every realized fill delta must reach the tracker — the governor's
+    cushion math is only as good as the balance it sees."""
+    import asyncio
+    from app.broker.paper import PaperBroker
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+    from app.broker.events import Bar
+
+    def bar(ts, price):
+        return Bar(instrument="MGC", timeframe="1min", ts=ts,
+                   open=D(str(price)), high=D(str(price + 1)),
+                   low=D(str(price - 1)), close=D(str(price)), volume=10)
+
+    tracker = PhaseTracker(phase="combine", combine=CombineRules(), xfa=XfaRules())
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=D("0"))
+    engine = ExecutionEngine(broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+                             runners=[], replay_mode=True, phase=tracker)
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        await broker.inject_bar(bar(T0, 100))
+        await broker.place_bracket("MGC", "long", 1, D("100"), D("95"), D("110"))
+        # next bar hits the target -> exit fill with positive realized pnl
+        await broker.inject_bar(bar(T0 + timedelta(minutes=1), 111))
+
+    asyncio.run(go())
+    assert tracker.balance > D("50000")
+
+
+def test_engine_rolls_phase_day_at_5pm_ct():
+    """today_pnl must reset at the 5pm CT boundary or the best-day cap and
+    winning-day counters compound across days."""
+    import asyncio
+    from app.broker.paper import PaperBroker
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+    from app.broker.events import Bar
+
+    def bar(ts, price=100):
+        return Bar(instrument="MGC", timeframe="1min", ts=ts,
+                   open=D(str(price)), high=D(str(price + 1)),
+                   low=D(str(price - 1)), close=D(str(price)), volume=10)
+
+    tracker = PhaseTracker(phase="combine", combine=CombineRules(), xfa=XfaRules())
+    tracker.on_pnl(D("700"), T0)
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=D("0"))
+    engine = ExecutionEngine(broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+                             runners=[], replay_mode=True, phase=tracker)
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        # 2026-01-05 22:00 UTC = 16:00 CT (same trading day)
+        await broker.inject_bar(bar(datetime(2026, 1, 5, 22, 0, tzinfo=timezone.utc)))
+        assert tracker.today_pnl == D("700")
+        # 2026-01-05 23:30 UTC = 17:30 CT -> NEXT trading day; roll fires
+        await broker.inject_bar(bar(datetime(2026, 1, 5, 23, 30, tzinfo=timezone.utc)))
+
+    asyncio.run(go())
+    assert tracker.today_pnl == D("0")
+    assert tracker.best_day == D("700")

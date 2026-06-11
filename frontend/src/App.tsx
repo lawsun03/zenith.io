@@ -40,6 +40,7 @@ import { TodosPage } from './pages/Todos'
 import { TradeAnalysisPage } from './pages/TradeAnalysis'
 import { TradeAnalysisDetailPage } from './pages/TradeAnalysisDetail'
 import { OpenPositions } from './components/OpenPositions'
+import { StrategyDebug } from './components/StrategyDebug'
 
 function LiveDashboard() {
   const chartCbRef = useRef<ChartCallbacks>({})
@@ -52,7 +53,7 @@ function LiveDashboard() {
   const activeSymbolRef = useRef(activeSymbol)
   useEffect(() => { activeSymbolRef.current = activeSymbol }, [activeSymbol])
 
-  const { status, signals, fills, reconciles, connState } = useStream(chartCbRef, activeSymbolRef)
+  const { status, signals, fills, reconciles, strategyState, connState } = useStream(chartCbRef, activeSymbolRef)
   const [configOpen, setConfigOpen] = useState(false)
 
   const [positions, setPositions] = useState<Position[]>([])
@@ -134,6 +135,7 @@ function LiveDashboard() {
               <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
                 <OpenPositions positions={positions} />
                 <ActivityFeed signals={signals} fills={fills} reconciles={reconciles} activeSymbol={activeSymbol} />
+                <StrategyDebug state={strategyState} />
               </div>
 
             </div>

@@ -40,7 +40,7 @@ import asyncio
 import dataclasses
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Awaitable, Callable, Optional
 
@@ -51,7 +51,7 @@ from app.broker.protocol import Broker
 from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
 from app.risk.account_phase import PhaseTracker
-from app.risk.flatten import in_flatten_window, past_entry_cutoff
+from app.risk.flatten import in_flatten_window, past_entry_cutoff, trading_day_ct
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
 from app.risk.state import CT, RiskState
@@ -444,6 +444,7 @@ class ExecutionEngine:
         self.flatten_time_ct = flatten_time_ct
         self.entry_cutoff_time_ct = entry_cutoff_time_ct
         self.phase = phase  # hot-applied via PATCH /api/config
+        self._phase_day: "date | None" = None
         self._flatten_task: asyncio.Task | None = None
         self._flattened_today: str | None = None  # trading-day key, avoid re-flatten spam
         # Called immediately after broker.place_bracket() succeeds so the
@@ -627,6 +628,15 @@ class ExecutionEngine:
         the NEXT signal will see — which is correct behavior.
         """
         await self._enforce_flatten(bar.ts)
+        if self.phase is not None:
+            td = trading_day_ct(bar.ts)
+            if self._phase_day is None:
+                self._phase_day = td
+            elif td != self._phase_day:
+                self.phase.roll_day(bar.ts)
+                log.info("Phase day rolled: %s — balance %s, cushion %s",
+                         td, self.phase.balance, self.phase.cushion)
+                self._phase_day = td
         # Resolve: a GC bar routes to the MGC runner via _bar_router.
         execution_key = self._bar_router.get(bar.instrument, bar.instrument)
 
@@ -743,6 +753,8 @@ class ExecutionEngine:
             contracts_delta=fill.contracts_delta,
             ts=fill.ts,
         )
+        if self.phase is not None and fill.realized_pnl_delta != 0:
+            self.phase.on_pnl(fill.realized_pnl_delta, fill.ts)
         log.info(
             "Fill: %s %s %d @ %s pnl=%s contracts_now=%d",
             fill.instrument,

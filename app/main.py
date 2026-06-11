@@ -74,6 +74,7 @@ from app.journaling import (
 from app.notifications import DiscordNotifier, EmailNotifier, EndOfDayScheduler, HourlyHealthScheduler, TailHandler
 from project_x_py.exceptions import ProjectXConnectionError
 from app.replay import load_bars_csv
+from app.risk.account_phase import tracker_from_config
 from app.risk.config import config_for_account, fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
@@ -348,6 +349,20 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             in_macro = in_macro_window(bar.ts, cfg.ifvg_macro_windows)
             news_block = in_news_blackout(bar.ts, cfg.ifvg_news_blackout)
 
+        phase_data: dict | None = None
+        if engine.phase is not None:
+            p = engine.phase
+            phase_data = {
+                "name": p.phase,
+                "balance": str(p.balance),
+                "mll": str(p.mll),
+                "cushion": str(p.cushion),
+                "today_pnl": str(p.today_pnl),
+                "best_day": str(p.best_day_live),
+                "winning_days": p.winning_days,
+                "target_reached": p.target_reached(),
+            }
+
         journal.publish_strategy_state(
             instrument=runner.instrument,
             grade=grade,
@@ -356,6 +371,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             session_low=sr[1] if sr else None,
             in_macro=in_macro,
             news_blackout=news_block,
+            phase=phase_data,
         )
 
     return on_bar
@@ -984,6 +1000,7 @@ async def _async_main() -> int:
         flatten_enabled=bot_cfg.flatten_enabled,
         flatten_time_ct=bot_cfg.flatten_time_ct,
         entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
+        phase=(tracker_from_config(bot_cfg) if bot_cfg.account_phase != "practice" else None),
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
@@ -1068,6 +1085,12 @@ async def _async_main() -> int:
     try:
         await broker.connect()
         await engine.start()
+        if bot_cfg.account_phase != "practice":
+            log.warning(
+                "ACCOUNT PHASE %s: tracker starts from configured starting_balance — "
+                "verify against the TopstepX dashboard before trusting governor gates "
+                "(broker-truth reconciliation is a follow-up).", bot_cfg.account_phase,
+            )
         await reconciler.start()
         if notifier.enabled or discord.enabled:
             await eod_scheduler.start()

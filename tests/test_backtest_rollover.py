@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.backtest.runner import _trading_day_ct
+from app.risk.flatten import trading_day_ct as _trading_day_ct
 from app.risk.config import fifty_k_combine
 from app.risk.state import LockoutReason, RiskState
 

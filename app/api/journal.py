@@ -303,6 +303,7 @@ class Journal:
         session_low: "Decimal | None" = None,
         in_macro: bool = False,
         news_blackout: bool = False,
+        phase: "dict | None" = None,
     ) -> None:
         """Emit strategy_state WebSocket event each bar for the live dashboard."""
         payload: dict = {"instrument": instrument}
@@ -335,6 +336,7 @@ class Journal:
             payload["session_low"] = str(session_low)
         payload["in_macro_window"] = in_macro
         payload["news_blackout"] = news_blackout
+        payload["phase"] = phase  # None when practice; dict with tracker state otherwise
 
         entry = JournalEntry(
             ts=datetime.now(timezone.utc),

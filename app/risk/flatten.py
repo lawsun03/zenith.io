@@ -8,7 +8,7 @@ expected hold spans the close are never opened.
 """
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 
 from app.risk.state import CT
 
@@ -18,6 +18,16 @@ _SESSION_OPEN = time(17, 0)  # 5:00 PM CT — new trading day
 def _parse_hhmm(s: str) -> time:
     h, m = s.split(":")
     return time(int(h), int(m))
+
+
+def trading_day_ct(ts: datetime) -> date:
+    """Topstep trading day: rolls at 5:00 PM CT, so a 6 PM CT bar belongs
+    to the NEXT calendar day's session."""
+    ct = ts.astimezone(CT)
+    d = ct.date()
+    if ct.hour >= 17:
+        d += timedelta(days=1)
+    return d
 
 
 def in_flatten_window(ts: datetime, flatten_time_ct: str) -> bool:

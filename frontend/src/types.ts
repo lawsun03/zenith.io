@@ -197,4 +197,14 @@ export interface StrategyStatePayload {
   in_session_window?: boolean
   in_macro_window?: boolean
   news_blackout?: boolean
+  phase?: {
+    name: string
+    balance: string
+    mll: string
+    cushion: string
+    today_pnl: string
+    best_day: string
+    winning_days: number
+    target_reached: boolean
+  } | null
 }
