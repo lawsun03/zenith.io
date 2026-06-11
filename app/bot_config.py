@@ -142,6 +142,11 @@ class BotConfig(BaseModel):
     # Rule numbers live here, not in code — Topstep changes them often.
     account_phase: str = "practice"
     phase_rules: dict = Field(default_factory=dict)
+    # Shadow mode: run the phase rules from the configured starting balance,
+    # IGNORING the broker balance at startup. Lets a Combine dry-run trade on
+    # the practice account (whose real balance is unrelated — reconciling it
+    # would instantly trip the stop-at-target gate).
+    phase_shadow: bool = False
 
 
 def strategy_for(config: BotConfig, instrument: str) -> StrategyParams:
@@ -203,5 +208,6 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "max_contracts_override": config.max_contracts_override,
         "account_phase": config.account_phase,
         "phase_rules": config.phase_rules,
+        "phase_shadow": config.phase_shadow,
     }
     path.write_text(json.dumps(data, indent=2))
