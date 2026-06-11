@@ -18,11 +18,13 @@ What this module is NOT:
     or live — but doesn't care about replay speed or cost modeling.
     That's the backtester's job on DigitalOcean.
 
-Idempotency note: every event handler is async and may be called
-concurrently. The engine uses a single asyncio.Lock around the
-critical section (gate + place + state update) so a fill arriving
-mid-decision can't corrupt state. Without this lock, a tight burst
-of bars + fills would race.
+Concurrency note: asyncio is single-threaded; coroutines only interleave
+at explicit await points. Risk-state mutations are synchronous, so the
+gate-check → place-bracket path is safe unless another coroutine runs
+during the broker.place_bracket await. The flatten task's last-moment
+in-window re-check (inside _act_on_signal, before that await) closes
+the only meaningful race: a wall-clock flatten firing between gate and
+placement.
 
 Lifecycle:
 
@@ -51,7 +53,7 @@ from app.bot_config import StrategyParams
 from app.risk.flatten import in_flatten_window, past_entry_cutoff
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
-from app.risk.state import RiskState
+from app.risk.state import CT, RiskState
 from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
@@ -565,7 +567,7 @@ class ExecutionEngine:
             return
         if not in_flatten_window(ts, self.flatten_time_ct):
             return
-        day_key = ts.astimezone(timezone.utc).date().isoformat()
+        day_key = ts.astimezone(CT).date().isoformat()
         if self._flattened_today == day_key:
             return
         open_insts = self._open_instruments()
@@ -573,18 +575,26 @@ class ExecutionEngine:
             self._flattened_today = day_key
             return
         log.warning("FLATTEN WINDOW: closing all positions at %s (rule: flat by 3:10 PM CT)", ts)
+        all_closed = True
         for inst in open_insts:
             try:
                 await self.broker.cancel_all(inst)
-                await self.broker.flatten(inst)
+                ok = await self.broker.flatten(inst)
+                if not ok:
+                    all_closed = False
+                    log.error("FLATTEN WINDOW: flatten(%s) rejected — will retry next tick", inst)
             except Exception:
-                log.exception("flatten-window close failed for %s", inst)
-        self._flattened_today = day_key
+                all_closed = False
+                log.exception("FLATTEN WINDOW: close failed for %s — will retry next tick", inst)
+        if all_closed:
+            self._flattened_today = day_key
 
     def _open_instruments(self) -> list[str]:
         """Instruments with open positions, per broker truth where available."""
         if callable(getattr(self.broker, "open_brackets", None)):
-            return sorted({b["instrument"] for b in self.broker.open_brackets()})
+            insts = sorted({b["instrument"] for b in self.broker.open_brackets()})
+            if insts:
+                return insts
         if self.risk_state.open_contracts != 0:
             return [r.instrument for r in self.runners.values()]
         return []
@@ -894,7 +904,12 @@ class ExecutionEngine:
         return size
 
     async def _act_on_signal(self, signal: Signal) -> OrderOutcome:
-        """Run the pretrade gate and place if allowed. Caller holds the lock."""
+        """Run the pretrade gate and place if allowed.
+
+        Asyncio cooperative scheduling: no lock needed. A last-moment
+        flatten-window re-check runs immediately before broker.place_bracket
+        to catch the flatten task interleaving at that await point.
+        """
         # Opposite-side signal while holding a position: flatten first, then
         # reverse. This MUST be checked before the pretrade gate. The gate only
         # denies (MAX_CONTRACTS) when headroom is exhausted, but max_contracts
@@ -995,6 +1010,15 @@ class ExecutionEngine:
                 tp1_price = max(candidates) if candidates else None
             tp1_fraction = self.strategy_cfg.ifvg_tp1_fraction
             be_after_tp1 = self.strategy_cfg.ifvg_be_after_tp1
+
+        # Last-moment flatten-window re-check. The 30s wall-clock flatten task
+        # can fire between the pretrade gate above and this await, opening a
+        # narrow race where a new entry slips in just as the flatten fires.
+        # Asyncio is single-threaded, so interleaving only happens at await
+        # points — this check runs before the next await and closes the gap.
+        if self.flatten_enabled and in_flatten_window(signal.created_at, self.flatten_time_ct):
+            log.info("Entry blocked: inside flatten window (last-moment check)")
+            return OrderOutcome(placed=False, reason="flatten_window")
 
         # Allowed — place the bracket. Note: the gate may have sized down,
         # which is reflected in decision.allowed_size.

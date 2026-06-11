@@ -105,3 +105,48 @@ def test_engine_flattens_open_position_in_window():
 
     remaining = asyncio.run(go())
     assert remaining == [], "engine must flatten open positions in the window"
+
+
+def test_failed_flatten_retries_next_tick():
+    """A rejected close must NOT mark the day flattened — the 30s wall-clock
+    backup retries until the position is actually gone. Fail-safe, not
+    fail-dangerous: holding through 3:10 PM CT fails the account."""
+    import asyncio
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+
+    class StubBroker(PaperBroker):
+        def __init__(self):
+            super().__init__(slippage_ticks_market=0, commission_per_side=Decimal("0"))
+            self.fail_flatten = True
+
+        async def flatten(self, instrument):
+            if self.fail_flatten:
+                return False
+            return await super().flatten(instrument)
+
+    broker = StubBroker()
+    engine = ExecutionEngine(
+        broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+        runners=[], replay_mode=True,
+        flatten_enabled=True, flatten_time_ct="15:05", entry_cutoff_time_ct="14:30",
+    )
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        await broker.inject_bar(_bar(_utc(2026, 1, 15, 20, 0)))
+        await broker.place_bracket("MGC", "long", 1,
+                                   Decimal("100"), Decimal("95"), Decimal("110"))
+        # First window tick: flatten rejected -> day NOT marked done
+        await engine._enforce_flatten(_utc(2026, 1, 15, 21, 6))
+        assert engine._flattened_today is None
+        assert len(broker.open_brackets()) == 1
+        # Broker recovers; next tick must retry and succeed
+        broker.fail_flatten = False
+        await engine._enforce_flatten(_utc(2026, 1, 15, 21, 7))
+        assert broker.open_brackets() == []
+        assert engine._flattened_today is not None
+
+    asyncio.run(go())
