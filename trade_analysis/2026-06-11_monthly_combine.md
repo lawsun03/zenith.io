@@ -64,8 +64,41 @@ floor constraint is comfortably satisfiable at ≤1.0% risk.
 - 29% is a per-month estimate from 17 samples — wide error bars
   (binomial 95% ≈ 13–53%).
 
+## Round 2 — strategy-param tuning at 0.75% risk (same 17 months)
+
+| variant | passed | note |
+|---|---|---|
+| r_multiple 1.5 | 5/17 | |
+| r_multiple 2.0 | 5/17 | |
+| **r_multiple 3.5** | **6/17 (35%)** | adds 2026-02 (+$6.7k pass on 02-09) |
+| r_multiple 4.0 / 4.5 | 6/17 each | plateau 3.5–4.5, not knife-edge |
+| r 3.5 @ 1.0% risk | 6/17 | same count, floor margin thinner |
+| r 3.5, no partials | 5/17 | partials keep losing months alive |
+| partial_r 1.0 | 3/17 | cuts winners too early |
+| cooldown 3 bars after stop | 5/17 | neutral |
+| trend EMA 50 | 4/17 | hurts |
+| DPL removed / DPL $2500 | 5/17 | identical months — $1.5k cap rarely binds at 0.75% |
+| 15min timeframe (r 2.5 or 3.5) | **0/17** | too few trades/month to reach $3k |
+
+**2024 out-of-sample check:** r 3.5 and r 2.5 both pass 2/12 (17%) on the
+2024 train months, with the same passing months (Mar, May) and similar
+nets. The r 3.5 edge doesn't replicate as an improvement on 2024 — but it
+costs nothing there either. Verdict: weakly better, definitely not worse,
+and the 3.5–4.5 plateau suggests it's a real region, not a fitted spike.
+
+## Final read
+
+Param-level ceiling reached: **~35% pass rate per month on 2025–26, ~17%
+on 2024** (regime-dependent, n small — binomial 95% on 6/17 ≈ 17–59%).
+Every lever tested: sizing (5 levels), grade floor, killzones (2),
+r_multiple (5), partials (3), cooldown, trend filter, DPL (2), timeframe.
+Only sizing (0.75–1.0%) and wide targets (r 3.5+) moved the needle; the
+rest were neutral or harmful. Further gains require a better edge
+(structural strategy work), not tuning.
+
 ## Recommendation (not applied)
 
-`risk_per_trade_pct: 0.75` (from 0.25), keep partials 1.5R, keep
-killzones "all", keep grader floor off. Apply only with explicit sign-off —
-it triples per-trade risk on the live bot.
+`risk_per_trade_pct: 0.75` (from 0.25) and `r_multiple: 3.5` (from 2.5,
+as an MNQ strategy_override next to stop_buffer/min_absolute_body); keep
+partials 1.5R, killzones "all", grader floor off, 5min. Apply only with
+explicit sign-off — it triples per-trade risk on the live bot.

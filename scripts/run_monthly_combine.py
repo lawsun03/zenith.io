@@ -33,9 +33,11 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import app.backtest.runner as _runner_mod
 from app.backtest.runner import BacktestConfig, run_backtest
 from app.bot_config import load_bot_config, strategy_for
 from app.replay import load_bars_csv
+from app.risk.config import fifty_k_combine
 
 STARTING = Decimal("50000")
 TARGET_EQ = Decimal("53000")   # +$3k profit target
@@ -134,7 +136,21 @@ def main() -> int:
     ap.add_argument("--config", default="bot_config.json")
     ap.add_argument("--set", action="append", default=[],
                     help="StrategyParams override, e.g. --set grader_min_grade=C")
+    ap.add_argument("--dpl", default=None,
+                    help="Override daily profit limit: dollar amount or 'none' "
+                         "(default: fifty_k_combine's $1500)")
     args = ap.parse_args()
+
+    if args.dpl is not None:
+        # Research-only override of the self-imposed daily profit cap; the
+        # runner builds its risk config via this module-level reference.
+        dpl = None if args.dpl.lower() == "none" else Decimal(args.dpl)
+
+        def _patched(soft_buffer=Decimal("500"), _dpl=dpl):
+            cfg = fifty_k_combine(soft_buffer)
+            return dc_replace(cfg, daily_profit_limit=_dpl)
+
+        _runner_mod.fifty_k_combine = _patched
 
     bot_cfg = load_bot_config(Path(args.config))
     strategy = strategy_for(bot_cfg, args.instrument.upper())
@@ -155,7 +171,7 @@ def main() -> int:
     months = split_months(Path(args.bars), Path("bars") / "monthly")
     print(f"params: contracts={args.contracts} risk_pct={args.risk_pct} "
           f"partial_r={args.partial_r} killzones={args.killzones} "
-          f"overrides={args.set or 'none'}")
+          f"overrides={args.set or 'none'} dpl={args.dpl or '1500 (default)'}")
     print(f"{'month':8s} {'trades':>6s} {'win%':>5s} {'net':>10s} {'min_eq':>9s} "
           f"{'result':18s}")
 
