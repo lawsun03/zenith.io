@@ -99,3 +99,36 @@ def test_exits_never_blocked_by_governor():
                        entry=D("2400"), stop=D("2405"), target=D("2390"),
                        is_entry=False)
     assert isinstance(check(ex, state(), phase=t, ts=TS), Allow)
+
+
+class TestBoundaryPins:
+    """Pin the governor constants so silent drift fails a test."""
+
+    def test_cap_constant_is_40pct_not_45(self):
+        """At cushion 2000 / $50 per contract: 0.40 -> cap 16, 0.45 -> 18.
+        Guards against copying the adjacent best_day_cap_frac (0.45)."""
+        t = combine()                       # fresh: cushion 2000, > $1000 zone
+        a = check(order(size=20), state(), phase=t, ts=TS)
+        assert isinstance(a, Allow) and a.allowed_size == 16
+
+    def test_no_halving_above_1000_cushion(self):
+        """Halving applies only at cushion <= $1000 (or post-payout)."""
+        t = combine()                       # cushion 2000
+        a = check(order(size=20), state(), phase=t, ts=TS)
+        assert a.allowed_size == 16         # NOT 8
+
+    def test_post_payout_half_risk_halves_size(self):
+        t = PhaseTracker(phase="xfa", combine=CombineRules(), xfa=XfaRules())
+        t.on_pnl(D("2500"), TS); t.roll_day(TS)   # locked at 0, cushion 2500
+        t.post_payout_half_risk = True
+        a = check(order(size=20, grade="A"), state(), phase=t, ts=TS)
+        # cap = int(0.40*2500/50) = 20 -> halved 10
+        assert isinstance(a, Allow) and a.allowed_size == 10
+
+    def test_winning_day_lock_needs_2x_threshold(self):
+        """Between 1x and 2x the winning-day threshold, B-grades still trade."""
+        t = PhaseTracker(phase="xfa", combine=CombineRules(), xfa=XfaRules())
+        t.on_pnl(D("2500"), TS); t.roll_day(TS)
+        t.on_pnl(D("299"), TS)              # 150 <= today < 300
+        a = check(order(size=2, grade="B"), state(), phase=t, ts=TS)
+        assert isinstance(a, Allow)

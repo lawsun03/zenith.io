@@ -99,8 +99,9 @@ def check(
             if denom > 0 and phase.today_pnl > 0 \
                     and phase.today_pnl >= phase.combine.best_day_cap_frac * denom:
                 return Deny(reason_code="BEST_DAY_CAP",
-                            message=f"Today {phase.today_pnl} would breach the "
-                                    f"consistency cap — done for the day.")
+                            message=f"Today {phase.today_pnl} hit the bot's intraday "
+                                    f"best-day cap (tighter than Topstep's 50% rule) "
+                                    f"— done for the day.")
         if phase.phase == "xfa":
             if (phase.today_pnl >= 2 * phase.xfa.winning_day_threshold
                     and order.setup_grade not in ("A",)):
