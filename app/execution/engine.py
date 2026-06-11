@@ -628,15 +628,18 @@ class ExecutionEngine:
         the NEXT signal will see — which is correct behavior.
         """
         await self._enforce_flatten(bar.ts)
-        if self.phase is not None:
-            td = trading_day_ct(bar.ts)
-            if self._phase_day is None:
-                self._phase_day = td
-            elif td != self._phase_day:
+        td = trading_day_ct(bar.ts)
+        if self._phase_day is None:
+            self._phase_day = td
+        elif td != self._phase_day:
+            # DLL/DPL lockouts are daily rules and must clear at 5pm CT live,
+            # same as the backtest replay loop (MLL lockouts persist).
+            self.risk_state.roll_trading_day(bar.ts)
+            if self.phase is not None:
                 self.phase.roll_day(bar.ts)
                 log.info("Phase day rolled: %s — balance %s, cushion %s",
                          td, self.phase.balance, self.phase.cushion)
-                self._phase_day = td
+            self._phase_day = td
         # Resolve: a GC bar routes to the MGC runner via _bar_router.
         execution_key = self._bar_router.get(bar.instrument, bar.instrument)
 
@@ -753,8 +756,11 @@ class ExecutionEngine:
             contracts_delta=fill.contracts_delta,
             ts=fill.ts,
         )
-        if self.phase is not None and fill.realized_pnl_delta != 0:
-            self.phase.on_pnl(fill.realized_pnl_delta, fill.ts)
+        # Governor must see NET P&L — Topstep balances/MLL are net of
+        # commissions, and a gross-fed cushion drifts optimistic.
+        net_delta = fill.realized_pnl_delta - commission
+        if self.phase is not None and net_delta != 0:
+            self.phase.on_pnl(net_delta, fill.ts)
         log.info(
             "Fill: %s %s %d @ %s pnl=%s contracts_now=%d",
             fill.instrument,
