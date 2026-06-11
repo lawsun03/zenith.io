@@ -206,19 +206,27 @@ class DisplacementDetector:
             return FairValueGap(side="bearish", low=b3.high, high=b1.low, created_at=b3.ts)
         return None
 
-    def _find_inverted_fvg(self, displacement_bar: Bar, side: DisplacementSide) -> FairValueGap | None:
+    def _find_inverted_fvg(
+        self, displacement_bar: Bar, side: DisplacementSide, prev_close: Decimal
+    ) -> FairValueGap | None:
         """
         Search _active_fvgs for one the displacement bar's body closed through.
         Bearish displacement (close < open) inverts bullish FVG when bar.close < fvg.low.
         Bullish displacement (close > open) inverts bearish FVG when bar.close > fvg.high.
         Returns the most-recently-formed matching FVG, or None.
+
+        The inversion must happen ON the displacement bar: prev_close (the bar
+        before it) must still be on the near side of the far edge. Without this,
+        an FVG that price closed through long ago (with no displacement firing)
+        re-matches every later displacement bar — entries land at stale FVG
+        edges far from market (2026-06-10 parity post-mortem, up to 70 pts off).
         """
         for fvg in reversed(self._active_fvgs):
             if side == "bearish" and fvg.side == "bullish":
-                if displacement_bar.close < fvg.low:
+                if displacement_bar.close < fvg.low <= prev_close:
                     return fvg
             elif side == "bullish" and fvg.side == "bearish":
-                if displacement_bar.close > fvg.high:
+                if displacement_bar.close > fvg.high >= prev_close:
                     return fvg
         return None
 
@@ -276,7 +284,7 @@ class DisplacementDetector:
             return None  # doji body — already filtered by min_absolute_body
                          # in normal cases, kept as a safety net
 
-        ifvg = self._find_inverted_fvg(b2, side)
+        ifvg = self._find_inverted_fvg(b2, side, prev_close=b1.close)
 
         ratio = body / atr  # safe: atr is non-zero in normal markets;
                             # if ATR is 0 we'd not have warmed up.
@@ -321,7 +329,7 @@ class DisplacementDetector:
         else:
             return None
 
-        if self._find_inverted_fvg(b2, side) is None:
+        if self._find_inverted_fvg(b2, side, prev_close=b1.close) is None:
             return None
 
         return side, b1, b2

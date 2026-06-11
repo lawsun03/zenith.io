@@ -385,8 +385,11 @@ class TestDisplacement:
         det.on_bar(bar(ts0 + timedelta(minutes=6), "2400.1", "2400.2", "2399.5", "2399.7"))
         det.on_bar(bar(ts0 + timedelta(minutes=7), "2399.7", "2399.6", "2398.8", "2399.0"))  # b3: high=2399.6 < 2399.9 → FVG
 
-        # b1 of the displacement window.
-        det.on_bar(bar(ts0 + timedelta(minutes=8), "2400", "2400.3", "2399.9", "2400.1"))
+        # b1 of the displacement window — close 2399.8 must stay at/below
+        # fvg.high=2399.9 so the inversion happens ON the displacement bar
+        # (a prior close already above the edge would make it stale). High must
+        # also stay below 2399.9 or the wick would mitigate the FVG.
+        det.on_bar(bar(ts0 + timedelta(minutes=8), "2399.7", "2399.8", "2399.5", "2399.8"))
 
         # Displacement bar (b2) — big bullish: open 2400.2, close 2402.5.
         # body=2.3, range=2.6, ratio=0.88 (>0.6). close=2402.5 > fvg.high=2399.9 → iFVG inversion.

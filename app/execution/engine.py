@@ -209,12 +209,13 @@ class StrategyRunner:
                     "Armed zone filled: %s %s @ entry=%s stop=%s",
                     zone.killzone, zone.side, zone.entry_price, zone.stop_price,
                 )
-            elif status == "invalidated":
-                log.info("Armed zone invalidated — pending signal discarded")
+            elif status in ("invalidated", "expired"):
+                log.info("Armed zone %s — pending signal discarded", status)
                 _ps = self._pending_signal
                 self._pending_signal = None
                 self.last_reject = RejectInfo(
-                    reason="invalidated", side=(_ps.side if _ps else ""),
+                    reason=("zone_expired" if status == "expired" else "invalidated"),
+                    side=(_ps.side if _ps else ""),
                     entry=(_ps.entry if _ps else None), stop=(_ps.stop if _ps else None),
                     target=(_ps.target if _ps else None),
                     grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
@@ -327,6 +328,7 @@ class StrategyRunner:
             created_at=bar.ts,
             killzone=signal.killzone,
             sweep_extreme=signal.sweep_extreme,
+            max_age_bars=self.strategy_cfg.ifvg_zone_max_age_bars,
         )
         # Attach tp1_price to zone (ArmedZone is frozen — use dc_replace)
         if tp1_price is not None:
@@ -356,7 +358,7 @@ class StrategyRunner:
             return None
         side, b1, b2 = peek
 
-        ifvg = self.displacement._find_inverted_fvg(b2, side)
+        ifvg = self.displacement._find_inverted_fvg(b2, side, prev_close=b1.close)
         if ifvg is None:
             return None
 

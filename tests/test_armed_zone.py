@@ -307,3 +307,44 @@ class TestStopUsesSweepExtreme:
                   entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
                   killzone="NY AM")   # sweep_extreme omitted
         assert z.stop_price == Decimal("2403.50")
+
+
+class TestZoneExpiry:
+    """
+    Zones must not live forever. A zone whose entry is hit long after arming
+    fills at days-old structure (2026-06-10 parity post-mortem found backtest
+    entries ~160 pts off-market from exactly this). max_age_bars caps zone life.
+    """
+
+    def test_zone_expires_after_max_age_bars(self):
+        """Entry touched AFTER max_age_bars -> expired, never filled."""
+        t = make_tracker()
+        t.arm(side="long", fvg_low=Decimal("2398"), fvg_high=Decimal("2400"),
+              entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+              killzone="NY AM", max_age_bars=3)
+        # 3 pending bars: price stays above entry=2400, no invalidation
+        for i in range(1, 4):
+            assert t.on_bar(bar(i, "2401", "2402", "2400.5", "2401")) == "pending"
+        # Bar 4 trades through entry — but the zone is past max age
+        status = t.on_bar(bar(4, "2401", "2401.5", "2399.5", "2400.5"))
+        assert status == "expired", f"stale zone must expire, got {status}"
+        assert t.active is None
+
+    def test_zone_fills_within_max_age(self):
+        """Entry touched within max_age_bars -> fills as before."""
+        t = make_tracker()
+        t.arm(side="long", fvg_low=Decimal("2398"), fvg_high=Decimal("2400"),
+              entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+              killzone="NY AM", max_age_bars=3)
+        assert t.on_bar(bar(1, "2401", "2402", "2400.5", "2401")) == "pending"
+        assert t.on_bar(bar(2, "2401", "2401.5", "2399.5", "2400.5")) == "filled"
+
+    def test_zero_max_age_disables_expiry(self):
+        """max_age_bars=0 (default) -> zone never expires (legacy behavior)."""
+        t = make_tracker()
+        t.arm(side="long", fvg_low=Decimal("2398"), fvg_high=Decimal("2400"),
+              entry_mode="ifvg_edge", stop_buffer=BUFFER, created_at=BASE_TS,
+              killzone="NY AM")
+        for i in range(1, 50):
+            assert t.on_bar(bar(i, "2401", "2402", "2400.5", "2401")) == "pending"
+        assert t.on_bar(bar(50, "2401", "2401.5", "2399.5", "2400.5")) == "filled"

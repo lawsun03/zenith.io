@@ -116,6 +116,7 @@ class PaperBroker:
         slippage_ticks_market: int = 1,
         commission_per_side: Decimal | None = None,  # None = use DEFAULT_COMMISSION table
         partial_profit_r: Decimal = Decimal("0"),    # 0 = disabled; 1.0 = take half at 1R
+        max_entry_slippage_frac: Decimal = Decimal("0"),  # 0 = disabled; refuse entry if |entry−market| > frac × stop distance
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
@@ -123,6 +124,7 @@ class PaperBroker:
         self._slippage_ticks_market = slippage_ticks_market
         self._commission_per_side = commission_per_side
         self._partial_profit_r = partial_profit_r
+        self._max_entry_slippage_frac = max_entry_slippage_frac
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -218,6 +220,21 @@ class PaperBroker:
         # off-market and used to "fill" there, then instantly "win" (2026-06-10
         # parity post-mortem). Falls back to `entry` before any bar is seen.
         market = self._last_bar_close.get(instrument, entry)
+
+        # Stale-signal guard (mirrors live's max_entry_slippage_frac, but on
+        # absolute distance: in replay a stale signal can sit FAVORABLY
+        # off-market and mint fantasy P&L, not just chase adversely). The
+        # graded setup no longer exists at this price — refuse, don't re-anchor.
+        if self._max_entry_slippage_frac > 0:
+            stop_dist = abs(entry - stop)
+            gap = abs(entry - market)
+            if stop_dist > 0 and gap > self._max_entry_slippage_frac * stop_dist:
+                msg = (
+                    f"signal entry {entry} is {gap} from market {market} "
+                    f"(> {self._max_entry_slippage_frac} × stop distance {stop_dist}) — stale signal refused"
+                )
+                log.error("place_bracket rejected: %s %s — %s", instrument, side, msg)
+                return BracketResult(False, None, None, None, error=msg)
 
         # Apply market-order slippage: shift fill price against the trader.
         tick = TICK_SIZE.get(instrument, Decimal("0.10"))

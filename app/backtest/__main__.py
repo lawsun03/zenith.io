@@ -57,6 +57,7 @@ async def _run_backtest(
         contracts=config.contracts,
         risk_per_trade_pct=config.risk_per_trade_pct,
         partial_profit_r=config.partial_profit_r,
+        max_entry_slippage_frac=config.max_entry_slippage_frac,
         enabled_killzones=config.enabled_killzones,
         strategy_params=strategy_for(config, instrument),
         enforce_risk_limits=enforce_risk_limits,

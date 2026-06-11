@@ -167,6 +167,11 @@ const FIELDS: FieldDef[] = [
     hint: 'Ticks beyond the iFVG extreme for the stop loss. 1.0 = one tick past the high/low that defined the FVG. Add buffer to avoid tight stop-outs on wicks.',
   },
   {
+    key: 'ifvg_zone_max_age_bars', label: 'iFVG Zone Max Age (bars)', type: 'slider', section: 'strategy',
+    min: 0, max: 480, step: 10,
+    hint: 'Bars an armed zone stays valid before expiring unfilled. 0 = never expires. Prevents entries on days-old structure when price returns to a stale zone.',
+  },
+  {
     key: 'ifvg_sweep_window_bars', label: 'iFVG Sweep Window (bars)', type: 'slider', section: 'strategy',
     min: 1, max: 30, step: 1,
     hint: 'Bars since the sweep that still qualify as "recent" for the grader (Rule A). Beyond this cap, setups without a delivery FVG are capped at B and filtered.',
@@ -361,6 +366,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       htf_swing_timeframe:      form.htf_swing_timeframe                || '30min',
       ifvg_entry_mode:          form.ifvg_entry_mode                    || 'ifvg_edge',
       ifvg_stop_buffer_ticks:   form.ifvg_stop_buffer_ticks             || '1.0',
+      // 0 is meaningful (= never expire) so NaN-check instead of || fallback
+      ifvg_zone_max_age_bars:   Number.isNaN(parseInt(form.ifvg_zone_max_age_bars)) ? 120 : parseInt(form.ifvg_zone_max_age_bars),
       ifvg_sweep_window_bars:   parseInt(form.ifvg_sweep_window_bars)   || 10,
       ifvg_min_displacement_mult: form.ifvg_min_displacement_mult       || '1.0',
       grader_min_grade:         form.grader_min_grade                   || 'F',

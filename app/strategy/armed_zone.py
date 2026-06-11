@@ -23,7 +23,7 @@ from app.broker.events import Bar
 log = logging.getLogger(__name__)
 
 EntryMode = Literal["ifvg_edge", "retrace_ce", "close"]
-ArmStatus = Literal["filled", "invalidated", "pending"]
+ArmStatus = Literal["filled", "invalidated", "expired", "pending"]
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,8 @@ class ArmedZoneTracker:
 
     def __init__(self) -> None:
         self._active: ArmedZone | None = None
+        self._max_age_bars: int = 0
+        self._bars_elapsed: int = 0
 
     @property
     def active(self) -> ArmedZone | None:
@@ -78,6 +80,7 @@ class ArmedZoneTracker:
         created_at: datetime,
         killzone: str,
         sweep_extreme: Decimal | None = None,
+        max_age_bars: int = 0,
     ) -> ArmedZone:
         """
         Create an ArmedZone from an iFVG zone.
@@ -130,9 +133,11 @@ class ArmedZoneTracker:
             killzone=killzone,
         )
         self._active = zone
+        self._max_age_bars = max_age_bars
+        self._bars_elapsed = 0
         log.info(
-            "ArmedZone armed: %s %s zone [%s-%s], entry=%s, stop=%s, mode=%s",
-            killzone, side, fvg_low, fvg_high, entry_price, stop_price, entry_mode,
+            "ArmedZone armed: %s %s zone [%s-%s], entry=%s, stop=%s, mode=%s, max_age_bars=%s",
+            killzone, side, fvg_low, fvg_high, entry_price, stop_price, entry_mode, max_age_bars,
         )
         return zone
 
@@ -154,6 +159,18 @@ class ArmedZoneTracker:
             return None
 
         zone = self._active
+
+        # Expiry first: a zone whose entry is hit long after arming would fill
+        # at stale structure (2026-06-10 parity: entries ~160 pts off-market).
+        # Checked before the fill test so the expiry bar itself can't fill.
+        self._bars_elapsed += 1
+        if self._max_age_bars > 0 and self._bars_elapsed > self._max_age_bars:
+            log.info(
+                "ArmedZone expired: %s %s — %d bars since armed (max %d)",
+                zone.killzone, zone.side, self._bars_elapsed, self._max_age_bars,
+            )
+            self._active = None
+            return "expired"
 
         # Check invalidation first (body-close, not wick).
         # If the bar closes through the far edge the zone is dead regardless of whether

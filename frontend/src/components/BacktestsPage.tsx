@@ -130,6 +130,7 @@ const PARAM_LABELS: Record<string, string> = {
   cooldown_bars_after_stop: 'Cooldown After Stop',
   min_penetration_atr_factor: 'Penetration ATR Factor',
   ifvg_stop_buffer_ticks: 'iFVG Stop Buffer (ticks)',
+  ifvg_zone_max_age_bars: 'Zone Max Age (bars)',
   ifvg_sweep_window_bars: 'Sweep Window (bars)',
   ifvg_min_displacement_mult: 'Min Displacement Mult',
   ifvg_tp1_fraction: 'TP1 Fraction',
@@ -298,6 +299,10 @@ const STRATEGY_FIELDS: StrategyField[] = [
     hint: 'Extra ticks beyond the iFVG extreme when placing the stop. Larger = wider stop, less noise-stopped, worse R/R.',
   },
   {
+    key: 'ifvg_zone_max_age_bars', label: 'Zone Max Age (bars)', section: 'Structure / IFVG', min: 0, max: 480, step: 10,
+    hint: 'Bars an armed zone stays valid before expiring unfilled. 0 = never expires. Prevents entries on days-old structure when price returns to a stale zone.',
+  },
+  {
     key: 'ifvg_sweep_window_bars', label: 'Sweep Window (bars)', section: 'Structure / IFVG', min: 1, max: 30, step: 1,
     hint: 'Rule A: how many bars back we look for a prior swing sweep before the iFVG formed. Larger window = more setups qualify; smaller = only recent, "clean" sweeps pass.',
   },
@@ -361,6 +366,7 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   cooldown_bars_after_stop:      '0',
   min_penetration_atr_factor:    '0',
   ifvg_stop_buffer_ticks:        '1.0',
+  ifvg_zone_max_age_bars:        '120',
   ifvg_sweep_window_bars:        '10',
   ifvg_min_displacement_mult:    '1.0',
   ifvg_tp1_fraction:             '0.5',

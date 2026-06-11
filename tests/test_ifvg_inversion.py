@@ -216,6 +216,86 @@ class TestIFVGInversion:
         assert result.fvg.side == "bullish"
 
 
+class TestStaleFVGNotInverted:
+    """
+    Inversion must happen ON the displacement bar — the previous bar's close
+    must be on the near side of the far edge. Without this, an FVG that price
+    closed through long ago (with no displacement) re-matches every later
+    displacement bar, producing entries far from market (2026-06-10 parity
+    post-mortem: entries up to 70 pts outside the signal bar).
+    """
+
+    def test_stale_fvg_not_inverted_when_price_already_beyond(self):
+        """FVG closed through quietly (no displacement) must not invert later."""
+        d = make_detector()
+        warm_atr(d, n=5, offset=0)
+
+        # Form bullish FVG [2401, 2403]
+        d.on_bar(bar(5, "2400", "2401", "2399", "2400"))
+        d.on_bar(bar(6, "2401", "2402", "2400", "2402"))
+        d.on_bar(bar(7, "2403", "2405", "2403", "2404"))
+        assert any(f.side == "bullish" for f in d.active_fvgs)
+
+        # Quiet close below fvg.low=2401 — body too small to be displacement.
+        # The FVG is now inverted-without-signal; it must never fire again.
+        d.on_bar(bar(8, "2401.2", "2402", "2400.5", "2400.8"))
+        d.on_bar(bar(9, "2400.8", "2401", "2400.3", "2400.5"))
+        d.on_bar(bar(10, "2400.5", "2400.7", "2399.9", "2400.1"))
+
+        # Big bearish displacement far below the stale FVG
+        d.on_bar(bar(11, "2400", "2400.2", "2392", "2392.4"))
+        result = d.on_bar(bar(12, "2392.4", "2393", "2391.8", "2392.2"))
+
+        assert result is None or result.fvg is None, (
+            f"Stale FVG must not be inverted: got fvg={result.fvg if result else None}"
+        )
+
+    def test_inverted_fvg_does_not_refire(self):
+        """Once an FVG inverts (signal fired), a later displacement must not re-match it."""
+        d = make_detector()
+        warm_atr(d, n=5, offset=0)
+
+        # Form bullish FVG [2401, 2403]
+        d.on_bar(bar(5, "2400", "2401", "2399", "2400"))
+        d.on_bar(bar(6, "2401", "2402", "2400", "2402"))
+        d.on_bar(bar(7, "2403", "2405", "2403", "2404"))
+
+        # Legit inversion: displacement bar closes through fvg.low=2401
+        d.on_bar(bar(8, "2404", "2405", "2392", "2393"))
+        first = d.on_bar(bar(9, "2393", "2394", "2391", "2392"))
+        assert first is not None and first.fvg is not None
+        assert first.fvg.low == Decimal("2401")
+
+        # Second displacement further down — same FVG must NOT re-fire
+        d.on_bar(bar(10, "2392", "2392.5", "2384", "2384.5"))
+        second = d.on_bar(bar(11, "2384.5", "2385", "2383.5", "2384"))
+
+        assert second is None or second.fvg is None, (
+            f"Inverted FVG re-fired: got fvg={second.fvg if second else None}"
+        )
+
+    def test_close_through_from_inside_zone_still_inverts(self):
+        """Prev close inside the FVG zone (not yet through) → inversion still fires."""
+        d = make_detector()
+        warm_atr(d, n=5, offset=0)
+
+        # Form bullish FVG [2401, 2403]
+        d.on_bar(bar(5, "2400", "2401", "2399", "2400"))
+        d.on_bar(bar(6, "2401", "2402", "2400", "2402"))
+        d.on_bar(bar(7, "2403", "2405", "2403", "2404"))
+
+        # Close INSIDE the zone (2402.4) — zone not yet inverted
+        d.on_bar(bar(8, "2403.5", "2404", "2402", "2402.4"))
+
+        # Displacement bar closes through fvg.low=2401 → genuine inversion
+        d.on_bar(bar(9, "2402.4", "2402.6", "2392", "2392.6"))
+        result = d.on_bar(bar(10, "2392.6", "2393.2", "2392", "2392.8"))
+
+        assert result is not None and result.fvg is not None
+        assert result.fvg.low == Decimal("2401")
+        assert result.fvg.high == Decimal("2403")
+
+
 class TestPeekDisplacementIFVG:
     def test_peek_none_when_no_prior_fvg(self):
         """peek_displacement returns None if displacement bar has no prior FVG to invert."""

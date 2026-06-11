@@ -1,4 +1,4 @@
-"""Tests for PaperBroker slippage and commission modeling."""
+﻿"""Tests for PaperBroker slippage and commission modeling."""
 import asyncio
 from decimal import Decimal
 from app.broker.paper import PaperBroker
@@ -41,12 +41,12 @@ def test_no_slippage_baseline():
         commission_per_side=Decimal("0"),
     )
     ts = _now()
-    # Entry at 100, target at 110 — should make $100 (10 points × $10/point × 1 contract)
+    # Entry at 100, target at 110 â€” should make $100 (10 points Ã— $10/point Ã— 1 contract)
     bars = [_bar(ts, 100, 115, 99, 110)]  # high hits target
     fills = asyncio.run(_run(broker, bars, entry=100, stop=95, target=110))
     exit_fill = next(f for f in fills if not f.is_entry)
     assert exit_fill.fill_price == Decimal("110")
-    assert exit_fill.realized_pnl_delta == Decimal("100")  # 10 pts × $10/pt
+    assert exit_fill.realized_pnl_delta == Decimal("100")  # 10 pts Ã— $10/pt
 
 
 def test_market_slippage_worsens_entry():
@@ -112,13 +112,13 @@ def test_balance_reflects_entry_commission():
 
 
 def test_market_entry_fills_at_market_not_signal_price():
-    """A market entry must fill at the current market (last bar close ± slip),
+    """A market entry must fill at the current market (last bar close Â± slip),
     NOT at the signal's entry price. Stop/target re-anchor as offsets from the
     fill, matching the live broker's _place_bracket_after_fill.
 
     Why: stale iFVG signals carry entry prices far off-market (2026-06-10
     parity check: MGC short 'filled' at 4361.20 while the bar was 4197-4202,
-    then instantly 'won' because target was above market — fantasy P&L)."""
+    then instantly 'won' because target was above market â€” fantasy P&L)."""
     broker = PaperBroker(
         starting_balance=Decimal("50000"),
         slippage_ticks_market=1,
@@ -139,7 +139,7 @@ def test_market_entry_fills_at_market_not_signal_price():
             Decimal("4361.2"), Decimal("4364.5"), Decimal("4352.9"),
         )
         brackets = broker.open_brackets()
-        # Next bar still ~4200 — must NOT instantly hit the re-anchored target.
+        # Next bar still ~4200 â€” must NOT instantly hit the re-anchored target.
         await broker.inject_bar(_bar(_now(), 4200.0, 4201.0, 4199.5, 4200.5))
         return brackets
 
@@ -156,14 +156,14 @@ def test_market_entry_fills_at_market_not_signal_price():
 
 
 def test_cancel_all_does_not_vaporize_positions():
-    """cancel_all must NOT delete filled positions — in live it cancels resting
+    """cancel_all must NOT delete filled positions â€” in live it cancels resting
     protective orders only; the position survives until flatten() closes it
     with a real exit fill.
 
     Why: the engine's reversal path is cancel_all() then flatten(). The old
     paper semantics dropped the bracket (position and all) on cancel_all, so
     flatten found nothing, no exit fill ever fired, and RiskState contracts
-    leaked — a 2.5y MNQ backtest deadlocked at MAX_CONTRACTS (-30/30) on
+    leaked â€” a 2.5y MNQ backtest deadlocked at MAX_CONTRACTS (-30/30) on
     2024-01-25 and traded nothing for the remaining 2.4 years."""
     broker = PaperBroker(
         starting_balance=Decimal("50000"),
@@ -209,3 +209,67 @@ def test_stop_slippage_worsens_exit():
                               side="long"))
     exit_fill = next(f for f in fills if not f.is_entry)
     assert exit_fill.fill_price == Decimal("95.00"), f"Got {exit_fill.fill_price}"
+
+
+def test_entry_refused_when_signal_far_from_market():
+    """With max_entry_slippage_frac set, a signal whose entry sits further from
+    market than frac x stop-distance is refused outright - no fill, no position.
+
+    Why: silently re-anchoring a stale signal to market keeps a trade whose
+    stop/target geometry came from days-old structure (2026-06-10 parity
+    post-mortem). The graded setup no longer exists at this price."""
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=0,
+        commission_per_side=Decimal("0"),
+        max_entry_slippage_frac=Decimal("0.5"),
+    )
+    fills = []
+
+    async def collect(f: Fill):
+        fills.append(f)
+
+    async def go():
+        broker.on_fill(collect)
+        await broker.connect()
+        await broker.inject_bar(_bar(_now(), 4199.0, 4202.6, 4197.8, 4200.0))
+        # Stale short: entry 161.2 pts from market, stop distance 3.3.
+        return await broker.place_bracket(
+            "MGC", "short", 1,
+            Decimal("4361.2"), Decimal("4364.5"), Decimal("4352.9"),
+        )
+
+    result = asyncio.run(go())
+    assert result.success is False, "stale entry must be refused"
+    assert result.error, "refusal must carry an error message"
+    assert fills == [], "no fill may be emitted for a refused entry"
+    assert broker.open_brackets() == []
+
+
+def test_entry_allowed_within_slippage_threshold():
+    """Signal entry within frac x stop-distance of market fills normally."""
+    broker = PaperBroker(
+        starting_balance=Decimal("50000"),
+        slippage_ticks_market=0,
+        commission_per_side=Decimal("0"),
+        max_entry_slippage_frac=Decimal("0.5"),
+    )
+    fills = []
+
+    async def collect(f: Fill):
+        fills.append(f)
+
+    async def go():
+        broker.on_fill(collect)
+        await broker.connect()
+        await broker.inject_bar(_bar(_now(), 100.0, 101.0, 99.0, 100.0))
+        # Entry 1 pt from market, stop distance 5 -> 1 <= 0.5 x 5, allowed.
+        return await broker.place_bracket(
+            "MGC", "long", 1,
+            Decimal("101.0"), Decimal("96.0"), Decimal("111.0"),
+        )
+
+    result = asyncio.run(go())
+    assert result.success is True
+    assert any(f.is_entry for f in fills)
+

@@ -31,6 +31,7 @@ export interface StrategyConfig {
   // iFVG entry
   ifvg_entry_mode: string
   ifvg_stop_buffer_ticks: string
+  ifvg_zone_max_age_bars: number  // bars an armed zone stays valid; 0 = never expires
   // iFVG grader / session filters
   ifvg_sweep_window_bars: number
   ifvg_min_displacement_mult: string
