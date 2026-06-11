@@ -9,9 +9,9 @@ expected hold spans the close are never opened.
 from __future__ import annotations
 
 from datetime import datetime, time
-from zoneinfo import ZoneInfo
 
-CT = ZoneInfo("America/Chicago")
+from app.risk.state import CT
+
 _SESSION_OPEN = time(17, 0)  # 5:00 PM CT — new trading day
 
 
