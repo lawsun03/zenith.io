@@ -58,3 +58,27 @@ Per-instrument params (or MNQ-only trading on 5min) needed before deploying.
 
 Artifacts: `backtest_results/wf_train_sweep{,2}/`, `wf_test_{baseline,winner,winner_dwb8}/`,
 split bars in `bars/bars_MNQ_{train_2024,test_2025_2026}.csv` (gitignored).
+
+## Re-run 2026-06-11 — post stale-FVG fix (d8dddbc): conclusion HOLDS, stronger
+
+The table above was generated with the stale-FVG inversion bug in the signal
+path (see `trade_analysis/2026-06-10_parity.md` resolution). Re-run with fixed
+code, same split bars, same harness (`--no-risk-limits`, current bot_config
+where base = old baseline 0.30/1.0 and MNQ overrides = winner 3.0/5.0):
+
+| run | period | trades | win% | PF | net (stats) | maxDD |
+|---|---|---|---|---|---|---|
+| baseline | 2024 train | 875 | 41.9 | 1.03 | +$1.3k | $5.7k |
+| **winner** sb=3.0 mab=5.0 | 2024 train | 859 | 43.4 | **1.11** | +$4.9k | $5.5k |
+| baseline (frozen) | 2025–26 test | 1,269 | 43.5 | 1.13 | +$11.6k | $4.7k |
+| **winner (frozen)** | 2025–26 test | 1,249 | 43.6 | **1.15** | **+$13.1k** | $5.7k |
+
+Read: the stale-FVG entries were net losers — removing them (~19% fewer
+trades) improved every cell. 2024 flips positive (best was PF 0.99 before),
+test PF rises 1.13 → 1.15, and maxDD shrinks $7.8k → $5.7k. The winner params
+still beat baseline on train and hold frozen on test, so the deployed config
+(MNQ-only 5min, overrides 3.0/5.0) survives re-validation.
+
+Still open: maxDD $5.7k vs the 50K Combine's ~$2k trailing max loss — the
+risk-limits-ON, Combine-realistic-sizing run remains the binding next check.
+Artifacts: `backtest_results/wf2_{train,test}_{baseline,winner}/`.
