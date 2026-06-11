@@ -138,6 +138,11 @@ class BotConfig(BaseModel):
     commission_per_contract: float = 0.0           # deducted from realized P&L on every fill (per side)
     max_contracts_override: int | None = None     # hard cap on risk-sized contracts (None = use account limit)
 
+    # Funded-pipeline phase: "practice" = current behavior (default).
+    # Rule numbers live here, not in code — Topstep changes them often.
+    account_phase: str = "practice"
+    phase_rules: dict = Field(default_factory=dict)
+
 
 def strategy_for(config: BotConfig, instrument: str) -> StrategyParams:
     """
@@ -196,5 +201,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "emergency_target_r": _conv(config.emergency_target_r),
         "naked_grace_seconds": config.naked_grace_seconds,
         "max_contracts_override": config.max_contracts_override,
+        "account_phase": config.account_phase,
+        "phase_rules": config.phase_rules,
     }
     path.write_text(json.dumps(data, indent=2))

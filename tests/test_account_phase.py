@@ -146,3 +146,33 @@ class TestReviewGaps:
         assert t.mll is None and t.cushion is None
         t.on_pnl(D("-10000"), day(0))
         assert not t.is_dead()
+
+
+class TestTrackerFromConfig:
+    def test_phase_rules_from_bot_config(self):
+        """phase_rules round-trips through BotConfig with defaults."""
+        from app.bot_config import BotConfig
+        from app.risk.account_phase import tracker_from_config
+
+        cfg = BotConfig()
+        assert cfg.account_phase == "practice"   # zero behavior change by default
+        t = tracker_from_config(cfg)
+        assert t.phase == "practice"
+        cfg2 = BotConfig(account_phase="combine",
+                         phase_rules={"combine": {"best_day_cap_frac": "0.40"}})
+        t2 = tracker_from_config(cfg2)
+        assert t2.combine.best_day_cap_frac == Decimal("0.40")
+        assert t2.combine.profit_target == Decimal("3000")  # defaults survive partial dict
+
+    def test_tracker_from_config_rejects_unsafe_payout_floor(self):
+        """payout_request_floor must be >= mll_lock_at: a payout that can fire
+        before the XFA's $0 lock would let the post-payout trailing MLL sit
+        above the halved balance and insta-kill the account."""
+        import pytest
+        from app.bot_config import BotConfig
+        from app.risk.account_phase import tracker_from_config
+
+        cfg = BotConfig(account_phase="xfa",
+                        phase_rules={"xfa": {"payout_request_floor": "1500"}})
+        with pytest.raises(ValueError, match="payout_request_floor"):
+            tracker_from_config(cfg)

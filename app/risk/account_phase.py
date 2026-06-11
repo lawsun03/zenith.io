@@ -154,3 +154,40 @@ class PhaseTracker:
         log.info("XFA payout %s, balance now %s (half-risk until %s)",
                  amount, self.balance, self.xfa.payout_request_floor)
         return amount
+
+
+def tracker_from_config(cfg) -> "PhaseTracker":
+    """Build a PhaseTracker from BotConfig.account_phase + .phase_rules.
+
+    Partial dicts are fine — dataclass defaults fill the gaps. Decimal
+    fields accept strings (config JSON stores numbers as strings).
+    Validates cross-field safety invariants (fail loud at startup, not
+    mid-session).
+    """
+    def _conv(rules_cls, raw: dict):
+        kwargs = {}
+        for f in rules_cls.__dataclass_fields__.values():
+            if f.name not in raw:
+                continue
+            v = raw[f.name]
+            default = f.default
+            # bool check MUST precede int — bool is a subclass of int
+            if isinstance(default, bool):
+                kwargs[f.name] = bool(v)
+            elif isinstance(default, Decimal):
+                kwargs[f.name] = Decimal(str(v))
+            elif isinstance(default, int):
+                kwargs[f.name] = int(v)
+            else:
+                kwargs[f.name] = str(v)
+        return rules_cls(**kwargs)
+
+    combine = _conv(CombineRules, dict(cfg.phase_rules.get("combine", {})))
+    xfa = _conv(XfaRules, dict(cfg.phase_rules.get("xfa", {})))
+    if xfa.payout_request_floor < xfa.mll_lock_at:
+        raise ValueError(
+            f"phase_rules.xfa.payout_request_floor ({xfa.payout_request_floor}) must be "
+            f">= mll_lock_at ({xfa.mll_lock_at}): a payout before the $0 MLL lock can "
+            f"leave the trailing MLL above the post-payout balance (instant account death)."
+        )
+    return PhaseTracker(phase=cfg.account_phase, combine=combine, xfa=xfa)
