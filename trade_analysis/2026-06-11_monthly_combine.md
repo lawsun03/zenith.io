@@ -96,9 +96,32 @@ Only sizing (0.75–1.0%) and wide targets (r 3.5+) moved the needle; the
 rest were neutral or harmful. Further gains require a better edge
 (structural strategy work), not tuning.
 
+## Round 3 — Topstep consistency rule enforced (Lawrence's correction)
+
+PASS now additionally requires best single trading day < 50% of total
+profit at the moment the $3k target is reached (the real Combine rule;
+the bot's $1.5k DPL is the guard for it, but DPL only gates *entries* —
+an open runner exiting at 3.5R later the same day still prints $1.8–3.9k
+days).
+
+| config | 2025–26 (17 mo) | 2024 (12 mo) | combined |
+|---|---|---|---|
+| 0.75% r2.5 | 4/17 (was 5) | — | |
+| 0.75% r3.5 | 5/17 (was 6) | 2/12 | 7/29 (24%) |
+| **1.0% r3.5** | **6/17 (35%)** | **3/12 (25%)** | **9/29 (31%)** |
+| 0.75% r3.5 + DPL $1000 | 5/17 | — | no help |
+
+The rule costs ~1 month and delays passes 3–9 days. Its failure mode is
+one monster day in an otherwise flat month (2025-04: +$3.9k day, +$2.5k
+month → 50%+ forever). Bigger sizing (1.0%) *helps* under this rule:
+totals overshoot $3k enough to dilute the best day — it even gains
+2024-10 and 2025-12 as passes. Worst min-equity at 1.0%: $48,220.
+
 ## Recommendation (not applied)
 
-`risk_per_trade_pct: 0.75` (from 0.25) and `r_multiple: 3.5` (from 2.5,
+`risk_per_trade_pct: 1.0` (from 0.25) and `r_multiple: 3.5` (from 2.5,
 as an MNQ strategy_override next to stop_buffer/min_absolute_body); keep
-partials 1.5R, killzones "all", grader floor off, 5min. Apply only with
-explicit sign-off — it triples per-trade risk on the live bot.
+partials 1.5R, DPL $1.5k, killzones "all", grader floor off, 5min.
+Expected ≈31% pass per attempt (9/29 months, 95% CI ≈ 15–51%), zero
+floor breaches in ~270 simulated months. Apply only with explicit
+sign-off — it quadruples per-trade risk on the live bot.

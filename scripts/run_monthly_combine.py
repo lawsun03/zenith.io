@@ -34,7 +34,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import app.backtest.runner as _runner_mod
-from app.backtest.runner import BacktestConfig, run_backtest
+from app.backtest.runner import BacktestConfig, _trading_day_ct, run_backtest
 from app.bot_config import load_bot_config, strategy_for
 from app.replay import load_bars_csv
 from app.risk.config import fifty_k_combine
@@ -64,16 +64,34 @@ def split_months(bars_csv: Path, out_dir: Path) -> list[tuple[str, Path]]:
 
 
 def eval_month(equity_curve: list[tuple[datetime, Decimal]]) -> dict:
-    """Walk the equity curve with the trailing-MLL rule.
+    """Walk the equity curve with the trailing-MLL and consistency rules.
 
-    Returns pass/breach status and the timestamps where each occurred.
+    PASS requires BOTH at the same moment:
+      - total profit >= $3,000 (equity >= $53k), and
+      - best single trading day < 50% of total profit (Topstep consistency
+        rule — a $1.5k+ day means trading on until the total dilutes it).
     Floor = min(hwm - 2000, 50000-locked); breach when equity <= floor.
     """
     hwm = STARTING
     passed_at: datetime | None = None
     breached_at: datetime | None = None
     min_eq = STARTING
+    best_day = Decimal("0")
+    day_pnl = Decimal("0")
+    cur_day = None
+    prev_eq = STARTING
     for ts, eq in equity_curve:
+        td = _trading_day_ct(ts)
+        if cur_day is None:
+            cur_day = td
+        elif td != cur_day:
+            cur_day = td
+            day_pnl = Decimal("0")
+        day_pnl += eq - prev_eq
+        prev_eq = eq
+        if day_pnl > best_day:
+            best_day = day_pnl
+
         if eq > hwm:
             hwm = eq
         floor = hwm - MLL_OFFSET
@@ -83,7 +101,9 @@ def eval_month(equity_curve: list[tuple[datetime, Decimal]]) -> dict:
             min_eq = eq
         if breached_at is None and eq <= floor:
             breached_at = ts
-        if passed_at is None and eq >= TARGET_EQ:
+        profit = eq - STARTING
+        if (passed_at is None and eq >= TARGET_EQ
+                and best_day < profit / 2):
             passed_at = ts
         # Stop at the first terminal event: a breach after passing is
         # irrelevant (account already passed); a pass after breaching
@@ -94,6 +114,7 @@ def eval_month(equity_curve: list[tuple[datetime, Decimal]]) -> dict:
         "passed_at": passed_at,
         "breached_at": breached_at,
         "min_eq": min_eq,
+        "best_day": best_day,
         "final_eq": equity_curve[-1][1] if equity_curve else STARTING,
     }
 
@@ -173,7 +194,7 @@ def main() -> int:
           f"partial_r={args.partial_r} killzones={args.killzones} "
           f"overrides={args.set or 'none'} dpl={args.dpl or '1500 (default)'}")
     print(f"{'month':8s} {'trades':>6s} {'win%':>5s} {'net':>10s} {'min_eq':>9s} "
-          f"{'result':18s}")
+          f"{'best_day':>9s} {'result':18s}")
 
     passed = failed = neither = 0
     for label, path in months:
@@ -188,7 +209,8 @@ def main() -> int:
             outcome = "no pass, survived"
             neither += 1
         print(f"{r['label']:8s} {r['trades']:6d} {r['win_rate']:5.1f} "
-              f"{r['net']:10.2f} {r['min_eq']:9.2f} {outcome:18s}")
+              f"{r['net']:10.2f} {r['min_eq']:9.2f} {r['best_day']:9.2f} "
+              f"{outcome:18s}")
 
     total = passed + failed + neither
     print(f"\n{total} months: {passed} passed ({100*passed/total:.0f}%), "
