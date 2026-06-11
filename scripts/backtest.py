@@ -68,6 +68,7 @@ from app.strategy.liquidity import LiquidityConfig
 # _build_runner honors when strategy_params is set). name → value type.
 STRATEGY_PARAM_TYPES: dict[str, type] = {
     "swing_lookback":             int,
+    "swing_stop_lookback":        int,
     "min_penetration":            Decimal,
     "multi_bar_window":           int,
     "atr_period":                 int,
@@ -84,6 +85,7 @@ STRATEGY_PARAM_TYPES: dict[str, type] = {
     "min_penetration_atr_factor": Decimal,
     "vp_min_target_r":            Decimal,
     "vp_filter_tolerance":        Decimal,
+    "ifvg_sweep_window_bars":     int,
 }
 
 # Legacy mode (--legacy): no VP, bare sub-configs. name → (container, type).
@@ -139,6 +141,7 @@ def build_base_config(args: argparse.Namespace) -> BacktestConfig:
     including the VP gate. Legacy mode (--legacy): bare sub-configs, no VP.
     """
     instrument = args.instrument.upper()
+    no_risk = getattr(args, "no_risk_limits", False)
     if not getattr(args, "legacy", False):
         bot_cfg = load_bot_config(Path(args.config))
         return BacktestConfig(
@@ -150,6 +153,9 @@ def build_base_config(args: argparse.Namespace) -> BacktestConfig:
             enabled_killzones=bot_cfg.enabled_killzones,
             contracts=bot_cfg.contracts,
             risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
+            partial_profit_r=bot_cfg.partial_profit_r,
+            timeframe=args.timeframe,
+            enforce_risk_limits=not no_risk,
         )
     # Legacy bare-config path (no VP).
     return BacktestConfig(
@@ -195,7 +201,7 @@ def write_outputs(
 async def run_single(args: argparse.Namespace) -> int:
     """One backtest, one summary."""
     base = build_base_config(args)
-    base.bars = load_bars_csv(args.bars, base.instrument)
+    base.bars = load_bars_csv(args.bars, base.instrument, args.timeframe)
     base.label = f"single ({args.instrument})"
 
     result = await run_backtest(base)
@@ -221,7 +227,7 @@ async def run_sweep_cmd(
     instrument = base.instrument
 
     def bars_factory():
-        return load_bars_csv(args.bars, instrument)
+        return load_bars_csv(args.bars, instrument, args.timeframe)
 
     results = await run_sweep(base, dims, bars_factory)
 
@@ -261,11 +267,11 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
             dims = [parse_sweep_arg(s, faithful=not args.legacy) for s in args.sweep]
             base = build_base_config(args_copy)
             def bars_factory(p=bars_path, sym=symbol):
-                return load_bars_csv(p, sym)
+                return load_bars_csv(p, sym, args.timeframe)
             results = await run_sweep(base, dims, bars_factory)
         else:
             base = build_base_config(args_copy)
-            base.bars = load_bars_csv(bars_path, symbol)
+            base.bars = load_bars_csv(bars_path, symbol, args.timeframe)
             base.label = symbol
             results = [await run_backtest(base)]
 
@@ -319,12 +325,20 @@ def main() -> int:
              "Default is faithful: seed from --config and run VP like live.",
     )
     parser.add_argument(
+        "--timeframe", default="1min",
+        help="Bar timeframe; CSV rows are resampled on the fly (default: 1min)",
+    )
+    parser.add_argument(
         "--sweep", action="append", default=[],
         help="Sweep dimension: key=v1,v2,v3 (repeatable)",
     )
     parser.add_argument(
         "--output-dir", default=None,
         help="Optional directory to write trades/equity/summary CSVs",
+    )
+    parser.add_argument(
+        "--no-risk-limits", action="store_true", dest="no_risk_limits",
+        help="Disable MLL/DLL/DPL for parameter exploration (trade count unaffected by lockouts)",
     )
     parser.add_argument(
         "--log-level", default="WARNING",
