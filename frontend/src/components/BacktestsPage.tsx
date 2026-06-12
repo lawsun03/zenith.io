@@ -1,7 +1,6 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Logo } from './Logo'
-import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
 import { useConfirm } from '../hooks/useConfirm'
 import type { FundedPipeline } from '../types'
@@ -386,64 +385,14 @@ const STRATEGY_DEFAULTS: Record<string, string> = {
   htf_swing_timeframe:           '30min',
 }
 
-type DataSource = 'local' | 'databento' | 'static'
+type DataSource = 'local' | 'databento'
 
-// Standard 2-year Databento CSV files per instrument (constant reference dataset).
-const STATIC_BARS_MAP: Record<string, string> = {
-  MGC: 'bars/bars_MGC_GCv_2024_2026.csv',
-  MNQ: 'bars/bars_MNQ_NQv_2024_2026.csv',
-  MES: 'bars/bars_MES_ESv_2024_2026.csv',
-  MCL: 'bars/bars_MCL_CLv_2024_2026.csv',
+interface BarsFile {
+  path: string
+  name: string
+  size_mb: number
+  modified: string
 }
-
-// TP-system params varied in A/B comparison. partial_profit_r is a top-level
-// config field; the rest live in the strategy dict. Both are sent on the run
-// request (partial_profit_r at top level, the others inside `strategy`).
-const TP_AB_FIELDS = [
-  'r_multiple',
-  'partial_profit_r',
-  'ifvg_tp1_fraction',
-  'ifvg_be_after_tp1',
-  'htf_target_enabled',
-  'htf_target_min_r',
-  'target_clarity_mode',
-] as const
-
-const TP_AB_LABELS: Record<string, string> = {
-  r_multiple: 'R Multiple',
-  partial_profit_r: 'Partial Profit R',
-  ifvg_tp1_fraction: 'TP1 Fraction',
-  ifvg_be_after_tp1: 'BE After TP1',
-  htf_target_enabled: 'HTF Target Selection',
-  htf_target_min_r: 'HTF Target Min R',
-  target_clarity_mode: 'Target-Clarity Gate',
-}
-
-// Distinct colors for overlaying variant equity curves (matrix-theme friendly).
-const VARIANT_COLORS = ['#00ff41', '#38bdf8', '#fbbf24', '#f87171', '#c084fc', '#fb923c']
-
-const VARIANT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
-
-interface ABVariant {
-  // Overrides for TP_AB_FIELDS only; absent keys inherit the base form value.
-  overrides: Record<string, string>
-  name?: string
-  rationale?: string
-}
-
-interface ABResult {
-  instrument: string
-  letter: string
-  label: string
-  id: string | null
-  stats: BacktestStats | null
-  startingBalance: string
-  status: 'pending' | 'running' | 'done' | 'error'
-}
-
-// Databento-supported instruments for the A/B matrix. Fetched from the backend
-// (/api/databento/symbols); this is the fallback if that call fails.
-const DEFAULT_AB_INSTRUMENTS = ['MES', 'MGC', 'MNQ']
 
 const FONTS_ID = 'bt-grotesk-fonts'
 function injectFonts() {
@@ -480,6 +429,7 @@ export function BacktestsPage() {
   const [bentoStartDate, setBentoStartDate] = useState(daysAgo(365))
   const [bentoEndDate, setBentoEndDate] = useState(isoDate(new Date()))
   const [partialR, setPartialR] = useState('0')
+  const [enforceRisk, setEnforceRisk] = useState(true)
   const [bentoMeta, setBentoMeta] = useState<{
     cost: number
     cachedThrough: string | null
@@ -488,16 +438,11 @@ export function BacktestsPage() {
   const [bentoLoading, setBentoLoading] = useState(false)
   const [gradeFilter, setGradeFilter] = useState<string | null>(null)
 
-  // A/B test mode: compare TP-system variants side by side.
-  const [abMode, setAbMode] = useState(false)
-  const [abVariants, setAbVariants] = useState<ABVariant[]>([{ overrides: {} }, { overrides: {} }])
-  const [abResults, setAbResults] = useState<ABResult[] | null>(null)
-  const [abRunning, setAbRunning] = useState(false)
-  // A/B runs on Databento across its own calendar range + selected instruments.
-  const [abStartDate, setAbStartDate] = useState(daysAgo(365))
-  const [abEndDate, setAbEndDate] = useState(isoDate(new Date()))
-  const [abInstruments, setAbInstruments] = useState<string[]>([])
-  const [supportedSymbols, setSupportedSymbols] = useState<string[]>(DEFAULT_AB_INSTRUMENTS)
+  // Local bars file picker state.
+  const [barFiles, setBarFiles] = useState<BarsFile[] | null>(null)
+  const [barFilesError, setBarFilesError] = useState(false)
+  const [selectedBarPath, setSelectedBarPath] = useState('')
+  const [freeTextBarPath, setFreeTextBarPath] = useState('')
 
   // Filtering and sorting for the saved-runs list.
   type SortKey = 'pnl_desc' | 'pnl_asc' | 'trades_desc' | 'win_rate_desc' | 'profit_factor_desc' | 'date_desc'
@@ -534,46 +479,36 @@ export function BacktestsPage() {
       .catch(() => {})
   }, [])
 
+  // Fetch available local bars files. If the endpoint 404s (bot predates the
+  // endpoint), fall back to free-text input.
+  useEffect(() => {
+    fetch('/api/backtest/bars-files')
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(d => {
+        const files: BarsFile[] = d.files ?? []
+        setBarFiles(files)
+        if (files.length > 0) setSelectedBarPath(files[0].path)
+      })
+      .catch(() => {
+        setBarFilesError(true)
+      })
+  }, [])
+
   function setStratField(k: string, v: string) {
     setStrategy(s => ({ ...s, [k]: v }))
     setStrategyDirty(true)
   }
 
-  // Populate the A/B instrument picker from the backend's Databento symbol map,
-  // and default the selection to the live bot's instrument.
-  useEffect(() => {
-    fetch('/api/databento/symbols')
-      .then(r => r.json())
-      .then(d => {
-        const syms: string[] = Array.isArray(d?.symbols) && d.symbols.length ? d.symbols : DEFAULT_AB_INSTRUMENTS
-        setSupportedSymbols(syms)
-        return resolveSymbol().then(sym => {
-          const def = sym.toUpperCase()
-          setAbInstruments([syms.includes(def) ? def : syms[0]])
-        })
-      })
-      .catch(() => {
-        setSupportedSymbols(DEFAULT_AB_INSTRUMENTS)
-        setAbInstruments([DEFAULT_AB_INSTRUMENTS[0]])
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function toggleAbInstrument(sym: string) {
-    setAbInstruments(prev =>
-      prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
-    )
-  }
-
-  // Build the strategy override payload from the current form state. `tpOverrides`
-  // lets A/B variants replace specific TP params without mutating form state.
+  // Build the strategy override payload from the current form state.
   // Returns the strategy dict plus the resolved top-level partial_profit_r.
-  function buildRunPayload(tpOverrides: Record<string, string> = {}): {
+  function buildRunPayload(): {
     strategy: Record<string, unknown>
     partialProfitR: string
   } {
-    const eff = (k: string): string =>
-      tpOverrides[k] ?? strategy[k] ?? STRATEGY_DEFAULTS[k]
+    const eff = (k: string): string => strategy[k] ?? STRATEGY_DEFAULTS[k]
     const stratPayload: Record<string, unknown> = {}
     for (const f of STRATEGY_FIELDS) {
       if (f.key === 'ifvg_macro_blackouts_enabled') continue
@@ -586,9 +521,7 @@ export function BacktestsPage() {
       const raw = String(stratPayload[lf] ?? '').trim()
       stratPayload[lf] = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []
     }
-    // partial_profit_r is a top-level config field, not a strategy key.
-    const partialProfitR = tpOverrides['partial_profit_r'] ?? partialR
-    return { strategy: stratPayload, partialProfitR }
+    return { strategy: stratPayload, partialProfitR: partialR }
   }
 
   function resetStrategyToConfig() {
@@ -742,21 +675,27 @@ export function BacktestsPage() {
       }
 
       const beforeCount = list.length
-      // Strings preserve decimal precision; the backend coerces via Pydantic.
       const { strategy: stratPayload, partialProfitR } = buildRunPayload()
       const runBody: Record<string, unknown> = {
         label: label || null,
         timeframe,
         strategy: stratPayload,
+        enforce_risk_limits: enforceRisk,
       }
       if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
       if (dataSource === 'databento') {
         runBody.bars_path = `bars/bars_${symbol.toUpperCase()}.csv`
-      } else if (dataSource === 'static') {
-        runBody.bars_path = STATIC_BARS_MAP[symbol.toUpperCase()] ?? `bars/bars_${symbol.toUpperCase()}.csv`
       } else {
-        runBody.start_date = startDate
-        runBody.end_date = endDate
+        // local file source
+        const barsPath = barFiles && !barFilesError
+          ? selectedBarPath
+          : freeTextBarPath
+        if (barsPath) {
+          runBody.bars_path = barsPath
+        } else {
+          runBody.start_date = startDate
+          runBody.end_date = endDate
+        }
       }
       const res = await fetch('/api/backtest/run', {
         method: 'POST',
@@ -771,8 +710,6 @@ export function BacktestsPage() {
       }
       const rangeStr = dataSource === 'databento'
         ? `${bentoStartDate} → ${bentoEndDate}`
-        : dataSource === 'static'
-        ? '2024 → 2026 (static)'
         : `${startDate} → ${endDate}`
       setMsg(`Running (pid ${body.pid}) — ${timeframe}  ${rangeStr}`)
       const watch = setInterval(async () => {
@@ -788,186 +725,6 @@ export function BacktestsPage() {
     } catch (e) {
       setMsg(String(e))
       setRunning(false)
-    }
-  }
-
-  function setVariantOverride(idx: number, key: string, value: string) {
-    setAbVariants(vs => vs.map((v, i) =>
-      i === idx ? { ...v, overrides: { ...v.overrides, [key]: value } } : v
-    ))
-  }
-
-  function clearVariantOverride(idx: number, key: string) {
-    setAbVariants(vs => vs.map((v, i) => {
-      if (i !== idx) return v
-      const next = { ...v.overrides }
-      delete next[key]
-      return { ...v, overrides: next }
-    }))
-  }
-
-  function addVariant() {
-    setAbVariants(vs => vs.length >= VARIANT_LETTERS.length ? vs : [...vs, { overrides: {} }])
-  }
-
-  function removeVariant(idx: number) {
-    setAbVariants(vs => vs.length <= 2 ? vs : vs.filter((_, i) => i !== idx))
-  }
-
-  async function loadTJRVariants() {
-    try {
-      const res = await fetch('/api/ab-variants')
-      if (!res.ok) throw new Error(await res.text())
-      const data: Array<{ name: string; rationale: string; overrides: Record<string, string> }> = await res.json()
-      setAbVariants(data.map(v => ({ overrides: v.overrides, name: v.name, rationale: v.rationale })))
-    } catch (e) {
-      setMsg(`Failed to load TJR variants: ${e}`)
-    }
-  }
-
-  // Resolve the effective TP value a variant will run with (override or base form).
-  function variantTpValue(v: ABVariant, key: string): string {
-    return v.overrides[key] ?? strategy[key] ?? (key === 'partial_profit_r' ? partialR : STRATEGY_DEFAULTS[key])
-  }
-
-  // A/B runs on Databento as a full matrix: each TP variant × each selected
-  // instrument. Bars are fetched once per instrument, then one isolated backtest
-  // per (instrument, variant). Labels encode both so list-polling can match back.
-  async function runABTest() {
-    if (abInstruments.length < 1) {
-      setMsg('Select at least one instrument for the A/B matrix.')
-      return
-    }
-    if (abStartDate > abEndDate) {
-      setMsg('A/B start date must be on or before the end date.')
-      return
-    }
-    setAbRunning(true)
-    setMsg('Starting A/B matrix…')
-
-    const base = (label || `${abStartDate}→${abEndDate}`).slice(0, 60)
-    // Seed one pending result cell per (instrument, variant) combo.
-    const runs: ABResult[] = []
-    for (const instr of abInstruments) {
-      for (let i = 0; i < abVariants.length; i++) {
-        runs.push({
-          instrument: instr,
-          letter: VARIANT_LETTERS[i],
-          label: `A/B: ${base} — ${instr} — Variant ${VARIANT_LETTERS[i]}`,
-          id: null,
-          stats: null,
-          startingBalance: '50000',
-          status: 'pending',
-        })
-      }
-    }
-    setAbResults(runs)
-
-    // Labels of runs that actually started — only these are polled for results.
-    const startedLabels = new Set<string>()
-
-    try {
-      for (const instr of abInstruments) {
-        const sym = instr.toUpperCase()
-        // Fetch Databento bars once per instrument before running its variants.
-        setMsg(`Fetching ${sym} bars from Databento…`)
-        let fetchOk = false
-        try {
-          const bentoRes = await fetch('/api/databento/fetch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: sym, start: abStartDate, end: abEndDate, dry_run: false }),
-          })
-          const bentoBody = await bentoRes.json()
-          fetchOk = !!bentoBody.ok
-          if (!fetchOk) {
-            setMsg(`${sym}: Databento fetch failed — ${bentoBody.reason ?? 'unknown'} (skipping)`)
-          }
-        } catch (e) {
-          setMsg(`${sym}: Databento fetch error — ${String(e)} (skipping)`)
-        }
-
-        if (!fetchOk) {
-          // Mark every variant cell for this instrument as errored and skip it.
-          setAbResults(prev => prev?.map(r =>
-            r.instrument === sym && r.status === 'pending' ? { ...r, status: 'error' } : r
-          ) ?? null)
-          continue
-        }
-
-        for (let i = 0; i < abVariants.length; i++) {
-          const r = runs.find(x => x.instrument === sym && x.letter === VARIANT_LETTERS[i])!
-          setMsg(`Running ${sym} · Variant ${VARIANT_LETTERS[i]}…`)
-          const { strategy: stratPayload, partialProfitR } = buildRunPayload(abVariants[i].overrides)
-          // NOTE: deliberately do NOT send start_date/end_date here. The backtest
-          // endpoint routes start_date+end_date to a *broker* fetch (live-mode
-          // only) and ignores bars_path; the date range is already applied by the
-          // Databento fetch above (the CSV only holds bars for that range). This
-          // mirrors the working single-run Databento flow.
-          const runBody: Record<string, unknown> = {
-            label: r.label,
-            timeframe,
-            strategy: stratPayload,
-            bars_path: `bars/bars_${sym}.csv`,
-            instrument: sym,
-          }
-          if (partialProfitR !== '0') runBody.partial_profit_r = partialProfitR
-          const res = await fetch('/api/backtest/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(runBody),
-          })
-          const body = await res.json()
-          if (body.ok) startedLabels.add(r.label)
-          setAbResults(prev => prev?.map(x =>
-            x.label === r.label ? { ...x, status: body.ok ? 'running' : 'error' } : x
-          ) ?? null)
-          if (!body.ok) {
-            setMsg(`${sym} · Variant ${VARIANT_LETTERS[i]} failed to start: ${body.reason ?? 'unknown'}`)
-          }
-        }
-      }
-
-      setMsg('A/B matrix running — collecting results…')
-      // Poll the list; backfill stats as each labeled run lands. Stop when all
-      // started runs are found or after a generous timeout.
-      const targets = startedLabels
-      if (targets.size === 0) {
-        setAbRunning(false)
-        setMsg('A/B matrix: no runs started.')
-        return
-      }
-      const deadline = Date.now() + 10 * 60 * 1000
-      const matched = new Set<string>()
-      const poll = setInterval(async () => {
-        try {
-          const d = await fetch('/api/backtest/list').then(r => r.json())
-          const items: BacktestSummary[] = d.backtests ?? []
-          setList(items)
-          for (const it of items) {
-            if (targets.has(it.label) && !matched.has(it.label)) {
-              matched.add(it.label)
-              const detail = await fetch(`/api/backtest/${it.id}`).then(r => r.json())
-              setAbResults(prev => prev?.map(r =>
-                r.label === it.label
-                  ? { ...r, id: it.id, stats: detail.stats, startingBalance: detail.starting_balance ?? '50000', status: 'done' }
-                  : r
-              ) ?? null)
-            }
-          }
-          if (matched.size >= targets.size || Date.now() > deadline) {
-            clearInterval(poll)
-            setAbRunning(false)
-            setMsg(matched.size >= targets.size
-              ? 'A/B matrix complete'
-              : `A/B matrix timed out — ${matched.size}/${targets.size} runs completed`)
-            setTimeout(() => setMsg(null), 5000)
-          }
-        } catch { /* keep polling */ }
-      }, 2500)
-    } catch (e) {
-      setMsg(String(e))
-      setAbRunning(false)
     }
   }
 
@@ -1268,37 +1025,13 @@ export function BacktestsPage() {
         <section className="bg-panel border border-border p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[10px] tracking-[0.3em] text-accent uppercase">
-              {abMode ? 'TP A/B Test' : 'Run New Backtest'}
+              Run New Backtest
             </h2>
-            <div className="flex items-center gap-px bg-border border border-border">
-              <button
-                onClick={() => setAbMode(false)}
-                className={`text-[10px] tracking-widest uppercase px-3 py-1 ${
-                  !abMode ? 'bg-accent/10 text-accent' : 'bg-panel text-dim hover:text-ink'
-                }`}
-              >
-                Single
-              </button>
-              <button
-                onClick={() => setAbMode(true)}
-                className={`text-[10px] tracking-widest uppercase px-3 py-1 ${
-                  abMode ? 'bg-accent/10 text-accent' : 'bg-panel text-dim hover:text-ink'
-                }`}
-              >
-                A/B Test
-              </button>
-            </div>
           </div>
           <p className="text-[11px] text-dim mb-4 leading-relaxed">
-            {abMode ? (
-              <>Run the base strategy config against 2+ variants that differ only in their
-              take-profit parameters, over the same bars and date window. Each variant runs
-              as its own isolated backtest and is saved to the list, then compared side by side.</>
-            ) : (
-              <>Pulls historical bars from TopstepX for the date range you pick, runs the
-              current strategy config against them in a separate process, and saves the
-              full stats. The live bot keeps running untouched.</>
-            )}
+            Pulls historical bars from TopstepX for the date range you pick, runs the
+            current strategy config against them in a separate process, and saves the
+            full stats. The live bot keeps running untouched.
           </p>
 
           <div className="mb-3 px-3 py-2 border border-border bg-bg/40">
@@ -1310,7 +1043,7 @@ export function BacktestsPage() {
                 <span className="text-dim">Probing…</span>
               ) : !availability?.available ? (
                 <span className="text-warn">
-                  {availability?.reason ?? 'Unknown availability — pick any range and we’ll try'}
+                  {availability?.reason ?? "Unknown availability — pick any range and we'll try"}
                 </span>
               ) : earliestStr && latestStr ? (
                 <span>
@@ -1403,11 +1136,13 @@ export function BacktestsPage() {
               </button>
             </summary>
             <div className="p-4 space-y-px bg-border">
-              {SECTION_ORDER.map(section => {
+              {SECTION_ORDER.map((section, sectionIdx) => {
                 const fields = STRATEGY_FIELDS.filter(f => f.section === section)
                 if (fields.length === 0) return null
+                // First section open by default; rest collapsed.
+                const isFirst = sectionIdx === 0
                 return (
-                  <details key={section} open className="bg-panel">
+                  <details key={section} open={isFirst} className="bg-panel">
                     <summary className="cursor-pointer px-3 py-2 bg-bg/40 text-[10px] tracking-[0.3em] text-dim uppercase hover:text-ink">
                       {section} <span className="text-dim/50 normal-case tracking-normal">({fields.length})</span>
                     </summary>
@@ -1465,10 +1200,8 @@ export function BacktestsPage() {
             </div>
           </details>
 
-          {!abMode && (
-          <>
           {/* Data source toggle */}
-          <div className="border border-border bg-bg/30 p-3">
+          <div className="border border-border bg-bg/30 p-3 mb-3">
             <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Data Source</div>
             <div className="flex items-center gap-2 mb-3">
               <button
@@ -1480,7 +1213,7 @@ export function BacktestsPage() {
                     : 'border-border text-dim hover:text-ink'
                 }`}
               >
-                Local CSV
+                Local File
               </button>
               <button
                 onClick={() => switchToDataSource('databento')}
@@ -1491,18 +1224,7 @@ export function BacktestsPage() {
                     : 'border-border text-dim hover:text-ink'
                 }`}
               >
-                Databento
-              </button>
-              <button
-                onClick={() => switchToDataSource('static')}
-                disabled={running}
-                className={`text-[11px] tracking-widest uppercase px-3 py-1 border transition-colors ${
-                  dataSource === 'static'
-                    ? 'border-accent text-accent bg-accent/10'
-                    : 'border-border text-dim hover:text-ink'
-                }`}
-              >
-                2yr Static
+                Fetch by Date
               </button>
               {bentoLoading && <span className="text-[10px] text-dim ml-2">probing…</span>}
               {dataSource === 'databento' && bentoMeta && !bentoLoading && (
@@ -1517,13 +1239,54 @@ export function BacktestsPage() {
                 </span>
               )}
             </div>
-            {dataSource === 'static' && (
+
+            {dataSource === 'local' && (
               <div className="pt-2 border-t border-border/50">
-                <p className="text-[10px] font-mono text-dim">
-                  Uses pre-downloaded 2yr CSV · Jan 2024 – May 2026
-                </p>
+                {barFilesError ? (
+                  <div>
+                    <p className="text-[10px] text-warn font-mono mb-1">
+                      Restart bot to enable file list. Paste a bars path directly:
+                    </p>
+                    <input
+                      type="text"
+                      value={freeTextBarPath}
+                      onChange={e => setFreeTextBarPath(e.target.value)}
+                      placeholder="bars/bars_MNQ_NQv_2024_2026.csv"
+                      disabled={running}
+                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                    />
+                    <p className="text-[10px] text-dim/60 mt-1">
+                      Leave blank to use TopstepX date range above instead.
+                    </p>
+                  </div>
+                ) : barFiles === null ? (
+                  <p className="text-[10px] text-dim font-mono">Loading files…</p>
+                ) : barFiles.length === 0 ? (
+                  <p className="text-[10px] text-dim font-mono">
+                    No CSVs in bars/. Use TopstepX date range above, or add a CSV file to the bars/ directory.
+                  </p>
+                ) : (
+                  <div>
+                    <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                      Bars file
+                    </label>
+                    <select
+                      value={selectedBarPath}
+                      onChange={e => setSelectedBarPath(e.target.value)}
+                      disabled={running}
+                      className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono cursor-pointer focus:outline-none focus:border-accent"
+                    >
+                      {barFiles.map(f => (
+                        <option key={f.path} value={f.path} className="bg-panel">
+                          {f.name} — {f.size_mb} MB · {f.modified.slice(0, 10)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
+
             {dataSource === 'databento' && (
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
                 <div>
@@ -1553,15 +1316,28 @@ export function BacktestsPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Run controls row */}
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
             <input
               type="text"
               value={label}
               onChange={e => setLabel(e.target.value)}
               placeholder="Optional label (e.g. swing=3, R=3, 30d-5min)"
               disabled={running}
-              className="flex-1 bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent"
+              className="flex-1 min-w-[200px] bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent"
             />
+            <button
+              onClick={() => setEnforceRisk(r => !r)}
+              disabled={running}
+              title={enforceRisk ? 'Risk limits active — click to disable for exploration' : 'Risk limits OFF — exploration mode'}
+              className={`text-[10px] tracking-widest uppercase px-3 py-2 border transition-colors whitespace-nowrap ${
+                enforceRisk
+                  ? 'border-accent/50 text-accent/70 bg-accent/5 hover:bg-accent/10'
+                  : 'border-warn text-warn bg-warn/10'
+              }`}
+            >
+              {enforceRisk ? 'Risk limits: ON' : 'Risk limits: OFF'}
+            </button>
             <button
               onClick={startRun}
               disabled={running || searchProgress?.running}
@@ -1599,30 +1375,6 @@ export function BacktestsPage() {
                 />
               </div>
             </div>
-          )}
-          </>
-          )}
-
-          {abMode && (
-            <ABPanel
-              variants={abVariants}
-              results={abResults}
-              running={abRunning}
-              startDate={abStartDate}
-              endDate={abEndDate}
-              onStartDate={setAbStartDate}
-              onEndDate={setAbEndDate}
-              supportedSymbols={supportedSymbols}
-              selectedInstruments={abInstruments}
-              onToggleInstrument={toggleAbInstrument}
-              onAddVariant={addVariant}
-              onRemoveVariant={removeVariant}
-              onSetOverride={setVariantOverride}
-              onClearOverride={clearVariantOverride}
-              variantTpValue={variantTpValue}
-              onRun={runABTest}
-              onLoadPreset={loadTJRVariants}
-            />
           )}
 
           {msg && <p className="text-[11px] text-accent mt-3">{msg}</p>}
@@ -2169,432 +1921,6 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
     <div className="bg-bg border border-border px-3 py-2">
       <div className="text-[9px] tracking-widest text-dim uppercase">{label}</div>
       <div className={`text-sm mt-1 ${colorClass}`}>{value}</div>
-    </div>
-  )
-}
-
-// Field definitions for the A/B variant editor. Most TP fields reuse their
-// STRATEGY_FIELDS entry; partial_profit_r is a top-level config field (not in
-// the strategy dict) so it gets an inline def here.
-const TP_AB_FIELD_DEFS: Record<string, StrategyField> = (() => {
-  const byKey = Object.fromEntries(STRATEGY_FIELDS.map(f => [f.key, f]))
-  const defs: Record<string, StrategyField> = {}
-  for (const key of TP_AB_FIELDS) {
-    defs[key] = byKey[key] ?? {
-      key,
-      label: TP_AB_LABELS[key] ?? key,
-      section: 'Take-Profit',
-      min: 0, max: 5, step: 0.5,
-      hint: '',
-    }
-  }
-  return defs
-})()
-
-interface ABPanelProps {
-  variants: ABVariant[]
-  results: ABResult[] | null
-  running: boolean
-  startDate: string
-  endDate: string
-  onStartDate: (v: string) => void
-  onEndDate: (v: string) => void
-  supportedSymbols: string[]
-  selectedInstruments: string[]
-  onToggleInstrument: (sym: string) => void
-  onAddVariant: () => void
-  onRemoveVariant: (idx: number) => void
-  onSetOverride: (idx: number, key: string, value: string) => void
-  onClearOverride: (idx: number, key: string) => void
-  variantTpValue: (v: ABVariant, key: string) => string
-  onRun: () => void
-  onLoadPreset: () => void
-}
-
-function ABPanel({
-  variants, results, running,
-  startDate, endDate, onStartDate, onEndDate,
-  supportedSymbols, selectedInstruments, onToggleInstrument,
-  onAddVariant, onRemoveVariant, onSetOverride, onClearOverride,
-  variantTpValue, onRun, onLoadPreset,
-}: ABPanelProps) {
-  const combos = selectedInstruments.length * variants.length
-  return (
-    <div className="space-y-4">
-      <p className="text-[11px] text-dim leading-relaxed">
-        Runs on <span className="text-accent">Databento</span> data across the selected
-        instruments and date range — a full matrix of each TP variant × each instrument.
-        Non-TP strategy params stay identical to the form above; only the take-profit
-        overrides differ per variant.
-      </p>
-
-      {/* Databento date range for the A/B matrix. */}
-      <div className="border border-border bg-bg/30 p-3">
-        <div className="text-[9px] tracking-widest text-dim uppercase mb-2">Databento Date Range</div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Start</label>
-            <input
-              type="date"
-              value={startDate}
-              max={endDate}
-              onChange={e => onStartDate(e.target.value)}
-              disabled={running}
-              className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">End</label>
-            <input
-              type="date"
-              value={endDate}
-              min={startDate}
-              max={isoDate(new Date())}
-              onChange={e => onEndDate(e.target.value)}
-              disabled={running}
-              className="w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-warn"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Instrument multi-select — the matrix runs every variant on each. */}
-      <div className="border border-border bg-bg/30 p-3">
-        <div className="text-[9px] tracking-widest text-dim uppercase mb-2">
-          Instruments
-          <span className="text-faint ml-2 normal-case tracking-normal">select one or more</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {supportedSymbols.map(sym => {
-            const on = selectedInstruments.includes(sym)
-            return (
-              <button
-                key={sym}
-                onClick={() => onToggleInstrument(sym)}
-                disabled={running}
-                className={`text-[11px] font-mono tracking-widest uppercase px-3 py-1.5 border disabled:opacity-50 ${
-                  on
-                    ? 'border-accent text-accent bg-accent/10'
-                    : 'border-border text-dim hover:text-ink'
-                }`}
-              >
-                {sym}
-              </button>
-            )
-          })}
-        </div>
-        {selectedInstruments.length === 0 && (
-          <p className="text-[10px] text-warn mt-2">Select at least one instrument.</p>
-        )}
-      </div>
-
-      {/* Variant editor — one column per variant, editing only TP params. */}
-      <div className="border border-border bg-bg/30 p-3">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[9px] tracking-widest text-dim uppercase">
-            Take-Profit Variants
-            <span className="text-faint ml-2 normal-case tracking-normal">
-              base config from form above · blank = inherit
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onLoadPreset}
-              disabled={running}
-              className="text-[10px] tracking-widest uppercase px-3 py-1 border border-accent/40 text-accent/80 hover:text-accent hover:border-accent disabled:opacity-40"
-              title="Load the 6 TJR-derived TP variant presets"
-            >
-              Load TJR Variants
-            </button>
-            <button
-              onClick={onAddVariant}
-              disabled={running || variants.length >= VARIANT_LETTERS.length}
-              className="text-[10px] tracking-widest uppercase px-3 py-1 border border-border text-dim hover:text-ink disabled:opacity-40"
-            >
-              + Variant
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px] font-mono">
-            <thead>
-              <tr className="text-[9px] tracking-widest text-dim uppercase">
-                <th className="text-left px-2 py-1 font-normal">TP Param</th>
-                {variants.map((v, i) => (
-                  <th key={i} className="text-left px-2 py-1 font-normal" style={{ color: VARIANT_COLORS[i] }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div>{v.name ?? `Variant ${VARIANT_LETTERS[i]}`}</div>
-                        {v.rationale && (
-                          <div className="text-[8px] text-faint normal-case tracking-normal font-sans mt-0.5 max-w-[160px] leading-tight" title={v.rationale}>
-                            {v.rationale.length > 60 ? v.rationale.slice(0, 57) + '…' : v.rationale}
-                          </div>
-                        )}
-                      </div>
-                      {variants.length > 2 && (
-                        <button
-                          onClick={() => onRemoveVariant(i)}
-                          disabled={running}
-                          className="text-faint hover:text-danger normal-case shrink-0"
-                          title="Remove variant"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {TP_AB_FIELDS.map(key => {
-                const field = TP_AB_FIELD_DEFS[key]
-                return (
-                  <tr key={key} className="align-top">
-                    <td className="px-2 py-2 text-dim whitespace-nowrap">{TP_AB_LABELS[key] ?? field.label}</td>
-                    {variants.map((v, i) => {
-                      const overridden = key in v.overrides
-                      return (
-                        <td key={i} className="px-2 py-2 min-w-[160px]">
-                          <StrategyFieldInput
-                            field={field}
-                            value={variantTpValue(v, key)}
-                            onChange={val => onSetOverride(i, key, val)}
-                            disabled={running}
-                          />
-                          {overridden && (
-                            <button
-                              onClick={() => onClearOverride(i, key)}
-                              disabled={running}
-                              className="text-[9px] text-faint hover:text-dim mt-1 uppercase tracking-wider"
-                            >
-                              reset to base
-                            </button>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onRun}
-          disabled={running || selectedInstruments.length === 0}
-          className="bg-accent/10 border border-accent text-accent text-xs tracking-widest uppercase px-5 py-2 hover:bg-accent/20 disabled:opacity-50"
-        >
-          {running ? 'Running A/B…' : `Run A/B Matrix (${combos})`}
-        </button>
-        {running && (
-          <span className="text-[10px] text-dim font-mono">
-            {(results ?? []).filter(r => r.status === 'done').length} / {combos} complete
-          </span>
-        )}
-      </div>
-
-      {results && <ABMatrixResults results={results} running={running} />}
-    </div>
-  )
-}
-
-// Group matrix results by instrument and render one comparison table +
-// equity-curve overlay per instrument, stacked vertically.
-function ABMatrixResults({ results, running }: { results: ABResult[]; running: boolean }) {
-  // Preserve first-seen instrument order.
-  const order: string[] = []
-  for (const r of results) if (!order.includes(r.instrument)) order.push(r.instrument)
-  return (
-    <div className="space-y-6">
-      {order.map(instr => {
-        const group = results.filter(r => r.instrument === instr)
-        return (
-          <div key={instr} className="border border-border bg-bg/20 p-3 space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] tracking-[0.3em] text-accent uppercase font-mono">{instr}</span>
-              {running && (
-                <span className="text-[10px] text-faint font-mono">
-                  {group.filter(r => r.status === 'done').length}/{group.length}
-                </span>
-              )}
-            </div>
-            <ABComparison results={group} />
-            {group.some(r => r.stats?.equity_curve?.length) && (
-              <ABEquityOverlay results={group} />
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// Side-by-side metrics table: one column per variant, best value per row highlighted.
-function ABComparison({ results }: { results: ABResult[] }) {
-  const num = (s: string | null | undefined) => (s == null ? NaN : parseFloat(s))
-  type Row = {
-    label: string
-    get: (s: BacktestStats) => number | null
-    fmt: (s: BacktestStats) => string
-    better: 'high' | 'low'
-  }
-  const rows: Row[] = [
-    { label: 'Net P&L',      get: s => num(s.net_pnl),       fmt: s => `${num(s.net_pnl) >= 0 ? '+' : ''}$${num(s.net_pnl).toFixed(0)}`, better: 'high' },
-    { label: 'Win Rate',     get: s => s.win_rate,           fmt: s => `${s.win_rate}%`,                                                better: 'high' },
-    { label: 'Trades',       get: s => s.trades,             fmt: s => String(s.trades),                                                better: 'high' },
-    { label: 'Profit Factor',get: s => s.profit_factor ?? null, fmt: s => s.profit_factor == null ? '—' : s.profit_factor.toFixed(2),  better: 'high' },
-    { label: 'Expectancy',   get: s => num(s.expectancy),    fmt: s => s.expectancy == null ? '—' : `$${num(s.expectancy).toFixed(2)}`, better: 'high' },
-    { label: 'Max Drawdown', get: s => num(s.max_drawdown),  fmt: s => `$${num(s.max_drawdown).toFixed(0)}`,                             better: 'low' },
-  ]
-  const done = results.filter(r => r.stats)
-  const bestIdx = (row: Row): number => {
-    let best = -1, bestVal = NaN
-    results.forEach((r, i) => {
-      if (!r.stats) return
-      const v = row.get(r.stats)
-      if (v == null || isNaN(v)) return
-      if (isNaN(bestVal) || (row.better === 'high' ? v > bestVal : v < bestVal)) {
-        bestVal = v; best = i
-      }
-    })
-    return best
-  }
-  return (
-    <div>
-      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Comparison</div>
-      <div className="border border-border overflow-x-auto">
-        <table className="w-full text-[11px] font-mono tabular-nums">
-          <thead>
-            <tr className="text-[9px] tracking-widest text-dim uppercase bg-bg/40">
-              <th className="text-left px-3 py-1.5 font-normal">Metric</th>
-              {results.map((r, i) => (
-                <th key={i} className="text-right px-3 py-1.5 font-normal" style={{ color: VARIANT_COLORS[i] }}>
-                  {r.letter}
-                  {r.status !== 'done' && (
-                    <span className="text-faint ml-1 normal-case">
-                      {r.status === 'error' ? '(err)' : r.status === 'pending' ? '(…)' : '(run)'}
-                    </span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map(row => {
-              const best = done.length > 1 ? bestIdx(row) : -1
-              return (
-                <tr key={row.label} className="text-ink">
-                  <td className="px-3 py-1.5 text-dim uppercase tracking-wider">{row.label}</td>
-                  {results.map((r, i) => (
-                    <td
-                      key={i}
-                      className={`px-3 py-1.5 text-right ${i === best ? 'text-accent font-medium bg-accent/5' : ''}`}
-                    >
-                      {r.stats ? row.fmt(r.stats) : '—'}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-            {/* Combine pass + MLL breach are optional flags. */}
-            <tr className="text-ink">
-              <td className="px-3 py-1.5 text-dim uppercase tracking-wider">Combine</td>
-              {results.map((r, i) => (
-                <td key={i} className="px-3 py-1.5 text-right">
-                  {r.stats?.passed_combine == null ? '—'
-                    : r.stats.passed_combine ? <span className="text-accent">PASS</span>
-                    : <span className="text-danger">FAIL</span>}
-                </td>
-              ))}
-            </tr>
-            <tr className="text-ink">
-              <td className="px-3 py-1.5 text-dim uppercase tracking-wider">MLL Breach</td>
-              {results.map((r, i) => (
-                <td key={i} className="px-3 py-1.5 text-right">
-                  {r.stats?.mll_breached == null ? '—'
-                    : r.stats.mll_breached ? <span className="text-danger">YES</span>
-                    : <span className="text-accent">no</span>}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-// Overlay each variant's equity curve on a single chart, one colored line each.
-function ABEquityOverlay({ results }: { results: ABResult[] }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const chart = createChart(el, {
-      autoSize: true,
-      height: 240,
-      layout: {
-        background: { color: 'transparent' },
-        textColor: '#6c82a8',
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: 'rgba(255,255,255,0.03)' },
-        horzLines: { color: 'rgba(255,255,255,0.03)' },
-      },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)' },
-      timeScale: { borderColor: 'rgba(255,255,255,0.05)', timeVisible: false },
-    })
-
-    results.forEach((r, i) => {
-      const curve = r.stats?.equity_curve
-      if (!curve || curve.length === 0) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const series = chart.addSeries(LineSeries as any, {
-        color: VARIANT_COLORS[i],
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: false,
-      })
-      // Equity curve timestamps may collide across variants; lightweight-charts
-      // requires strictly ascending unique times, so index by bar ordinal.
-      const data = curve.map(([, eq], j) => ({ time: (j + 1) as never, value: parseFloat(eq) }))
-      series.setData(data)
-    })
-    chart.timeScale().fitContent()
-
-    return () => { chart.remove() }
-  }, [results])
-
-  return (
-    <div>
-      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Equity Curves</div>
-      <div className="bg-bg border border-border p-2">
-        <div ref={containerRef} className="w-full" style={{ height: 240 }} />
-        <div className="flex flex-wrap gap-3 mt-2 px-1">
-          {results.map((r, i) => (
-            r.stats?.equity_curve?.length ? (
-              <div key={i} className="flex items-center gap-1.5 text-[10px] font-mono">
-                <span className="inline-block w-3 h-0.5" style={{ background: VARIANT_COLORS[i] }} />
-                <span className="text-dim">
-                  {r.letter}
-                  {r.stats && (
-                    <span className="ml-1 text-faint">
-                      {parseFloat(r.stats.net_pnl) >= 0 ? '+' : ''}${parseFloat(r.stats.net_pnl).toFixed(0)}
-                    </span>
-                  )}
-                </span>
-              </div>
-            ) : null
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

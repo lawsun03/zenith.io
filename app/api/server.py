@@ -1642,6 +1642,22 @@ Notes:
             "running": state["task"] is not None and not state["task"].done(),
         })
 
+    @app.get("/api/backtest/bars-files")
+    async def list_bars_files() -> JSONResponse:
+        """Local bars CSVs runnable from the UI (replaces the hardcoded map)."""
+        bars_dir = Path("bars")
+        if not bars_dir.exists():
+            return JSONResponse({"files": []})
+        files = []
+        for f in sorted(bars_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
+            files.append({
+                "path": str(f).replace("\\", "/"),
+                "name": f.name,
+                "size_mb": round(f.stat().st_size / 1e6, 1),
+                "modified": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
+            })
+        return JSONResponse({"files": files})
+
     @app.get("/api/backtest/list")
     async def list_backtests() -> JSONResponse:
         if not backtests_dir.exists():
