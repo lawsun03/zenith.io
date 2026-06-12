@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { JournalItem } from '../types'
+import { useMemo, useState } from 'react'
+import type { JournalItem, ReconcilePayload } from '../types'
 import { ActivityRow } from './ActivityRow'
 import { ConditionsPanel } from './ConditionsPanel'
 
@@ -13,6 +13,12 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'setup', label: 'Setup' },
 ]
 
+function isOkRecon(item: JournalItem): boolean {
+  if (item.kind !== 'reconcile') return false
+  const r = item.payload as ReconcilePayload
+  return !r.drift_detected
+}
+
 interface Props {
   signals: JournalItem[]
   fills: JournalItem[]
@@ -23,21 +29,43 @@ interface Props {
 export function ActivityFeed({ signals, fills, reconciles, activeSymbol }: Props) {
   const [tab, setTab] = useState<Tab>('all')
 
+  // Last reconcile for status line
+  const lastRecon = useMemo(() => {
+    if (reconciles.length === 0) return null
+    return [...reconciles].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())[0]
+  }, [reconciles])
+
+  const lastReconOk = lastRecon ? !(lastRecon.payload as ReconcilePayload).drift_detected : null
+  const lastReconTime = lastRecon
+    ? new Date(lastRecon.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    : null
+
   const merged = [...signals, ...fills, ...reconciles]
     .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
     .slice(0, 60)
 
+  // In "All" view, suppress OK-recon noise; show all in "Recon" tab
   const list =
-    tab === 'all' ? merged
+    tab === 'all'     ? merged.filter(item => !isOkRecon(item))
     : tab === 'signals' ? signals
-    : tab === 'fills' ? fills
-    : tab === 'recon' ? reconciles
+    : tab === 'fills'   ? fills
+    : tab === 'recon'   ? reconciles
     : []
 
   return (
     <div className="bg-panel border border-border flex flex-col overflow-hidden animate-fade-up">
       <div className="px-4 pt-4 shrink-0">
-        <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-faint mb-3">Activity</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-faint">Activity</div>
+          {lastReconTime && (
+            <div className="text-[9px] font-mono text-faint flex items-center gap-1">
+              <span className={lastReconOk ? 'text-good' : 'text-danger'}>
+                {lastReconOk ? '✓' : '✗'}
+              </span>
+              <span>recon {lastReconTime}</span>
+            </div>
+          )}
+        </div>
         <div className="flex gap-4 border-b border-border">
           {TABS.map(t => (
             <button

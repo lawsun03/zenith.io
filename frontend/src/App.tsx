@@ -7,24 +7,27 @@ import { useKillzone } from './hooks/useKillzone'
 import type { StrategyConfig, Position } from './types'
 
 function ConfigFlags({ strategy, partialR }: { strategy: StrategyConfig; partialR?: string }) {
-  const flag = (label: string, on: boolean, detail?: string) => (
-    <span key={label} className={`font-mono text-[9px] tracking-widest px-1.5 py-0.5 border ${
-      on ? 'border-accent/50 text-accent' : 'border-border text-faint'
-    }`}>
-      {label}{detail ? `:${detail}` : on ? ':on' : ':off'}
-    </span>
-  )
   const ema = strategy.trend_ema_period > 0
   const macroOn = strategy.ifvg_macro_windows?.length > 0
   const partial = partialR && parseFloat(partialR) > 0
+
+  const chips: { label: string; detail?: string }[] = []
+  if (strategy.vp_enabled)                   chips.push({ label: 'VP' })
+  if (strategy.htf_target_enabled)           chips.push({ label: 'HTF' })
+  if (strategy.ifvg_rule_f_enabled)          chips.push({ label: 'RuleF' })
+  if (ema)                                   chips.push({ label: 'EMA', detail: String(strategy.trend_ema_period) })
+  if (macroOn)                               chips.push({ label: 'Macro' })
+  if (partial)                               chips.push({ label: 'Partials', detail: `${partialR}R` })
+
+  if (chips.length === 0) return null
+
   return (
     <div className="flex items-center gap-1">
-      {flag('VP', strategy.vp_enabled)}
-      {flag('HTF', strategy.htf_target_enabled)}
-      {flag('RuleF', strategy.ifvg_rule_f_enabled ?? false)}
-      {flag('EMA', ema, ema ? String(strategy.trend_ema_period) : undefined)}
-      {flag('Macro', macroOn)}
-      {flag('Partials', !!partial, partial ? `${partialR}R` : undefined)}
+      {chips.map(c => (
+        <span key={c.label} className="font-mono text-[9px] tracking-widest px-1.5 py-0.5 border border-accent/50 text-accent">
+          {c.label}{c.detail ? `:${c.detail}` : ':on'}
+        </span>
+      ))}
     </div>
   )
 }
@@ -45,7 +48,7 @@ import { StrategyDebug } from './components/StrategyDebug'
 
 function LiveDashboard() {
   const chartCbRef = useRef<ChartCallbacks>({})
-  const { config, saveConfig, saving, saveError } = useConfig()
+  const { config, setConfig, saveConfig, saving, saveError } = useConfig()
 
   const symbols = (config?.instruments?.length ?? 0) > 0
     ? config!.instruments!
@@ -79,7 +82,12 @@ function LiveDashboard() {
   const yearLabel = now.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' })
 
   const modeLabel = config?.mode === 'live' ? 'live' : 'paper'
-  const contractsLabel = config ? `${config.entry_mode} · ${config.contracts} contracts` : ''
+  const sizeLabel = config
+    ? (config.risk_per_trade_pct > 0
+        ? `risk ${config.risk_per_trade_pct}%/trade`
+        : `${config.contracts} contracts`)
+    : ''
+  const contractsLabel = config ? `${config.entry_mode} · ${sizeLabel}` : ''
 
   return (
     <div className="min-h-screen flex flex-col h-screen overflow-hidden">
@@ -87,7 +95,7 @@ function LiveDashboard() {
       <div className="flex flex-col h-screen">
         <Header status={status} connState={connState} onConfigOpen={() => setConfigOpen(true)} mode={config?.mode} activeKillzone={activeKillzone} />
         <LockoutBanner lockout={status?.lockout ?? null} />
-        {config && <PhaseBanner config={config} phase={strategyState?.phase ?? null} />}
+        {config && <PhaseBanner config={config} phase={strategyState?.phase ?? null} onConfigChange={setConfig} />}
 
         <div className="flex-1 min-h-0 flex justify-center items-center overflow-hidden">
           <div className="w-full max-w-[1320px] h-full max-h-[820px] px-7 pt-[22px] pb-[26px] flex flex-col min-h-0 overflow-hidden">
