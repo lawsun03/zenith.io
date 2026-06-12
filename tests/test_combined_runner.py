@@ -23,6 +23,7 @@ class _StubRunner:
     vp: object = None
     composer: object = None
     grader: object = None
+    displacement: object = None
     signal_instrument: str = ""
     last_reject: object = None
     queued: list = field(default_factory=list)
@@ -50,11 +51,14 @@ class TestCombinedRunner:
         assert CombinedRunner(primary=a, secondary=b).on_bar(_bar()) == "ifvg-sig"
 
     def test_delegates_engine_facing_attrs(self):
-        a = _StubRunner(instrument="MNQ", last_reject="rej")
+        a = _StubRunner(instrument="MNQ", last_reject="rej", displacement="disp")
         c = CombinedRunner(primary=a, secondary=_StubRunner())
         assert c.instrument == "MNQ"
         assert c.last_reject == "rej"
         assert c.vp is a.vp and c.grader is a.grader and c.composer is a.composer
+        # server.py's strategy_state SSE reads runner.displacement — a live
+        # CombinedRunner without it crashes the dashboard loop.
+        assert c.displacement == "disp"
 
 
 class TestEngineSelection:

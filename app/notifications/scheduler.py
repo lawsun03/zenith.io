@@ -39,6 +39,7 @@ class EndOfDayScheduler:
         trades_csv_path: Path | None = None,
         daily_csv_fn: Callable[[], Path] | None = None,
         discord: "DiscordNotifier | None" = None,
+        sweeps_armed_fn: Callable[[], int] | None = None,
     ) -> None:
         self.journal = journal
         self.risk_state = risk_state
@@ -48,6 +49,8 @@ class EndOfDayScheduler:
         self.close_minute_ct = close_minute_ct
         self.trades_csv_path = trades_csv_path
         self.daily_csv_fn = daily_csv_fn
+        self.sweeps_armed_fn = sweeps_armed_fn
+        self._sweeps_at_last_summary = 0
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
@@ -116,6 +119,19 @@ class EndOfDayScheduler:
 
         stats = compute_stats(today_fills, today_signals)
         trades = pair_trades(today_fills)
+
+        # Detector heartbeat: sweeps armed since the last summary. A quiet
+        # day shows "0 sweeps armed" (market gave nothing) vs "N armed, 0
+        # placed" (setups appeared but no confirmation followed).
+        if self.sweeps_armed_fn is not None:
+            try:
+                total = self.sweeps_armed_fn()
+                if total < self._sweeps_at_last_summary:
+                    self._sweeps_at_last_summary = 0  # counter reset (restart)
+                stats["sweeps_armed"] = total - self._sweeps_at_last_summary
+                self._sweeps_at_last_summary = total
+            except Exception:
+                log.warning("sweeps_armed_fn failed", exc_info=True)
 
         attachments = []
         daily_path = self.daily_csv_fn() if self.daily_csv_fn else None

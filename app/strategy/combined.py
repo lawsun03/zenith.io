@@ -56,6 +56,12 @@ class CombinedRunner:
         return self.primary.composer
 
     @property
+    def displacement(self):
+        # server.py's strategy_state SSE and /api/forming/status read
+        # runner.displacement (peek + atr) — must exist for live deployment.
+        return self.primary.displacement
+
+    @property
     def grader(self):
         return self.primary.grader
 

@@ -211,7 +211,9 @@ class DiscordNotifier:
             {"name": "Avg loss",      "value": f"${stats['avg_loss']}", "inline": True},
             {"name": "Profit factor", "value": stats["profit_factor"],  "inline": True},
             {"name": "Signals",
-             "value": f"{stats['signals_placed']} placed / {stats['signals_denied']} denied",
+             "value": (f"{stats['signals_placed']} placed / "
+                       f"{stats['signals_denied']} denied / "
+                       f"{stats.get('sweeps_armed', '—')} sweeps armed"),
              "inline": False},
         ]
 

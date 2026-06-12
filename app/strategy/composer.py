@@ -183,6 +183,9 @@ class SweepDisplacementComposer:
         _buf = max(1, config.swing_stop_lookback) if config.swing_stop_lookback > 0 else 1
         self._bar_lows: deque[Decimal] = deque(maxlen=_buf)
         self._bar_highs: deque[Decimal] = deque(maxlen=_buf)
+        # Telemetry: total sweeps armed this process (EOD summary heartbeat —
+        # distinguishes "detector saw nothing" from "gates blocked everything").
+        self.sweeps_armed_total: int = 0
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -213,6 +216,7 @@ class SweepDisplacementComposer:
             bars_since_sweep=0,
             killzone_name=zone.name,
         ))
+        self.sweeps_armed_total += 1
 
     def on_stop_loss(self) -> None:
         """Called by the engine when a stop fill is confirmed for this instrument."""

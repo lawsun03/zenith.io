@@ -1119,6 +1119,10 @@ async def _async_main() -> int:
         trades_csv_path=_TRADES_CSV,
         daily_csv_fn=_daily_csv_path,
         discord=discord,
+        sweeps_armed_fn=lambda: sum(
+            getattr(r.composer, "sweeps_armed_total", 0)
+            for r in engine.runners.values()
+        ),
     )
     health_scheduler = HourlyHealthScheduler(
         notifier=notifier,
