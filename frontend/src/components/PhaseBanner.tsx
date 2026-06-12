@@ -1,10 +1,18 @@
 import { useConfirm } from '../hooks/useConfirm'
+import { useEffect, useState } from 'react'
 import type { BotConfig, StrategyStatePayload } from '../types'
 
 interface Props {
   config: BotConfig
   phase: StrategyStatePayload['phase']
   onConfigChange: (updated: BotConfig) => void
+}
+
+interface AccountInfo {
+  name: string
+  balance: number
+  can_trade: boolean
+  simulated: boolean
 }
 
 function fmt$(raw: string): string {
@@ -42,6 +50,36 @@ const PHASE_CONFIRM: Record<string, string> = {
 export function PhaseBanner({ config, phase, onConfigChange }: Props) {
   const { confirm, modal } = useConfirm()
   const { account_phase, phase_shadow, account_name, risk_per_trade_pct, strategy, strategy_overrides } = config
+
+  const isLive = config.mode === 'live'
+  const [accounts, setAccounts] = useState<AccountInfo[]>([])
+
+  useEffect(() => {
+    if (!isLive) return
+    fetch('/api/accounts')
+      .then(r => r.json())
+      .then(d => setAccounts(d.accounts ?? []))
+      .catch(() => setAccounts([]))
+  }, [isLive])
+
+  async function handleAccountChange(name: string) {
+    if (name === account_name) return
+    const ok = await confirm(
+      `Switch trading account to ${name}? The bot binds its data/order connection at startup — the change is saved now but ONLY takes effect after a restart. Restart now?`,
+      { title: 'Switch Account', variant: 'warn', confirmLabel: 'Save & Restart' }
+    )
+    if (!ok) return
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_name: name }),
+      })
+      if (!res.ok) return
+      onConfigChange(await res.json())
+      await fetch('/api/restart', { method: 'POST' }).catch(() => {/* process exits before response */})
+    } catch { /* ignore */ }
+  }
 
   const currentPhase: Phase = (account_phase as Phase) ?? 'practice'
   const isPractice = currentPhase === 'practice'
@@ -99,6 +137,33 @@ export function PhaseBanner({ config, phase, onConfigChange }: Props) {
     } catch { /* ignore */ }
   }
 
+  // Account select — live mode only; falls back to plain text when no accounts loaded
+  const accountSelect = (() => {
+    if (!account_name) return null
+    if (!isLive || accounts.length === 0) {
+      return <span className="text-[10px] text-faint font-mono">{account_name}</span>
+    }
+    const fmtOption = (a: AccountInfo) =>
+      `${a.name}  ·  $${a.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    return (
+      <select
+        value={account_name ?? ''}
+        onChange={e => handleAccountChange(e.target.value)}
+        className="text-[10px] text-dim font-mono bg-transparent border border-border/50 px-1 py-0.5 cursor-pointer hover:border-border focus:outline-none"
+      >
+        {accounts.map(a => (
+          <option key={a.name} value={a.name} className="bg-panel text-ink">
+            {fmtOption(a)}
+          </option>
+        ))}
+        {/* fallback option if current account not in list */}
+        {!accounts.find(a => a.name === account_name) && (
+          <option value={account_name} className="bg-panel text-ink">{account_name}</option>
+        )}
+      </select>
+    )
+  })()
+
   // Phase segmented control
   const phaseControl = (
     <div className="flex items-center gap-2 shrink-0">
@@ -140,9 +205,7 @@ export function PhaseBanner({ config, phase, onConfigChange }: Props) {
           <div className="flex items-center gap-2.5">
             <span className="text-[11px] font-bold text-faint tracking-widest font-mono">PRACTICE</span>
             <span className="text-[9px] text-dim font-mono">governor off</span>
-            {account_name && (
-              <span className="text-[10px] text-faint font-mono">{account_name}</span>
-            )}
+            {accountSelect}
           </div>
           {phaseControl}
         </div>
@@ -169,9 +232,7 @@ export function PhaseBanner({ config, phase, onConfigChange }: Props) {
               TARGET REACHED — STOP
             </span>
           )}
-          {account_name && (
-            <span className="text-[10px] text-dim font-mono">{account_name}</span>
-          )}
+          {accountSelect}
         </div>
 
         {/* center: labeled stats */}
