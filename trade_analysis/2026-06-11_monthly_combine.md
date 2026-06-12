@@ -175,3 +175,40 @@ post-flatten, +$3k/month at 80% reliability needs roughly 4-5x the edge.
 1.0% setting fell to 24% under the flatten rule; 1.25% is the cross-period
 frontier). Paths beyond 35% remain structural: a second setup engine for the
 quiet months, excursion-driven exits, live slippage reduction.
+
+## Round 6 - two-month attempt windows (user request, all saved to UI)
+
+A real Combine has no time limit, so a 2-month horizon = one more $49
+subscription cycle. Non-overlapping 2-month windows, fresh $50k each:
+
+| config | with soft buffer | WITHOUT soft buffer |
+|---|---|---|
+| 0.75% r3.5, 2025-26 (8 windows) | 3/8 (38%), 0 busts | 3/8 (38%), 1 bust |
+| 0.75% r3.5, 2024 (6 windows) | 2/6 (33%), 0 busts | **3/6 (50%), 1 bust** |
+| 1.25% r3.5, 2025-26 | 2/8 (25%), 0 busts | 2/8 (25%), 1 bust |
+| 1.25% r3.5, 2024 | 2/6 (33%), 0 busts | 2/6 (33%), 1 bust |
+
+Findings:
+1. **With the soft buffer ON, longer windows are nearly useless**: the
+   $500-above-MLL lockout is permanent within an attempt, so a drawn-down
+   month 1 freezes the account and month 2 never trades (2025-03..04 had 11
+   trades in 2 months; April alone had 71 and PASSED in the monthly framing).
+2. **Without the soft buffer, recovery becomes real** (2024-09..10: 156
+   trades grinding to +$6.2k after a weak September start) - but so do real
+   MLL busts: the campaign's first actual account deaths (1 per period set,
+   ~12-17% of windows; all in the same Nov-2025 / Jan-2024 drawdown
+   regimes).
+3. Best 2-month figure: 0.75% no-soft-buffer = 6/14 windows (43%) with
+   2/14 busts, vs the monthly frontier 10/29 (34%) with zero busts. The
+   longer horizon buys ~9 points of pass rate at the cost of ~14% bust
+   risk per attempt ($149 reset each).
+4. Small-n warning: windows halve the sample (8+6); all differences are
+   within noise except the soft-buffer freeze mechanism, which is
+   structural and certain.
+
+Implication for live: if running a real (non-shadow) Combine with intent to
+hold attempts open past a month, consider clearing or widening the soft
+buffer once an attempt is underwater-but-alive - the governor's half-size
+cushion gates still protect, and the data says month-2 recoveries pay for
+the occasional bust. 80-90% per attempt remains out of reach without a
+second signal engine.
