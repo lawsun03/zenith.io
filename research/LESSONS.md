@@ -41,3 +41,23 @@ Seeded 2026-06-12 from the week's ~25 experiments (details in trade_analysis/):
     journal signal history is session-scoped (parity must run same-day);
     bars CSVs are vendor-labeled at bar CLOSE time; v-rolled (NQ.v.0)
     continuous is the house data convention (c.0 has thin expiry Fridays).
+
+Appended 2026-06-13 (B4 weekly forensics):
+
+12. **The trades.csv `slippage` column is plan-deviation, not execution
+    slippage.** `signal_entry` is the FVG proximal edge (composer.py:398) and
+    market entries fill at confirmation-bar close, so the column reads 100+ pts
+    in vertical moves while real fill-vs-market slippage is ~2 ticks (n=10 week
+    of 06-08: mean 0.78 pts). Don't gate or grade anything on that column until
+    B13 splits it.
+13. **Roll-week fetch trap:** `fetch_bars.py` resolves the symbol to the
+    CURRENT front contract for the whole lookback — on 06-12 the same command
+    returned M26 at 18Z and U26 (+292 pts) at 23Z. Parity bars must be archived
+    same-week; post-roll they are unrecoverable from the free API.
+14. **Tracked runtime ledgers get wiped by git tree-restores** (22 trades.csv
+    rows lost 06-10..12 to a `reset --hard`-class restore; daily untracked
+    files survived). Resolve the tracked-trades/ policy (B12) before trusting
+    the rolling ledger for analysis.
+15. **Multi-instrument excursion rows 06-07..06-11 are unusable** — the live
+    ExcursionTracker had no instrument filter, so MGC/MES/MNQ bars cross-
+    contaminated mfe/mae/outcome (B11 fixes; MNQ-only rows 06-12+ are clean).

@@ -9,5 +9,16 @@
     "verdict": "dataset",
     "learned": "The XFA payout pipeline is rich even from a config that only passes 24% of Combine months. Bust rate, not payout size, is the frontier variable - sizing is the lever B1 probes.",
     "links": {"doc": null, "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T00:55:00Z",
+    "session": "wk1-b4",
+    "item": "B4",
+    "variant": "weekly live forensics 2026-06-08..12 (slippage, parity, ledger integrity)",
+    "objective": "infra",
+    "metrics": {"exec_slip_mean_pts": 0.78, "exec_slip_canonical_era_pts": 0.5, "exec_slip_n": 10, "modeled_ticks": 1, "recommended_ticks": 2, "contaminated_excursion_days": 3, "trades_csv_rows_lost": 22, "parity_signal_match_0612": "1/1"},
+    "verdict": "dataset",
+    "learned": "Real MNQ execution slippage is ~2 ticks (the trades.csv slippage column measures distance-from-FVG-edge, not execution; the scary 111.5pt value was 0.5pt of real slippage). Three data-integrity bugs found: excursion tracker mixes instruments (06-07..11 rows unusable), git tree-restores wiped 22 tracked trades.csv rows, and roll-week fetch_bars returns the new front contract (~+292pts vs what live traded).",
+    "links": {"doc": "trade_analysis/2026-06-12_weekly_forensics.md", "runs": [], "src": null}
   }
 ]

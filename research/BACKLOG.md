@@ -5,7 +5,7 @@ Research/ideation sessions (every ~3rd) APPEND new items as mini-specs.
 
 ---
 
-## B1 — Funded-objective re-scoring of the rejected bench  [pending]
+## B1 — Funded-objective re-scoring of the rejected bench  [in-progress — session 2026-06-12T23:35Z]
 The whole bench was rejected on COMBINE pass-rate grounds; several had the best
 PF we ever measured. Score them on the XFA payout metric instead.
 - Variants (fixed configs, no sweeps): control (iFVG frontier, risk 1.25);
@@ -49,7 +49,13 @@ payouts (B1 winner). Simulate the full pipeline: attempts at A → funded at B.
 - Needs B1 done. Deliverable: recommended per-phase pair + pipeline numbers
   (expected $/month including reset costs), trade_analysis doc.
 
-## B4 — Weekly live-data forensics  [pending]
+## B4 — Weekly live-data forensics  [done — dataset; doc trade_analysis/2026-06-12_weekly_forensics.md]
+(was claimed out of rank order: B1 concurrently claimed by a duplicate wrapper
+session at 23:35Z; B2 would mutate backtest code under B1's running variant
+comparison; B3 depends on B1. B4 was the top concurrency-safe item.)
+Outcome: exec slippage ~2 ticks (recommend slippage_ticks_market=2); the 111.5pt
+"slippage" was 0.5pt real (column = plan deviation); 06-12 signal parity 1/1;
+3 integrity bugs filed as B11-B13; M26 week bars archived in bars/live_archive/.
 Inputs: this week's `logs/*.log`, `trades/*.csv`, `bars` via free TopstepX
 fetch (`scripts/fetch_bars.py --symbol MNQ --days 7`).
 - Run `scripts/parity_check.py` per live day (engine matching what was live:
@@ -103,6 +109,40 @@ Give funded_sim (or equity_export) a `--save-id` that writes a UI-registry
 JSON (shape like run_monthly_combine._save_ui_result, with the funded metrics
 in a `funded_pipeline` block) so payout-frontier results render in the
 dashboard alongside backtests.
+
+## B11 — Excursion tracker instrument filter  [pending]  (data integrity, small)
+From B4 forensics: `ExcursionTracker.on_bar` (app/execution/excursion.py:87-95)
+updates every open window with every bar — no instrument filter, and
+`ExcursionWindow` has no instrument field. Multi-instrument days (06-07..06-11)
+produced garbage mfe/mae/outcome (MES window scored `win` off an MNQ high).
+Fix: add `instrument` to ExcursionWindow, pass at all `open()` call sites
+(app/journaling.py:136/344/373 — normalize `CON.F.US.MNQ.M26` → `MNQ` root),
+skip foreign bars in `on_bar`. Defining-behavior test: two open windows on
+different instruments, inject a bar for one, assert the other's mfe/mae/flags
+untouched. Note in trade_analysis that pre-06-12 multi-instrument rows stay
+unusable (no backfill possible).
+
+## B12 — Tracked runtime-ledger policy (git-wipe hazard)  [pending]  (decision for Lawrence)
+From B4 forensics: 22 rows of trades/trades.csv (06-10T01:32Z→06-12T14:59Z)
+were destroyed by a git tree-restore (reflog: `reset: moving to HEAD` 06-10
+23:35 PT); writer was healthy. Conflict: .gitignore comment says trades/ is
+*intentionally* tracked for cloud analysis. Options to present, not decide:
+(a) untrack rolling files, keep daily files tracked; (b) commit-on-write;
+(c) move cloud-sync to the outbox channel. Either way: backfill the 22 rows
+from trades_2026-06-10.csv into the rolling file first. NEVER resolve this by
+running git restore/reset on a live tree with unsynced ledgers.
+
+## B13 — Split the slippage column: execution vs plan-deviation  [pending]  (small)
+From B4 forensics: `slippage = fill − signal_entry` (app/journaling.py:178-191)
+where signal_entry is the FVG proximal edge → 111.5 "slippage" on 0.5pt of real
+slippage. Add `exec_slippage` (fill vs last bar close at order time — broker
+already has `_last_bar_close`-equivalent via the engine's bar stream) and rename
+the existing semantics to `plan_deviation` (keep the old column name for
+compatibility, add the new one). Defining-behavior test. Bonus: surface both in
+the StrategyDebug/fills UI per Rule 13. Related Monday recommendation already
+in the forensics doc: `slippage_ticks_market: 2` for backtests; consider a
+nonzero `max_entry_slippage_frac` live (would have skipped the 06-12 trade —
+strategy question, needs a backtest before recommending).
 
 ---
 (Research sessions append new items below this line.)
