@@ -112,6 +112,21 @@ def _build_runner(
     signal_instrument: str | None = None,
 ) -> StrategyRunner:
     zones = killzones_from_names(enabled_killzones) if enabled_killzones else None
+    if s.engine == "orb":
+        from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
+        return ORBRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=ORBDetector(ORBConfig(
+                instrument=instrument,
+                open_et=s.orb_open_et,
+                range_minutes=s.orb_range_minutes,
+                r_multiple=s.orb_r_multiple,
+                max_trades_per_day=s.orb_max_trades_per_day,
+            )),
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
     return StrategyRunner(
         instrument=instrument,
         timeframe=timeframe,

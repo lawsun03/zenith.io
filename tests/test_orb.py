@@ -74,3 +74,20 @@ class TestORB:
         assert det.on_bar(bar(8, 40, "21018", "21019", "21008", "21012")) is None
         sig = det.on_bar(bar(8, 45, "21015", "21030", "21014", "21028"))
         assert sig is not None and sig.side == "long"
+
+
+class TestEngineSelection:
+    def test_build_runner_returns_orb_runner(self):
+        from app.backtest.runner import BacktestConfig, _build_runner
+        from app.bot_config import StrategyParams
+        from app.strategy.orb import ORBRunner
+
+        s = StrategyParams(engine="orb", orb_range_minutes=30,
+                           orb_r_multiple=Decimal("2.5"), orb_open_et="08:30")
+        cfg = BacktestConfig(instrument="MNQ", bars=iter([]),
+                             timeframe="5min", strategy_params=s)
+        runner = _build_runner(cfg)
+        assert isinstance(runner, ORBRunner)
+        assert runner.detector.config.range_minutes == 30
+        assert runner.detector.config.open_et == "08:30"
+        assert runner.detector.config.r_multiple == Decimal("2.5")

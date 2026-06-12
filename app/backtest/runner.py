@@ -151,6 +151,20 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
     # r_multiple from the same StrategyParams the composer was built from.
     if cfg.strategy_params is not None:
         s = cfg.strategy_params
+        if s.engine == "orb":
+            from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
+            return ORBRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                detector=ORBDetector(ORBConfig(
+                    instrument=cfg.instrument,
+                    open_et=s.orb_open_et,
+                    range_minutes=s.orb_range_minutes,
+                    r_multiple=s.orb_r_multiple,
+                    max_trades_per_day=s.orb_max_trades_per_day,
+                )),
+                strategy_cfg=s,
+            )
         return StrategyRunner(
             instrument=cfg.instrument,
             timeframe=cfg.timeframe,
