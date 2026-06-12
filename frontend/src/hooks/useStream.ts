@@ -106,6 +106,12 @@ export function useStream(
           const p = msg.payload as StrategyStatePayload
           if (!activeSymbolRef?.current || !p.instrument || p.instrument === activeSymbolRef.current) {
             setStrategyState(p)
+          } else {
+            // The phase block is account-level, not per-instrument — it must
+            // update even when the chart shows a different symbol (e.g. chart
+            // on MGC while the MNQ runner emits strategy_state).
+            setStrategyState(prev =>
+              prev ? { ...prev, phase: p.phase } : ({ instrument: p.instrument, phase: p.phase } as StrategyStatePayload))
           }
           return
         }
