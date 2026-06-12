@@ -63,6 +63,29 @@ def split_months(bars_csv: Path, out_dir: Path) -> list[tuple[str, Path]]:
     return out
 
 
+def window_months(
+    monthly: list[tuple[str, Path]], window: int, out_dir: Path,
+) -> list[tuple[str, Path]]:
+    """Concatenate consecutive per-month CSVs into non-overlapping N-month
+    windows (a real Combine has no time limit — a longer window models
+    keeping one attempt alive across subscription cycles)."""
+    if window <= 1:
+        return monthly
+    out: list[tuple[str, Path]] = []
+    for i in range(0, len(monthly) - window + 1, window):
+        chunk = monthly[i:i + window]
+        label = f"{chunk[0][0]}..{chunk[-1][0]}"
+        p = out_dir / f"win{window}_{chunk[0][0]}_{chunk[-1][0]}.csv"
+        if not p.exists():
+            header = chunk[0][1].read_text().splitlines()[0]
+            body = []
+            for _, mp in chunk:
+                body.extend(mp.read_text().splitlines()[1:])
+            p.write_text(header + "\n" + "\n".join(body) + "\n")
+        out.append((label, p))
+    return out
+
+
 def eval_month(equity_curve: list[tuple[datetime, Decimal]]) -> dict:
     """Walk the equity curve with the trailing-MLL and consistency rules.
 
@@ -164,6 +187,8 @@ def main() -> int:
                     help="Write a UI-visible result JSON to backtests/<id>.json")
     ap.add_argument("--save-label", default=None,
                     help="Display label for the saved result (default: param summary)")
+    ap.add_argument("--window", type=int, default=1,
+                    help="Months per Combine attempt window (default 1)")
     args = ap.parse_args()
 
     if args.dpl is not None:
@@ -194,6 +219,7 @@ def main() -> int:
         args.killzones = ",".join(bot_cfg.enabled_killzones)
 
     months = split_months(Path(args.bars), Path("bars") / "monthly")
+    months = window_months(months, args.window, Path("bars") / "monthly")
     print(f"params: contracts={args.contracts} risk_pct={args.risk_pct} "
           f"partial_r={args.partial_r} killzones={args.killzones} "
           f"overrides={args.set or 'none'} dpl={args.dpl or '1500 (default)'}")
