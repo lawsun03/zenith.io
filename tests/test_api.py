@@ -237,15 +237,17 @@ async def test_journal_caps_at_max_signals():
 
 
 async def test_journal_subscriber_drops_old_under_backpressure():
-    """If a subscriber doesn't drain, new entries displace old."""
+    """If a subscriber doesn't drain, new entries displace old (queue stays
+    bounded at the subscribe() maxsize — 2000, sized for replay streaming)."""
     j = Journal()
     q = j.subscribe()
+    cap = q.maxsize
     sig = make_signal()
     out = OrderOutcome(placed=True, reason="allowed", allowed_size=1, broker_order_id="x")
 
-    # Fill the queue past its limit (100).
-    for _ in range(150):
+    # Fill the queue past its cap.
+    for _ in range(cap + 50):
         await j.record_signal(sig, out)
 
-    # Queue size must be capped at maxsize.
-    assert q.qsize() <= 100
+    # Bounded, and the overflow displaced old entries instead of raising.
+    assert q.qsize() == cap

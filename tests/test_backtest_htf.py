@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.backtest.runner import BacktestConfig, run_backtest
-from app.bot_config import load_bot_config
+from app.bot_config import StrategyParams
 from app.replay import load_bars_csv
 
 _BARS = Path("bars/bars_MGC_1min_20251111_20260511.csv")
@@ -22,12 +22,18 @@ _BARS = Path("bars/bars_MGC_1min_20251111_20260511.csv")
 
 @pytest.mark.skipif(not _BARS.exists(), reason="MGC 1min bars fixture not present")
 def test_faithful_backtest_produces_trades_with_htf_feed():
-    cfg = load_bot_config(Path("bot_config.json"))
-    assert cfg.strategy.htf_target_enabled, "fixture assumes htf_target_enabled"
+    # Self-contained params: the regression requires the HTF target gate ON
+    # (the bug starved the grader when run_backtest fed it no HTF data).
+    # Reading the live bot_config here made the test depend on deployment
+    # state — the deployed MNQ config has the gate off.
+    strategy = StrategyParams(
+        htf_target_enabled=True,
+        target_clarity_mode="reject",
+    )
     bars = list(load_bars_csv(str(_BARS), instrument="MGC", timeframe="1min"))
     bc = BacktestConfig(
-        instrument="MGC", bars=iter(bars), strategy_params=cfg.strategy,
-        enabled_killzones=cfg.enabled_killzones, timeframe="1min",
+        instrument="MGC", bars=iter(bars), strategy_params=strategy,
+        enabled_killzones=["london", "ny_am", "ny_pm"], timeframe="1min",
     )
     result = asyncio.run(run_backtest(bc))
     assert result.stats.trades > 0, (

@@ -555,9 +555,12 @@ def build_app(
                 await _htf_rebuild(body)
             except Exception:
                 log.exception("_hot_apply: HTF tracker rebuild failed")
-        reconciler.config.naked_grace_seconds = body.naked_grace_seconds
-        reconciler.config.emergency_stop_distance = dict(body.emergency_stop_distance)
-        reconciler.config.emergency_target_r = body.emergency_target_r
+        # Paper/replay/test apps run without a reconciler — hot-apply must not
+        # crash the PATCH for the fields that still applied above.
+        if reconciler is not None:
+            reconciler.config.naked_grace_seconds = body.naked_grace_seconds
+            reconciler.config.emergency_stop_distance = dict(body.emergency_stop_distance)
+            reconciler.config.emergency_target_r = body.emergency_target_r
 
     @app.patch("/api/config")
     async def patch_config(request: Request) -> JSONResponse:
@@ -1342,10 +1345,13 @@ Notes:
         cost_match = re.search(r'\$(\d+\.\d+)', result.stdout)
         cost = float(cost_match.group(1)) if cost_match else 0.0
 
-        try:
-            days_fetched = (date.fromisoformat(req.end) - date.fromisoformat(req.start)).days + 1
-        except ValueError:
-            days_fetched = 0
+        if "fully cached" in result.stdout or "skipping fetch" in result.stdout:
+            days_fetched = 0  # cache hit — the script downloaded nothing
+        else:
+            try:
+                days_fetched = (date.fromisoformat(req.end) - date.fromisoformat(req.start)).days + 1
+            except ValueError:
+                days_fetched = 0
 
         return JSONResponse({
             "ok": True,

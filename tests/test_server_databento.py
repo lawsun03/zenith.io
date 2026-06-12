@@ -77,8 +77,11 @@ async def test_databento_fetch_cache_hit_skips_download(monkeypatch, tmp_path):
     client = await _make_client()
     monkeypatch.setenv("DATABENTO_API_KEY", "fake-key")
     csv_path = tmp_path / "bars_MGC.csv"
+    # The cache must COVER the requested range: the fetch script's backfill
+    # logic (correctly) re-fetches when the file starts after `start`.
     csv_path.write_text(
         "timestamp,open,high,low,close,volume\n"
+        "2025-12-31T23:59:00+00:00,100,101,99,100,10\n"
         "2026-05-29T23:59:00+00:00,100,101,99,100,10\n"
     )
     with patch("app.api.server._bars_csv_path", return_value=str(csv_path)):

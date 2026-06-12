@@ -277,10 +277,13 @@ async def test_sign_flipped_position_is_drift():
 # Balance drift
 # =====================================================================
 
-async def test_large_balance_drift_locks_and_adopts_broker_truth():
+async def test_large_balance_drift_adopts_broker_truth_without_lockout():
     """
-    Balance off by more than tolerance and no positions to explain it.
-    Almost certainly a missed fill. Adopt broker, lock out.
+    Balance off by more than tolerance: adopt broker truth, do NOT lock out.
+    Policy (2026): broker REST balance lags ~30s after every exit fill, so a
+    balance-only delta is a timing artifact — a lockout here fired falsely on
+    every losing trade. The contract-count check covers the dangerous case
+    (missed fill = contracts mismatch), which still locks elsewhere.
     """
     broker = PaperBroker(starting_balance=Decimal("50300"))  # +$300 vs internal
     await broker.connect()
@@ -296,23 +299,22 @@ async def test_large_balance_drift_locks_and_adopts_broker_truth():
 
     assert report.drift_detected is True
     assert report.drift_kind == "balance"
-    assert state.realized_balance == Decimal("50300")
-    assert state.locked_out is not None
-    assert state.locked_out.code == "RECONCILE_DRIFT"
+    assert state.realized_balance == Decimal("50300")  # broker truth adopted
+    assert state.locked_out is None                    # and trading continues
 
 
-async def test_lockout_message_explains_drift():
-    """The lockout message should be specific enough to debug from."""
+async def test_negative_balance_drift_also_adopts_without_lockout():
+    """Same policy for downward drift — adopt the broker's lower balance."""
     broker = PaperBroker(starting_balance=Decimal("49000"))  # -$1,000
     await broker.connect()
     state = fresh_state()
 
     rec = Reconciler(broker, state, no_grace())
-    await rec.tick()
+    report = await rec.tick()
 
-    msg = state.locked_out.message
-    assert "Balance drift" in msg or "balance" in msg.lower()
-    assert "tolerance" in msg.lower() or "manual review" in msg.lower()
+    assert report.drift_detected is True
+    assert state.realized_balance == Decimal("49000")
+    assert state.locked_out is None
 
 
 # =====================================================================

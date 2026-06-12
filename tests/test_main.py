@@ -201,10 +201,13 @@ def test_config_loader_validates_mode(monkeypatch):
         load_config()
 
 
-def test_config_loader_defaults(monkeypatch):
+def test_config_loader_defaults(monkeypatch, tmp_path):
     """Required values present, others take defaults."""
     monkeypatch.setenv("TOPSTEP_BOT_MODE", "paper")
     monkeypatch.setenv("TOPSTEP_BOT_INSTRUMENT", "mgc")  # lowercase OK
+    # Point away from the repo's live bot_config.json — by design it
+    # overrides env instrument/timeframes, which is not under test here.
+    monkeypatch.setenv("BOT_CONFIG_PATH", str(tmp_path / "missing.json"))
     cfg = load_config()
     assert cfg.mode == "paper"
     assert cfg.instrument == "MGC"

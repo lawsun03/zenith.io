@@ -68,7 +68,8 @@ def load_log_events(days: int = 2) -> list[dict]:
 
 def load_config() -> dict:
     p = _ROOT / "bot_config.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    # utf-8-sig: tolerate a BOM (PowerShell edits write one by default).
+    return json.loads(p.read_text(encoding="utf-8-sig")) if p.exists() else {}
 
 
 # ---------------------------------------------------------------------------
