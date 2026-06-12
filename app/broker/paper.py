@@ -61,6 +61,9 @@ class _OpenBracket:
     partial_size: int = 0                  # contracts to exit at partial_target
     partial_filled: bool = False           # True once the partial fill has been emitted
     entry_time: float = 0.0               # Unix timestamp of fill, for chart marker
+    # Trail-1R mode (ablation T4): R distance at entry; ratchet level reached.
+    trail_r: Decimal | None = None
+    trail_level: int = 0
 
 
 # Per-instrument tick value. Verified against CME contract specs:
@@ -117,6 +120,7 @@ class PaperBroker:
         commission_per_side: Decimal | None = None,  # None = use DEFAULT_COMMISSION table
         partial_profit_r: Decimal = Decimal("0"),    # 0 = disabled; 1.0 = take half at 1R
         max_entry_slippage_frac: Decimal = Decimal("0"),  # 0 = disabled; refuse entry if |entry−market| > frac × stop distance
+        trail_1r: bool = False,  # ablation T4: no TP, stop ratchets +1R per +1R MFE
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
@@ -125,6 +129,7 @@ class PaperBroker:
         self._commission_per_side = commission_per_side
         self._partial_profit_r = partial_profit_r
         self._max_entry_slippage_frac = max_entry_slippage_frac
+        self._trail_1r = trail_1r
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -258,7 +263,9 @@ class PaperBroker:
             target=target,
         )
 
-        if self._partial_profit_r > 0 and size >= 2:
+        if self._trail_1r:
+            bracket.trail_r = abs(slipped_entry - stop)
+        elif self._partial_profit_r > 0 and size >= 2:
             r = abs(slipped_entry - stop)
             if side == "long":
                 pt = slipped_entry + r * self._partial_profit_r
@@ -407,7 +414,7 @@ class PaperBroker:
                 (bracket.side == "long" and bar.low <= bracket.stop)
                 or (bracket.side == "short" and bar.high >= bracket.stop)
             )
-            target_hit = (
+            target_hit = bracket.trail_r is None and (
                 (bracket.side == "long" and bar.high >= bracket.target)
                 or (bracket.side == "short" and bar.low <= bracket.target)
             )
@@ -422,6 +429,26 @@ class PaperBroker:
                 exit_price = bracket.target
                 reason = "target"
             else:
+                # Trail ratchet applies on bar CLOSE — the raised stop is live
+                # from the next bar. Raising intra-bar from this bar's high and
+                # then stopping on this bar's low would assume the high printed
+                # first (lookahead).
+                if bracket.trail_r:
+                    fav = (bar.high - bracket.entry if bracket.side == "long"
+                           else bracket.entry - bar.low)
+                    levels = int(fav / bracket.trail_r)
+                    if levels > bracket.trail_level:
+                        bracket.trail_level = levels
+                        if bracket.side == "long":
+                            new_stop = bracket.entry + bracket.trail_r * (levels - 1)
+                            if new_stop > bracket.stop:
+                                bracket.stop = new_stop
+                        else:
+                            new_stop = bracket.entry - bracket.trail_r * (levels - 1)
+                            if new_stop < bracket.stop:
+                                bracket.stop = new_stop
+                        log.info("Trail ratchet: %s stop -> %s (level %d)",
+                                 bracket.order_id, bracket.stop, levels)
                 continue
 
             is_stop_exit = "stop" in reason  # covers "stop" and "stop (whipsaw)"

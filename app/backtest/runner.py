@@ -110,6 +110,7 @@ class BacktestConfig:
     commission_per_side: Decimal = field(default_factory=lambda: Decimal("0.74"))
     partial_profit_r: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled
     max_entry_slippage_frac: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled; refuse entries > frac × stop distance from market
+    trail_1r: bool = False  # ablation T4: trailing 1R-ratchet exit, no TP, no partials
     # When set, the runner is built faithfully from this live StrategyParams —
     # including the VolumeProfileTracker and the VP gate (vp_enabled, target
     # override). This is the only way the backtest matches live behavior. When
@@ -349,6 +350,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         commission_per_side=cfg.commission_per_side,
         partial_profit_r=cfg.partial_profit_r,
         max_entry_slippage_frac=cfg.max_entry_slippage_frac,
+        trail_1r=cfg.trail_1r,
     )
     base_risk = fifty_k_combine(soft_buffer=cfg.soft_buffer)
     risk_state = RiskState(config=base_risk if cfg.enforce_risk_limits else _no_limits_risk_config(base_risk))

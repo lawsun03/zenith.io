@@ -155,6 +155,7 @@ async def run_month(label: str, bars_path: Path, args, base_strategy) -> dict:
         strategy_params=base_strategy,
         enforce_risk_limits=True,
         soft_buffer=Decimal(args.soft_buffer),
+        trail_1r=args.trail_1r,
     )
     result = await run_backtest(cfg)
     s = result.stats
@@ -195,6 +196,9 @@ def main() -> int:
                     help="Display label for the saved result (default: param summary)")
     ap.add_argument("--window", type=int, default=1,
                     help="Months per Combine attempt window (default 1)")
+    ap.add_argument("--trail-1r", action="store_true",
+                    help="Exit mode trail_1r: no TP, no partials, stop ratchets "
+                         "+1R per +1R of favorable excursion (ablation T4)")
     ap.add_argument("--soft-buffer", default="500",
                     help="Soft-buffer lockout distance above MLL ($; 0 = disabled, "
                          "trade down to the raw MLL — real busts become possible)")
@@ -224,6 +228,8 @@ def main() -> int:
         args.risk_pct = str(bot_cfg.risk_per_trade_pct)
     if args.partial_r is None:
         args.partial_r = str(bot_cfg.partial_profit_r)
+    if args.trail_1r:
+        args.partial_r = "0"   # trail mode excludes partials by definition
     if args.killzones is None:
         args.killzones = ",".join(bot_cfg.enabled_killzones)
 
@@ -366,7 +372,7 @@ def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: i
             "params": {
                 "risk_pct": args.risk_pct, "partial_r": args.partial_r,
                 "killzones": args.killzones, "overrides": args.set,
-                "dpl": args.dpl or "1500",
+                "dpl": args.dpl or "1500", "trail_1r": args.trail_1r,
             },
             "run_pf": run_pf,
             "worst_month_max_dd": str(worst_dd),

@@ -62,3 +62,49 @@ class TestAllowedSides:
         signal, _ = _short_setup(SweepDisplacementComposer(_cfg()))
         assert signal is not None
         assert signal.side == "short"
+
+
+class TestTrail1R:
+    def test_ratchets_at_exact_1r_and_exits_on_stop_only(self):
+        from app.broker.paper import PaperBroker
+
+        async def run():
+            br = PaperBroker(starting_balance=Decimal("50000"),
+                             slippage_ticks_market=0, trail_1r=True)
+            fills = []
+
+            async def collect(f):
+                fills.append(f)
+
+            br.on_fill(collect)
+            await br.connect()
+            ts = datetime(2026, 3, 4, 14, 30, tzinfo=timezone.utc)
+            await br.inject_bar(bar(ts, "21000", "21000", "21000", "21000"))
+            res = await br.place_bracket(
+                "MNQ", "long", 2,
+                entry=Decimal("21000"), stop=Decimal("20990"),
+                target=Decimal("21035"),
+            )
+            assert res.success
+            b = br._open[res.entry_order_id]
+            assert b.trail_r == Decimal("10")
+            assert b.partial_target is None  # no partials in trail mode
+
+            # +1R high: stop ratchets to BE exactly (effective next bar)
+            await br.inject_bar(bar(ts, "21000", "21010", "20995", "21008"))
+            assert b.stop == Decimal("21000")
+
+            # high crosses the old TP (21035): must NOT take profit; +3R
+            # reached so stop ratchets to +2R
+            await br.inject_bar(bar(ts, "21008", "21036", "21005", "21030"))
+            assert res.entry_order_id in br._open
+            assert b.stop == Decimal("21020")
+
+            # low touches the ratcheted stop -> stop exit at the stop price
+            await br.inject_bar(bar(ts, "21030", "21031", "21019", "21022"))
+            assert res.entry_order_id not in br._open
+            exit_fill = fills[-1]
+            assert exit_fill.is_stop
+            assert exit_fill.fill_price == Decimal("21020")
+
+        asyncio.run(run())
