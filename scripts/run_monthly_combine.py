@@ -154,6 +154,7 @@ async def run_month(label: str, bars_path: Path, args, base_strategy) -> dict:
         enabled_killzones=args.killzones.split(",") if args.killzones else ["all"],
         strategy_params=base_strategy,
         enforce_risk_limits=True,
+        soft_buffer=Decimal(args.soft_buffer),
     )
     result = await run_backtest(cfg)
     s = result.stats
@@ -189,6 +190,9 @@ def main() -> int:
                     help="Display label for the saved result (default: param summary)")
     ap.add_argument("--window", type=int, default=1,
                     help="Months per Combine attempt window (default 1)")
+    ap.add_argument("--soft-buffer", default="500",
+                    help="Soft-buffer lockout distance above MLL ($; 0 = disabled, "
+                         "trade down to the raw MLL — real busts become possible)")
     args = ap.parse_args()
 
     if args.dpl is not None:
