@@ -43,13 +43,24 @@ while ($true) {
         Add-Content -Path $loopLog -Value ("--- session #$sessionNum tail ---`r`n" + $tail) -Encoding utf8
     }
 
-    if ($tail -match 'usage limit|rate limit|limit reached|overloaded|429|out of credit|exceeded') {
-        Log "session #$sessionNum hit a usage limit after ${mins}m (exit $code) - sleeping 40 min."
-        Start-Sleep -Seconds 2400
+    if ($tail -match 'session limit|usage limit|rate limit|limit reached|overloaded|429|out of credit|exceeded') {
+        # Sleep until the stated reset time when present ("resets 4:30pm"),
+        # else fall back to 40 min. +3 min cushion past the reset.
+        $sleepSec = 2400
+        if ($tail -match 'resets (\d{1,2}):(\d{2})\s*(am|pm)') {
+            $h = [int]$Matches[1]; $m = [int]$Matches[2]
+            if ($Matches[3] -eq 'pm' -and $h -ne 12) { $h += 12 }
+            if ($Matches[3] -eq 'am' -and $h -eq 12) { $h = 0 }
+            $target = (Get-Date).Date.AddHours($h).AddMinutes($m)
+            if ($target -le (Get-Date)) { $target = $target.AddDays(1) }
+            $sleepSec = [int]((($target - (Get-Date)).TotalSeconds) + 180)
+        }
+        Log "session #$sessionNum limit-blocked after ${mins}m - sleeping $([int]($sleepSec/60)) min (until reset)."
+        Start-Sleep -Seconds $sleepSec
     }
     elseif ($code -ne 0) {
-        Log "session #$sessionNum exited $code after ${mins}m (not limit-shaped) - sleeping 5 min."
-        Start-Sleep -Seconds 300
+        Log "session #$sessionNum exited $code after ${mins}m (not limit-shaped) - sleeping 10 min."
+        Start-Sleep -Seconds 600
     }
     else {
         Log "session #$sessionNum completed in ${mins}m - next in 60s."

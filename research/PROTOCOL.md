@@ -49,9 +49,12 @@ Sun 15:00 PT; stale bars during closure are normal.
    `research/BACKLOG.md`, and the last ~3 entries of `research/JOURNAL.md`.
 2. Bot-keeper health check.
 3. Claim the top item whose status is `pending` (set it `in-progress — session
-   <timestamp>` in BACKLOG.md). If the last 2 completed items were build items,
-   and a research/ideation item exists or session count % 3 == 0, do a
-   RESEARCH session instead (see below).
+   <timestamp>` in BACKLOG.md). **Stale claims:** an item marked `in-progress`
+   with NO matching completed entry in JOURNAL.md is an orphan from a crashed
+   session — reclaim it (update the timestamp) and continue; do not skip it.
+   If the last 2 completed items were build items, and a research/ideation
+   item exists or session count % 3 == 0, do a RESEARCH session instead (see
+   below).
 4. Execute. Subagents encouraged for parallel analysis (Explore for code/data
    recon, general-purpose for heavy analysis) — e.g., dispatch one to analyze
    trade lists while you build.
