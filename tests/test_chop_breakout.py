@@ -67,6 +67,7 @@ class TestGate:
 def _in_chop(det, hi="21010", lo="20990"):
     det.state = "chop"
     det.chop_high, det.chop_low = Decimal(hi), Decimal(lo)
+    det._pre_widen_bounds = (Decimal(hi), Decimal(lo))
     return det
 
 
@@ -158,6 +159,43 @@ class TestExitRules:
         det._vwap.on_bar(bar(299, "21050", "21060", c="21055"))  # vwap ≈ 21055
         det._manage_trade(bar(300, "21020", "21040", c="21030"))  # close < vwap
         assert det.exit_request == "vwap_invalidation"
+
+
+class TestBreakoutBarOrdering:
+    def test_displacement_bar_does_not_absorb_its_own_breakout(self):
+        """The displacement bar (b2) widens chop bounds one bar before its
+        event arrives (on b3 close). The breakout must be judged against the
+        PRE-b2 range or no breakout can ever fire (close <= own high)."""
+        det = ChopBreakoutDetector(_cfg())
+        i = feed_history(det)
+        k = 0
+        while det.state != "chop":
+            det.on_bar(tight(i + k))
+            k += 1
+            assert k < 60, "never entered chop"
+        det._liq15._swings.append(_swing("high", "21150"))
+        hi0 = det.chop_high
+        fvg = FairValueGap(side="bearish", low=Decimal("21000"),
+                           high=Decimal("21006"), created_at=T0)
+
+        # b2: big bullish bar closing above the pre-existing chop high; the
+        # detector sees no event yet (real detector fires one bar later).
+        b2 = bar(i + k, "20998", str(hi0 + 30), c=str(hi0 + 25))
+        events = {0: None, 1: DisplacementEvent(
+            side="bullish", displacement_bar=b2, body_size=Decimal("25"),
+            atr_at_event=Decimal("5"), body_to_atr=Decimal("5"), fvg=fvg)}
+        calls = {"n": -1}
+
+        class _DispStub:
+            def on_bar(self, _bar):
+                calls["n"] += 1
+                return events.get(calls["n"])
+
+        det.disp = _DispStub()
+        assert det.on_bar(b2) is None          # event not visible yet
+        b3 = bar(i + k + 1, str(hi0 + 20), str(hi0 + 32), c=str(hi0 + 28))
+        sig = det.on_bar(b3)                   # event for b2 arrives now
+        assert sig is not None and sig.side == "long"
 
 
 class TestEngineExitChannel:

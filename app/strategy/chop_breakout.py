@@ -79,6 +79,11 @@ class ChopBreakoutDetector:
         self.chop_high: Decimal | None = None
         self.chop_low: Decimal | None = None
         self._recent: deque[tuple[Decimal, Decimal]] = deque(maxlen=config.min_chop_bars)
+        # Bounds as they stood BEFORE the most recent bar widened them. The
+        # displacement bar (b2) widens bounds one bar before its event arrives
+        # (b3 close), so breakouts must be judged against this snapshot — the
+        # pre-breakout range — or close > chop_high is unsatisfiable.
+        self._pre_widen_bounds: tuple[Decimal, Decimal] | None = None
         # 15m aggregation for swing targets
         self._bucket: list[Bar] = []
         self._bucket_floor = None
@@ -146,6 +151,7 @@ class ChopBreakoutDetector:
             self.state = "idle"
             self._streak = 0
             self.chop_high = self.chop_low = None
+            self._pre_widen_bounds = None
             return signal
         if compressed:
             self._streak += 1
@@ -154,12 +160,15 @@ class ChopBreakoutDetector:
             if self.state == "chop":
                 self.state = "idle"
                 self.chop_high = self.chop_low = None
+                self._pre_widen_bounds = None
         if self.state == "idle" and self._streak >= self.config.min_chop_bars:
             self.state = "chop"
             self.chop_high = max(h for h, _ in self._recent)
             self.chop_low = min(l for _, l in self._recent)
+            self._pre_widen_bounds = (self.chop_high, self.chop_low)
         elif self.state == "chop":
             assert self.chop_high is not None and self.chop_low is not None
+            self._pre_widen_bounds = (self.chop_high, self.chop_low)
             self.chop_high = max(self.chop_high, bar.high)
             self.chop_low = min(self.chop_low, bar.low)
         return None
@@ -198,27 +207,31 @@ class ChopBreakoutDetector:
     def on_displacement(self, bar: Bar, event: DisplacementEvent) -> Optional[Signal]:
         if event.fvg is None:
             return None  # breakout without iFVG inversion is not a setup
-        assert self.chop_high is not None and self.chop_low is not None
+        if self._pre_widen_bounds is None:
+            return None
+        # Judge the breakout against the PRE-breakout range: the displacement
+        # bar itself already widened chop_high/low one bar ago.
+        ch, cl = self._pre_widen_bounds
         d = event.displacement_bar
-        mid = (self.chop_high + self.chop_low) / 2
+        mid = (ch + cl) / 2
         fvg = event.fvg
 
         if event.side == "bullish":
-            if d.close <= self.chop_high:
+            if d.close <= ch:
                 return None  # didn't close outside the range
-            if fvg.low > self.chop_high:
+            if fvg.low > ch:
                 return None  # FVG not at/inside the breached boundary
-            side, entry, broken = "long", bar.close, self.chop_high
+            side, entry, broken = "long", bar.close, ch
             stop = max(fvg.low, mid)        # whichever is TIGHTER
             if stop >= entry:
                 return None
             r = entry - stop
         else:
-            if d.close >= self.chop_low:
+            if d.close >= cl:
                 return None
-            if fvg.high < self.chop_low:
+            if fvg.high < cl:
                 return None
-            side, entry, broken = "short", bar.close, self.chop_low
+            side, entry, broken = "short", bar.close, cl
             stop = min(fvg.high, mid)
             if stop <= entry:
                 return None
@@ -232,11 +245,10 @@ class ChopBreakoutDetector:
 
         self._trade = {
             "side": side, "entry": entry, "r": r, "bars": 0, "trail_armed": False,
-            "chop_high": self.chop_high, "chop_low": self.chop_low,
+            "chop_high": ch, "chop_low": cl,
         }
         log.info("chop_breakout: %s %s entry=%s stop=%s target=%s chop=[%s-%s]",
-                 self.config.instrument, side, entry, stop, target,
-                 self.chop_low, self.chop_high)
+                 self.config.instrument, side, entry, stop, target, cl, ch)
         return Signal(
             instrument=self.config.instrument, side=side, entry=entry,
             stop=stop, target=target, created_at=bar.ts,
@@ -244,7 +256,7 @@ class ChopBreakoutDetector:
             sweep_extreme=broken,
             fvg_low=fvg.low, fvg_high=fvg.high,
             rationale=(f"chop_breakout: {side} displacement close {d.close} outside "
-                       f"chop [{self.chop_low}-{self.chop_high}], iFVG "
+                       f"chop [{cl}-{ch}], iFVG "
                        f"{fvg.low}-{fvg.high} at boundary, target 15m swing {target}"),
             sweep_bar_range=d.high - d.low,
         )
