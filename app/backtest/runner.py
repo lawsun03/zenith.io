@@ -129,6 +129,7 @@ class BacktestResult:
     bars_processed: int
     rejected_signals: int
     label: str
+    signals: list[dict] = field(default_factory=list)  # placed signals (parity diffing)
 
 
 @dataclass
@@ -447,6 +448,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     runner = _build_runner(cfg)
 
     fills_captured: list[dict] = []
+    signals_captured: list[dict] = []
     rejected_signals = 0
     # Maps entry order_id → killzone name so exit fills can be tagged.
     # on_signal fires after place_bracket (entry fill already emitted), so
@@ -472,6 +474,15 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         if not outcome.placed:
             rejected_signals += 1
             return
+        signals_captured.append({
+            "ts": signal.created_at.isoformat(),
+            "side": signal.side,
+            "entry": str(signal.entry),
+            "stop": str(signal.stop),
+            "target": str(signal.target),
+            "killzone": signal.killzone,
+            "rationale": signal.rationale,
+        })
         if outcome.broker_order_id:
             _order_killzones[outcome.broker_order_id] = signal.killzone
             g = signal.setup_grade
@@ -579,6 +590,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         bars_processed=bar_count,
         rejected_signals=rejected_signals,
         label=cfg.label,
+        signals=signals_captured,
     )
 
 
