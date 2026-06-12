@@ -160,11 +160,13 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
             return CombinedRunner(primary=primary, secondary=secondary)
         if s.engine == "regime_switch":
             from app.strategy.regime_switch import RegimeSwitchRunner
-            active = _build_runner(dataclasses.replace(
+            ifvg = _build_runner(dataclasses.replace(
                 cfg, strategy_params=s.model_copy(update={"engine": "ifvg"})))
-            quiet = _build_runner(dataclasses.replace(
+            orb = _build_runner(dataclasses.replace(
                 cfg, strategy_params=s.model_copy(update={"engine": "orb"})))
-            return RegimeSwitchRunner(quiet=quiet, active=active)
+            if s.rs_invert:
+                return RegimeSwitchRunner(quiet=ifvg, active=orb, delegate=ifvg)
+            return RegimeSwitchRunner(quiet=orb, active=ifvg, delegate=ifvg)
         if s.engine == "chop_breakout":
             from app.strategy.chop_breakout import (ChopBreakoutConfig,
                                                     ChopBreakoutDetector,

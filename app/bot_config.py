@@ -121,6 +121,10 @@ class StrategyParams(BaseModel):
     cb_vwap_invalidation: bool = True
     cb_sma21_trail: bool = False
 
+    # regime_switch polarity diagnostic: False (default) = ORB on small-range
+    # days / iFVG on large. True = inverted (ORB on large-range days).
+    rs_invert: bool = False
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

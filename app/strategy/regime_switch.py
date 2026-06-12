@@ -1,5 +1,5 @@
-"""
-RegimeSwitchRunner — one engine per day, selected by a daily range regime.
+﻿"""
+RegimeSwitchRunner â€” one engine per day, selected by a daily range regime.
 
 Lawrence's hypothesis (2026-06-12): ORB earns in iFVG's quiet months and
 vice versa, but a shared account budget couples them (the combined-engine
@@ -7,15 +7,15 @@ failure). Route by regime instead: on SMALL-range days the quiet engine
 (ORB) trades; on LARGE-range days the active engine (iFVG) trades. Only
 one engine spends the loss budget on any given day.
 
-Regime metric (parameter-free by design — no new tunables): the previous
-ET-day's (high−low)/close vs the trailing 60-day median of the same.
-Below median → quiet day → ORB. At/above → iFVG. Decided once per day at
+Regime metric (parameter-free by design â€” no new tunables): the previous
+ET-day's (highâˆ’low)/close vs the trailing 60-day median of the same.
+Below median â†’ quiet day â†’ ORB. At/above â†’ iFVG. Decided once per day at
 the ET date roll; during warmup (<10 days of history) the active (iFVG)
 side trades, matching the deployed status quo.
 
 Both sub-runners receive EVERY bar (detector state must stay warm); only
 signal emission is gated. Exit requests pass through from either side
-unconditionally — a position must always be exitable.
+unconditionally â€” a position must always be exitable.
 """
 from __future__ import annotations
 
@@ -39,9 +39,13 @@ _WARMUP_DAYS = 10
 
 
 class RegimeSwitchRunner:
-    def __init__(self, quiet, active) -> None:
+    def __init__(self, quiet, active, delegate=None) -> None:
         self.quiet = quiet        # trades small-range (below-median) days
         self.active = active      # trades large-range days; warmup default
+        # Engine-facing attribute delegation target. Must be the iFVG runner
+        # regardless of routing polarity â€” run_backtest feeds HTF/delivery
+        # FVGs through runner.grader, which only iFVG consumes.
+        self._delegate = delegate if delegate is not None else active
         self._day: date | None = None
         self._day_high: Decimal | None = None
         self._day_low: Decimal | None = None
@@ -95,32 +99,32 @@ class RegimeSwitchRunner:
     # Engine-facing surface delegates to the active (iFVG) runner.
     @property
     def instrument(self):
-        return self.active.instrument
+        return self._delegate.instrument
 
     @property
     def timeframe(self):
-        return self.active.timeframe
+        return self._delegate.timeframe
 
     @property
     def strategy_cfg(self):
-        return self.active.strategy_cfg
+        return self._delegate.strategy_cfg
 
     @property
     def vp(self):
-        return self.active.vp
+        return self._delegate.vp
 
     @property
     def composer(self):
-        return self.active.composer
+        return self._delegate.composer
 
     @property
     def grader(self):
-        return self.active.grader
+        return self._delegate.grader
 
     @property
     def signal_instrument(self):
-        return self.active.signal_instrument
+        return self._delegate.signal_instrument
 
     @property
     def last_reject(self):
-        return self.active.last_reject
+        return self._delegate.last_reject
