@@ -1,0 +1,3 @@
+CAP: $20.00 (weekend research loop — hard limit, estimate-only before any fetch)
+TOTAL SPENT: $0.00
+--- entries below: YYYY-MM-DD $X.XX <symbol> <range> ---

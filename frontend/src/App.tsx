@@ -39,6 +39,7 @@ import { BarChart } from './components/BarChart'
 import { ActivityFeed } from './components/ActivityFeed'
 import { ConfigPanel } from './components/ConfigPanel'
 import { BacktestsPage } from './components/BacktestsPage'
+import { ResearchPage } from './components/ResearchPage'
 import { AnalyticsPage } from './pages/Analytics'
 import { TodosPage } from './pages/Todos'
 import { TradeAnalysisPage } from './pages/TradeAnalysis'
@@ -176,6 +177,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/backtests" element={<BacktestsPage />} />
+        <Route path="/research" element={<ResearchPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/todos" element={<TodosPage />} />
         <Route path="/trade-analysis/:date" element={<TADetail />} />

@@ -1,0 +1,13 @@
+[
+  {
+    "ts": "2026-06-12T22:30:00Z",
+    "session": "seed",
+    "item": "infra",
+    "variant": "equity_export bridge + ORB r2.5 probe (2024, risk 1.25%)",
+    "objective": "funded",
+    "metrics": {"xfa_net": 23566, "xfa_busts": 8, "xfa_accounts": 9, "combine_passes": 10, "combine_busts": 15, "haircut": 200},
+    "verdict": "dataset",
+    "learned": "The XFA payout pipeline is rich even from a config that only passes 24% of Combine months. Bust rate, not payout size, is the frontier variable - sizing is the lever B1 probes.",
+    "links": {"doc": null, "runs": [], "src": null}
+  }
+]

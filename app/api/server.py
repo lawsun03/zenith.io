@@ -1707,6 +1707,43 @@ Notes:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(json.loads(f.read_text()))
 
+    @app.get("/api/research/state")
+    async def research_state() -> JSONResponse:
+        """Read-only snapshot of the autonomous research loop's state files."""
+        rdir = Path("research")
+
+        def _read(name: str) -> str:
+            p = rdir / name
+            try:
+                return p.read_text(encoding="utf-8") if p.exists() else ""
+            except Exception:
+                return ""
+
+        findings = []
+        try:
+            raw = _read("findings.json")
+            if raw:
+                findings = json.loads(raw)
+        except Exception:
+            log.warning("research findings.json unparseable", exc_info=True)
+        loop_log_tail = ""
+        lp = rdir / "loop.log"
+        if lp.exists():
+            try:
+                loop_log_tail = "\n".join(
+                    lp.read_text(encoding="utf-8", errors="replace").splitlines()[-20:])
+            except Exception:
+                pass
+        return JSONResponse({
+            "findings": findings,
+            "backlog_md": _read("BACKLOG.md"),
+            "journal_md": _read("JOURNAL.md"),
+            "lessons_md": _read("LESSONS.md"),
+            "ledger": _read("databento_ledger.txt"),
+            "loop_log_tail": loop_log_tail,
+            "stopped": (rdir / "STOP").exists(),
+        })
+
     @app.get("/api/backtest/{run_id}/trade-chart")
     async def backtest_trade_chart(run_id: str, i: int = 0, pad: int = 60) -> JSONResponse:
         """Bars + markers for one backtest trade (the trade-replay visualizer).

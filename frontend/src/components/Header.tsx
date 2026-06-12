@@ -167,6 +167,7 @@ export function Header({ status, connState, onConfigOpen, mode, activeKillzone }
         )}
         <Link to="/analytics" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open analytics">Analytics</Link>
         <Link to="/backtests" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Open backtests">Backtests</Link>
+        <Link to="/research" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Autonomous research loop">Research</Link>
         <Link to="/todos" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Backlog">Backlog</Link>
         <a href="/api/export/trades.csv" download="trades.csv" className="text-[11px] text-dim px-2.5 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Export trades CSV">↓ CSV</a>
         <button onClick={onConfigOpen} className="text-sm text-dim px-2 py-1 rounded hover:bg-white/[0.04] hover:text-ink" title="Configuration">⚙</button>
