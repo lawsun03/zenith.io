@@ -149,3 +149,29 @@ partials 1.5R, DPL $1.5k, killzones "all", grader floor off, 5min.
 Expected ≈31% pass per attempt (9/29 months, 95% CI ≈ 15–51%), zero
 floor breaches in ~270 simulated months. Apply only with explicit
 sign-off — it quadruples per-trade risk on the live bot.
+
+## Round 5 - five-batch campaign toward 80-90% (2026-06-11, post-flatten, all saved to UI)
+
+Goal was 80-90% monthly pass rate; 23 variants across 5 batches, every run
+under the now-live ruleset (flatten 15:05 CT + consistency + DLL/soft-buffer
++ 5pm CT rollover). All results in the UI Backtests registry (monthly_b1..b5).
+
+| batch | sweep | best |
+|---|---|---|
+| B1 sizing @ r3.5 | 0.75/1.0/1.25/1.5/2.0% | 0.75% and 1.25% -> 6/17 (35%); live 1.0% dropped to 24% post-flatten |
+| B2 r_multiple @ 1.25% | 2.5/3.0/4.0/4.5/5.0 | none beat r3.5 (29/29/24/24/24%) |
+| B3 stop geometry | stop 2/4, body 4/6, ssl 15/50 | stop2.0, body4.0, body6.0 all TIE 35%; ssl15 hurts (18%) |
+| B4 exits | partials 0/1.0/2.0R, DPL off, stacked geometry | all <= 35%; partials 1.5R confirmed; ties do not stack |
+| B5 2024 validation | 1.25% + 0.75% on 12 unseen months | **1.25% r3.5: 4/12 (33%)**; 0.75%: 2/12 (17%) |
+
+**Verdict: the parameter surface is a plateau at ~35%, and it is REAL** -
+1.25% r3.5 scores 6/17 test + 4/12 2024 = 10/29 (34%, binomial 95% ~ 18-53%),
+zero MLL failures in all 690 month-simulations of the campaign. The 80-90%
+target is not reachable by parameters: pass months are the signal-rich months
+(60-90 trades), and no knob manufactures signals in the quiet ones. At PF ~1.1
+post-flatten, +$3k/month at 80% reliability needs roughly 4-5x the edge.
+
+**Recommended live-shadow update:** risk_per_trade_pct 1.0 -> 1.25 (the live
+1.0% setting fell to 24% under the flatten rule; 1.25% is the cross-period
+frontier). Paths beyond 35% remain structural: a second setup engine for the
+quiet months, excursion-driven exits, live slippage reduction.
