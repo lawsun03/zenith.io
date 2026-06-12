@@ -30,6 +30,7 @@ function ConfigFlags({ strategy, partialR }: { strategy: StrategyConfig; partial
 }
 import { Header } from './components/Header'
 import { LockoutBanner } from './components/LockoutBanner'
+import { PhaseBanner } from './components/PhaseBanner'
 import { MetricsGrid } from './components/MetricsGrid'
 import { BarChart } from './components/BarChart'
 import { ActivityFeed } from './components/ActivityFeed'
@@ -86,6 +87,7 @@ function LiveDashboard() {
       <div className="flex flex-col h-screen">
         <Header status={status} connState={connState} onConfigOpen={() => setConfigOpen(true)} mode={config?.mode} activeKillzone={activeKillzone} />
         <LockoutBanner lockout={status?.lockout ?? null} />
+        {config && <PhaseBanner config={config} phase={strategyState?.phase ?? null} />}
 
         <div className="flex-1 min-h-0 flex justify-center items-center overflow-hidden">
           <div className="w-full max-w-[1320px] h-full max-h-[820px] px-7 pt-[22px] pb-[26px] flex flex-col min-h-0 overflow-hidden">
