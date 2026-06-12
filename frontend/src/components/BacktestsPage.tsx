@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Logo } from './Logo'
+import { TradeChart } from './TradeChart'
 import { fmtBarTs } from '../utils/format'
 import { useConfirm } from '../hooks/useConfirm'
 import type { FundedPipeline } from '../types'
@@ -415,6 +416,9 @@ export function BacktestsPage() {
   const { confirm, modal } = useConfirm()
   const [list, setList] = useState<BacktestSummary[]>([])
   const [selected, setSelected] = useState<BacktestDetail | null>(null)
+  // Trade-replay chart: index into selected.trades, or null when closed.
+  const [replayIndex, setReplayIndex] = useState<number | null>(null)
+  useEffect(() => { setReplayIndex(null) }, [selected?.id])
   const [running, setRunning] = useState(false)
   const [label, setLabel] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
@@ -1707,6 +1711,16 @@ export function BacktestsPage() {
                   </div>
                 )}
 
+                {/* Trade replay chart */}
+                {replayIndex !== null && (
+                  <TradeChart
+                    runId={selected.id}
+                    tradeIndex={replayIndex}
+                    onNavigate={setReplayIndex}
+                    onClose={() => setReplayIndex(null)}
+                  />
+                )}
+
                 {/* Trade list */}
                 <div>
                   <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
@@ -1721,8 +1735,14 @@ export function BacktestsPage() {
                   <div className="max-h-[40vh] overflow-y-auto feed border border-border divide-y divide-border">
                     {displayedTrades.map((t, i) => {
                       const pnl = parseFloat(t.realized_pnl)
+                      const fullIndex = selected.trades.indexOf(t)
                       return (
-                        <div key={i} className="px-3 py-2 text-[11px] font-mono">
+                        <div
+                          key={i}
+                          onClick={() => setReplayIndex(fullIndex)}
+                          className={`px-3 py-2 text-[11px] font-mono cursor-pointer transition-colors hover:bg-accent/5 ${replayIndex === fullIndex ? 'bg-accent/10' : ''}`}
+                          title="view on chart"
+                        >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <span className="text-dim">{fmtBarTs(t.entry_ts)}</span>

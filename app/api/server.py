@@ -1701,6 +1701,54 @@ Notes:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(json.loads(f.read_text()))
 
+    @app.get("/api/backtest/{run_id}/trade-chart")
+    async def backtest_trade_chart(run_id: str, i: int = 0, pad: int = 60) -> JSONResponse:
+        """Bars + markers for one backtest trade (the trade-replay visualizer).
+
+        Slices the run's bars CSV around trade `i` (entry−pad .. exit+pad bars
+        at the run's timeframe) so the frontend can render the trade in
+        context without shipping the whole bar file.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_\-]*", run_id):
+            return JSONResponse({"error": "invalid id"}, status_code=400)
+        f = backtests_dir / f"{run_id}.json"
+        if not f.exists():
+            return JSONResponse({"error": "not found"}, status_code=404)
+        data = json.loads(f.read_text())
+        trades = data.get("trades") or []
+        if not trades:
+            return JSONResponse({"error": "run has no trade list"}, status_code=404)
+        i = max(0, min(i, len(trades) - 1))
+        trade = trades[i]
+        bars_path = data.get("bars_path")
+        if not bars_path or not Path(bars_path).exists():
+            return JSONResponse({"error": f"bars file missing: {bars_path}"},
+                                status_code=404)
+
+        from datetime import datetime as _dt, timedelta as _td
+
+        from app.replay import load_bars_csv as _load
+        tf = data.get("timeframe") or "5min"
+        tf_secs = {"1min": 60, "3min": 180, "5min": 300, "15min": 900,
+                   "30min": 1800, "1h": 3600}.get(tf, 300)
+        entry_ts = _dt.fromisoformat(trade["entry_ts"])
+        exit_ts = _dt.fromisoformat(trade["exit_ts"])
+        lo = entry_ts - _td(seconds=tf_secs * pad)
+        hi = exit_ts + _td(seconds=tf_secs * pad)
+        bars = []
+        for b in _load(bars_path, data.get("instrument", "MNQ"), tf):
+            if b.ts < lo:
+                continue
+            if b.ts > hi:
+                break
+            bars.append({"time": int(b.ts.timestamp()), "open": float(b.open),
+                         "high": float(b.high), "low": float(b.low),
+                         "close": float(b.close)})
+        return JSONResponse({
+            "trade": trade, "bars": bars, "index": i, "total": len(trades),
+            "timeframe": tf, "tf_secs": tf_secs,
+        })
+
     @app.delete("/api/backtest/clear-unbookmarked")
     async def clear_unbookmarked() -> JSONResponse:
         """Delete all backtest JSON files that do not have bookmarked=true."""
