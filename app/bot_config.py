@@ -84,6 +84,13 @@ class StrategyParams(BaseModel):
     # (current behavior: stop just past sweep_extreme).
     swing_stop_lookback: int = 0
 
+    # Stop-width cap in ATR multiples (0 = off). When the swing-anchored stop
+    # (swing_stop_lookback) sits further than max_stop_atr × ATR from entry,
+    # fall back to the sweep-extreme anchor; if even that exceeds the cap,
+    # skip the trade. ATR-relative on purpose — fixed-point caps were the
+    # 2022-23 drought mechanism. Caps the target too (target = R × stop).
+    max_stop_atr: Decimal = Decimal("0")
+
     # Ablation T1: restrict signal side. "both" (default) | "long" | "short".
     # String (not list) so the monthly harness's --set k=v override can type it.
     allowed_sides: str = "both"

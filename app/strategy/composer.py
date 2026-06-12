@@ -131,6 +131,10 @@ class ComposerConfig:
     # at emission (ablation T1 — long-only test).
     allowed_sides: str = "both"
 
+    # Stop-width cap in ATR multiples (0 = off): swing-anchored stop too far
+    # → fall back to sweep-extreme anchor; still too far → no trade.
+    max_stop_atr: Decimal = Decimal("0")
+
     # "ifvg" | "displacement_only" | "ob_fallback" — see StrategyParams.
     # ob_fallback: iFVG signals unchanged; when displacement fires WITHOUT an
     # FVG inversion, the last opposite-direction candle (the order block)
@@ -411,6 +415,33 @@ class SweepDisplacementComposer:
             stop = stop_anchor + cfg.stop_buffer
             r = stop - entry
             target = entry - r * cfg.r_multiple
+
+        # Stop-width cap (ATR-relative): if the swing-anchored stop is wider
+        # than max_stop_atr × ATR, fall back to the tighter structural anchor
+        # (the sweep extreme); if even that exceeds the cap, no trade. Also
+        # shrinks the target proportionally (target = R-multiple × stop width).
+        if cfg.max_stop_atr > 0 and event.atr_at_event > 0:
+            cap = cfg.max_stop_atr * event.atr_at_event
+            if r > cap:
+                if side == "long":
+                    stop = awaiting.sweep.sweep_extreme - cfg.stop_buffer
+                    r = entry - stop
+                    target = entry + r * cfg.r_multiple
+                else:
+                    stop = awaiting.sweep.sweep_extreme + cfg.stop_buffer
+                    r = stop - entry
+                    target = entry - r * cfg.r_multiple
+                if r > cap or r <= 0:
+                    log.info(
+                        "Signal blocked: stop width %s exceeds %s×ATR cap (%s) "
+                        "even at the sweep-extreme anchor",
+                        r, cfg.max_stop_atr, cap,
+                    )
+                    return None
+                log.info(
+                    "Stop cap: swing anchor too wide — fell back to sweep "
+                    "extreme (r=%s, cap=%s)", r, cap,
+                )
 
         fvg_desc = (f"{zone_kind} {zone_low}–{zone_high}" if zone_low is not None
                     else "no-FVG (displacement-only)")

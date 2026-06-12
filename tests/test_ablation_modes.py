@@ -126,6 +126,34 @@ class TestDisplacementOnly:
         assert signal is None
 
 
+class TestMaxStopAtr:
+    def _wide_swing_setup(self, **cfg_kw):
+        """Short setup where swing_stop_lookback anchors the stop far away
+        (bar highs at 21100 vs sweep extreme 21010)."""
+        composer = SweepDisplacementComposer(
+            _cfg(swing_stop_lookback=5, **cfg_kw))
+        wide = bar(ny_am(0), "21090", "21100", "21085", "21095")
+        composer.on_bar_close(wide)  # seeds _bar_highs with 21100
+        return _short_setup(composer)
+
+    def test_cap_falls_back_to_sweep_extreme(self):
+        # swing stop = 21100.30 -> r ≈ 118 > 6×ATR(5)=30 -> fallback anchor:
+        # sweep extreme 21010 + 0.30 -> r ≈ 28.3 <= 30 -> trades
+        signal, _ = self._wide_swing_setup(max_stop_atr=Decimal("6"))
+        assert signal is not None
+        assert signal.stop == Decimal("21010.30")
+
+    def test_cap_blocks_when_even_sweep_anchor_too_wide(self):
+        # 4×ATR(5)=20 < 28.3 -> no trade
+        signal, _ = self._wide_swing_setup(max_stop_atr=Decimal("4"))
+        assert signal is None
+
+    def test_cap_off_keeps_swing_anchor(self):
+        signal, _ = self._wide_swing_setup()
+        assert signal is not None
+        assert signal.stop == Decimal("21100.30")
+
+
 class TestOBFallback:
     def _setup(self, composer, prev_bar, with_fvg=False):
         """Sweep high, then bearish displacement with explicit prev_bar (b1)."""
