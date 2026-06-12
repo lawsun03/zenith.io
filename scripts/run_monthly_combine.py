@@ -164,6 +164,11 @@ async def run_month(label: str, bars_path: Path, args, base_strategy) -> dict:
         "trades": s.trades,
         "win_rate": s.win_rate,
         "net": s.net_pnl,
+        "pf": s.profit_factor,
+        "max_dd": s.max_drawdown,
+        "gross_win": s.gross_win,
+        "gross_loss": s.gross_loss,
+        "by_side": s.by_side,
         **ev,
         "mll_breached": s.mll_breached,
     }
@@ -227,12 +232,15 @@ def main() -> int:
     print(f"params: contracts={args.contracts} risk_pct={args.risk_pct} "
           f"partial_r={args.partial_r} killzones={args.killzones} "
           f"overrides={args.set or 'none'} dpl={args.dpl or '1500 (default)'}")
-    print(f"{'month':8s} {'trades':>6s} {'win%':>5s} {'net':>10s} {'min_eq':>9s} "
-          f"{'best_day':>9s} {'result':18s}")
+    print(f"{'month':8s} {'trades':>6s} {'win%':>5s} {'net':>10s} {'pf':>5s} "
+          f"{'min_eq':>9s} {'best_day':>9s} {'result':18s}")
 
     passed = failed = neither = 0
     rows: list[dict] = []
     days_to_pass: list[int] = []
+    gw_total = gl_total = Decimal("0")
+    worst_dd = Decimal("0")
+    side_acc: dict[str, dict] = {}
     for label, path in months:
         r = asyncio.run(run_month(label, path, args, strategy))
         if r["passed_at"]:
@@ -244,12 +252,23 @@ def main() -> int:
         else:
             outcome = "no pass, survived"
             neither += 1
+        pf_s = f"{r['pf']:.2f}" if r["pf"] is not None else "-"
         print(f"{r['label']:8s} {r['trades']:6d} {r['win_rate']:5.1f} "
-              f"{r['net']:10.2f} {r['min_eq']:9.2f} {r['best_day']:9.2f} "
+              f"{r['net']:10.2f} {pf_s:>5s} {r['min_eq']:9.2f} {r['best_day']:9.2f} "
               f"{outcome:18s}")
+        gw_total += r["gross_win"]
+        gl_total += r["gross_loss"]
+        if r["max_dd"] > worst_dd:
+            worst_dd = r["max_dd"]
+        for sd, d in r["by_side"].items():
+            acc = side_acc.setdefault(sd, {"exits": 0, "gw": 0.0, "gl": 0.0})
+            acc["exits"] += d["exits"]
+            acc["gw"] += d["gross_win"]
+            acc["gl"] += d["gross_loss"]
         rows.append({
             "month": r["label"], "trades": r["trades"],
             "win_rate": r["win_rate"], "net": str(r["net"]),
+            "pf": r["pf"], "max_dd": str(r["max_dd"]),
             "min_eq": str(r["min_eq"]), "best_day": str(r["best_day"]),
             "result": outcome,
         })
@@ -258,12 +277,24 @@ def main() -> int:
     print(f"\n{total} months: {passed} passed ({100*passed/total:.0f}%), "
           f"{failed} MLL-failed, {neither} survived without passing")
 
+    run_pf = float(gw_total / gl_total) if gl_total > 0 else None
+    pf_s = f"{run_pf:.2f}" if run_pf is not None else "-"
+    print(f"run PF: {pf_s} | worst-month maxDD: {worst_dd:.0f}")
+    for sd in ("long", "short"):
+        acc = side_acc.get(sd)
+        if acc:
+            spf = acc["gw"] / acc["gl"] if acc["gl"] > 0 else float("inf")
+            print(f"  {sd}s: {acc['exits']} exits, net {acc['gw']-acc['gl']:+.0f}, "
+                  f"PF {spf:.2f}")
+
     if args.save_id:
-        _save_ui_result(args, rows, passed, failed, neither)
+        _save_ui_result(args, rows, passed, failed, neither, run_pf, worst_dd, side_acc)
     return 0
 
 
-def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: int) -> None:
+def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: int,
+                    run_pf: float | None = None, worst_dd: Decimal = Decimal("0"),
+                    side_acc: dict | None = None) -> None:
     """Write a backtests/<id>.json the BacktestsPage can list and open.
 
     Mirrors the field shape of app.backtest.__main__'s result dict so the
@@ -312,7 +343,7 @@ def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: i
             "win_rate": round(100 * wins_total / trades_total, 1) if trades_total else 0.0,
             "net_pnl": str(net_total),
             "gross_win": "0", "gross_loss": "0", "avg_win": "0", "avg_loss": "0",
-            "profit_factor": None,
+            "profit_factor": run_pf,
             "max_drawdown": str(STARTING - worst_eq),
             "expectancy": str(net_total / trades_total) if trades_total else "0",
             "is_profitable": net_total > 0,
@@ -337,6 +368,9 @@ def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: i
                 "killzones": args.killzones, "overrides": args.set,
                 "dpl": args.dpl or "1500",
             },
+            "run_pf": run_pf,
+            "worst_month_max_dd": str(worst_dd),
+            "by_side": side_acc or {},
             "months": rows,
         },
         "trades": [],

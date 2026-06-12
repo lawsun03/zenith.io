@@ -85,6 +85,7 @@ class BacktestStats:
     mll_breached: bool
     equity_curve: list[tuple[datetime, Decimal]]
     by_killzone: dict[str, dict]
+    by_side: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -245,6 +246,24 @@ def _compute_stats(
             "net_pnl": float(sum(pnls, Decimal("0"))),
         }
 
+    # Per-side breakdown: an exit fill's side is the opposite of the trade's.
+    # Counts are exit fills (partials count separately); PF is unaffected.
+    side_exits: dict[str, list[Decimal]] = {}
+    for f in exits:
+        trade_side = "long" if f["side"] == "short" else "short"
+        side_exits.setdefault(trade_side, []).append(Decimal(f["realized_pnl_delta"]))
+    by_side: dict[str, dict] = {}
+    for sd, side_pnls in side_exits.items():
+        gw = sum((p for p in side_pnls if p > 0), Decimal("0"))
+        gl = abs(sum((p for p in side_pnls if p < 0), Decimal("0")))
+        by_side[sd] = {
+            "exits": len(side_pnls),
+            "gross_win": float(gw),
+            "gross_loss": float(gl),
+            "net_pnl": float(gw - gl),
+            "profit_factor": float(gw / gl) if gl > 0 else None,
+        }
+
     n = len(exits)
     profit_target = risk_state.config.profit_target
 
@@ -269,6 +288,7 @@ def _compute_stats(
         mll_breached=risk_state.locked_out is not None,
         equity_curve=eq_curve,
         by_killzone=by_killzone,
+        by_side=by_side,
     )
 
 
