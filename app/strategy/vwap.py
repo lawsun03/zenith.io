@@ -31,29 +31,16 @@ log = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 
-@dataclass
-class VWAPConfig:
-    instrument: str
-    anchor_et: str = "09:30"                  # "09:30" cash open | "18:00" futures day
-    band_sigma: Decimal = Decimal("2.5")      # entry band: close beyond vwap ± k·σ
-    stop_sigma: Decimal = Decimal("1.5")      # stop distance beyond entry, in σ
-    min_bars: int = 6                         # bars after anchor before signals
+class SessionVWAP:
+    """Anchored VWAP/σ accumulator with daily session reset at anchor (ET)."""
 
-
-class VWAPDetector:
-    """Streaming: feed closed bars, get fade Signals at band stretches."""
-
-    def __init__(self, config: VWAPConfig) -> None:
-        self.config = config
-        hh, mm = config.anchor_et.split(":")
+    def __init__(self, anchor_et: str = "09:30") -> None:
+        hh, mm = anchor_et.split(":")
         self._anchor_t = time(int(hh), int(mm))
         self._session_start: datetime | None = None
         self._sum_w = Decimal("0")
         self._sum_p = Decimal("0")
         self._sum_p2 = Decimal("0")
-        self._bars = 0
-        self._armed_long = True
-        self._armed_short = True
 
     @property
     def vwap(self) -> Decimal | None:
@@ -77,20 +64,53 @@ class VWAPDetector:
             start -= timedelta(days=1)
         return start
 
-    def on_bar(self, bar: Bar) -> Optional[Signal]:
+    def on_bar(self, bar: Bar) -> bool:
+        """Accumulate; returns True when a new session started on this bar."""
         et = bar.ts.astimezone(ET)
         start = self._session_start_for(et)
-        if start != self._session_start:
+        new_session = start != self._session_start
+        if new_session:
             self._session_start = start
             self._sum_w = self._sum_p = self._sum_p2 = Decimal("0")
-            self._bars = 0
-            self._armed_long = self._armed_short = True
-
         vol = Decimal(bar.volume or 0)
         tp = (bar.high + bar.low + bar.close) / 3
         self._sum_w += vol
         self._sum_p += tp * vol
         self._sum_p2 += tp * tp * vol
+        return new_session
+
+
+@dataclass
+class VWAPConfig:
+    instrument: str
+    anchor_et: str = "09:30"                  # "09:30" cash open | "18:00" futures day
+    band_sigma: Decimal = Decimal("2.5")      # entry band: close beyond vwap ± k·σ
+    stop_sigma: Decimal = Decimal("1.5")      # stop distance beyond entry, in σ
+    min_bars: int = 6                         # bars after anchor before signals
+
+
+class VWAPDetector:
+    """Streaming: feed closed bars, get fade Signals at band stretches."""
+
+    def __init__(self, config: VWAPConfig) -> None:
+        self.config = config
+        self._sv = SessionVWAP(config.anchor_et)
+        self._bars = 0
+        self._armed_long = True
+        self._armed_short = True
+
+    @property
+    def vwap(self) -> Decimal | None:
+        return self._sv.vwap
+
+    @property
+    def sigma(self) -> Decimal | None:
+        return self._sv.sigma
+
+    def on_bar(self, bar: Bar) -> Optional[Signal]:
+        if self._sv.on_bar(bar):
+            self._bars = 0
+            self._armed_long = self._armed_short = True
         self._bars += 1
 
         vwap = self.vwap
