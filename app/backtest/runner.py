@@ -151,6 +151,13 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
     # r_multiple from the same StrategyParams the composer was built from.
     if cfg.strategy_params is not None:
         s = cfg.strategy_params
+        if s.engine == "combined":
+            from app.strategy.combined import CombinedRunner
+            primary = _build_runner(dataclasses.replace(
+                cfg, strategy_params=s.model_copy(update={"engine": "ifvg"})))
+            secondary = _build_runner(dataclasses.replace(
+                cfg, strategy_params=s.model_copy(update={"engine": "orb"})))
+            return CombinedRunner(primary=primary, secondary=secondary)
         if s.engine == "orb":
             from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
             return ORBRunner(

@@ -55,3 +55,20 @@ class TestCombinedRunner:
         assert c.instrument == "MNQ"
         assert c.last_reject == "rej"
         assert c.vp is a.vp and c.grader is a.grader and c.composer is a.composer
+
+
+class TestEngineSelection:
+    def test_build_runner_combined(self):
+        from app.backtest.runner import BacktestConfig, _build_runner
+        from app.bot_config import StrategyParams
+        from app.execution.engine import StrategyRunner
+        from app.strategy.orb import ORBRunner
+
+        s = StrategyParams(engine="combined", orb_r_multiple=Decimal("2.5"))
+        cfg = BacktestConfig(instrument="MNQ", bars=iter([]),
+                             timeframe="5min", strategy_params=s)
+        runner = _build_runner(cfg)
+        assert isinstance(runner.primary, StrategyRunner)
+        assert isinstance(runner.secondary, ORBRunner)
+        assert runner.secondary.detector.config.r_multiple == Decimal("2.5")
+        assert runner.instrument == "MNQ"

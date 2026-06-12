@@ -112,6 +112,15 @@ def _build_runner(
     signal_instrument: str | None = None,
 ) -> StrategyRunner:
     zones = killzones_from_names(enabled_killzones) if enabled_killzones else None
+    if s.engine == "combined":
+        from app.strategy.combined import CombinedRunner
+        primary = _build_runner(
+            instrument, s.model_copy(update={"engine": "ifvg"}),
+            enabled_killzones, timeframe, signal_instrument)
+        secondary = _build_runner(
+            instrument, s.model_copy(update={"engine": "orb"}),
+            enabled_killzones, timeframe, signal_instrument)
+        return CombinedRunner(primary=primary, secondary=secondary)
     if s.engine == "orb":
         from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
         return ORBRunner(
