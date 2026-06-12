@@ -62,3 +62,69 @@ class TestGate:
         assert det.chop_high == hi0 + 2 and det.chop_low == lo0
         det.on_bar(bar(i + k + 1, str(lo0 + 1), str(hi0)))  # inside bar
         assert det.chop_high == hi0 + 2 and det.chop_low == lo0  # never shrink
+
+
+def _in_chop(det, hi="21010", lo="20990"):
+    det.state = "chop"
+    det.chop_high, det.chop_low = Decimal(hi), Decimal(lo)
+    return det
+
+
+def _disp_event(i, side, close, fvg):
+    d = bar(i, str(Decimal(close) - 2), str(Decimal(close) + 2), close)
+    return d, DisplacementEvent(side=side, displacement_bar=d,
+                                body_size=Decimal("20"), atr_at_event=Decimal("5"),
+                                body_to_atr=Decimal("4"), fvg=fvg)
+
+
+def _swing(kind, price, i=0):
+    ts = T0 + timedelta(minutes=5 * i)
+    return Swing(kind=kind, price=Decimal(price), bar_ts=ts, confirmed_ts=ts)
+
+
+class TestTrigger:
+    def test_breakout_without_inversion_no_signal(self):
+        det = _in_chop(ChopBreakoutDetector(_cfg()))
+        b, ev = _disp_event(200, "bullish", "21030", fvg=None)
+        assert det.on_displacement(b, ev) is None
+
+    def test_breakout_with_inversion_at_boundary_signals_continuation(self):
+        det = _in_chop(ChopBreakoutDetector(_cfg()))
+        det._liq15._swings.append(_swing("high", "21120"))
+        fvg = FairValueGap(side="bearish", low=Decimal("21002"),
+                           high=Decimal("21008"), created_at=T0)
+        b, ev = _disp_event(200, "bullish", "21030", fvg=fvg)
+        sig = det.on_displacement(b, ev)
+        assert sig is not None
+        assert sig.side == "long"                      # continuation, not reversal
+        assert sig.entry == b.close
+        # stop = tighter of fvg far side (21002) vs chop mid (21000) -> 21002
+        assert sig.stop == Decimal("21002")
+        assert sig.target == Decimal("21120")          # nearest 15m swing high
+
+    def test_fvg_outside_boundary_no_signal(self):
+        det = _in_chop(ChopBreakoutDetector(_cfg()))
+        det._liq15._swings.append(_swing("high", "21120"))
+        fvg = FairValueGap(side="bearish", low=Decimal("21015"),
+                           high=Decimal("21020"), created_at=T0)  # above chop_high
+        b, ev = _disp_event(200, "bullish", "21030", fvg=fvg)
+        assert det.on_displacement(b, ev) is None
+
+
+class TestFloorRule:
+    def _setup(self, swing_price):
+        det = _in_chop(ChopBreakoutDetector(_cfg()))
+        det._liq15._swings.append(_swing("high", swing_price))
+        fvg = FairValueGap(side="bearish", low=Decimal("21002"),
+                           high=Decimal("21008"), created_at=T0)
+        b, ev = _disp_event(200, "bullish", "21030", fvg=fvg)
+        return det, b, ev
+
+    def test_swing_below_floor_no_trade(self):
+        # R = 28 (21030-21002); floor 1.5R = 42 -> swing must be >= 21072
+        det, b, ev = self._setup("21069")   # 1.39R
+        assert det.on_displacement(b, ev) is None
+
+    def test_swing_above_floor_trades(self):
+        det, b, ev = self._setup("21075")   # 1.61R
+        assert det.on_displacement(b, ev) is not None

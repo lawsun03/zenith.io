@@ -164,13 +164,92 @@ class ChopBreakoutDetector:
             self.chop_low = min(self.chop_low, bar.low)
         return None
 
-    # ---------------- stubs (Tasks 3-4) ----------------
+    # ---------------- 15m swings ----------------
 
     def _feed_15m(self, bar: Bar) -> None:
-        pass
+        floor_min = bar.ts.minute - bar.ts.minute % 15
+        floor = bar.ts.replace(minute=floor_min, second=0, microsecond=0)
+        if self._bucket_floor is None:
+            self._bucket_floor = floor
+        if floor != self._bucket_floor and self._bucket:
+            b15 = Bar(
+                instrument=bar.instrument, timeframe="15min",
+                ts=self._bucket_floor,
+                open=self._bucket[0].open,
+                high=max(b.high for b in self._bucket),
+                low=min(b.low for b in self._bucket),
+                close=self._bucket[-1].close,
+                volume=sum(b.volume for b in self._bucket),
+            )
+            self._liq15.on_bar(b15)
+            self._bucket = []
+            self._bucket_floor = floor
+        self._bucket.append(bar)
+
+    def _nearest_target(self, side: str, entry: Decimal) -> Decimal | None:
+        if side == "long":
+            above = [s.price for s in self._liq15.recent_high_swings if s.price > entry]
+            return min(above) if above else None
+        below = [s.price for s in self._liq15.recent_low_swings if s.price < entry]
+        return max(below) if below else None
+
+    # ---------------- trigger ----------------
 
     def on_displacement(self, bar: Bar, event: DisplacementEvent) -> Optional[Signal]:
-        return None
+        if event.fvg is None:
+            return None  # breakout without iFVG inversion is not a setup
+        assert self.chop_high is not None and self.chop_low is not None
+        d = event.displacement_bar
+        mid = (self.chop_high + self.chop_low) / 2
+        fvg = event.fvg
+
+        if event.side == "bullish":
+            if d.close <= self.chop_high:
+                return None  # didn't close outside the range
+            if fvg.low > self.chop_high:
+                return None  # FVG not at/inside the breached boundary
+            side, entry, broken = "long", bar.close, self.chop_high
+            stop = max(fvg.low, mid)        # whichever is TIGHTER
+            if stop >= entry:
+                return None
+            r = entry - stop
+        else:
+            if d.close >= self.chop_low:
+                return None
+            if fvg.high < self.chop_low:
+                return None
+            side, entry, broken = "short", bar.close, self.chop_low
+            stop = min(fvg.high, mid)
+            if stop <= entry:
+                return None
+            r = stop - entry
+
+        target = self._nearest_target(side, entry)
+        if target is None or abs(target - entry) < self.config.target_floor_r * r:
+            log.info("chop_breakout floor rule: no 15m swing >= %sR away — no trade",
+                     self.config.target_floor_r)
+            return None
+
+        self._trade = {
+            "side": side, "entry": entry, "r": r, "bars": 0, "trail_armed": False,
+            "chop_high": self.chop_high, "chop_low": self.chop_low,
+        }
+        log.info("chop_breakout: %s %s entry=%s stop=%s target=%s chop=[%s-%s]",
+                 self.config.instrument, side, entry, stop, target,
+                 self.chop_low, self.chop_high)
+        return Signal(
+            instrument=self.config.instrument, side=side, entry=entry,
+            stop=stop, target=target, created_at=bar.ts,
+            killzone="CHOP", sweep_pattern="CHOP_BREAKOUT",
+            sweep_extreme=broken,
+            fvg_low=fvg.low, fvg_high=fvg.high,
+            rationale=(f"chop_breakout: {side} displacement close {d.close} outside "
+                       f"chop [{self.chop_low}-{self.chop_high}], iFVG "
+                       f"{fvg.low}-{fvg.high} at boundary, target 15m swing {target}"),
+            sweep_bar_range=d.high - d.low,
+        )
+
+    # ---------------- stub (Task 4) ----------------
 
     def _manage_trade(self, bar: Bar) -> None:
         pass
