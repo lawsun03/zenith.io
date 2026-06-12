@@ -158,6 +158,19 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
             secondary = _build_runner(dataclasses.replace(
                 cfg, strategy_params=s.model_copy(update={"engine": "orb"})))
             return CombinedRunner(primary=primary, secondary=secondary)
+        if s.engine == "vwap":
+            from app.strategy.vwap import VWAPConfig, VWAPDetector, VWAPRunner
+            return VWAPRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                detector=VWAPDetector(VWAPConfig(
+                    instrument=cfg.instrument,
+                    anchor_et=s.vwap_anchor_et,
+                    band_sigma=s.vwap_band_sigma,
+                    stop_sigma=s.vwap_stop_sigma,
+                )),
+                strategy_cfg=s,
+            )
         if s.engine == "orb":
             from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
             return ORBRunner(

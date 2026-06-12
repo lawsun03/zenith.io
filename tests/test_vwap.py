@@ -98,3 +98,21 @@ class TestVWAPDetector:
         for i in range(4):  # identical bars -> σ == 0
             det.on_bar(bar(9, 30 + 5 * i, "21000", "21000", "21000", "21000"))
         assert det.on_bar(bar(10, 0, "21000", "21000", "21000", "21000")) is None
+
+
+class TestEngineSelection:
+    def test_build_runner_returns_vwap_runner(self):
+        from app.backtest.runner import BacktestConfig, _build_runner
+        from app.bot_config import StrategyParams
+        from app.strategy.vwap import VWAPRunner
+
+        s = StrategyParams(engine="vwap", vwap_anchor_et="18:00",
+                           vwap_band_sigma=Decimal("3.0"),
+                           vwap_stop_sigma=Decimal("1.0"))
+        cfg = BacktestConfig(instrument="MNQ", bars=iter([]),
+                             timeframe="5min", strategy_params=s)
+        runner = _build_runner(cfg)
+        assert isinstance(runner, VWAPRunner)
+        assert runner.detector.config.anchor_et == "18:00"
+        assert runner.detector.config.band_sigma == Decimal("3.0")
+        assert runner.detector.config.stop_sigma == Decimal("1.0")

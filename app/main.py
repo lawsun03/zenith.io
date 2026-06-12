@@ -121,6 +121,20 @@ def _build_runner(
             instrument, s.model_copy(update={"engine": "orb"}),
             enabled_killzones, timeframe, signal_instrument)
         return CombinedRunner(primary=primary, secondary=secondary)
+    if s.engine == "vwap":
+        from app.strategy.vwap import VWAPConfig, VWAPDetector, VWAPRunner
+        return VWAPRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=VWAPDetector(VWAPConfig(
+                instrument=instrument,
+                anchor_et=s.vwap_anchor_et,
+                band_sigma=s.vwap_band_sigma,
+                stop_sigma=s.vwap_stop_sigma,
+            )),
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
     if s.engine == "orb":
         from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
         return ORBRunner(

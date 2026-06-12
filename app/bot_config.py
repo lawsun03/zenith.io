@@ -94,13 +94,17 @@ class StrategyParams(BaseModel):
     # bar close (the first actionable price — bar2's close would be lookahead).
     confirmation: str = "ifvg"
 
-    # Second engine selection: "ifvg" (default) | "orb". ORB = opening range
-    # breakout — clock-driven, fires ~daily; attacks iFVG drought months.
+    # Engine selection: "ifvg" (default) | "orb" | "vwap" | "combined".
+    # ORB = opening range breakout — clock-driven, fires ~daily.
+    # vwap = VWAP mean-reversion fades. combined = iFVG + ORB in one process.
     engine: str = "ifvg"
     orb_open_et: str = "09:30"            # "09:30" cash open | "08:30" data open
     orb_range_minutes: int = 15
     orb_r_multiple: Decimal = Decimal("2.0")
     orb_max_trades_per_day: int = 1
+    vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
+    vwap_band_sigma: Decimal = Decimal("2.5")
+    vwap_stop_sigma: Decimal = Decimal("1.5")
 
 
 class BotConfig(BaseModel):
