@@ -55,6 +55,19 @@ spec hoped for is genuinely visible on 2025–26.
   tune." No funded_sim combined run (gated on success), no parameter
   rescue.
 
+## MGC addendum (same spec, fixed defaults, run 2026-06-12)
+
+| period | passes | trades (exits) | run PF | net | months with 0 trades |
+|---|---|---|---|---|---|
+| test 18mo | 0/18 | **5** | 0.34 | −$804 | 13 of 18 |
+| 2024 12mo | 0/12 | 13 | 0.20 | −$1,539 | 4 of 12 |
+
+REJECT, trivially — no period shows edge and volume is near-nonexistent.
+Gold's 2025–26 trend regime rarely satisfies the 12-bar compression
+hold, and the iFVG-at-boundary conjunction almost never follows it. The
+MNQ test-period drought sparkle does not appear on MGC at all. (UI:
+`chop_mgc_test`, `chop_mgc_2024`.)
+
 ## Salvage notes (not actions)
 
 1. The 2025–26 drought-month signal (+$2.7k across 6 winners / 1 loser)
