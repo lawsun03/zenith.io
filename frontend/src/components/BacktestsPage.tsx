@@ -4,6 +4,7 @@ import { Logo } from './Logo'
 import { createChart, LineSeries } from 'lightweight-charts'
 import { fmtBarTs } from '../utils/format'
 import { useConfirm } from '../hooks/useConfirm'
+import type { FundedPipeline } from '../types'
 
 interface KillzoneStat {
   trades: number
@@ -45,6 +46,7 @@ interface BacktestSummary {
   ending_balance: string
   stats: BacktestStats
   bookmarked?: boolean
+  funded_pipeline?: FundedPipeline | null
 }
 
 interface GradeCriteria {
@@ -104,6 +106,7 @@ interface BacktestDetail extends BacktestSummary {
   signals: unknown[]
   fills: unknown[]
   note?: string
+  funded_pipeline?: FundedPipeline | null
 }
 
 const PARAM_LABELS: Record<string, string> = {
@@ -1782,6 +1785,7 @@ export function BacktestsPage() {
                     <div className="mt-0.5 text-[9px] text-dim/60 font-mono tabular-nums">
                       {fmtRange(b.start_date, b.end_date)}
                     </div>
+                    <FundedPipelineOneliner pipeline={b.funded_pipeline} />
                   </div>
                 )
               })}
@@ -1843,6 +1847,8 @@ export function BacktestsPage() {
                   <Stat label="Duration" value={`${selected.duration_seconds}s`} />
                   <Stat label="Date Range" value={fmtRange(selected.start_date, selected.end_date)} />
                 </div>
+
+                <FundedPipelineDetail pipeline={selected.funded_pipeline} />
 
                 {selected.stats.equity_curve && selected.stats.equity_curve.length > 1 && (
                   <EquityCurve curve={selected.stats.equity_curve} startingBalance={selected.starting_balance} />
@@ -2588,6 +2594,84 @@ function ABEquityOverlay({ results }: { results: ABResult[] }) {
             ) : null
           ))}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Formats a dollar value from the funded_pipeline block (may be string or number).
+function fmtPipelineDollars(v: number | string | undefined | null): string {
+  if (v == null) return '—'
+  const n = typeof v === 'string' ? parseFloat(v) : v
+  if (Number.isNaN(n)) return '—'
+  return `$${Math.round(n).toLocaleString()}`
+}
+
+function fmtPipelineNum(v: number | string | undefined | null): string {
+  if (v == null) return '—'
+  const n = typeof v === 'string' ? parseFloat(v) : v
+  if (Number.isNaN(n)) return '—'
+  return String(Math.round(n))
+}
+
+// One-liner for the list card.
+function FundedPipelineOneliner({ pipeline }: { pipeline?: FundedPipeline | null }) {
+  if (!pipeline) return null
+  if (pipeline.error) {
+    return (
+      <div className="mt-0.5 text-[9px] text-dim font-mono">pipeline: error</div>
+    )
+  }
+  if (!pipeline.combine) return null
+  const passes = fmtPipelineNum(pipeline.combine.passes)
+  const attempts = fmtPipelineNum(pipeline.combine.attempts)
+  const net = pipeline.xfa?.net_payouts != null ? fmtPipelineDollars(pipeline.xfa.net_payouts) : null
+  return (
+    <div className="mt-0.5 text-[9px] text-dim/70 font-mono">
+      Combine {passes}/{attempts} passed{net ? ` · XFA ${net} net` : ''}
+    </div>
+  )
+}
+
+// Two-row detail block for the expanded view.
+function FundedPipelineDetail({ pipeline }: { pipeline?: FundedPipeline | null }) {
+  if (!pipeline) return null
+  if (pipeline.error) {
+    return (
+      <div className="text-[10px] text-dim font-mono">pipeline: error</div>
+    )
+  }
+  if (!pipeline.combine && !pipeline.xfa) return null
+  const c = pipeline.combine
+  const x = pipeline.xfa
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">Funded Pipeline</div>
+      <div className="bg-bg border border-border px-3 py-2 space-y-1 font-mono text-[11px]">
+        {c && (
+          <div>
+            <span className="text-[9px] tracking-widest text-dim uppercase mr-2">Combine</span>
+            <span className="text-ink">
+              attempts {fmtPipelineNum(c.attempts)}
+              {' · '}passes {fmtPipelineNum(c.passes)}
+              {' · '}busts {fmtPipelineNum(c.busts)}
+              {c.median_days_to_pass != null && ` · median days-to-pass ${fmtPipelineNum(c.median_days_to_pass)}`}
+            </span>
+          </div>
+        )}
+        {x && (
+          <div>
+            <span className="text-[9px] tracking-widest text-dim uppercase mr-2">XFA</span>
+            <span className="text-ink">
+              accounts {fmtPipelineNum(x.accounts)}
+              {' · '}busts {fmtPipelineNum(x.busts)}
+              {' · '}payouts {fmtPipelineDollars(x.gross_payouts)} gross / {fmtPipelineDollars(x.net_payouts)} net
+            </span>
+          </div>
+        )}
+        {pipeline.caveat && (
+          <div className="text-[9px] text-dim mt-0.5">{pipeline.caveat}</div>
+        )}
       </div>
     </div>
   )

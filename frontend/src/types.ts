@@ -46,6 +46,28 @@ export interface StrategyConfig {
   ifvg_be_after_tp1: boolean   // move stop to breakeven when structural TP1 fills
 }
 
+export interface FundedPipelineCombine {
+  attempts?: number | string
+  passes?: number | string
+  busts?: number | string
+  median_days_to_pass?: number | string | null
+}
+
+export interface FundedPipelineXfa {
+  accounts?: number | string
+  busts?: number | string
+  gross_payouts?: number | string
+  net_payouts?: number | string
+  median_days_to_first_payout?: number | string | null
+}
+
+export interface FundedPipeline {
+  combine?: FundedPipelineCombine
+  xfa?: FundedPipelineXfa
+  caveat?: string
+  error?: string
+}
+
 export interface BotConfig {
   instrument: string
   instruments?: string[]
@@ -70,6 +92,9 @@ export interface BotConfig {
   commission_per_contract?: number
   max_contracts_override?: number | null
   mode?: string
+  account_phase?: string
+  phase_shadow?: boolean
+  phase_rules?: Record<string, unknown>
   strategy: StrategyConfig
   // Per-instrument partial overrides of `strategy`, e.g. {MNQ: {stop_buffer: "3.0"}}
   strategy_overrides?: Record<string, Partial<StrategyConfig>>

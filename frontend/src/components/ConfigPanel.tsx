@@ -216,6 +216,16 @@ const FIELDS: FieldDef[] = [
     min: 1.0, max: 5.0, step: 0.1,
     hint: 'An HTF level must deliver at least this many R to be used as target. Below this, falls back to VP / fixed R.',
   },
+  {
+    key: 'account_phase', label: 'Account Phase', type: 'select', section: 'bot',
+    options: ['practice', 'combine', 'xfa', 'live'],
+    hint: 'Funded-pipeline phase. practice = no governor (default). combine/xfa arm the rule tracker + risk governor gates (MLL cushion sizing, stop-at-target, best-day cap, winning-day lock).',
+  },
+  {
+    key: 'phase_shadow', label: 'Phase Shadow Mode', type: 'select', section: 'bot',
+    options: ['true', 'false'],
+    hint: 'true = the phase tracker simulates a fresh account from its configured starting balance, ignoring the broker balance — dry-run a Combine on the practice account. false = reconcile to broker truth at startup.',
+  },
 ]
 
 const inputClass =
@@ -282,6 +292,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       naked_grace_seconds:  String(config.naked_grace_seconds ?? 15.0),
       commission_per_contract: String(config.commission_per_contract ?? 0.0),
       signal_instrument:    config.signal_instrument ?? '',
+      account_phase:        config.account_phase ?? 'practice',
+      phase_shadow:         String(config.phase_shadow ?? false),
       ...Object.fromEntries(
         Object.entries(config.strategy).map(([k, v]) => [k, String(v)])
       ),
@@ -409,6 +421,9 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       commission_per_contract: parseFloat(form.commission_per_contract) || 0.0,
       enabled_killzones:    enabledKillzones,
       signal_instrument:    form.signal_instrument?.trim().toUpperCase() || null,
+      account_phase:        form.account_phase || 'practice',
+      phase_shadow:         form.phase_shadow === 'true',
+      phase_rules:          config?.phase_rules ?? {},
       strategy,
       strategy_overrides: Object.fromEntries(
         Object.entries(overrides)
