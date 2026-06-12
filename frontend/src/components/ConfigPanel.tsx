@@ -324,8 +324,6 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const { confirm, modal } = useConfirm()
   const [form, setForm] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
-  const [restarting, setRestarting] = useState(false)
-  const [restartMsg, setRestartMsg] = useState<string | null>(null)
   const [reloading, setReloading] = useState(false)
   const [reloadMsg, setReloadMsg] = useState<string | null>(null)
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
@@ -541,26 +539,6 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       setReloadMsg(String(e))
     } finally {
       setReloading(false)
-    }
-  }
-
-  const handleRunBacktest = async () => {
-    setRestarting(true)
-    setRestartMsg(null)
-    try {
-      await handleSave()
-      const res = await fetch('/api/replay/restart', { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setRestartMsg(body.reason || 'Restart failed')
-      } else {
-        setRestartMsg('Restarting...')
-        setTimeout(() => setRestartMsg(null), 3000)
-      }
-    } catch (e) {
-      setRestartMsg(String(e))
-    } finally {
-      setRestarting(false)
     }
   }
 
@@ -1222,11 +1200,6 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
 
         <footer className="bg-panel border-t border-border p-5 flex-shrink-0 space-y-3">
           {saveError && <p className="text-[10px] text-danger">{saveError}</p>}
-          {restartMsg && (
-            <p className={`text-[10px] ${restartMsg === 'Restarting...' ? 'text-accent' : 'text-danger'}`}>
-              {restartMsg}
-            </p>
-          )}
           {reloadMsg && (
             <p className={`text-[10px] ${reloadMsg === 'Strategy reloaded!' ? 'text-accent' : 'text-danger'}`}>
               {reloadMsg}
@@ -1254,21 +1227,9 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
           >
             {reloading ? 'Reloading...' : 'Save & Reload Strategy'}
           </button>
-          <button
-            onClick={handleRunBacktest}
-            disabled={restarting || saving}
-            className="w-full border border-border text-dim/60 text-xs tracking-widest uppercase px-4 py-2 hover:bg-bg disabled:opacity-50"
-          >
-            {restarting ? 'Starting...' : 'Save & Run Backtest'}
-          </button>
           <p className="text-[10px] text-dim text-center">
             Contracts &amp; mode: instant · Strategy: Reload · Instrument/TF: restart
           </p>
-          {form.instrument && (
-            <p className="text-[10px] text-dim/60 text-center font-mono">
-              bars_{form.instrument.toUpperCase()}.csv
-            </p>
-          )}
         </footer>
       </aside>
     </>
