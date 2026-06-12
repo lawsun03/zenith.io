@@ -517,6 +517,9 @@ def build_app(
             "emergency_stop_distance": {k: float(v) for k, v in cfg.emergency_stop_distance.items()},
             "emergency_target_r": float(cfg.emergency_target_r),
             "naked_grace_seconds": cfg.naked_grace_seconds,
+            "account_phase": cfg.account_phase,
+            "phase_rules": cfg.phase_rules,
+            "phase_shadow": cfg.phase_shadow,
         })
 
     async def _hot_apply(body: BotConfig) -> None:
@@ -598,6 +601,9 @@ def build_app(
             "emergency_stop_distance": {k: float(v) for k, v in body.emergency_stop_distance.items()},
             "emergency_target_r": float(body.emergency_target_r),
             "naked_grace_seconds": body.naked_grace_seconds,
+            "account_phase": body.account_phase,
+            "phase_rules": body.phase_rules,
+            "phase_shadow": body.phase_shadow,
         })
 
     # ------------------------------------------------------------------
