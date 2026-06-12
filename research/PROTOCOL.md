@@ -135,3 +135,8 @@ plateau is real and documented. That is fine and useful. The compounding value:
 the funded-objective frontier, the excursion dataset, live-parity forensics,
 and the occasional structural win (ORB-class). Honesty over optimism: report
 numbers that embarrass the hypothesis.
+
+Note: the wrapper (`scripts/research_loop.ps1`) picks your model per session —
+sonnet by default, opus when the usage window is near reset with quota likely
+left (Lawrence's adaptive-model instruction, 2026-06-12). Not your concern
+in-session; just do the work.
