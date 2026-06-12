@@ -95,10 +95,11 @@ class StrategyParams(BaseModel):
     confirmation: str = "ifvg"
 
     # Engine selection: "ifvg" (default) | "orb" | "vwap" | "chop_breakout"
-    # | "combined" | "regime_switch". ORB = opening range breakout. vwap =
-    # VWAP mean-reversion fades. chop_breakout = compression → iFVG
-    # continuation. combined = iFVG + ORB simultaneously. regime_switch =
-    # ORB on small-range days / iFVG on large-range days (daily gate).
+    # | "combined" | "regime_switch" | "sweep_bos". ORB = opening range
+    # breakout. vwap = VWAP mean-reversion fades. chop_breakout = compression
+    # → iFVG continuation. combined = iFVG + ORB simultaneously.
+    # regime_switch = daily-range gate between ORB/iFVG. sweep_bos = sweep +
+    # break-of-structure, no displacement/FVG leg (Revelio's simple chain).
     engine: str = "ifvg"
     orb_open_et: str = "09:30"            # "09:30" cash open | "08:30" data open
     orb_range_minutes: int = 15

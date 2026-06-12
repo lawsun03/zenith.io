@@ -131,7 +131,10 @@ class ComposerConfig:
     # at emission (ablation T1 — long-only test).
     allowed_sides: str = "both"
 
-    # "ifvg" | "displacement_only" — see StrategyParams.confirmation.
+    # "ifvg" | "displacement_only" | "ob_fallback" — see StrategyParams.
+    # ob_fallback: iFVG signals unchanged; when displacement fires WITHOUT an
+    # FVG inversion, the last opposite-direction candle (the order block)
+    # supplies the entry zone instead. Strict superset of iFVG signals.
     confirmation: str = "ifvg"
 
 
@@ -228,8 +231,14 @@ class SweepDisplacementComposer:
         Returns at most one Signal per call. If multiple awaitings could
         match, we take the most recent — that's the freshest setup.
         """
-        if event.fvg is None and self.config.confirmation != "displacement_only":
-            return None  # no entry zone, no trade
+        if event.fvg is None:
+            if self.config.confirmation == "displacement_only":
+                pass  # T5 semantics: no zone needed
+            elif self.config.confirmation == "ob_fallback":
+                if self._ob_bar(event) is None:
+                    return None  # no opposite-candle order block — no zone
+            else:
+                return None  # no entry zone, no trade
 
         if self.config.allowed_sides != "both":
             want_side = "long" if event.side == "bullish" else "short"
@@ -303,6 +312,19 @@ class SweepDisplacementComposer:
 
         return None
 
+    @staticmethod
+    def _ob_bar(event: DisplacementEvent) -> Bar | None:
+        """Order-block candidate: the bar immediately before the displacement
+        bar, valid only when its body opposes the displacement direction."""
+        ob = event.prev_bar
+        if ob is None:
+            return None
+        if event.side == "bearish" and ob.close > ob.open:
+            return ob
+        if event.side == "bullish" and ob.close < ob.open:
+            return ob
+        return None
+
     def on_bar_close(self, bar: Bar) -> None:
         """
         Bookkeeping: increment bar counters, expire old sweeps, update EMA.
@@ -350,12 +372,22 @@ class SweepDisplacementComposer:
         cfg = self.config
         fvg = event.fvg
         displacement_only = cfg.confirmation == "displacement_only"
-        assert fvg is not None or displacement_only  # guarded by caller
+        # Entry zone: the inverted FVG when present, else the order block
+        # (ob_fallback mode). displacement_only takes no zone (T5 semantics).
+        zone_low = zone_high = None
+        zone_kind = ""
+        if fvg is not None:
+            zone_low, zone_high, zone_kind = fvg.low, fvg.high, "FVG"
+        elif cfg.confirmation == "ob_fallback":
+            ob = self._ob_bar(event)
+            assert ob is not None  # guarded by caller
+            zone_low, zone_high, zone_kind = ob.low, ob.high, "OB"
+        assert zone_low is not None or displacement_only  # guarded by caller
 
         lookback = cfg.swing_stop_lookback
         if event.side == "bullish":
             side: Side = "long"
-            entry = bar.close if displacement_only else fvg.high
+            entry = bar.close if displacement_only or zone_high is None else zone_high
             if lookback > 0 and self._bar_lows:
                 swing_anchor = min(self._bar_lows)
                 stop_anchor = min(swing_anchor, awaiting.sweep.sweep_extreme)
@@ -366,7 +398,7 @@ class SweepDisplacementComposer:
             target = entry + r * cfg.r_multiple
         else:
             side = "short"
-            entry = bar.close if displacement_only else fvg.low
+            entry = bar.close if displacement_only or zone_low is None else zone_low
             if lookback > 0 and self._bar_highs:
                 swing_anchor = max(self._bar_highs)
                 stop_anchor = max(swing_anchor, awaiting.sweep.sweep_extreme)
@@ -376,7 +408,7 @@ class SweepDisplacementComposer:
             r = stop - entry
             target = entry - r * cfg.r_multiple
 
-        fvg_desc = (f"FVG {fvg.low}–{fvg.high}" if fvg is not None
+        fvg_desc = (f"{zone_kind} {zone_low}–{zone_high}" if zone_low is not None
                     else "no-FVG (displacement-only)")
         rationale = (
             f"{awaiting.killzone_name}: "
@@ -397,8 +429,8 @@ class SweepDisplacementComposer:
             killzone=awaiting.killzone_name,
             sweep_pattern=awaiting.sweep.pattern,
             sweep_extreme=awaiting.sweep.sweep_extreme,
-            fvg_low=fvg.low if fvg is not None else None,
-            fvg_high=fvg.high if fvg is not None else None,
+            fvg_low=zone_low,
+            fvg_high=zone_high,
             rationale=rationale,
             sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
         )

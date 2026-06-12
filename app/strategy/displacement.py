@@ -74,6 +74,9 @@ class DisplacementEvent:
     atr_at_event: Decimal    # ATR value used for the threshold check
     body_to_atr: Decimal     # ratio — for logging/dashboarding
     fvg: FairValueGap | None # may be None if no gap formed
+    # Bar immediately before the displacement bar (b1) — the order-block
+    # candidate for the composer's ob_fallback mode. None for hand-built events.
+    prev_bar: Bar | None = None
 
 
 @dataclass
@@ -295,6 +298,7 @@ class DisplacementDetector:
             atr_at_event=atr,
             body_to_atr=ratio,
             fvg=ifvg,
+            prev_bar=b1,
         )
 
     def peek_displacement(self) -> "tuple[DisplacementSide, Bar, Bar] | None":

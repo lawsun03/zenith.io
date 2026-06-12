@@ -124,3 +124,55 @@ class TestDisplacementOnly:
     def test_default_mode_still_requires_ifvg(self):
         signal, _ = _short_setup(SweepDisplacementComposer(_cfg()), with_fvg=False)
         assert signal is None
+
+
+class TestOBFallback:
+    def _setup(self, composer, prev_bar, with_fvg=False):
+        """Sweep high, then bearish displacement with explicit prev_bar (b1)."""
+        ts0 = ny_am(0)
+        b_sweep = bar(ts0, "21000", "21010", "20995", "21005")
+        sweep = SweepEvent(
+            side="high",
+            swept_swing=Swing(kind="high", price=Decimal("21008"),
+                              bar_ts=ts0, confirmed_ts=ts0),
+            pattern="B_one_bar",
+            sweep_extreme=Decimal("21010"),
+            completed_at=ts0,
+            sweep_bar=b_sweep,
+        )
+        composer.on_sweep(b_sweep, sweep)
+        composer.on_bar_close(b_sweep)
+        ts1 = ny_am(1)
+        b_disp = bar(ts1, "21005", "21006", "20980", "20982")
+        fvg = FairValueGap(side="bearish", low=Decimal("20985"),
+                           high=Decimal("21000"), created_at=ts1) if with_fvg else None
+        event = DisplacementEvent(
+            side="bearish", displacement_bar=b_disp, body_size=Decimal("23"),
+            atr_at_event=Decimal("5"), body_to_atr=Decimal("4.6"), fvg=fvg,
+            prev_bar=prev_bar,
+        )
+        return composer.on_displacement(b_disp, event)
+
+    def test_no_fvg_uses_opposite_candle_as_ob_zone(self):
+        composer = SweepDisplacementComposer(_cfg(confirmation="ob_fallback"))
+        # b1 is BULLISH (opposite of bearish displacement) -> valid OB
+        ob = bar(ny_am(0), "21002", "21009", "21000", "21007")  # o=21002 c=21007
+        signal = self._setup(composer, prev_bar=ob)
+        assert signal is not None
+        assert signal.side == "short"
+        assert signal.entry == ob.low                # near edge of the OB zone
+        assert (signal.fvg_low, signal.fvg_high) == (ob.low, ob.high)
+
+    def test_no_fvg_and_same_color_prev_bar_no_signal(self):
+        composer = SweepDisplacementComposer(_cfg(confirmation="ob_fallback"))
+        # b1 bearish (same direction as displacement) -> not an OB -> no signal
+        same = bar(ny_am(0), "21007", "21009", "21000", "21002")  # o>c bearish
+        assert self._setup(composer, prev_bar=same) is None
+
+    def test_with_fvg_behaves_exactly_like_ifvg_mode(self):
+        composer = SweepDisplacementComposer(_cfg(confirmation="ob_fallback"))
+        ob = bar(ny_am(0), "21002", "21009", "21000", "21007")
+        signal = self._setup(composer, prev_bar=ob, with_fvg=True)
+        assert signal is not None
+        assert signal.entry == Decimal("20985")      # fvg.low, unchanged iFVG path
+        assert (signal.fvg_low, signal.fvg_high) == (Decimal("20985"), Decimal("21000"))

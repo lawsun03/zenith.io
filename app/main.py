@@ -159,6 +159,25 @@ def _build_runner(
             strategy_cfg=s,
             signal_instrument=signal_instrument or "",
         )
+    if s.engine == "sweep_bos":
+        from app.strategy.sweep_bos import (SweepBOSConfig, SweepBOSDetector,
+                                            SweepBOSRunner)
+        return SweepBOSRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=SweepBOSDetector(SweepBOSConfig(
+                instrument=instrument,
+                swing_lookback=s.swing_lookback,
+                min_penetration=s.min_penetration,
+                multi_bar_window=s.multi_bar_window,
+                stop_buffer=s.stop_buffer,
+                r_multiple=s.r_multiple,
+                bos_window_bars=s.ifvg_sweep_window_bars,
+                killzones=zones,
+            )),
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
     if s.engine == "vwap":
         from app.strategy.vwap import VWAPConfig, VWAPDetector, VWAPRunner
         return VWAPRunner(
