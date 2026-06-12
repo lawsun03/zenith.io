@@ -127,6 +127,10 @@ class ComposerConfig:
     # instead of the immediate sweep extreme. 0 = disabled.
     swing_stop_lookback: int = 0
 
+    # Side gate: "both" | "long" | "short". Non-matching signals suppressed
+    # at emission (ablation T1 — long-only test).
+    allowed_sides: str = "both"
+
 
 @dataclass
 class _Awaiting:
@@ -223,6 +227,15 @@ class SweepDisplacementComposer:
         """
         if event.fvg is None:
             return None  # no entry zone, no trade
+
+        if self.config.allowed_sides != "both":
+            want_side = "long" if event.side == "bullish" else "short"
+            if want_side != self.config.allowed_sides:
+                log.info(
+                    "Signal blocked: %s side disabled (allowed_sides=%s)",
+                    want_side, self.config.allowed_sides,
+                )
+                return None
 
         if self._cooldown_remaining > 0:
             log.info("Cooldown active (%d bars remaining) — signal suppressed", self._cooldown_remaining)

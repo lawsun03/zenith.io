@@ -84,6 +84,10 @@ class StrategyParams(BaseModel):
     # (current behavior: stop just past sweep_extreme).
     swing_stop_lookback: int = 0
 
+    # Ablation T1: restrict signal side. "both" (default) | "long" | "short".
+    # String (not list) so the monthly harness's --set k=v override can type it.
+    allowed_sides: str = "both"
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
