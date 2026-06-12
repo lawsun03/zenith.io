@@ -287,3 +287,33 @@ class ChopBreakoutDetector:
                 if crossed:
                     self.exit_request = "sma21_trail"
                     self._trade = None
+
+
+class _NoopComposer:
+    """Stop-fill hook the engine calls on every runner; no cooldown here."""
+
+    def on_stop_loss(self) -> None:
+        pass
+
+
+@dataclass
+class ChopBreakoutRunner:
+    """Duck-type of the StrategyRunner surface ExecutionEngine touches."""
+
+    instrument: str
+    timeframe: str
+    detector: ChopBreakoutDetector
+    strategy_cfg: StrategyParams
+    vp: None = None                       # engine skips VP when None
+    signal_instrument: str = ""
+    last_reject: None = field(default=None, init=False)
+    exit_request: str | None = field(default=None, init=False)
+    composer: _NoopComposer = field(default_factory=_NoopComposer)
+    grader: SetupGrader = field(default_factory=SetupGrader)  # empty swings → no TP1
+
+    def on_bar(self, bar: Bar) -> Optional[Signal]:
+        sig = self.detector.on_bar(bar)
+        if self.detector.exit_request is not None:
+            self.exit_request = self.detector.exit_request
+            self.detector.exit_request = None
+        return sig

@@ -158,6 +158,34 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
             secondary = _build_runner(dataclasses.replace(
                 cfg, strategy_params=s.model_copy(update={"engine": "orb"})))
             return CombinedRunner(primary=primary, secondary=secondary)
+        if s.engine == "chop_breakout":
+            from app.strategy.chop_breakout import (ChopBreakoutConfig,
+                                                    ChopBreakoutDetector,
+                                                    ChopBreakoutRunner)
+            return ChopBreakoutRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                detector=ChopBreakoutDetector(ChopBreakoutConfig(
+                    instrument=cfg.instrument,
+                    regime_metric=s.cb_regime_metric,
+                    compression_lookback=s.cb_compression_lookback,
+                    compression_percentile=s.cb_compression_percentile,
+                    history_window=s.cb_history_window,
+                    min_chop_bars=s.cb_min_chop_bars,
+                    vwap_cross_min=s.cb_vwap_cross_min,
+                    entry_mode=s.cb_entry_mode,
+                    target_floor_r=s.cb_target_floor_r,
+                    failed_breakout_bars=s.cb_failed_breakout_bars,
+                    vwap_invalidation=s.cb_vwap_invalidation,
+                    sma21_trail=s.cb_sma21_trail,
+                    atr_period=s.atr_period,
+                    body_atr_multiple=s.body_atr_multiple,
+                    min_body_to_range_ratio=s.min_body_to_range_ratio,
+                    min_absolute_body=s.min_absolute_body,
+                    swing_lookback=s.swing_lookback,
+                )),
+                strategy_cfg=s,
+            )
         if s.engine == "vwap":
             from app.strategy.vwap import VWAPConfig, VWAPDetector, VWAPRunner
             return VWAPRunner(

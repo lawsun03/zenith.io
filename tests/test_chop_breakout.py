@@ -160,6 +160,69 @@ class TestExitRules:
         assert det.exit_request == "vwap_invalidation"
 
 
+class TestEngineExitChannel:
+    def test_exit_request_flattens_open_position(self):
+        import asyncio
+        from dataclasses import dataclass as dc, field as f
+        from app.broker.paper import PaperBroker
+        from app.execution.engine import ExecutionEngine
+        from app.risk.config import fifty_k_combine
+        from app.risk.state import RiskState
+
+        @dc
+        class _Stub:
+            instrument: str = "MNQ"
+            timeframe: str = "5min"
+            strategy_cfg: object = None
+            vp: object = None
+            composer: object = f(default_factory=lambda: type(
+                "C", (), {"on_stop_loss": lambda self: None})())
+            grader: object = None
+            signal_instrument: str = ""
+            last_reject: object = None
+            exit_request: object = None
+
+            def on_bar(self, bar):
+                return None
+
+        async def run():
+            br = PaperBroker(starting_balance=Decimal("50000"),
+                             slippage_ticks_market=0)
+            rs = RiskState(config=fifty_k_combine())
+            stub = _Stub()
+            eng = ExecutionEngine(broker=br, risk_state=rs, runners=[stub],
+                                  replay_mode=True, contracts=1)
+            await br.connect()
+            await eng.start()
+            await br.inject_bar(bar(0, "20990", "21010", c="21000"))
+            res = await br.place_bracket("MNQ", "long", 1,
+                                         entry=Decimal("21000"),
+                                         stop=Decimal("20980"),
+                                         target=Decimal("21100"))
+            assert res.success and len(br._open) == 1
+            stub.exit_request = "failed_breakout"
+            await br.inject_bar(bar(1, "20995", "21005", c="21000"))
+            assert len(br._open) == 0  # flattened by the exit channel
+            await eng.stop()
+
+        asyncio.run(run())
+
+
+class TestEngineSelection:
+    def test_build_runner_returns_chop_runner(self):
+        from app.backtest.runner import BacktestConfig, _build_runner
+        from app.bot_config import StrategyParams
+        from app.strategy.chop_breakout import ChopBreakoutRunner
+
+        s = StrategyParams(engine="chop_breakout", min_absolute_body=Decimal("5.0"))
+        cfg = BacktestConfig(instrument="MNQ", bars=iter([]),
+                             timeframe="5min", strategy_params=s)
+        runner = _build_runner(cfg)
+        assert isinstance(runner, ChopBreakoutRunner)
+        assert runner.detector.config.min_chop_bars == 12
+        assert runner.detector.disp.config.min_absolute_body == Decimal("5.0")
+
+
 class TestDeterminism:
     def test_same_bars_identical_signals(self):
         def run():

@@ -694,6 +694,22 @@ class ExecutionEngine:
             log.exception("Strategy raised on bar %s", bar.ts)
             return
 
+        # Strategy-initiated exit channel (e.g. chop_breakout failed-breakout
+        # / VWAP invalidation). Consumed every bar; only acts when a position
+        # is open — a request while flat is a no-op by design.
+        exit_req = getattr(runner, "exit_request", None)
+        if exit_req is not None:
+            runner.exit_request = None
+            if self.risk_state.open_contracts != 0:
+                log.info("Strategy exit request '%s' — flattening %s",
+                         exit_req, runner.instrument)
+                try:
+                    await self.broker.cancel_all(runner.instrument)
+                    await self.broker.flatten(runner.instrument)
+                except Exception:
+                    log.exception("Strategy exit flatten failed for %s",
+                                  runner.instrument)
+
         if signal is None:
             # Runner rejected internally (grader-B / premature-liq / invalidate).
             # Skip stale/warmup bars so the ledger holds live misses only.

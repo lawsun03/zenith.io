@@ -94,9 +94,10 @@ class StrategyParams(BaseModel):
     # bar close (the first actionable price — bar2's close would be lookahead).
     confirmation: str = "ifvg"
 
-    # Engine selection: "ifvg" (default) | "orb" | "vwap" | "combined".
-    # ORB = opening range breakout — clock-driven, fires ~daily.
-    # vwap = VWAP mean-reversion fades. combined = iFVG + ORB in one process.
+    # Engine selection: "ifvg" (default) | "orb" | "vwap" | "chop_breakout"
+    # | "combined". ORB = opening range breakout — clock-driven, ~daily.
+    # vwap = VWAP mean-reversion fades. chop_breakout = compression → iFVG
+    # continuation. combined = iFVG + ORB in one process.
     engine: str = "ifvg"
     orb_open_et: str = "09:30"            # "09:30" cash open | "08:30" data open
     orb_range_minutes: int = 15
@@ -105,6 +106,19 @@ class StrategyParams(BaseModel):
     vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")
+
+    # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
+    cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"
+    cb_compression_lookback: int = 20
+    cb_compression_percentile: int = 30
+    cb_history_window: int = 100
+    cb_min_chop_bars: int = 12
+    cb_vwap_cross_min: int = 6
+    cb_entry_mode: str = "close"               # v1: "close" only (fail loud otherwise)
+    cb_target_floor_r: Decimal = Decimal("1.5")
+    cb_failed_breakout_bars: int = 6
+    cb_vwap_invalidation: bool = True
+    cb_sma21_trail: bool = False
 
 
 class BotConfig(BaseModel):
