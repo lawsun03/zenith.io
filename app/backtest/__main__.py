@@ -86,6 +86,21 @@ async def _run_backtest(
         "equity_curve": [[ts.isoformat(), str(eq)] for ts, eq in s.equity_curve],
     }
 
+    # Funded-pipeline replay (sequential Combines + XFA chain through the
+    # same PhaseTracker the live governor uses). Never let it kill a result.
+    try:
+        from app.backtest.funded_sim import (
+            daily_pnls_from_equity, simulate_combines, simulate_xfa_chain,
+        )
+        daily = daily_pnls_from_equity(s.equity_curve)
+        funded_pipeline = _to_jsonable({
+            "combine": simulate_combines(daily),
+            "xfa": simulate_xfa_chain(daily),
+            "caveat": "daily granularity — intraday MLL touches understated",
+        })
+    except Exception as e:
+        funded_pipeline = {"error": str(e)}
+
     return {
         "config": _to_jsonable(config.model_dump()),
         "instrument": instrument,
@@ -98,6 +113,7 @@ async def _run_backtest(
         "ending_balance": str(starting_balance + s.net_pnl),
         "duration_seconds": round(duration, 2),
         "stats": stats,
+        "funded_pipeline": funded_pipeline,
         "trades": result.trades,
         "signals": [],
         "fills": [],

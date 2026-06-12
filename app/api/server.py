@@ -1666,6 +1666,7 @@ Notes:
                     "end_date": data.get("end_date"),
                     "bars_processed": data.get("bars_processed"),
                     "stats": data.get("stats", {}),
+                    "funded_pipeline": data.get("funded_pipeline"),
                     "ending_balance": data.get("ending_balance"),
                     "bookmarked": bool(data.get("bookmarked", False)),
                 })
