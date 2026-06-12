@@ -1,4 +1,4 @@
-"""PhaseTracker — Topstep Combine/XFA rule state machine.
+﻿"""PhaseTracker â€” Topstep Combine/XFA rule state machine.
 
 Why each test exists:
 - MLL ratchet semantics decide whether the account lives or dies; EOD vs
@@ -91,7 +91,7 @@ class TestXFA:
         t.on_pnl(D("2000"), day(0)); t.roll_day(day(1))
         assert t.mll == D("0")
         t.on_pnl(D("3000"), day(1)); t.roll_day(day(2))
-        assert t.mll == D("0")              # locked — never trails above 0
+        assert t.mll == D("0")              # locked â€” never trails above 0
 
     def test_payout_resets_winning_days_and_halves_balance(self):
         t = xfa_tracker()
@@ -194,7 +194,7 @@ def test_tracker_from_config_rejects_unknown_keys():
 
 
 def test_engine_feeds_fills_to_phase_tracker():
-    """Every realized fill delta must reach the tracker — the governor's
+    """Every realized fill delta must reach the tracker â€” the governor's
     cushion math is only as good as the balance it sees."""
     import asyncio
     from app.broker.paper import PaperBroker
@@ -303,3 +303,30 @@ class TestReconcileAndSeed:
                         phase_rules={"state": {"balnce": "51500"}})
         with pytest.raises(ValueError, match="balnce"):
             tracker_from_config(cfg)
+
+
+def test_phase_aware_sizing_uses_tracker_not_broker_equity():
+    """In a shadow Combine the broker (practice) equity is unrelated capital;
+    sizing must budget from the tracked $50k or a 1% trade risks 3x too much."""
+    import asyncio
+    from app.broker.paper import PaperBroker
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+    from app.strategy.composer import Signal
+
+    tracker = PhaseTracker(phase="combine", combine=CombineRules(), xfa=XfaRules())
+    rs = RiskState(config=fifty_k_combine())
+    rs.realized_balance = D("153000")        # practice account truth
+    rs._current_equity = D("153000")
+    engine = ExecutionEngine(broker=PaperBroker(), risk_state=rs,
+                             runners=[], replay_mode=True, phase=tracker,
+                             risk_per_trade_pct=D("1.0"))
+    sig = Signal(instrument="MNQ", side="long", entry=D("21000"),
+                 stop=D("20950"), target=D("21175"), created_at=T0,
+                 killzone="NY AM", sweep_pattern="single", sweep_extreme=D("20950"),
+                 fvg_low=D("20990"), fvg_high=D("21000"), rationale="test")
+    # 1% of tracker 50k = $500 budget; 50pt x $2 = $100/contract -> 5
+    # (1% of broker 153k would give 15 - the bug this test pins)
+    assert engine._entry_size(sig) == 5
+

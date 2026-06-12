@@ -893,12 +893,24 @@ class ExecutionEngine:
         if not self.risk_per_trade_pct or self.risk_per_trade_pct <= 0:
             return self.contracts
 
-        equity = self.risk_state.current_equity
-        if equity <= 0:  # before the first mark-to-market tick of the session
-            equity = self.risk_state.realized_balance
-        offset = self.risk_state.config.risk_sizing_equity_offset
-        if offset > 0:
-            equity = max(equity - offset, Decimal("1"))
+        if self.phase is not None and self.phase.phase in ("combine", "xfa"):
+            # Phase-aware sizing: the tracked account (real or shadow) is the
+            # capital at risk — broker equity may be an unrelated practice
+            # balance (e.g. $153k practice vs a simulated $50k Combine).
+            # XFA balances start at $0, so its risked capital is the MLL
+            # cushion, not the balance.
+            if self.phase.phase == "combine":
+                equity = self.phase.balance
+            else:
+                equity = self.phase.cushion or Decimal("1")
+            offset = Decimal("0")
+        else:
+            equity = self.risk_state.current_equity
+            if equity <= 0:  # before the first mark-to-market tick of the session
+                equity = self.risk_state.realized_balance
+            offset = self.risk_state.config.risk_sizing_equity_offset
+            if offset > 0:
+                equity = max(equity - offset, Decimal("1"))
         stop_distance = abs(signal.entry - signal.stop)
         if stop_distance <= 0:
             return self.contracts  # degenerate signal; fall back rather than divide by zero
