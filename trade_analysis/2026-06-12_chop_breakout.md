@@ -19,10 +19,21 @@ the ordering.
 
 ## Solo results (frontier sizing 1.25%, full live ruleset)
 
+POST-FIX (second one-bar-lag bug — see below — fixed; numbers re-run):
+
 | period | passes | trades (exits) | run PF | maxDD | long PF | short PF | net |
 |---|---|---|---|---|---|---|---|
-| test 17mo | 0/17 | 22 | **1.92** | 1090 | 3.31 | 0.21 | +$1,948 |
-| 2024 12mo | 0/12 | 13 | **0.09** | 661 | 0.00 | 0.25 | −$2,473 |
+| test 17mo | 0/17 | 25 | **1.21** | 1090 | 3.31 | 0.09 | +$695 |
+| 2024 12mo | 0/12 | 16 | **0.09** | 661 | 0.00 | 0.26 | −$2,596 |
+
+Second suppression bug (caught by Lawrence questioning the trade counts):
+a strong breakout bar blows up the rolling 20-bar range and breaks the
+compression gate on b2 itself, so its displacement event (arriving at b3)
+found state=idle and was discarded — the STRONGEST breakouts were the
+suppressed ones. Fixed by judging events against a start-of-b2 snapshot
+(state + bounds); regression test pins it. The recovered trades were net
+LOSERS (test PF 1.92 → 1.21), strengthening the rejection. Post-fix
+frequency (~1.3/mo) is the spec's conjunction by design, not a defect.
 
 ## Complementarity matrix (test period, iFVG drought months)
 
@@ -57,10 +68,10 @@ spec hoped for is genuinely visible on 2025–26.
 
 ## MGC addendum (same spec, fixed defaults, run 2026-06-12)
 
-| period | passes | trades (exits) | run PF | net | months with 0 trades |
+| period (post-fix) | passes | trades (exits) | run PF | net | MLL fails |
 |---|---|---|---|---|---|
-| test 18mo | 0/18 | **5** | 0.34 | −$804 | 13 of 18 |
-| 2024 12mo | 0/12 | 13 | 0.20 | −$1,539 | 4 of 12 |
+| test 18mo | 0/18 | 19 | 0.26 | −$2,957 | 0 |
+| 2024 12mo | 0/12 | 15 | 0.31 | −$1,351 | 0 |
 
 REJECT, trivially — no period shows edge and volume is near-nonexistent.
 Gold's 2025–26 trend regime rarely satisfies the 12-bar compression
