@@ -249,7 +249,41 @@ class ChopBreakoutDetector:
             sweep_bar_range=d.high - d.low,
         )
 
-    # ---------------- stub (Task 4) ----------------
+    # ---------------- post-entry hard exits ----------------
 
     def _manage_trade(self, bar: Bar) -> None:
-        pass
+        t = self._trade
+        if t is None:
+            return
+        t["bars"] += 1
+        close = bar.close
+
+        # 1. Failed-breakout rule (mandatory, K bars, no exceptions)
+        if (t["bars"] <= self.config.failed_breakout_bars
+                and t["chop_low"] <= close <= t["chop_high"]):
+            self.exit_request = "failed_breakout"
+            self._trade = None
+            return
+
+        # 2. VWAP invalidation — a close on the wrong side of session VWAP
+        if self.config.vwap_invalidation:
+            v = self._vwap.vwap
+            if v is not None:
+                wrong = close < v if t["side"] == "long" else close > v
+                if wrong:
+                    self.exit_request = "vwap_invalidation"
+                    self._trade = None
+                    return
+
+        # 3. Optional SMA21 trail (default OFF): arms at +1.5R, exits on a
+        #    close beyond the 21SMA.
+        if self.config.sma21_trail and len(self._sma_closes) == 21:
+            fav = close - t["entry"] if t["side"] == "long" else t["entry"] - close
+            if fav >= Decimal("1.5") * t["r"]:
+                t["trail_armed"] = True
+            if t["trail_armed"]:
+                sma = sum(self._sma_closes) / len(self._sma_closes)
+                crossed = close < sma if t["side"] == "long" else close > sma
+                if crossed:
+                    self.exit_request = "sma21_trail"
+                    self._trade = None
