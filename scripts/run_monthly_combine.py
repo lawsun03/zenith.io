@@ -160,6 +160,10 @@ def main() -> int:
     ap.add_argument("--dpl", default=None,
                     help="Override daily profit limit: dollar amount or 'none' "
                          "(default: fifty_k_combine's $1500)")
+    ap.add_argument("--save-id", default=None,
+                    help="Write a UI-visible result JSON to backtests/<id>.json")
+    ap.add_argument("--save-label", default=None,
+                    help="Display label for the saved result (default: param summary)")
     args = ap.parse_args()
 
     if args.dpl is not None:
@@ -197,6 +201,8 @@ def main() -> int:
           f"{'best_day':>9s} {'result':18s}")
 
     passed = failed = neither = 0
+    rows: list[dict] = []
+    days_to_pass: list[int] = []
     for label, path in months:
         r = asyncio.run(run_month(label, path, args, strategy))
         if r["passed_at"]:
@@ -211,11 +217,106 @@ def main() -> int:
         print(f"{r['label']:8s} {r['trades']:6d} {r['win_rate']:5.1f} "
               f"{r['net']:10.2f} {r['min_eq']:9.2f} {r['best_day']:9.2f} "
               f"{outcome:18s}")
+        rows.append({
+            "month": r["label"], "trades": r["trades"],
+            "win_rate": r["win_rate"], "net": str(r["net"]),
+            "min_eq": str(r["min_eq"]), "best_day": str(r["best_day"]),
+            "result": outcome,
+        })
 
     total = passed + failed + neither
     print(f"\n{total} months: {passed} passed ({100*passed/total:.0f}%), "
           f"{failed} MLL-failed, {neither} survived without passing")
+
+    if args.save_id:
+        _save_ui_result(args, rows, passed, failed, neither)
     return 0
+
+
+def _save_ui_result(args, rows: list[dict], passed: int, failed: int, neither: int) -> None:
+    """Write a backtests/<id>.json the BacktestsPage can list and open.
+
+    Mirrors the field shape of app.backtest.__main__'s result dict so the
+    list/detail UI renders without special-casing; the monthly table rides
+    in `monthly_combine` and the pass summary reuses the funded_pipeline
+    one-liner (combine block only).
+    """
+    import json
+    import re
+    from datetime import datetime, timezone
+
+    run_id = re.sub(r"[^A-Za-z0-9_\-]", "_", args.save_id)[:64]
+    total = max(passed + failed + neither, 1)
+    net_total = sum(Decimal(r["net"]) for r in rows)
+    trades_total = sum(r["trades"] for r in rows)
+    wins_total = sum(round(r["trades"] * r["win_rate"] / 100) for r in rows)
+    worst_eq = min((Decimal(r["min_eq"]) for r in rows), default=STARTING)
+    # Month-end cumulative equity so the detail page draws a curve.
+    eq, curve = STARTING, []
+    for r in rows:
+        eq += Decimal(r["net"])
+        curve.append([f"{r['month']}-28T00:00:00+00:00", str(eq)])
+    label = args.save_label or (
+        f"Monthly Combine: risk {args.risk_pct}% "
+        f"{'+ ' + ' '.join(args.set) if args.set else ''}".strip()
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    data = {
+        "id": run_id,
+        "label": label,
+        "instrument": args.instrument.upper(),
+        "timeframe": args.timeframe,
+        "start_date": rows[0]["month"] if rows else None,
+        "end_date": rows[-1]["month"] if rows else None,
+        "bars_path": args.bars,
+        "bars_processed": 0,
+        "starting_balance": str(STARTING),
+        "ending_balance": str(STARTING + net_total),
+        "duration_seconds": 0,
+        "started_at": now,
+        "completed_at": now,
+        "stats": {
+            "trades": trades_total,
+            "wins": wins_total,
+            "losses": trades_total - wins_total,
+            "win_rate": round(100 * wins_total / trades_total, 1) if trades_total else 0.0,
+            "net_pnl": str(net_total),
+            "gross_win": "0", "gross_loss": "0", "avg_win": "0", "avg_loss": "0",
+            "profit_factor": None,
+            "max_drawdown": str(STARTING - worst_eq),
+            "expectancy": str(net_total / trades_total) if trades_total else "0",
+            "is_profitable": net_total > 0,
+            "passed_combine": passed > 0,
+            "mll_breached": failed > 0,
+            "by_killzone": {},
+            "equity_curve": curve,
+        },
+        "funded_pipeline": {
+            "combine": {
+                "attempts": total, "passes": passed, "busts": failed,
+                "median_days_to_pass": None,
+            },
+            "caveat": (
+                f"monthly increments: each month is a fresh $50k Combine; "
+                f"{neither} months survived without passing"
+            ),
+        },
+        "monthly_combine": {
+            "params": {
+                "risk_pct": args.risk_pct, "partial_r": args.partial_r,
+                "killzones": args.killzones, "overrides": args.set,
+                "dpl": args.dpl or "1500",
+            },
+            "months": rows,
+        },
+        "trades": [],
+        "signals": [],
+        "fills": [],
+    }
+    out = Path("backtests") / f"{run_id}.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps(data, indent=2))
+    print(f"saved UI result -> {out}")
 
 
 if __name__ == "__main__":

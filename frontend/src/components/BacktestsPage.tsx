@@ -106,6 +106,13 @@ interface BacktestDetail extends BacktestSummary {
   fills: unknown[]
   note?: string
   funded_pipeline?: FundedPipeline | null
+  monthly_combine?: {
+    params?: Record<string, unknown>
+    months?: Array<{
+      month: string; trades: number; win_rate: number
+      net: string; min_eq: string; best_day: string; result: string
+    }>
+  } | null
 }
 
 const PARAM_LABELS: Record<string, string> = {
@@ -1602,6 +1609,8 @@ export function BacktestsPage() {
 
                 <FundedPipelineDetail pipeline={selected.funded_pipeline} />
 
+                <MonthlyCombineTable monthly={selected.monthly_combine} />
+
                 {selected.stats.equity_curve && selected.stats.equity_curve.length > 1 && (
                   <EquityCurve curve={selected.stats.equity_curve} startingBalance={selected.starting_balance} />
                 )}
@@ -1955,6 +1964,46 @@ function FundedPipelineOneliner({ pipeline }: { pipeline?: FundedPipeline | null
   return (
     <div className="mt-0.5 text-[9px] text-dim/70 font-mono">
       Combine {passes}/{attempts} passed{net ? ` · XFA ${net} net` : ''}
+    </div>
+  )
+}
+
+// Per-month table for monthly-Combine batch results (one fresh $50k per month).
+function MonthlyCombineTable({ monthly }: { monthly?: BacktestDetail['monthly_combine'] }) {
+  if (!monthly?.months?.length) return null
+  return (
+    <div>
+      <div className="text-[10px] tracking-wider text-dim uppercase mb-1">
+        Monthly Combine — fresh $50k each month
+      </div>
+      <table className="w-full text-[11px] font-mono">
+        <thead>
+          <tr className="text-dim text-left">
+            <th className="font-normal py-0.5">month</th>
+            <th className="font-normal text-right">trades</th>
+            <th className="font-normal text-right">win%</th>
+            <th className="font-normal text-right">net</th>
+            <th className="font-normal text-right">min eq</th>
+            <th className="font-normal pl-3">result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {monthly.months.map(m => (
+            <tr key={m.month} className="text-ink">
+              <td className="py-0.5">{m.month}</td>
+              <td className="text-right">{m.trades}</td>
+              <td className="text-right">{m.win_rate.toFixed(1)}</td>
+              <td className={`text-right ${Number(m.net) >= 0 ? 'text-accent' : 'text-danger'}`}>
+                {Number(m.net).toFixed(0)}
+              </td>
+              <td className="text-right">{Number(m.min_eq).toFixed(0)}</td>
+              <td className={`pl-3 ${m.result.startsWith('PASS') ? 'text-accent' : m.result.startsWith('FAIL') ? 'text-danger' : 'text-dim'}`}>
+                {m.result}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
