@@ -84,6 +84,11 @@ class StrategyParams(BaseModel):
     # (current behavior: stop just past sweep_extreme).
     swing_stop_lookback: int = 0
 
+    # Displacement body threshold uses the ATR from N bars ago (0 = off).
+    # Anti-pro-cyclical: a flush inflates ATR exactly when the reversal
+    # displacement prints; the lagged reference keeps the pre-flush bar.
+    atr_ref_lag_bars: int = 0
+
     # Stop-width cap in ATR multiples (0 = off). When the swing-anchored stop
     # (swing_stop_lookback) sits further than max_stop_atr × ATR from entry,
     # fall back to the sweep-extreme anchor; if even that exceeds the cap,

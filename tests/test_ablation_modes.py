@@ -126,6 +126,44 @@ class TestDisplacementOnly:
         assert signal is None
 
 
+class TestAtrRefLag:
+    def _feed(self, det, n, width, i0=0):
+        from datetime import timedelta
+        for i in range(n):
+            ts = ny_am(0) + timedelta(minutes=5 * (i0 + i))
+            base = Decimal("21000")
+            det.on_bar(Bar(instrument="MNQ", timeframe="5min", ts=ts,
+                           open=base, high=base + width, low=base - width,
+                           close=base, volume=100))
+        return i0 + n
+
+    def test_lagged_atr_admits_post_flush_displacement(self):
+        from datetime import timedelta
+        from app.strategy.displacement import DisplacementConfig, DisplacementDetector
+
+        def mk(lag):
+            return DisplacementDetector(DisplacementConfig(
+                atr_period=5, body_atr_multiple=Decimal("1.0"),
+                min_absolute_body=Decimal("1.0"), atr_ref_lag_bars=lag))
+
+        for lag, expect_event in ((0, False), (9, True)):
+            det = mk(lag)
+            i = self._feed(det, 8, Decimal("4"))          # calm: ATR ~ 8
+            i = self._feed(det, 5, Decimal("30"), i)      # flush: ATR balloons
+            # displacement candidate: body 12 (> calm ATR 8, < flushed ATR)
+            ts = ny_am(0) + timedelta(minutes=5 * i)
+            b2 = Bar(instrument="MNQ", timeframe="5min", ts=ts,
+                     open=Decimal("20990"), high=Decimal("21003"),
+                     low=Decimal("20989"), close=Decimal("21002"), volume=100)
+            det.on_bar(b2)
+            ts3 = ny_am(0) + timedelta(minutes=5 * (i + 1))
+            b3 = Bar(instrument="MNQ", timeframe="5min", ts=ts3,
+                     open=Decimal("21002"), high=Decimal("21006"),
+                     low=Decimal("21000"), close=Decimal("21005"), volume=100)
+            ev = det.on_bar(b3)
+            assert (ev is not None) == expect_event, f"lag={lag}"
+
+
 class TestMaxStopAtr:
     def _wide_swing_setup(self, **cfg_kw):
         """Short setup where swing_stop_lookback anchors the stop far away

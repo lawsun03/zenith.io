@@ -100,6 +100,12 @@ class DisplacementConfig:
     # just because ATR is also tiny. /MGC: $1.00 = 10 ticks.
     min_absolute_body: Decimal = Decimal("1.0")
 
+    # Use the ATR from N bars ago as the body threshold reference (0 = off,
+    # current behavior). Rationale: a volatility flush inflates ATR exactly
+    # when the reversal displacement prints, raising the bar pro-cyclically —
+    # V-bottom impulses get filtered by the very move they reverse.
+    atr_ref_lag_bars: int = 0
+
 
 class DisplacementDetector:
     """
@@ -116,6 +122,9 @@ class DisplacementDetector:
         self._atr: Decimal | None = None
         self._prev_close: Decimal | None = None
         self._active_fvgs: deque[FairValueGap] = deque(maxlen=30)
+        # ATR history for the lagged threshold reference (atr_ref_lag_bars).
+        self._atr_hist: Deque[Decimal] = deque(
+            maxlen=max(1, self.config.atr_ref_lag_bars + 1))
 
     @property
     def atr(self) -> Decimal | None:
@@ -196,6 +205,15 @@ class DisplacementDetector:
             # Wilder smoothing: ATR = (prev_ATR * (n-1) + TR) / n
             n = Decimal(self.config.atr_period)
             self._atr = (self._atr * (n - 1) + tr) / n
+        if self._atr is not None:
+            self._atr_hist.append(self._atr)
+
+    def _threshold_atr(self) -> Decimal | None:
+        """ATR used for the body threshold: the lagged value when
+        atr_ref_lag_bars is set (pre-flush reference), else current."""
+        if self.config.atr_ref_lag_bars > 0 and self._atr_hist:
+            return self._atr_hist[0]
+        return self._atr
 
     # ------------------------------------------------------------------
     # Displacement evaluation
@@ -263,7 +281,7 @@ class DisplacementDetector:
         If no prior FVG was inverted, fvg=None.
         """
         cfg = self.config
-        atr = self._atr
+        atr = self._threshold_atr()
         assert atr is not None  # guarded by caller
 
         body = abs(b2.close - b2.open)

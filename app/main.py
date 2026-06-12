@@ -222,6 +222,7 @@ def _build_runner(
             body_atr_multiple=s.body_atr_multiple,
             min_body_to_range_ratio=s.min_body_to_range_ratio,
             min_absolute_body=s.min_absolute_body,
+            atr_ref_lag_bars=s.atr_ref_lag_bars,
         )),
         composer=SweepDisplacementComposer(ComposerConfig(
             instrument=instrument,
