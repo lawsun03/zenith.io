@@ -228,6 +228,57 @@ const FIELDS: FieldDef[] = [
   },
 ]
 
+// Field-to-group assignment
+const FIELD_GROUP: Record<string, string> = {
+  instrument: 'core',
+  timeframes: 'core',
+  account_phase: 'core',
+  phase_shadow: 'core',
+  entry_mode: 'core',        // inline control — handled below
+  forming_bar_entries: 'core', // inline control
+  contracts: 'risk',
+  risk_per_trade_pct: 'risk',
+  partial_profit_r: 'risk',
+  max_entry_slippage_frac: 'risk',
+  flatten_enabled: 'risk',
+  flatten_time_ct: 'risk',
+  entry_cutoff_time_ct: 'risk',
+  swing_lookback: 'signal',
+  min_penetration: 'signal',
+  multi_bar_window: 'signal',
+  atr_period: 'signal',
+  body_atr_multiple: 'signal',
+  min_body_to_range_ratio: 'signal',
+  min_absolute_body: 'signal',
+  displacement_window_bars: 'signal',
+  stop_buffer: 'signal',
+  r_multiple: 'signal',
+  cooldown_bars_after_stop: 'signal',
+  min_penetration_atr_factor: 'signal',
+  min_atr_filter: 'signal',
+  max_atr_filter: 'signal',
+  trend_ema_period: 'signal',
+  ifvg_entry_mode: 'ifvg',
+  ifvg_stop_buffer_ticks: 'ifvg',
+  ifvg_zone_max_age_bars: 'ifvg',
+  ifvg_sweep_window_bars: 'ifvg',
+  ifvg_min_displacement_mult: 'ifvg',
+  grader_min_grade: 'ifvg',
+  ifvg_gapping_sack_enabled: 'ifvg',
+  ifvg_tp1_fraction: 'ifvg',
+  ifvg_be_after_tp1: 'ifvg',
+  vp_enabled: 'vp',
+  vp_value_area_pct: 'vp',
+  vp_filter_tolerance: 'vp',
+  vp_hvn_threshold: 'vp',
+  vp_min_target_r: 'vp',
+  htf_bias_enabled: 'htf',
+  htf_target_enabled: 'htf',
+  htf_target_min_r: 'htf',
+  replay_start_delay_s: 'replay',
+  replay_delay_ms: 'replay',
+}
+
 const inputClass =
   'w-full bg-bg border border-border text-ink text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent'
 
@@ -238,6 +289,36 @@ const KILLZONES: { name: string; label: string; window: string }[] = [
   { name: 'ny_am',     label: 'NY AM',      window: '5:30 AM – 8:00 AM PT' },
   { name: 'ny_pm',     label: 'NY PM',      window: '10:00 AM – 1:00 PM PT' },
 ]
+
+interface GroupDef {
+  id: string
+  label: string
+  defaultOpen: boolean
+}
+
+const GROUPS: GroupDef[] = [
+  { id: 'core',   label: 'Core',             defaultOpen: true  },
+  { id: 'risk',   label: 'Risk & Sizing',    defaultOpen: true  },
+  { id: 'signal', label: 'Signal Tuning',    defaultOpen: false },
+  { id: 'ifvg',   label: 'iFVG',             defaultOpen: false },
+  { id: 'vp',     label: 'Volume Profile',   defaultOpen: false },
+  { id: 'htf',    label: 'Higher Timeframe', defaultOpen: false },
+  { id: 'replay', label: 'Replay',           defaultOpen: false },
+]
+
+function GroupHeader({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center gap-2 py-2 text-left"
+    >
+      <span className="text-dim text-[11px]">{open ? '▾' : '▸'}</span>
+      <span className="text-[10px] tracking-[0.25em] text-dim uppercase">{label}</span>
+      <span className="flex-1 border-t border-border/40 ml-1" />
+    </button>
+  )
+}
 
 export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError }: Props) {
   const { confirm, modal } = useConfirm()
@@ -257,6 +338,11 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
   const [savePresetName, setSavePresetName] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savingPreset, setSavingPreset] = useState(false)
+
+  const defaultGroupOpen = Object.fromEntries(GROUPS.map(g => [g.id, g.defaultOpen]))
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>(defaultGroupOpen)
+
+  const toggleGroup = (id: string) => setGroupOpen(o => ({ ...o, [id]: !o[id] }))
 
   const emergencyInstruments: string[] =
     config?.instruments && config.instruments.length > 0
@@ -478,6 +564,357 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
     }
   }
 
+  // Renders a FIELDS entry as its input widget
+  function renderField(field: FieldDef) {
+    return (
+      <div key={field.key}>
+        <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+          {field.label}
+        </label>
+        {field.type === 'select' ? (
+          <select
+            value={form[field.key] ?? ''}
+            onChange={e => set(field.key, e.target.value)}
+            className={inputClass + ' cursor-pointer'}
+          >
+            {field.options!.map(o => (
+              <option key={o} value={o} className="bg-panel">{o}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={field.min}
+              max={field.max}
+              step={field.step ?? 1}
+              value={Number(form[field.key] ?? field.min ?? 0)}
+              onChange={e => set(field.key, e.target.value)}
+              className="flex-1 slider-accent"
+            />
+            <input
+              type="number"
+              min={field.min}
+              max={field.max}
+              step={field.step ?? 1}
+              value={form[field.key] ?? ''}
+              onChange={e => set(field.key, e.target.value)}
+              className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+            />
+          </div>
+        )}
+        <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">{field.hint}</p>
+      </div>
+    )
+  }
+
+  // Returns rendered content for a group
+  function renderGroupContent(groupId: string) {
+    switch (groupId) {
+      case 'core':
+        return (
+          <>
+            {/* instrument + signal_instrument from FIELDS */}
+            {FIELDS.filter(f => FIELD_GROUP[f.key] === 'core' && f.key !== 'account_phase' && f.key !== 'phase_shadow').map(field => {
+              if (field.key === 'instrument') {
+                return (
+                  <div key="instrument-block">
+                    {renderField(field)}
+                    <div key="signal_instrument" className="mt-4">
+                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Signal Instrument</label>
+                      <input
+                        className={inputClass}
+                        value={form.signal_instrument ?? ''}
+                        onChange={e => set('signal_instrument', e.target.value)}
+                        placeholder="blank = same as instrument (e.g. GC)"
+                      />
+                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                        Leave blank to use the same instrument for signals and execution. Set to GC to read structure off full Gold while trading MGC. Requires restart.
+                      </p>
+                    </div>
+                  </div>
+                )
+              }
+              return renderField(field)
+            })}
+            {/* Entry Mode — inline toggle */}
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                Entry Mode
+              </label>
+              <div className="flex gap-0">
+                {(['market', 'limit'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => set('entry_mode', mode)}
+                    className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
+                      form.entry_mode === mode
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-border text-dim hover:text-ink'
+                    } ${mode === 'market' ? 'border-r-0' : ''}`}
+                  >
+                    {mode === 'market' ? 'Market Fill' : 'Limit Entry'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                {form.entry_mode === 'limit'
+                  ? 'Limit order at the FVG level. Stop + target placed after fill. Stays working until cancelled — no timeout.'
+                  : 'Market order fills immediately. Stop + target placed after fill is confirmed. No SDK bracket wrapper.'}
+              </p>
+            </div>
+            {/* Entry Confirmation — inline toggle */}
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                Entry Confirmation
+              </label>
+              <div className="flex gap-0">
+                {(['false', 'true'] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => set('forming_bar_entries', v)}
+                    className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
+                      (form.forming_bar_entries ?? 'false') === v
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-border text-dim hover:text-ink'
+                    } ${v === 'false' ? 'border-r-0' : ''}`}
+                  >
+                    {v === 'false' ? 'Closed Bar' : 'Forming Bar'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                {form.forming_bar_entries === 'true'
+                  ? 'Enters mid-bar the moment the forming bar touches the inversion price. NOT covered by the backtest validation.'
+                  : 'Waits for the confirmation bar to close before entering — the path the walk-forward validated. Hot-applied.'}
+              </p>
+            </div>
+            {/* account_phase + phase_shadow from FIELDS */}
+            {FIELDS.filter(f => f.key === 'account_phase' || f.key === 'phase_shadow').map(renderField)}
+          </>
+        )
+
+      case 'risk':
+        return (
+          <>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Contracts Per Signal
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={1}
+                  max={30}
+                  step={1}
+                  value={parseInt(form.contracts ?? '1') || 1}
+                  onChange={e => set('contracts', e.target.value)}
+                  className="flex-1 slider-accent"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  step={1}
+                  value={form.contracts ?? '1'}
+                  onChange={e => set('contracts', e.target.value)}
+                  className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                />
+              </div>
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Number of contracts placed per signal. Hot-applied immediately — no restart needed.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Risk % Per Trade (0 = off)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step={0.05}
+                value={form.risk_per_trade_pct ?? '0.25'}
+                onChange={e => set('risk_per_trade_pct', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+              />
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Percent of account equity risked per trade. Size = budget ÷ stop distance, capped at max contracts. 0 disables (uses fixed contracts). Hot-applied — no restart.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Partial Profit (R, 0 = off)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step={0.25}
+                value={form.partial_profit_r ?? '0'}
+                onChange={e => set('partial_profit_r', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+              />
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Take half off at this R-multiple then move the stop to break-even. For 1-contract entries, the scale-out is skipped but the stop still moves to break-even at this level. 0 disables. Hot-applied — affects the next entry.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Max Entry Slippage (× stop dist, 0 = off)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={form.max_entry_slippage_frac ?? '0'}
+                onChange={e => set('max_entry_slippage_frac', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+              />
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Abort guard: if a market entry fills beyond this fraction of the stop distance past the signal price, flatten immediately instead of bracketing (the tightened stop would sit inside the retrace zone). 0.5 = abort when slip exceeds half the stop. Hot-applied.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Flatten Rule
+              </label>
+              <select
+                value={form.flatten_enabled ?? 'true'}
+                onChange={e => set('flatten_enabled', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+              >
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Topstep requires flat by 3:10 PM CT. When enabled, the engine cancels all orders and flattens at flatten time. Hot-applied.
+              </p>
+            </div>
+            {form.flatten_enabled !== 'false' && (
+              <>
+                <div>
+                  <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                    Flatten Time (CT, HH:MM)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.flatten_time_ct ?? '15:05'}
+                    onChange={e => set('flatten_time_ct', e.target.value)}
+                    className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                  />
+                  <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                    Time (HH:MM, CT) at which the engine flattens all open positions. Default 15:05 (5 min before the 3:10 PM Topstep deadline). Hot-applied.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                    Entry Cutoff Time (CT, HH:MM)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.entry_cutoff_time_ct ?? '14:30'}
+                    onChange={e => set('entry_cutoff_time_ct', e.target.value)}
+                    className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
+                  />
+                  <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                    No new entries after this time (HH:MM, CT). Prevents opening trades that would hold past the flatten window. Hot-applied.
+                  </p>
+                </div>
+              </>
+            )}
+          </>
+        )
+
+      case 'signal':
+        return (
+          <>
+            {FIELDS.filter(f => FIELD_GROUP[f.key] === 'signal').map(renderField)}
+          </>
+        )
+
+      case 'ifvg':
+        return (
+          <>
+            {FIELDS.filter(f => FIELD_GROUP[f.key] === 'ifvg').map(renderField)}
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                Macro Windows (NY time, comma-separated)
+              </label>
+              <textarea
+                rows={2}
+                value={form.ifvg_macro_windows ?? ''}
+                onChange={e => set('ifvg_macro_windows', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
+              />
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                NY local windows near economic releases — adds grade bonus context only, does not block signals.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                News Blackout (UTC ISO intervals, comma-separated)
+              </label>
+              <textarea
+                rows={2}
+                value={form.ifvg_news_blackout ?? ''}
+                onChange={e => set('ifvg_news_blackout', e.target.value)}
+                className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
+              />
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                UTC ISO 8601 intervals during which all signals are blocked (e.g. 2026-06-06T12:30/2026-06-06T13:00). Empty = no blackout.
+              </p>
+            </div>
+          </>
+        )
+
+      case 'vp':
+        return (
+          <>
+            {renderField(FIELDS.find(f => f.key === 'vp_enabled')!)}
+            {form.vp_enabled !== 'false' && (
+              <>
+                {FIELDS.filter(f => FIELD_GROUP[f.key] === 'vp' && f.key !== 'vp_enabled').map(renderField)}
+              </>
+            )}
+          </>
+        )
+
+      case 'htf':
+        return (
+          <>
+            {renderField(FIELDS.find(f => f.key === 'htf_bias_enabled')!)}
+            {form.htf_bias_enabled === 'true' && (
+              /* htf_bias_timeframe and htf_bias_lookback have no FIELDS entry — they flow via form init from config.strategy */
+              <p className="text-[10px] text-dim/60 leading-relaxed">
+                Bias timeframe and lookback are not yet exposed in UI — defaults: 4h / 3 bars.
+              </p>
+            )}
+            {renderField(FIELDS.find(f => f.key === 'htf_target_enabled')!)}
+            {form.htf_target_enabled === 'true' && (
+              <>
+                {renderField(FIELDS.find(f => f.key === 'htf_target_min_r')!)}
+                {/* htf_swing_timeframe has no FIELDS entry — flows via form init from config.strategy */}
+              </>
+            )}
+          </>
+        )
+
+      case 'replay':
+        return (
+          <>
+            {FIELDS.filter(f => FIELD_GROUP[f.key] === 'replay').map(renderField)}
+          </>
+        )
+
+      default:
+        return null
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -559,6 +996,8 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
               </div>
             </section>
           )}
+
+          {/* Killzones */}
           <section>
             <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-4">
               Active Killzones
@@ -603,359 +1042,107 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
             )}
           </section>
 
-          {(['bot', 'strategy'] as const).map(section => (
-            <section key={section}>
-              <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-4">
-                {section === 'bot' ? 'Bot & Simulation' : 'Strategy Parameters'}
-              </h3>
-              <div className="space-y-4">
-                {section === 'bot' && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
-                        Entry Mode
-                      </label>
-                      <div className="flex gap-0">
-                        {(['market', 'limit'] as const).map(mode => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => set('entry_mode', mode)}
-                            className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
-                              form.entry_mode === mode
-                                ? 'border-accent bg-accent/10 text-accent'
-                                : 'border-border text-dim hover:text-ink'
-                            } ${mode === 'market' ? 'border-r-0' : ''}`}
-                          >
-                            {mode === 'market' ? 'Market Fill' : 'Limit Entry'}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        {form.entry_mode === 'limit'
-                          ? 'Limit order at the FVG level. Stop + target placed after fill. Stays working until cancelled — no timeout.'
-                          : 'Market order fills immediately. Stop + target placed after fill is confirmed. No SDK bracket wrapper.'}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
-                        Entry Confirmation
-                      </label>
-                      <div className="flex gap-0">
-                        {(['false', 'true'] as const).map(v => (
-                          <button
-                            key={v}
-                            type="button"
-                            onClick={() => set('forming_bar_entries', v)}
-                            className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
-                              (form.forming_bar_entries ?? 'false') === v
-                                ? 'border-accent bg-accent/10 text-accent'
-                                : 'border-border text-dim hover:text-ink'
-                            } ${v === 'false' ? 'border-r-0' : ''}`}
-                          >
-                            {v === 'false' ? 'Closed Bar' : 'Forming Bar'}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        {form.forming_bar_entries === 'true'
-                          ? 'Enters mid-bar the moment the forming bar touches the inversion price. NOT covered by the backtest validation.'
-                          : 'Waits for the confirmation bar to close before entering — the path the walk-forward validated. Hot-applied.'}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Contracts Per Signal
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={1}
-                          max={30}
-                          step={1}
-                          value={parseInt(form.contracts ?? '1') || 1}
-                          onChange={e => set('contracts', e.target.value)}
-                          className="flex-1 slider-accent"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          step={1}
-                          value={form.contracts ?? '1'}
-                          onChange={e => set('contracts', e.target.value)}
-                          className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                        />
-                      </div>
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Number of contracts placed per signal. Hot-applied immediately — no restart needed.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Risk % Per Trade (0 = off)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={5}
-                        step={0.05}
-                        value={form.risk_per_trade_pct ?? '0.25'}
-                        onChange={e => set('risk_per_trade_pct', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Percent of account equity risked per trade. Size = budget ÷ stop distance, capped at max contracts. 0 disables (uses fixed contracts). Hot-applied — no restart.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Partial Profit (R, 0 = off)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={5}
-                        step={0.25}
-                        value={form.partial_profit_r ?? '0'}
-                        onChange={e => set('partial_profit_r', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Take half off at this R-multiple then move the stop to break-even. For 1-contract entries, the scale-out is skipped but the stop still moves to break-even at this level. 0 disables. Hot-applied — affects the next entry.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Max Entry Slippage (× stop dist, 0 = off)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={2}
-                        step={0.1}
-                        value={form.max_entry_slippage_frac ?? '0'}
-                        onChange={e => set('max_entry_slippage_frac', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Abort guard: if a market entry fills beyond this fraction of the stop distance past the signal price, flatten immediately instead of bracketing (the tightened stop would sit inside the retrace zone). 0.5 = abort when slip exceeds half the stop. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Flatten Rule
-                      </label>
-                      <select
-                        value={form.flatten_enabled ?? 'true'}
-                        onChange={e => set('flatten_enabled', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
-                      >
-                        <option value="true">Enabled</option>
-                        <option value="false">Disabled</option>
-                      </select>
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Topstep requires flat by 3:10 PM CT. When enabled, the engine cancels all orders and flattens at flatten time. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Flatten Time (CT, HH:MM)
-                      </label>
-                      <input
-                        type="text"
-                        value={form.flatten_time_ct ?? '15:05'}
-                        onChange={e => set('flatten_time_ct', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Time (HH:MM, CT) at which the engine flattens all open positions. Default 15:05 (5 min before the 3:10 PM Topstep deadline). Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Entry Cutoff Time (CT, HH:MM)
-                      </label>
-                      <input
-                        type="text"
-                        value={form.entry_cutoff_time_ct ?? '14:30'}
-                        onChange={e => set('entry_cutoff_time_ct', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        No new entries after this time (HH:MM, CT). Prevents opening trades that would hold past the flatten window. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Naked Grace Period (s)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={120}
-                        step={1}
-                        value={form.naked_grace_seconds ?? '15'}
-                        onChange={e => set('naked_grace_seconds', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Seconds a position may be naked (no stop/target) before the reconciler places emergency protection. Suppresses false alarms during the fill→bracket race. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Commission / Contract
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={form.commission_per_contract ?? '0'}
-                        onChange={e => set('commission_per_contract', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Cost per contract per fill side (entry + exit charged separately). Deducted from realized P&amp;L so daily P&amp;L matches broker net. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Emergency Target R
-                      </label>
-                      <input
-                        type="number"
-                        min={0.5}
-                        max={10}
-                        step={0.5}
-                        value={form.emergency_target_r ?? '2.0'}
-                        onChange={e => set('emergency_target_r', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Target distance for an emergency bracket = this R × emergency stop distance. Hot-applied.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
-                        Emergency Stop Distance (pts)
-                      </label>
-                      <div className="space-y-2">
-                        {emergencyInstruments.map(sym => (
-                          <div key={sym} className="flex items-center gap-2">
-                            <span className="text-[10px] text-dim font-mono w-10">{sym}</span>
-                            <input
-                              type="number"
-                              min={0.1}
-                              max={200}
-                              step={0.1}
-                              value={form[`emergency_stop_distance_${sym}`] ?? ''}
-                              onChange={e => set(`emergency_stop_distance_${sym}`, e.target.value)}
-                              className="flex-1 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Price points from broker avg entry for an emergency re-attached stop, per instrument. Hot-applied.
-                      </p>
-                    </div>
-                  </>
-                )}
-                {section === 'strategy' && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        Macro Windows (NY time, comma-separated)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={form.ifvg_macro_windows ?? ''}
-                        onChange={e => set('ifvg_macro_windows', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        NY local windows near economic releases — adds grade bonus context only, does not block signals.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        News Blackout (UTC ISO intervals, comma-separated)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={form.ifvg_news_blackout ?? ''}
-                        onChange={e => set('ifvg_news_blackout', e.target.value)}
-                        className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono focus:outline-none focus:border-accent resize-none"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        UTC ISO 8601 intervals during which all signals are blocked (e.g. 2026-06-06T12:30/2026-06-06T13:00). Empty = no blackout.
-                      </p>
-                    </div>
-                  </>
-                )}
-                {FIELDS.filter(f => f.section === section).flatMap(field => {
-                  const el = (
-                    <div key={field.key}>
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
-                        {field.label}
-                      </label>
-                      {field.type === 'select' ? (
-                        <select
-                          value={form[field.key] ?? ''}
-                          onChange={e => set(field.key, e.target.value)}
-                          className={inputClass + ' cursor-pointer'}
-                        >
-                          {field.options!.map(o => (
-                            <option key={o} value={o} className="bg-panel">{o}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={field.min}
-                            max={field.max}
-                            step={field.step ?? 1}
-                            value={Number(form[field.key] ?? field.min ?? 0)}
-                            onChange={e => set(field.key, e.target.value)}
-                            className="flex-1 slider-accent"
-                          />
-                          <input
-                            type="number"
-                            min={field.min}
-                            max={field.max}
-                            step={field.step ?? 1}
-                            value={form[field.key] ?? ''}
-                            onChange={e => set(field.key, e.target.value)}
-                            className="w-20 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
-                          />
-                        </div>
-                      )}
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">{field.hint}</p>
-                    </div>
-                  )
-                  if (field.key !== 'instrument') return [el]
-                  return [
-                    el,
-                    <div key="signal_instrument">
-                      <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">Signal Instrument</label>
-                      <input
-                        className={inputClass}
-                        value={form.signal_instrument ?? ''}
-                        onChange={e => set('signal_instrument', e.target.value)}
-                        placeholder="blank = same as instrument (e.g. GC)"
-                      />
-                      <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
-                        Leave blank to use the same instrument for signals and execution. Set to GC to read structure off full Gold while trading MGC. Requires restart.
-                      </p>
-                    </div>,
-                  ]
-                })}
+          {/* Emergency stop inputs — kept outside groups (not in FIELDS) */}
+          <section>
+            <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-4">Emergency Protection</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                  Naked Grace Period (s)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={120}
+                  step={1}
+                  value={form.naked_grace_seconds ?? '15'}
+                  onChange={e => set('naked_grace_seconds', e.target.value)}
+                  className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                />
+                <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                  Seconds a position may be naked (no stop/target) before the reconciler places emergency protection. Suppresses false alarms during the fill→bracket race. Hot-applied.
+                </p>
               </div>
-            </section>
-          ))}
+              <div>
+                <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                  Commission / Contract
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.commission_per_contract ?? '0'}
+                  onChange={e => set('commission_per_contract', e.target.value)}
+                  className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                />
+                <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                  Cost per contract per fill side (entry + exit charged separately). Deducted from realized P&amp;L so daily P&amp;L matches broker net. Hot-applied.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] tracking-wider text-dim uppercase mb-1">
+                  Emergency Target R
+                </label>
+                <input
+                  type="number"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  value={form.emergency_target_r ?? '2.0'}
+                  onChange={e => set('emergency_target_r', e.target.value)}
+                  className="w-full bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                />
+                <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                  Target distance for an emergency bracket = this R × emergency stop distance. Hot-applied.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                  Emergency Stop Distance (pts)
+                </label>
+                <div className="space-y-2">
+                  {emergencyInstruments.map(sym => (
+                    <div key={sym} className="flex items-center gap-2">
+                      <span className="text-[10px] text-dim font-mono w-10">{sym}</span>
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={200}
+                        step={0.1}
+                        value={form[`emergency_stop_distance_${sym}`] ?? ''}
+                        onChange={e => set(`emergency_stop_distance_${sym}`, e.target.value)}
+                        className="flex-1 bg-bg border border-border text-ink text-xs px-2 py-1 font-mono tabular-nums focus:outline-none focus:border-accent"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                  Price points from broker avg entry for an emergency re-attached stop, per instrument. Hot-applied.
+                </p>
+              </div>
+            </div>
+          </section>
 
+          {/* Collapsible parameter groups */}
+          <section className="space-y-1">
+            <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-2">Parameters</h3>
+            {GROUPS.filter(g => g.id !== 'replay' || !isLive).map(group => (
+              <div key={group.id} className="border border-border/30">
+                <GroupHeader
+                  label={group.label}
+                  open={groupOpen[group.id] ?? group.defaultOpen}
+                  onToggle={() => toggleGroup(group.id)}
+                />
+                {(groupOpen[group.id] ?? group.defaultOpen) && (
+                  <div className="px-3 pb-4 space-y-4">
+                    {renderGroupContent(group.id)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </section>
+
+          {/* Per-Instrument Overrides */}
           {(config?.instruments?.length ?? 0) > 0 && (
             <section>
               <h3 className="text-[10px] tracking-[0.3em] text-accent uppercase mb-3">
