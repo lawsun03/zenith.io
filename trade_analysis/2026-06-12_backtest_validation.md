@@ -47,13 +47,25 @@ prioritization.
 
 ## 2. Clean data: Databento 5-year pull + cross-check
 
-- Pulled `NQ.c.0` (GLBX.MDP3, ohlcv-1m, continuous front month — the
-  same convention all existing campaign bars use) 2021-06-12 →
-  2026-06-12 into `bars/bars_MNQ_db_2021_2026.csv`. Cost: $6.40.
-- Vendor flagged 3 degraded-quality days in 5 years: 2021-12-05,
-  2022-01-02, 2025-09-17.
-- Integrity + cross-diff vs the campaign bars: see results appended
-  below by `scripts/check_bars_quality.py`.
+- Pulled both roll conventions, 2021-06-12 → 2026-06-12 (~$12.90
+  total): `NQ.c.0` → `bars/bars_MNQ_db_2021_2026.csv` and `NQ.v.0` →
+  **`bars/bars_MNQ_dbv_2021_2026.csv` (canonical)**.
+- Integrity (both): 1.75M rows, zero duplicate timestamps, zero OHLC
+  sanity violations, median 1380 bars/weekday, thin days = real
+  holidays. Vendor flags 3 degraded days in 5y (2021-12-05, 2022-01-02,
+  2025-09-17).
+- **Roll-rule finding:** c.0 vs the campaign bars = 97.42% exact OHLC,
+  with ALL differences clustered in quarterly roll windows (calendar-
+  spread-sized, 250–300 pts) and thin quad-witching Fridays — the c.0
+  stitch holds the dying contract through expiry. The campaign data is
+  the **volume-rolled stitch**: `bars_MNQ_test_2025_2026.csv` is an
+  exact slice of `bars_MNQ_NQv_2024_2026.csv` (100.00% match), and the
+  fresh `NQ.v.0` pull matches the campaign bars **100.00% on all 497k
+  overlapping bars** — both the old data and the new file are
+  certified against each other. Use v-rolled for everything.
+- Downstream proof: the 5-year frozen-config walk-forward on the new
+  file reproduced all prior campaign months dollar-for-dollar
+  (`trade_analysis/2026-06-12_5y_walkforward.md`).
 
 ## Verdict on "are the backtests correct?"
 
