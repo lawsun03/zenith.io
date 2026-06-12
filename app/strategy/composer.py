@@ -131,6 +131,9 @@ class ComposerConfig:
     # at emission (ablation T1 — long-only test).
     allowed_sides: str = "both"
 
+    # "ifvg" | "displacement_only" — see StrategyParams.confirmation.
+    confirmation: str = "ifvg"
+
 
 @dataclass
 class _Awaiting:
@@ -225,7 +228,7 @@ class SweepDisplacementComposer:
         Returns at most one Signal per call. If multiple awaitings could
         match, we take the most recent — that's the freshest setup.
         """
-        if event.fvg is None:
+        if event.fvg is None and self.config.confirmation != "displacement_only":
             return None  # no entry zone, no trade
 
         if self.config.allowed_sides != "both":
@@ -346,12 +349,13 @@ class SweepDisplacementComposer:
     ) -> Signal:
         cfg = self.config
         fvg = event.fvg
-        assert fvg is not None  # guarded by caller
+        displacement_only = cfg.confirmation == "displacement_only"
+        assert fvg is not None or displacement_only  # guarded by caller
 
         lookback = cfg.swing_stop_lookback
         if event.side == "bullish":
             side: Side = "long"
-            entry = fvg.high
+            entry = bar.close if displacement_only else fvg.high
             if lookback > 0 and self._bar_lows:
                 swing_anchor = min(self._bar_lows)
                 stop_anchor = min(swing_anchor, awaiting.sweep.sweep_extreme)
@@ -362,7 +366,7 @@ class SweepDisplacementComposer:
             target = entry + r * cfg.r_multiple
         else:
             side = "short"
-            entry = fvg.low
+            entry = bar.close if displacement_only else fvg.low
             if lookback > 0 and self._bar_highs:
                 swing_anchor = max(self._bar_highs)
                 stop_anchor = max(swing_anchor, awaiting.sweep.sweep_extreme)
@@ -372,13 +376,15 @@ class SweepDisplacementComposer:
             r = stop - entry
             target = entry - r * cfg.r_multiple
 
+        fvg_desc = (f"FVG {fvg.low}–{fvg.high}" if fvg is not None
+                    else "no-FVG (displacement-only)")
         rationale = (
             f"{awaiting.killzone_name}: "
             f"{awaiting.sweep.pattern} sweep of {awaiting.sweep.side} "
             f"@ {awaiting.sweep.swept_swing.price}, "
             f"{event.side} displacement "
             f"({event.body_to_atr:.2f}× ATR), "
-            f"FVG {fvg.low}–{fvg.high}"
+            f"{fvg_desc}"
         )
 
         return Signal(
@@ -391,8 +397,8 @@ class SweepDisplacementComposer:
             killzone=awaiting.killzone_name,
             sweep_pattern=awaiting.sweep.pattern,
             sweep_extreme=awaiting.sweep.sweep_extreme,
-            fvg_low=fvg.low,
-            fvg_high=fvg.high,
+            fvg_low=fvg.low if fvg is not None else None,
+            fvg_high=fvg.high if fvg is not None else None,
             rationale=rationale,
             sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
         )

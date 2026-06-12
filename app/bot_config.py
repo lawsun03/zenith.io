@@ -88,6 +88,12 @@ class StrategyParams(BaseModel):
     # String (not list) so the monthly harness's --set k=v override can type it.
     allowed_sides: str = "both"
 
+    # Ablation T5: signal confirmation chain. "ifvg" (default) = displacement
+    # bar must invert a prior FVG, entry at the iFVG zone. "displacement_only"
+    # = sweep + opposite displacement bar suffices; entry at the confirmation-
+    # bar close (the first actionable price — bar2's close would be lookahead).
+    confirmation: str = "ifvg"
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

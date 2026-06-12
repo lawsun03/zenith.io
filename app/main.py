@@ -140,6 +140,7 @@ def _build_runner(
             max_atr_filter=s.max_atr_filter,
             swing_stop_lookback=s.swing_stop_lookback,
             allowed_sides=s.allowed_sides,
+            confirmation=s.confirmation,
         )),
         grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,

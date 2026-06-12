@@ -108,3 +108,19 @@ class TestTrail1R:
             assert exit_fill.fill_price == Decimal("21020")
 
         asyncio.run(run())
+
+
+class TestDisplacementOnly:
+    def test_signal_fires_without_ifvg(self):
+        composer = SweepDisplacementComposer(_cfg(confirmation="displacement_only"))
+        signal, b_disp = _short_setup(composer, with_fvg=False)
+        assert signal is not None
+        assert signal.side == "short"
+        assert signal.entry == b_disp.close          # confirmation-bar close
+        assert signal.fvg_low is None and signal.fvg_high is None
+        # stop unchanged: past sweep extreme (21010) + stop_buffer (0.30)
+        assert signal.stop == Decimal("21010.30")
+
+    def test_default_mode_still_requires_ifvg(self):
+        signal, _ = _short_setup(SweepDisplacementComposer(_cfg()), with_fvg=False)
+        assert signal is None
