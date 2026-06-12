@@ -1,4 +1,4 @@
-"""chop_breakout: spec-mandated tests, one per defining behavior."""
+﻿"""chop_breakout: spec-mandated tests, one per defining behavior."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -23,7 +23,7 @@ def _cfg(**kw):
 
 
 def feed_history(det, n=130, i0=0):
-    """Wide oscillating bars: 20-bar range ≈ 70 → the percentile history."""
+    """Wide oscillating bars: 20-bar range â‰ˆ 70 â†’ the percentile history."""
     for i in range(n):
         base = 21000 + (30 if i % 2 else -30)
         det.on_bar(bar(i0 + i, str(base - 5), str(base + 5)))
@@ -64,10 +64,12 @@ class TestGate:
         assert det.chop_high == hi0 + 2 and det.chop_low == lo0  # never shrink
 
 
+BOUNDS = (Decimal("21010"), Decimal("20990"))
+
+
 def _in_chop(det, hi="21010", lo="20990"):
     det.state = "chop"
     det.chop_high, det.chop_low = Decimal(hi), Decimal(lo)
-    det._pre_widen_bounds = (Decimal(hi), Decimal(lo))
     return det
 
 
@@ -87,7 +89,7 @@ class TestTrigger:
     def test_breakout_without_inversion_no_signal(self):
         det = _in_chop(ChopBreakoutDetector(_cfg()))
         b, ev = _disp_event(200, "bullish", "21030", fvg=None)
-        assert det.on_displacement(b, ev) is None
+        assert det.on_displacement(b, ev, *BOUNDS) is None
 
     def test_breakout_with_inversion_at_boundary_signals_continuation(self):
         det = _in_chop(ChopBreakoutDetector(_cfg()))
@@ -95,7 +97,7 @@ class TestTrigger:
         fvg = FairValueGap(side="bearish", low=Decimal("21002"),
                            high=Decimal("21008"), created_at=T0)
         b, ev = _disp_event(200, "bullish", "21030", fvg=fvg)
-        sig = det.on_displacement(b, ev)
+        sig = det.on_displacement(b, ev, *BOUNDS)
         assert sig is not None
         assert sig.side == "long"                      # continuation, not reversal
         assert sig.entry == b.close
@@ -109,7 +111,7 @@ class TestTrigger:
         fvg = FairValueGap(side="bearish", low=Decimal("21015"),
                            high=Decimal("21020"), created_at=T0)  # above chop_high
         b, ev = _disp_event(200, "bullish", "21030", fvg=fvg)
-        assert det.on_displacement(b, ev) is None
+        assert det.on_displacement(b, ev, *BOUNDS) is None
 
 
 class TestFloorRule:
@@ -124,11 +126,11 @@ class TestFloorRule:
     def test_swing_below_floor_no_trade(self):
         # R = 28 (21030-21002); floor 1.5R = 42 -> swing must be >= 21072
         det, b, ev = self._setup("21069")   # 1.39R
-        assert det.on_displacement(b, ev) is None
+        assert det.on_displacement(b, ev, *BOUNDS) is None
 
     def test_swing_above_floor_trades(self):
         det, b, ev = self._setup("21075")   # 1.61R
-        assert det.on_displacement(b, ev) is not None
+        assert det.on_displacement(b, ev, *BOUNDS) is not None
 
 
 class TestExitRules:
@@ -156,7 +158,7 @@ class TestExitRules:
 
     def test_vwap_invalidation_long_close_below(self):
         det = self._entered(vwap_invalidation=True)
-        det._vwap.on_bar(bar(299, "21050", "21060", c="21055"))  # vwap ≈ 21055
+        det._vwap.on_bar(bar(299, "21050", "21060", c="21055"))  # vwap â‰ˆ 21055
         det._manage_trade(bar(300, "21020", "21040", c="21030"))  # close < vwap
         assert det.exit_request == "vwap_invalidation"
 
@@ -195,6 +197,49 @@ class TestBreakoutBarOrdering:
         assert det.on_bar(b2) is None          # event not visible yet
         b3 = bar(i + k + 1, str(hi0 + 20), str(hi0 + 32), c=str(hi0 + 28))
         sig = det.on_bar(b3)                   # event for b2 arrives now
+        assert sig is not None and sig.side == "long"
+
+
+class TestBreakoutBarBreaksGate:
+    def test_signal_survives_gate_break_by_breakout_bar(self):
+        """A strong breakout bar (b2) blows up the rolling 20-bar range and
+        breaks the compression gate on b2 itself â€” one bar BEFORE its
+        displacement event arrives. The signal must still fire: the chop
+        state/bounds as of b2's open are what the breakout is judged
+        against."""
+        det = ChopBreakoutDetector(_cfg())
+        # Saturate the range history with TIGHT bars so the P30 threshold is
+        # realistic (small) and a big bar genuinely breaks the gate.
+        i = 0
+        for k in range(140):
+            det.on_bar(tight(i + k, width=4 + (k % 3)))  # ranges 4-6
+        i += 140
+        k = 0
+        while det.state != "chop":
+            det.on_bar(tight(i + k))
+            k += 1
+            assert k < 60, "never entered chop"
+        det._liq15._swings.append(_swing("high", "21150"))
+        hi0 = det.chop_high
+        fvg = FairValueGap(side="bearish", low=Decimal("21000"),
+                           high=Decimal("21004"), created_at=T0)
+
+        b2 = bar(i + k, "20998", str(hi0 + 40), c=str(hi0 + 35))  # huge bar
+        events = {0: None, 1: DisplacementEvent(
+            side="bullish", displacement_bar=b2, body_size=Decimal("35"),
+            atr_at_event=Decimal("4"), body_to_atr=Decimal("8"), fvg=fvg)}
+        calls = {"n": -1}
+
+        class _DispStub:
+            def on_bar(self, _bar):
+                calls["n"] += 1
+                return events.get(calls["n"])
+
+        det.disp = _DispStub()
+        assert det.on_bar(b2) is None
+        assert det.state == "idle"             # gate broken by b2 â€” the trap
+        b3 = bar(i + k + 1, str(hi0 + 30), str(hi0 + 42), c=str(hi0 + 38))
+        sig = det.on_bar(b3)
         assert sig is not None and sig.side == "long"
 
 

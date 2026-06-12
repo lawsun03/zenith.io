@@ -79,11 +79,14 @@ class ChopBreakoutDetector:
         self.chop_high: Decimal | None = None
         self.chop_low: Decimal | None = None
         self._recent: deque[tuple[Decimal, Decimal]] = deque(maxlen=config.min_chop_bars)
-        # Bounds as they stood BEFORE the most recent bar widened them. The
-        # displacement bar (b2) widens bounds one bar before its event arrives
-        # (b3 close), so breakouts must be judged against this snapshot — the
-        # pre-breakout range — or close > chop_high is unsatisfiable.
-        self._pre_widen_bounds: tuple[Decimal, Decimal] | None = None
+        # (was_chop, chop_high, chop_low) as of the START of the PREVIOUS
+        # bar's processing. The displacement event for bar b2 only arrives
+        # when b3 closes, and b2 itself both widens the bounds AND usually
+        # breaks the compression gate (a big bar blows up the rolling range).
+        # Breakouts must therefore be judged against the chop state/bounds as
+        # of b2's open — this snapshot — or real breakouts are unsatisfiable
+        # (bounds absorb the close) or discarded (state already idle).
+        self._prev_bar_start: tuple[bool, Decimal | None, Decimal | None] | None = None
         # 15m aggregation for swing targets
         self._bucket: list[Bar] = []
         self._bucket_floor = None
@@ -129,9 +132,14 @@ class ChopBreakoutDetector:
             self._streak = 0
             self.chop_high = self.chop_low = None
             self._trade = None
+            self._prev_bar_start = None
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         self._roll_day(bar)
+        # Snapshot the chop state/bounds as of THIS bar's open, before any
+        # update — next bar's displacement event (for this bar) is judged
+        # against it. See _prev_bar_start comment in __init__.
+        start_snapshot = (self.state == "chop", self.chop_high, self.chop_low)
         self._vwap.on_bar(bar)
         self._sma_closes.append(bar.close)
         self._feed_15m(bar)
@@ -139,11 +147,12 @@ class ChopBreakoutDetector:
 
         self._manage_trade(bar)
 
-        # Breakout check BEFORE bound-widening: the breakout bar's own
-        # high/low must not absorb its close back inside the range.
+        was_chop, ch, cl = self._prev_bar_start or (False, None, None)
+        self._prev_bar_start = start_snapshot
+
         signal = None
-        if self.state == "chop" and event is not None:
-            signal = self.on_displacement(bar, event)
+        if was_chop and event is not None and ch is not None and cl is not None:
+            signal = self.on_displacement(bar, event, ch, cl)
 
         compressed = self._compressed(bar)
         self._recent.append((bar.high, bar.low))
@@ -151,7 +160,6 @@ class ChopBreakoutDetector:
             self.state = "idle"
             self._streak = 0
             self.chop_high = self.chop_low = None
-            self._pre_widen_bounds = None
             return signal
         if compressed:
             self._streak += 1
@@ -160,15 +168,12 @@ class ChopBreakoutDetector:
             if self.state == "chop":
                 self.state = "idle"
                 self.chop_high = self.chop_low = None
-                self._pre_widen_bounds = None
         if self.state == "idle" and self._streak >= self.config.min_chop_bars:
             self.state = "chop"
             self.chop_high = max(h for h, _ in self._recent)
             self.chop_low = min(l for _, l in self._recent)
-            self._pre_widen_bounds = (self.chop_high, self.chop_low)
         elif self.state == "chop":
             assert self.chop_high is not None and self.chop_low is not None
-            self._pre_widen_bounds = (self.chop_high, self.chop_low)
             self.chop_high = max(self.chop_high, bar.high)
             self.chop_low = min(self.chop_low, bar.low)
         return None
@@ -204,14 +209,12 @@ class ChopBreakoutDetector:
 
     # ---------------- trigger ----------------
 
-    def on_displacement(self, bar: Bar, event: DisplacementEvent) -> Optional[Signal]:
+    def on_displacement(self, bar: Bar, event: DisplacementEvent,
+                        ch: Decimal, cl: Decimal) -> Optional[Signal]:
+        """Evaluate a breakout against the PRE-breakout range (ch, cl) — the
+        chop bounds as of the displacement bar's open."""
         if event.fvg is None:
             return None  # breakout without iFVG inversion is not a setup
-        if self._pre_widen_bounds is None:
-            return None
-        # Judge the breakout against the PRE-breakout range: the displacement
-        # bar itself already widened chop_high/low one bar ago.
-        ch, cl = self._pre_widen_bounds
         d = event.displacement_bar
         mid = (ch + cl) / 2
         fvg = event.fvg
