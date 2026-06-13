@@ -77,6 +77,22 @@ export function StrategyDebug({ state }: { state: StrategyStatePayload | null })
             <LabeledValue label="news blackout" value={state.news_blackout ? 'yes' : 'no'} />
           </div>
 
+          {/* ORB State */}
+          {state.orb_state != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">ORB</div>
+              <LabeledValue
+                label="range"
+                value={
+                  state.orb_state.or_established
+                    ? `${state.orb_state.or_low} – ${state.orb_state.or_high}`
+                    : 'building…'
+                }
+              />
+              <LabeledValue label="signals today" value={String(state.orb_state.fired)} />
+            </div>
+          )}
+
           {/* Account Phase */}
           {hasPhase && <PhaseSection phase={state.phase!} />}
           {!hasPhase && (

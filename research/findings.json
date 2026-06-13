@@ -259,5 +259,25 @@
     "verdict": "shipped",
     "learned": "The wall-clock backup task (_flatten_clock, every 30s) already existed and ran unconditionally in live mode — the B8 core fix was present. What was missing: a flatten_wallclock_enabled flag (now default True, preserving existing behavior), an early-close calendar note listing 8 known CME half-days for 2025-2026 in flatten.py, and two defining-behavior tests (clock-driven flatten without bar arrival, and flag=False gates task creation). The bar-driven path is insufficient alone: on CME early-close days bars stop at noon but the configured flatten time is 15:05 CT. The wall-clock covers this gap.",
     "links": {"doc": null, "runs": [], "src": ["app/execution/engine.py", "app/risk/flatten.py", "tests/test_flatten_window.py"]}
+  },
+  {
+    "ts": "2026-06-13T14:00Z",
+    "session": "wk1-b9",
+    "item": "B9",
+    "variant": "ORB Rule-13 UI wiring — state() method + strategy_state SSE field + StrategyDebug panel",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 6,
+      "suite_total": 604,
+      "suite_failures": 0,
+      "layers": 3,
+      "new_orb_fields": ["or_high", "or_low", "or_established", "fired"],
+      "new_log_event": "ORB range established: <instr> OR=[lo-hi]",
+      "frontend_built": true,
+      "bot_restarted": true
+    },
+    "verdict": "shipped",
+    "learned": "All three Rule-13 layers implemented: (1) ORBDetector.on_bar logs when the OR range is first established after the window closes; (2) ORBDetector.state() returns {or_high, or_low, or_established, fired} — extracted from CombinedRunner.secondary in the strategy_state publisher in main.py, added as orb_state field in journal.publish_strategy_state; (3) StrategyDebug.tsx renders an ORB section showing the live range and signals-today count. or_established uses _or_range_logged (True only after first post-range bar) so the UI shows 'building...' during the 09:30+15min window and the confirmed range thereafter.",
+    "links": {"doc": null, "runs": [], "src": ["app/strategy/orb.py", "app/api/journal.py", "app/main.py", "frontend/src/types.ts", "frontend/src/components/StrategyDebug.tsx", "tests/test_orb_ui_state.py"]}
   }
 ]

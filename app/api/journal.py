@@ -304,6 +304,7 @@ class Journal:
         in_macro: bool = False,
         news_blackout: bool = False,
         phase: "dict | None" = None,
+        orb_state: "dict | None" = None,
     ) -> None:
         """Emit strategy_state WebSocket event each bar for the live dashboard."""
         payload: dict = {"instrument": instrument}
@@ -337,6 +338,8 @@ class Journal:
         payload["in_macro_window"] = in_macro
         payload["news_blackout"] = news_blackout
         payload["phase"] = phase  # None when practice; dict with tracker state otherwise
+        if orb_state is not None:
+            payload["orb_state"] = orb_state
 
         entry = JournalEntry(
             ts=datetime.now(timezone.utc),

@@ -87,7 +87,7 @@ StrategyParams or engine ctor) that enforces the flatten window by clock, plus
 an early-close calendar note. Tests: simulated clock crossing with open
 position; no-op when flag off. Ship default-off + recommendation.
 
-## B9 — ORB Rule-13 UI wiring  [pending]  (observability)
+## B9 — ORB Rule-13 UI wiring  [done — shipped: ORBDetector.state() + strategy_state orb_state field + StrategyDebug ORB section; 6 tests; bot restarted]  (observability)
 ORB is LIVE (combined engine) with no dashboard state. Add OR-range/fired state
 to the `strategy_state` SSE event + a StrategyDebug section (CLAUDE.md Rule 13
 defines the three layers). Pure additive; frontend build required

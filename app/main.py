@@ -503,6 +503,14 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
                 "target_reached": p.target_reached(),
             }
 
+        # Extract ORB state from CombinedRunner.secondary or a standalone ORBRunner.
+        orb_state: dict | None = None
+        orb_runner = getattr(runner, "secondary", None)
+        if orb_runner is None and hasattr(runner, "detector"):
+            orb_runner = runner
+        if orb_runner is not None and hasattr(orb_runner, "detector"):
+            orb_state = orb_runner.detector.state()
+
         journal.publish_strategy_state(
             instrument=runner.instrument,
             grade=grade,
@@ -512,6 +520,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             in_macro=in_macro,
             news_blackout=news_block,
             phase=phase_data,
+            orb_state=orb_state,
         )
 
     return on_bar

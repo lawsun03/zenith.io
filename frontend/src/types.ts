@@ -232,4 +232,10 @@ export interface StrategyStatePayload {
     winning_days: number
     target_reached: boolean
   } | null
+  orb_state?: {
+    or_high: string | null
+    or_low: string | null
+    or_established: boolean
+    fired: number
+  } | null
 }

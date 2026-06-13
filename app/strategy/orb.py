@@ -53,6 +53,7 @@ class ORBDetector:
         self._or_high: Decimal | None = None
         self._or_low: Decimal | None = None
         self._fired = 0
+        self._or_range_logged = False  # avoid re-logging established range each bar
         # Prior-day-range qualifier state
         self._pdr_ranges: deque[Decimal] = deque(maxlen=config.pdr_lookback)
         self._pdr_day_high: Decimal | None = None
@@ -71,6 +72,7 @@ class ORBDetector:
             self._day = et.date()
             self._or_high = self._or_low = None
             self._fired = 0
+            self._or_range_logged = False
             self._pdr_day_high = None
             self._pdr_day_low = None
             self._pdr_day_close = None
@@ -95,6 +97,10 @@ class ORBDetector:
             return None
         if self._or_high is None or self._or_low is None:
             return None  # no bars landed in the range window (holiday/gap)
+        if not self._or_range_logged:
+            log.info("ORB range established: %s OR=[%s-%s]",
+                     self.config.instrument, self._or_low, self._or_high)
+            self._or_range_logged = True
         if self._fired >= self.config.max_trades_per_day:
             return None
 
@@ -139,6 +145,19 @@ class ORBDetector:
                        f"{self._or_low}-{self._or_high}"),
             sweep_bar_range=self._or_high - self._or_low,
         )
+
+    def state(self) -> dict:
+        """Current OR range and signal count — for the live dashboard. Never mutates.
+
+        or_established is True only after the range window has closed (first post-range
+        bar processed); False while still accumulating during the window.
+        """
+        return {
+            "or_high": str(self._or_high) if self._or_high is not None else None,
+            "or_low": str(self._or_low) if self._or_low is not None else None,
+            "or_established": self._or_range_logged,
+            "fired": self._fired,
+        }
 
 
 class _NoopComposer:
