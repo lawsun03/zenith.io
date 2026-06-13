@@ -803,3 +803,41 @@ Entry format:
 - **Verdict:** rejected — 10-min Phase B gives $183/mo sust 0.33x — far below B3 threshold ($393/mo, sust 1.26x). B21 ($497/mo, sust 2.62x) remains the best and undefeated two-phase pipeline recommendation.
 - **Learned:** Flat-5y standalone improvements from higher trade frequency don't transfer to per-year two-phase pipeline economics. 10-min ORB fires on more days; combined with reentry, accounts experience more frequent P&L events, accelerating both gains and busts. The 15-min window provides better funded Phase B economics because it concentrates ORB signals into higher-quality breakout setups, leading to fewer bust events per funded account even if absolute payout is similar. B29 closes the B27/B28/B29 thread: all three tested alternatives to B21 and all were rejected.
 - **Next:** Backlog fully exhausted — all B1-B29 items done, all 6 research ideation sessions complete. Monday priorities for Lawrence: (1) apply Phase A config fix (swing_stop_lookback=0, target_clarity_mode=reject per B26 recommendation); (2) confirm B21 as the recommended two-phase deployment config (iFVG Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x); (3) replenish backlog with new hypotheses or move to deployment tasks.
+
+## 2026-06-13T17:30:00Z — session wk2-r1 — RESEARCH (backlog replenishment)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** Research/ideation session (backlog fully exhausted; session count 36 % 3 == 0 triggers research).
+- **Sources used:** WebSearch (NQ/MNQ ORB r-multiple optimization; prop-firm passing strategies; intraday momentum literature 2025-26) AND own-data mining (5y MFE/MAE CSVs: day-of-week PF breakdown for iFVG and ORB).
+- **Web search findings:** No new mechanism families identified. Lesson 6 confirmed 5-for-5 (external claims fail to transfer; SSRN/arxiv finds no robust OHLCV signal on index futures). Topstep's published combine success rate: 16.8% per attempt (our B21 Phase A at ifvg_edge: 21%). No new proposals from web.
+- **Own-data mining (day-of-week PF, 5y MFE/MAE excl 2022):**
+
+  **iFVG DOW (n=2477 total):**
+  | Day | n | PF | net |
+  |-----|---|----|-----|
+  | Monday | 454 | 1.088 | +$13,342 |
+  | **Tuesday** | **539** | **0.917** | **-$15,792** |
+  | Wednesday | 518 | 1.182 | +$31,357 |
+  | Thursday | 487 | 1.032 | +$5,403 |
+  | Friday | 455 | 1.008 | +$1,281 |
+
+  **ORB DOW (n=1030 total):**
+  | Day | n | PF | net |
+  |-----|---|----|-----|
+  | **Monday** | **206** | **0.898** | **-$5,100** |
+  | Tuesday | 209 | 1.351 | +$15,443 |
+  | **Wednesday** | **207** | **0.942** | **-$3,131** |
+  | Thursday | 205 | 1.282 | +$13,295 |
+  | **Friday** | **203** | **1.775** | **+$29,446** |
+
+- **Key findings:**
+  - **iFVG Tuesday is loss-making (PF=0.917)** — the only loss-making iFVG day. Removing Tuesday: estimated PF improves from 1.043 to ~1.080 (+3.5%), volume drops 22% (~55/month). Mechanism: Tuesday is post-Monday-positioning consolidation; choppier directional structure.
+  - **ORB Monday and Wednesday both loss-making** — combined removal improves ORB PF from ~1.10 to ~1.147 (+4.3%), volume drops 40% (~14/month). Mechanisms: Monday gap reversals create false ORB breakouts; Wednesday FOMC announcement days create choppy, indecisive sessions.
+  - **ORB Friday is exceptionally strong (PF=1.775)** — end-of-week position squaring creates clear directional momentum. This is 60% of total ORB net ($29,446 / $49,953) from 20% of trades.
+  - These are 5-year structural patterns (n=200-540 per day), not external claims. Different from Lesson 6.
+- **Proposed backlog items (3):**
+  - **B30:** DOW filter (`skip_trading_days` parameter) for iFVG (skip Tuesday) and ORB (skip Mon+Wed). Code required: new StrategyParams field + suppression in composer/detector (~30 lines). Funded-objective test only (combine volume too sparse after DOW filter).
+  - **B31:** Phase A at higher risk (r=2.0) — hypothesis: higher risk → more months exceed $3k target faster → more Phase A passes per year. No code; quick benchmark.
+  - **B32:** ORB-reentry Phase B at r=0.5 (below current B21 optimum r=0.75) — maps the lower end of the risk sensitivity curve. No code; confirms or rebuts r=0.75 as the optimum.
+- **Verdict:** dataset — 3 new backlog items appended; no items to evaluate this session.
+- **Learned:** Day-of-week structural patterns in our own 5y data reveal two genuine anomalies: iFVG Tuesday loss-making (PF=0.917, -$15.8k net) and ORB Monday/Wednesday both negative. These are different from session-hour filters (B18 rejected) because they reflect institutional calendar patterns, not time-of-day microstructure. ORB Friday's PF=1.775 is the strongest single-segment finding since iFVG London (PF~1.3-1.4 from hour-of-day analysis).
+- **Next:** B30 (DOW filter, code required) — highest-quality new finding; prior ~55%. B31 and B32 are no-code quick benchmarks that can follow.

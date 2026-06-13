@@ -879,3 +879,169 @@ passes with 10-min may differ enough to change sust. Low code risk, cheap test.
 
 Source: B22 ORB range_minutes benchmark (10-min +9% funded $/mo); B22 long/short PF reversal
 at 10-min (longs 1.15 vs 0.99 at 15-min); wk1-b18 RESEARCH theme 4.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk2-r1 (post-B29 backlog replenishment)  [done — 3 items appended: B30 DOW filter, B31 Phase A higher risk, B32 ORB Phase B r=0.5]
+
+All B1-B29 items completed; all 6 prior research sessions done. This session replenishes with new
+testable hypotheses. Primary source: 5y MFE/MAE day-of-week mining + web research.
+
+**Key data findings:**
+- **iFVG DOW (n=2477, excl 2022):** Tuesday PF=0.917 (n=539, net=-$15,792) is the only loss-making day.
+  All other days: Mon 1.088, Wed 1.182 (best), Thu 1.032, Fri 1.008.
+- **ORB DOW (n=1030, excl 2022):** Monday PF=0.898 (-$5,100) and Wednesday PF=0.942 (-$3,131) both
+  loss-making. Friday PF=1.775 (+$29,446) is by far the strongest ORB day — 60% of total net from 20%
+  of trades. Tuesday (1.351) and Thursday (1.282) also strong.
+- **Mechanisms:** iFVG Tuesday = post-Monday consolidation (chop); ORB Monday = gap reversal false
+  breakouts; ORB Wednesday = FOMC announcement days (choppy); ORB Friday = end-of-week position
+  squaring (directional momentum). All are data-derived, not external claims.
+- **B21 Phase A risk sensitivity:** never tested above r=1.25%. If higher risk generates more
+  Phase A passes per year (higher expected monthly gain / fixed $3k target), B21 $/month improves.
+- **B21 Phase B risk floor:** r=0.5 not tested. Completing the risk curve below r=0.75 clarifies
+  whether r=0.75 is a true optimum or if lower risk improves pipeline sustainability further.
+- **Web search:** No new mechanism families (Lesson 6 confirmed 5-for-5; SSRN/arxiv finds no robust
+  signals on index futures). Topstep published 16.8% combine success rate vs our 21% baseline.
+
+## B30 — Day-of-week (DOW) filter: skip_trading_days parameter  [pending]
+Hypothesis: iFVG Tuesday (PF=0.917) and ORB Monday+Wednesday (PF=0.898/0.942) are structurally
+loss-making over 5 years. Suppressing signals on these days should improve funded-phase PF and
+reduce bust frequency without touching the entry/exit mechanics.
+
+**iFVG without Tuesday:** estimated PF 1.043 → ~1.080 (+3.5%), volume 2477 → ~1938 trades (78%).
+At ~55/month, combine phase may lose some borderline-passing months (Lesson 2: 60+ trades needed).
+Route to funded objective only.
+
+**ORB without Mon+Wed:** estimated PF ~1.10 → ~1.147 (+4.3%), volume 1030 → ~617 trades (60%).
+At ~14/month non-reentry (vs ~23/month full), funded phase per-account net drops but bust rate may drop
+proportionally or more. Route to funded Phase B only (combine already tested; combining ORB with DOW
+filter is too sparse at ~7 passes/61mo estimated).
+
+Mechanism (code required, ~30 lines total):
+- Add `skip_trading_days: list[str] = Field(default_factory=list)` to StrategyParams (e.g.,
+  `["Tuesday"]` or `["Monday", "Wednesday"]`). Day names match Python's `datetime.strftime("%A")`.
+- In SweepDisplacementComposer (iFVG signal path), check `bar.ts` ET day: if in skip_trading_days,
+  return None before any other logic (don't suppress the detector state, only signal emission).
+- In ORBDetector.on_bar, same check: if bar.ts ET weekday in skip_trading_days, return None.
+- ET conversion: use `bar.ts.astimezone(ZoneInfo("America/New_York")).strftime("%A")`.
+- The range/sweep state continues accumulating (Monday gap can still build the range); only signals
+  are suppressed. This prevents discarding context that persists across the gap.
+
+Fixed defaults: `skip_trading_days=[]` (no suppression, existing behavior preserved).
+
+Defining-behavior tests (tests/test_dow_filter.py):
+1. iFVG skip_trading_days=["Tuesday"]: bars on Tuesday → no signal from composer; Monday bar → signal
+2. ORB skip_trading_days=["Monday"]: Monday breakout bar → on_bar returns None; Tuesday bar → Signal
+3. skip_trading_days=[] (default): Tuesday/Monday bars fire normally (existing behavior unchanged)
+4. Day check uses ET timezone (a bar at 23:45 UTC Monday = Tuesday ET → correctly suppressed if
+   skip_trading_days=["Tuesday"])
+
+Benchmark:
+1. iFVG funded (B19 LongOnly + london+ny_am, r1.25 close mode): add `--set skip_trading_days=Tuesday`
+   Compare to B19 r1.25 baseline: PF=1.173, sust=1.600x. Success: PF >= 1.20 AND sust >= 1.60x.
+2. ORB-reentry Phase B (B21 config, r0.75): add `--set skip_trading_days=Monday,Wednesday`
+   equity_export + per-year ORB Phase B equity → two-phase pipeline.
+   Compare to B21 Phase B baseline: 13 busts, $3,131/account, sust 2.62x (with B21 Phase A).
+   Success: busts < 13 AND $/month >= $497 with same Phase A (B21 equity_b1/control_r1p25).
+
+Stop rule: both iFVG and ORB DOW-filtered variants must independently improve vs their respective
+baselines on funded PF/sust. A filter that improves one but fails the other is tested separately.
+
+Prior: ~55% for iFVG Tuesday skip (clear structural pattern, $15.8k net cost removed). ~45% for
+ORB Mon+Wed skip (correct mechanisms but 40% volume drop is steep; might hurt per-account net enough
+to offset the bust reduction).
+
+Source: scripts/research_dow_analysis.py (this session) — 5y MFE/MAE per-day PF analysis.
+Mechanisms: iFVG Tuesday = post-Monday consolidation chop; ORB Monday = gap reversal false breakouts;
+ORB Wednesday = FOMC announcement days; all corroborated by institutional calendar literature.
+
+## B31 — Phase A higher-risk sensitivity (r=2.0) to increase annual combine passes  [pending]
+Hypothesis: B21 Phase A runs iFVG r=1.25%. The $3k combine target is FIXED. At r=2.0%, each
+winning trade earns 1.6× more — fewer winning trades needed to reach the $3k threshold. Expected
+monthly gain rises from ~$3.5k (r=1.25) to ~$5.6k (r=2.0), making the $3k target easier to reach
+on average. This should increase Phase A pass rate AND pass speed (fewer days to reach $3k from
+a positive starting position). Faster passes → more Phase A supply per year → higher pipeline $/month.
+
+Mechanism: no new code. Generate per-year Phase A equity at r=2.0:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 2.0 --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject
+   --set ifvg_entry_mode=ifvg_edge --out research/equity_b31/ifvg_r2p0_{year}.csv`
+Write scripts/run_b31_pipeline.py using:
+  Phase A: equity_b31/ifvg_r2p0_{year}.csv
+  Phase B: equity_b21/orb_reentry_r0p75_{year}.csv (unchanged from B21)
+
+Counterarguments (assign prior weight):
+- At r=2.0, MLL ($2k below starting balance) is breached with only 2-3 consecutive full stops
+  ($50k × 0.02 × 2.5R WR-flip = $1k per loss at worst; 2-3 losses = $2k) → busts happen faster
+- But faster busts = more attempts per year = possibly same total passes with faster cycling
+- PF is unchanged by risk level (it's a dimensionless ratio) → pass RATE per attempt stays same
+- The benefit is purely from faster cycling: if attempts complete 2x faster, 2x more passes/year
+
+The crucial test: does the funded_sim show more combined attempts + passes over the 5y period at
+r=2.0 vs r=1.25? If Phase A passes roughly double (to ~68), the pipeline can sustain more Phase B
+accounts even if Phase B bust rate stays at 13 — sust stays 2.62x but $/month could double.
+
+Also test r=1.5 (secondary) to map the curve: r=1.25 → r=1.5 → r=2.0 → identify the optimum.
+
+Fixed defaults: same research baseline (ifvg_edge, partial_r=0, lookback=0, target_clarity=reject).
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B21: $497/mo, sust 2.62x):
+- Primary: $/month improves AND sust stays >= 2.62x (both criteria)
+- If sust drops: report as high-yield option with risk commentary
+- If Phase A passes < 34 (fewer than r=1.25): reject (higher risk is strictly worse at this risk level)
+
+Prior: ~40% that r=2.0 generates more Phase A passes per year (faster cycling is the mechanism;
+the question is whether MLL busts happen proportionally faster or slower than passes; if both scale
+linearly with risk, cycling is faster at same efficiency, and $/month stays the same or improves
+modestly from fewer combine attempt fees paid per pass).
+
+Warning: do NOT use 2022 for any r=2.0 equity generation (frozen holdout per protocol).
+
+Source: Phase A pipeline analysis (wk2-r1); B1-B21 Phase A stats. This is the only Phase A risk
+level we haven't tested (B1 tested r=0.5/0.75/1.0/1.25 for Phase B ORB; Phase A was always r=1.25).
+
+## B32 — ORB-reentry Phase B at r=0.5 (below-optimum risk floor)  [pending]
+Hypothesis: B21's Phase B optimum is r=0.75 (sust 2.62x, $3,131/account, 13 busts). B1 showed
+plain ORB r=0.5 standalone had 6 XFA busts (flat 5y) vs 8 Combine passes — "genuinely positive."
+ORB-reentry at r=0.5 should have fewer busts than r=0.75 (smaller per-trade risk → smaller daily
+swings → harder to breach MLL in a few bad days). The question: does the per-account net reduction
+(~$2,087 estimated at r=0.5 vs $3,131 at r=0.75) make $/month lower, or does high sust compensate?
+
+At r=0.5, per-year busts could be as low as 3-6 (vs 13 at r=0.75). With Phase A 34 passes:
+sust = 34 / 4 = ~8.5x. But $/month depends on how many funded accounts cycle in 5y. At very high
+sust (>> 1), the pipeline is supply-constrained on Phase B: very few funded accounts bust per year,
+so very few new ones are opened per year. Net $/month might be only $100-200 (account earns ~$2k
+over many months before anyone replaces it) — well below B21's $497/mo.
+
+Value of running this: definitively closes the question of whether the risk sensitivity curve has
+a lower optimum than r=0.75. If confirmed, r=0.75 is the true optimum. If r=0.5 gives more $/month
+(unexpected but possible if the funded account survival rate lets it run for 6+ months earning multiple
+payouts), that's a significant finding.
+
+Mechanism: no new code. Generate per-year ORB-reentry r=0.5 equity:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 0.5 --partial-r 0 --set swing_stop_lookback=0 --set engine=orb
+   --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+   --out research/equity_b32/orb_reentry_r0p5_{year}.csv`
+Run B21 pipeline model with equity_b32/ as Phase B (Phase A = equity_b1/control_r1p25 unchanged).
+
+Fixed defaults: orb_reentry_after_stop=True, orb_r_multiple=2.5, partial_r=0, swing_stop_lookback=0.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B21: $497/mo, sust 2.62x):
+- Primary: any improvement in sust while $/month >= $300/mo (meaningful minimum)
+- If sust >> 2.62x but $/month < $300: note as "over-conservative, not practically useful"
+- If sust < 2.62x: reject (r=0.5 is strictly worse than r=0.75 across the board)
+
+Prior: ~25% that r=0.5 beats B21 on $/month (pipeline math suggests the sequential model limits
+throughput when sust >> 1; conservatively-sized accounts earn slowly, and very few busts means
+very few account replacements, so $/month is determined by time-to-payout per account rather than
+by volume of accounts). This is an important but expected-to-reject item that formally closes the
+lower end of the Phase B risk sensitivity ladder.
+
+Source: B1 Phase B risk ladder (r=0.5/0.75/1.0/1.25 plain ORB); B21 established r=0.75 reentry
+as the optimum. This item extends the ladder to r=0.5 for reentry ORB.

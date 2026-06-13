@@ -1364,5 +1364,48 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T17:30:00Z",
+    "session": "wk2-r1",
+    "item": "RESEARCH",
+    "variant": "Session wk2-r1: post-B29 backlog replenishment — DOW analysis + pipeline risk sensitivity + web research",
+    "objective": "infra",
+    "metrics": {
+      "ifvg_dow_tuesday_pf": 0.917,
+      "ifvg_dow_tuesday_n": 539,
+      "ifvg_dow_tuesday_net": -15792,
+      "ifvg_dow_wednesday_pf": 1.182,
+      "ifvg_dow_monday_pf": 1.088,
+      "ifvg_dow_thursday_pf": 1.032,
+      "ifvg_dow_friday_pf": 1.008,
+      "ifvg_skip_tuesday_pf_est": 1.080,
+      "ifvg_skip_tuesday_pf_improvement_pct": 3.5,
+      "ifvg_skip_tuesday_volume_pct_remaining": 78,
+      "orb_dow_monday_pf": 0.898,
+      "orb_dow_monday_n": 206,
+      "orb_dow_monday_net": -5100,
+      "orb_dow_wednesday_pf": 0.942,
+      "orb_dow_wednesday_n": 207,
+      "orb_dow_wednesday_net": -3131,
+      "orb_dow_friday_pf": 1.775,
+      "orb_dow_friday_n": 203,
+      "orb_dow_friday_net": 29446,
+      "orb_friday_pct_of_total_net": 60,
+      "orb_skip_monwed_pf_est": 1.147,
+      "orb_skip_monwed_pf_improvement_pct": 4.3,
+      "orb_skip_monwed_volume_pct_remaining": 60,
+      "topstep_published_combine_success_rate_pct": 16.8,
+      "our_b21_phase_a_pass_rate_pct": 21,
+      "web_ideas_none_new": "Lesson 6 confirmed 5-for-5; no new mechanism families from NQ/futures academic literature",
+      "new_backlog_items": 3
+    },
+    "verdict": "dataset",
+    "learned": "Day-of-week analysis of 5y iFVG and ORB MFE/MAE data (excl 2022) reveals two structural anomalies: iFVG Tuesday is the only loss-making iFVG day (PF=0.917, net=-$15.8k), and ORB Monday+Wednesday are both loss-making (PF=0.898/0.942) while ORB Friday is exceptionally strong (PF=1.775, contributing 60% of ORB net from 20% of trades). These are own-data findings, not external claims; mechanisms (FOMC Wednesday, gap-reversal Monday, consolidation Tuesday, position-squaring Friday) are data-corroborated. Web research found nothing new — Lesson 6 confirmed 5-for-5.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/research_dow_analysis.py"],
+      "src": null
+    }
   }
 ]

@@ -468,3 +468,17 @@ Appended 2026-06-13 (B29 ORB-reentry 10min Phase B):
     exposes it. Rule: when a flat-5y benefit comes from higher trade frequency, verify per-year dynamics
     before committing to a pipeline recommendation — higher frequency always means faster account cycling,
     which amplifies bust rate in the two-phase model.
+
+Appended 2026-06-13 (wk2-r1 research session):
+
+66. **iFVG Tuesday and ORB Monday+Wednesday are structurally loss-making over 5 years; ORB Friday is the
+    dominant single-day edge.** From 5y MFE/MAE data (excl 2022): iFVG Tuesday PF=0.917 (n=539,
+    net=-$15,792) — the only loss-making iFVG day. ORB Monday PF=0.898 (-$5,100) and Wednesday
+    PF=0.942 (-$3,131) are both loss-making; ORB Friday PF=1.775 (+$29,446) generates 60% of total
+    ORB net from 20% of trades. These are 5-year structural patterns, not external claims. Proposed
+    mechanisms: iFVG Tuesday = post-Monday-positioning consolidation (choppy); ORB Monday = weekend
+    gap reversals creating false breakouts; ORB Wednesday = FOMC announcement days (choppy, indecisive);
+    ORB Friday = end-of-week position squaring (clear directional momentum). B30 tests whether filtering
+    these days improves funded-phase PF and sustainability. Importantly: these are DIFFERENT from
+    session-hour filters (B18 rejected) — DOW patterns reflect institutional calendar cycles, not
+    intraday microstructure.
