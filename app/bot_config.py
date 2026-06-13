@@ -138,6 +138,12 @@ class StrategyParams(BaseModel):
     # days / iFVG on large. True = inverted (ORB on large-range days).
     rs_invert: bool = False
 
+    # Break-even trail: move the stop to entry (BE) the moment MFE exceeds
+    # be_trail_r × initial stop distance. 0 = disabled (default).
+    # Default-off; data-derived from B2 MFE/MAE analysis (ORB r2.5: winner p50
+    # MFE 1.64R, loser MFE p90 1.29R → trial values: 1.0R and 1.5R).
+    be_trail_r: Decimal = Decimal("0")
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

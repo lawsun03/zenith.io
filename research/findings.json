@@ -50,5 +50,51 @@
     "verdict": "candidate",
     "learned": "ORB r0.75 holds positive edge in the 2022 holdout year (PF 1.15, +$5,551) despite the rate-hike/tech-crash regime. Combine pass rate drops from 52% to 25% in 2022, but the strategy stays profitable — more robust to the low-price regime than the fixed-point iFVG filters.",
     "links": {"doc": "trade_analysis/2026-06-13_B1_funded_objective_scoring.md", "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T06:00:00Z",
+    "session": "wk1-b2",
+    "item": "B2",
+    "variant": "MFE/MAE dataset + be_trail_r=1.0 exit ladder (iFVG and ORB)",
+    "objective": "combine",
+    "metrics": {
+      "ifvg_be_trail_passes_61mo": 7,
+      "ifvg_be_trail_pf": 0.97,
+      "ifvg_baseline_test_passes": 6,
+      "ifvg_baseline_test_total": 17,
+      "ifvg_baseline_pf": 1.31,
+      "orb_be_trail_passes_61mo": 8,
+      "orb_be_trail_pass_rate_pct": 13.1,
+      "orb_be_trail_pf": 1.057,
+      "orb_baseline_passes_61mo": 12,
+      "orb_baseline_pass_rate_pct": 19.7,
+      "orb_baseline_pf": 1.10,
+      "ifvg_winner_mfe_p50_r": 3.0,
+      "ifvg_winner_mfe_p75_r": 3.69,
+      "ifvg_loser_mfe_p75_r": 1.03,
+      "ifvg_winner_mae_p90_r": 0.82,
+      "orb_winner_mfe_p75_r": 2.50,
+      "orb_loser_mfe_p75_r": 0.78,
+      "orb_loser_mfe_p90_r": 1.29
+    },
+    "verdict": "rejected",
+    "learned": "be_trail_r=1.0 hurts the Combine objective on both iFVG and ORB (both metrics worse for both strategies). The mechanism kills 'two-thrust' winners: price crosses 1.0R favorable, stop moves to BE, price consolidates back to entry and stops out instead of running to target. The distributions of loser-MFE and winner-MAE overlap at 1.0R — there is no clean separation threshold that saves losers without also killing winners.",
+    "links": {"doc": "trade_analysis/2026-06-13_B2_mfe_mae_excursion.md", "runs": ["backtests/ab_be_trail_r10_ifvg.json", "backtests/ab_be_trail_r10_orb25.json", "backtests/ab_orb25_baseline.json"], "src": ["app/broker/paper.py", "app/backtest/runner.py", "tests/test_mfe_mae.py"]}
+  },
+  {
+    "ts": "2026-06-13T06:00:00Z",
+    "session": "wk1-b2",
+    "item": "B2",
+    "variant": "MFE/MAE excursion infrastructure",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 11,
+      "new_trade_fields": ["mfe_pts", "mae_pts", "r_mfe", "r_mae"],
+      "new_bot_config_fields": ["be_trail_r"],
+      "analysis_csvs": ["research/mfe_mae_ifvg_clean.csv", "research/mfe_mae_orb_clean.csv", "research/mfe_mae_control.csv", "research/mfe_mae_orb25.csv"]
+    },
+    "verdict": "dataset",
+    "learned": "Per-trade MFE/MAE now ships with every backtest run as r_mfe/r_mae fields on BacktestResult.trades. The be_trail_r mechanism is wired and default-off. Four analysis CSVs cover iFVG and ORB (clean: partial_r=0; deployed: partial_r=1.5) for future exit-mode research.",
+    "links": {"doc": null, "runs": [], "src": ["app/broker/paper.py", "app/backtest/runner.py", "app/bot_config.py", "scripts/analyze_mfe_mae.py", "tests/test_mfe_mae.py"]}
   }
 ]

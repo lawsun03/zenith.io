@@ -77,3 +77,17 @@ Entry format:
 - **Next:** B11 (excursion instrument filter — small, high value) is the next pending
   item that unblocks clean live data; B2 (MFE/MAE) follows; B3 (phase-policy pipeline
   sim) needs B1 done (now done) — can begin next session.
+
+## 2026-06-13T06:00Z — session wk1-b2 — B2 (MFE/MAE excursion ladder)
+- **Bot health:** not checked this session (market closed; no live risk; prior session confirmed flat).
+- **Ran:** (Steps 1-3)
+  - Step 1 (dataset): added MFE/MAE tracking to PaperBroker (`_OpenBracket.mfe_pts/mae_pts/initial_stop_dist`, `_closed_excursions` sidecar, `be_trail_r` mechanism); wired r_mfe/r_mae into BacktestResult.trades in runner.py; added `be_trail_r: Decimal = Decimal("0")` to StrategyParams. 11 defining-behavior tests in tests/test_mfe_mae.py.
+  - Step 2 (analysis): `scripts/analyze_mfe_mae.py` ran per-year backtests (2021/2023/2024/2025/2026) on iFVG (partial_r=0) and ORB r2.5 (partial_r=0). Distribution CSVs: `research/mfe_mae_ifvg_clean.csv`, `research/mfe_mae_orb_clean.csv`, `research/mfe_mae_control.csv`, `research/mfe_mae_orb25.csv`.
+  - Step 3 (candidates): be_trail_r=1.0 benchmarked on iFVG (61mo) and ORB r2.5 (61mo) via run_monthly_combine.py. ORB r2.5 baseline run to establish comparison.
+- **Numbers:**
+  - iFVG + be_trail_r=1.0: 7/61 passes (11%), PF 0.97 vs iFVG control (6/17 test = 35%, PF 1.31) — BOTH METRICS WORSE.
+  - ORB + be_trail_r=1.0: 8/61 passes (13%), PF 1.057 vs ORB baseline (12/61 = 20%, PF 1.10) — BOTH METRICS WORSE.
+  - Key distributions (partial_r=0): iFVG winner MFE p50=3.0R, p75=3.69R; loser MFE p75=1.03R, p90=1.80R; winner MAE p90=0.82R. ORB winner MFE p75=2.50R (= target); loser MFE p75=0.78R, p90=1.29R.
+- **Verdict:** rejected (be_trail_r=1.0); dataset (MFE/MAE infrastructure shipped).
+- **Learned:** be_trail_r at 1.0R destroys "two-thrust" winning trades — price crosses 1.0R favorable, stop moves to BE, price consolidates to entry (or below), scratch instead of running to target. The loser-MFE and winner-MAE distributions overlap at 1.0R with no clean separation threshold. The MFE/MAE dataset is now available in BacktestResult.trades for all future runs.
+- **Next:** B3 (two-phase policy sim, B1 now done) or B5 (ORB prior-day-range qualifier). B11 (excursion instrument filter, small fix) is highest-value quality item if market opens before next session.

@@ -83,3 +83,23 @@ Appended 2026-06-13 (B1 funded-objective scoring):
     stitched pipeline (21 passes vs 46 busts at r1.25) is the worst ratio of any
     variant. Route trail-1R ideas to the research-only bin unless pipeline
     sustainability is explicitly modeled.
+
+Appended 2026-06-13 (B2 MFE/MAE excursion ladder):
+
+20. **be_trail_r=1.0 kills "two-thrust" winners and hurts both objectives on both
+    strategies.** iFVG: 7/61 passes (11%), PF 0.97 vs ~35% baseline, PF 1.31.
+    ORB: 8/61 (13%), PF 1.057 vs 12/61 (20%), PF 1.10 baseline. The mechanism
+    moves the stop to entry when MFE reaches 1.0R — any winner that consolidates
+    back to entry before its final push to target becomes a scratch. Don't propose
+    be_trail_r without first confirming that loser-MFE and winner-MAE distributions
+    are cleanly separated at the candidate threshold.
+21. **Adverse excursion from entry is not the same as retracement from MFE peak.**
+    MAE p90=0.82R for winners means 90% of winners had their worst dip within 0.82R
+    of entry — it does NOT mean those winners survived a 0.82R retracement from their
+    peak before recovery. A winner can have MFE=2.0R, then pull back 1.0R to entry
+    (MAE=0 from initial entry perspective), and be stopped at BE. The path through
+    the MFE point is what matters for trail mechanisms, not the raw MAE number.
+22. **MFE/MAE infrastructure now available.** BacktestResult.trades includes
+    mfe_pts, mae_pts, r_mfe, r_mae for every closed trade. Analysis CSVs are in
+    research/mfe_mae_*.csv. The be_trail_r parameter is wired and default-off —
+    future exit-mode candidates can use it without new code.

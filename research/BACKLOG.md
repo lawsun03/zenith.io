@@ -27,7 +27,7 @@ PF we ever measured. Score them on the XFA payout metric instead.
   enough that account replacement (via Combine passes) sustains it. Think in
   pipeline terms: passes feed accounts; payouts must outrun bust+reset costs.
 
-## B2 — MFE/MAE excursion ladder  [pending]
+## B2 — MFE/MAE excursion ladder  [done — infrastructure shipped; be_trail_r=1.0 rejected (iFVG: 7/61 passes 11% PF 0.97; ORB: 8/61 13% PF 1.057 — both worse than baseline); MFE/MAE per-trade data in BacktestResult.trades + research/*.csv]
 Standing #1 from the monitoring backlog. Capture per-trade max favorable /
 adverse excursion in the backtest, then derive exit levels from data.
 - Step 1 (dataset): additive fields on `BacktestResult.trades` — track per

@@ -64,6 +64,12 @@ class _OpenBracket:
     # Trail-1R mode (ablation T4): R distance at entry; ratchet level reached.
     trail_r: Decimal | None = None
     trail_level: int = 0
+    # MFE/MAE excursion tracking (price points from slipped entry, always >= 0)
+    mfe_pts: Decimal = field(default_factory=lambda: Decimal("0"))
+    mae_pts: Decimal = field(default_factory=lambda: Decimal("0"))
+    initial_stop_dist: Decimal = field(default_factory=lambda: Decimal("0"))
+    # BE-trail: once triggered, stop is already at entry; don't trigger again.
+    be_trail_triggered: bool = False
 
 
 # Per-instrument tick value. Verified against CME contract specs:
@@ -130,6 +136,7 @@ class PaperBroker:
         self._partial_profit_r = partial_profit_r
         self._max_entry_slippage_frac = max_entry_slippage_frac
         self._trail_1r = trail_1r
+        self._be_trail_r = Decimal("0")   # set by run_backtest via strategy_params
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -140,6 +147,8 @@ class PaperBroker:
         self._bar_handlers: list[BarHandler] = []
         self._fill_handlers: list[FillHandler] = []
         self._equity_handlers: list[EquityHandler] = []
+        # Keyed by entry order_id: (mfe_pts, mae_pts, initial_stop_dist)
+        self._closed_excursions: dict[str, tuple[Decimal, Decimal, Decimal]] = {}
 
     # ------------------------------------------------------------------
     # Connection
@@ -261,6 +270,7 @@ class PaperBroker:
             entry=slipped_entry,  # record slipped price as the true entry for P&L
             stop=stop,
             target=target,
+            initial_stop_dist=abs(slipped_entry - stop),
         )
 
         if self._trail_1r:
@@ -376,6 +386,14 @@ class PaperBroker:
         self._next_order_id = 1
         self._last_bar_close.clear()
         self._current_bar_ts = None
+        self._closed_excursions.clear()
+
+    def excursions_by_order_id(self) -> dict[str, tuple[Decimal, Decimal, Decimal]]:
+        """Return closed-bracket excursions keyed by entry order_id.
+
+        Each value is (mfe_pts, mae_pts, initial_stop_dist) in price points.
+        """
+        return dict(self._closed_excursions)
 
     async def inject_bar(self, bar: Bar) -> None:
         """
@@ -390,6 +408,36 @@ class PaperBroker:
             bracket = self._open.get(oid)
             if bracket is None or bracket.instrument != bar.instrument:
                 continue
+
+            # MFE/MAE: update before stop/target check so the favorable leg of
+            # a whipsaw bar is captured even when the bracket closes this bar.
+            if bracket.side == "long":
+                fav = bar.high - bracket.entry
+                adv = bracket.entry - bar.low
+            else:
+                fav = bracket.entry - bar.low
+                adv = bar.high - bracket.entry
+            if fav > bracket.mfe_pts:
+                bracket.mfe_pts = fav
+            if adv > bracket.mae_pts:
+                bracket.mae_pts = adv
+
+            # BE trail: once MFE exceeds be_trail_r × initial stop distance,
+            # move the stop to break-even (entry). Fires once; independent of
+            # trail_1r (don't enable both simultaneously).
+            if (
+                self._be_trail_r > 0
+                and not bracket.be_trail_triggered
+                and bracket.initial_stop_dist > 0
+                and bracket.mfe_pts >= self._be_trail_r * bracket.initial_stop_dist
+            ):
+                bracket.stop = bracket.entry
+                bracket.be_trail_triggered = True
+                log.info(
+                    "BE trail triggered: %s stop -> BE=%s (mfe=%.2f >= %.2f×R)",
+                    bracket.order_id, bracket.entry,
+                    float(bracket.mfe_pts), float(self._be_trail_r),
+                )
 
             # Partial profit: if partial_target touched and not yet filled,
             # close partial_size contracts and move the stop to break-even.
@@ -522,6 +570,9 @@ class PaperBroker:
         pnl -= commission * bracket.size
         self._balance += pnl
 
+        self._closed_excursions[bracket.order_id] = (
+            bracket.mfe_pts, bracket.mae_pts, bracket.initial_stop_dist
+        )
         del self._open[bracket.order_id]
 
         await self._fanout(

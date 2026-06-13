@@ -410,6 +410,7 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 "exit_price": f["fill_price"],
                 "realized_pnl": f["realized_pnl_delta"],
                 "hold_seconds": hold,
+                "_entry_order_id": open_entry.get("order_id", ""),
             }
             if open_entry.get("grade") is not None:
                 trade["grade"] = open_entry["grade"]
@@ -445,6 +446,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         max_entry_slippage_frac=cfg.max_entry_slippage_frac,
         trail_1r=cfg.trail_1r,
     )
+    if cfg.strategy_params is not None and cfg.strategy_params.be_trail_r > 0:
+        broker._be_trail_r = cfg.strategy_params.be_trail_r
     base_risk = fifty_k_combine(soft_buffer=cfg.soft_buffer)
     risk_state = RiskState(config=base_risk if cfg.enforce_risk_limits else _no_limits_risk_config(base_risk))
     runner = _build_runner(cfg)
@@ -584,6 +587,18 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
                 fill_dict["criteria"] = grade_info["criteria"]
     stats = _compute_stats(fills_captured, risk_state, cfg.starting_balance)
     trades = _reconstruct_trades(fills_captured)
+
+    # Merge MFE/MAE from the broker's closed-excursion sidecar into each trade.
+    excursions = broker.excursions_by_order_id()
+    for trade in trades:
+        oid = trade.pop("_entry_order_id", "")
+        exc = excursions.get(oid)
+        if exc is not None:
+            mfe, mae, stop_dist = exc
+            trade["mfe_pts"] = str(mfe)
+            trade["mae_pts"] = str(mae)
+            trade["r_mfe"] = round(float(mfe / stop_dist), 4) if stop_dist else 0.0
+            trade["r_mae"] = round(float(mae / stop_dist), 4) if stop_dist else 0.0
 
     return BacktestResult(
         config=cfg,
