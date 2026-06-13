@@ -285,3 +285,24 @@ Appended 2026-06-13 (B19 long-only iFVG + London+NY AM funded benchmark):
     contributions from shorts; B19 removes only NY PM (all-sides PF 0.906 < 1.0), which is
     net-negative for both long and short signals. Rule: when a session's all-sides PF < 1.0,
     it is safely removable from any config — even one that already benefits from named sessions.
+
+Appended 2026-06-13 (wk1-r4 research session):
+
+49. **First iFVG signal of each day (rank-1) has structurally higher PF (1.129) than the full
+    aggregate (1.043).** Rank-2 signals are loss-making (PF=0.970); the primary drag is rank-2+
+    shorts (PF=0.841 over 5y, n=731). Rank-2+ longs remain profitable (PF=1.139). A hybrid that
+    takes all rank-1 signals plus rank-2+ longs only achieves PF=1.133 with 29.1/month volume —
+    similar PF to B15 long-only (1.136) but 43% more volume. Mechanism: the second short signal
+    of the day fires into an already-tested level; the structure that made the first iFVG worth
+    trading is consumed by the first entry.
+
+50. **Research benchmark config parity gap**: all B1-B21 funded benchmarks ran with BotConfig
+    defaults (bot_config.json was empty at the time): partial_profit_r=0, enabled_killzones=
+    ["london","ny_am","ny_pm"], swing_stop_lookback=0, target_clarity_mode="reject",
+    ifvg_rule_f_enabled=True, ifvg_entry_mode="ifvg_edge". The deployed live bot_config.json
+    (as of 2026-06-13) has: partial_profit_r=1.5, killzones=["all"], swing_stop_lookback=30,
+    target_clarity_mode="off", rule_f_enabled=False. These 5 parameter differences mean the
+    B1-B21 benchmark numbers (PF, $/month, sust) do NOT reflect live behavior. All future
+    equity_export benchmarks must pass `--partial-r 0 --set swing_stop_lookback=0` (and other
+    explicit overrides) to maintain within-series consistency with prior results — OR explicitly
+    document that a new research baseline is being established.

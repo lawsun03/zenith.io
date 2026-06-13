@@ -442,7 +442,7 @@ this passes criteria) — the long-only removal of loss-making shorts is a stron
 
 Source: B1/B3 pipeline model + B15 equity data + per-year methodology correction analysis.
 
-## B21 — iFVG Combine → ORB-reentry Funded (two-phase pipeline)  [done — candidate: iFVG r1.25 Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x (vs B3 $393/mo, 1.26x — beats B3 on both criteria); r1.0/r1.25 reentry pipeline-negative; new recommended two-phase pair]
+## B21 — iFVG Combine → ORB-reentry Funded (two-phase pipeline)  [done — candidate: iFVG r1.25 Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x (vs B3 $393/mo, 1.26x — beats B3 on both criteria); r1.0/r1.25 reentry pipeline-negative; new recommended two-phase pair; benchmark baseline uses partial_r=0, killzones=["london","ny_am","ny_pm"], swing_stop_lookback=0 (BotConfig defaults at the time)]
 Hypothesis: B14 ORB-reentry standalone sust 0.99x at r1.0 (borderline pipeline-negative).
 B3 showed that iFVG combine speed lifts ORB r1.0 standalone sust 0.85x → 1.26x two-phase.
 The same mechanism may lift ORB-reentry from 0.99x → ~1.46x two-phase. Additionally,
@@ -476,3 +476,107 @@ Estimated sust is marginal — below the 1.26x threshold. Lower prior (~35% pass
 but still worth testing since $/mo may be substantially higher.
 
 Source: B3 pipeline model + B14 ORB-reentry equity data + per-year methodology analysis.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk1-r4  [done — 2 items appended: B22 ORB range_minutes sensitivity, B23 iFVG daily signal cap]
+
+B21 exhausted the backlog. This session replenishes with new testable hypotheses.
+Sources: WebSearch + data mining on mfe_mae_ifvg_clean.csv (per-signal-rank analysis).
+
+Key data findings driving proposals:
+- **Signal-rank analysis** (scripts/analyze_signal_rank.py, n=2477 over 5y excl. 2022):
+  - Rank-1 (first iFVG signal of day): n=1016, PF=1.129 — BEST single-rank PF
+  - Rank-2: n=726, PF=0.970 — LOSS-MAKING (drags aggregate PF from 1.129 to 1.062 when added)
+  - Rank-3: n=419, PF=1.081; Rank-4: n=192, PF=0.813; Rank-5: n=88, PF=0.962
+  - Cumulative PF: cap=1 → 1.129; cap=2 → 1.062; cap=3 → 1.066; full → 1.043
+  - Rank-2+ SHORTS are the loss-making driver: PF=0.841 (n=731); rank-2+ LONGS PF=1.139
+  - Hybrid (rank-1-all + rank-2+-long): PF=1.133, n=1746, 29.1/month — but 2023 PF=0.983 (red flag)
+- **Config parity gap discovered**: current bot_config.json has partial_profit_r=1.5, 
+  enabled_killzones=["all"], swing_stop_lookback=30, target_clarity_mode="off" — these differ
+  from the research baseline used in B1-B21 (BotConfig defaults: partial_r=0, killzones=named sessions,
+  swing_stop_lookback=0). Future benchmarks must pass `--partial-r 0` to match prior results.
+- **ORB range_minutes=15 is untested** — already in StrategyParams as orb_range_minutes (default 15),
+  no code needed to test 10 or 30.
+- **Web search**: SSRN 6709401 (Apr 2026) tests 14 OHLCV signal families on MNQ 5min 2021-2025 —
+  no family survives institutional standards. Lesson 6 confirmed 4-for-4. No new mechanisms found.
+
+## B22 — ORB opening range window sensitivity (10 vs 15 vs 30 min)  [pending]
+Hypothesis: the 15-minute opening range window is arbitrary. A shorter window (10 min) locks
+the OR faster and generates more breakout opportunities; a longer window (30 min) filters out
+the first-bar noise and produces higher-quality breakouts at lower frequency. Either direction
+could improve the combine pass rate or funded PF.
+
+Mechanism: no new code. `orb_range_minutes` is already in StrategyParams and wired in both
+runner.py and main.py. Test via `--set engine=orb --set orb_range_minutes=10` and
+`--set engine=orb --set orb_range_minutes=30`.
+
+Fixed defaults to test: 10 and 30 (alongside existing 15 baseline).
+Defining-behavior tests: none needed (no code change).
+
+IMPORTANT — baseline parity: pass `--partial-r 0` to all equity_export runs so results are
+comparable to B1-B21 benchmarks (which used BotConfig defaults of partial_r=0 at the time).
+Also pass `--set swing_stop_lookback=0` to match research baseline (deployed bot uses 30).
+
+Benchmark:
+1. Combine objective: `run_monthly_combine.py --set engine=orb --set orb_r_multiple=2.5 --set orb_range_minutes=10` and `...=30`.
+   Compare to baseline (12/61 passes, PF 1.10 at orb_range_minutes=15).
+2. Funded objective: `equity_export --partial-r 0 --set engine=orb --set orb_r_multiple=2.5
+   --set orb_range_minutes=10` (and 30) + `funded_sim --haircut 200`.
+   Compare to B1 ORB r1.0 baseline funded metrics.
+
+Success criteria:
+- Combine: any range_minutes value achieves >= 13/61 passes AND PF >= 1.10 (matches or beats B5/B7)
+- Funded: net $/month or sust ratio improves vs ORB r1.0 standalone baseline from B1
+
+Prior: ~30% (15-min is a standard market open interval; parameter plateau is real; but 10-min
+could add meaningful volume if NQ's early-session volatility resolves faster).
+
+Source: ORB timing mechanics + common practitioner variations (range_minutes is the one
+unexplored ORB parameter after B5/B14/B17).
+
+## B23 — iFVG daily signal cap (funded objective, cap=1)  [pending]
+Hypothesis: the first iFVG signal of the day (rank-1, both sides) has PF=1.129, which is +8.3%
+above the full all-ranks aggregate (1.043). Rank-2 signals are loss-making (PF=0.970) due to
+rank-2+ shorts (PF=0.841). Capping at 1 signal per day raises PF to 1.129 — better than B15's
+long-only (PF=1.121) with balanced long/short exposure.
+
+Volume concern: cap=1 yields ~17/month (too sparse for combine). Route to funded objective only.
+Expected vs B15 (long-only r1.25, sust=1.13x, PF=1.121): cap=1 has slightly higher PF but
+~42% less volume. Net effect on funded pipeline uncertain — fewer busts from higher PF, but fewer
+total account earnings from lower volume. Test at r1.0/r1.25/r1.5 to probe the risk lever.
+
+Mechanism:
+- Add `ifvg_daily_signal_cap: int = 0` to StrategyParams (default 0 = disabled; > 0 = max
+  signals emitted per calendar ET-day from the iFVG/SweepDisplacement engine)
+- Add daily signal counter to SweepDisplacementComposer: reset on bar-day-change; increment on
+  every emitted signal; return None (suppress) when count >= cap and cap > 0
+- Day boundary: same ET-date comparison already used in ORBDetector
+
+Fixed defaults: `ifvg_daily_signal_cap=0` (off). Test at cap=1 (primary), cap=2 (secondary).
+
+Defining-behavior tests (tests/test_ifvg_signal_cap.py):
+1. cap=1: first signal of day fires; second identical-setup signal returns None
+2. cap=2: first and second signals fire; third returns None
+3. cap=0 (default): unlimited signals (existing behavior preserved)
+4. Day reset: cap=1, first signal fires on day 1, same setup fires again on day 2
+
+Success criteria (vs B19 r1.25, best funded standalone: PF=1.173, sust=1.600x):
+- Primary: sust >= 1.60x AND PF >= 1.17 (doesn't regress vs B19)
+- If B19 beats cap=1 on both metrics, B23 is rejected (B15/B19 chain is already the right
+  funded filter and cap=1's lower volume hurts it)
+
+Benchmark (funded objective, explicit research baseline):
+1. `equity_export --partial-r 0 --set ifvg_daily_signal_cap=1 --risk-pct 1.25`
+   Compare to B19 r1.25 baseline (PF 1.173, sust 1.600x).
+2. Also test cap=1 with `allowed_sides=long` (first-signal long-only): does removing rank-1 shorts
+   improve B23 further, or does rank-1 short quality (PF=1.127) justify keeping them?
+
+Prior: ~25% (B19 already captures most of the PF improvement through long-only filter;
+cap=1 trades volume for PF improvement, but 2023 regime risk for first-signal shorts is real;
+B15 long-only at same PF with more volume likely beats cap=1 on pipeline metrics).
+
+Source: scripts/analyze_signal_rank.py data mining (this session). Rank-1 PF=1.129 vs rank-2
+PF=0.970; year-by-year analysis shows 2023 cap=1 PF is regime-dependent (not computed directly,
+but rank-1 2023 shorts likely dragged by the same mechanism as full iFVG 2023 weakness).

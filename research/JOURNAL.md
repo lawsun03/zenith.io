@@ -427,3 +427,48 @@ Entry format:
 - **Mechanism:** At r0.75, ORB-reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded bust count nearly identical (13 vs 14). The iFVG combine produces 34 passes against only 13 reentry busts → 2.62x sustainability. Higher risk levels (r1.0/r1.25) amplify volume but create too many funded busts for the iFVG combine to sustain.
 - **Learned:** ORB-reentry at low risk (r0.75) is the sweet spot for the two-phase pipeline: the reentry mechanism adds meaningful account earnings without creating the bust frequency that kills sustainability at r1.0+. This contrasts with B14's standalone finding (ORB-reentry sust 0.99x at r1.0) where the full earning power required r1.0+. In the two-phase model, the iFVG combine's fixed 34 passes constrains how many funded busts are sustainable; r0.75 reentry keeps busts at 13 (vs 27 for plain ORB r1.0) making the pipeline much more robust.
 - **Next:** B21 exhausts the backlog. Recommend a new research/ideation session to replenish. Monday recommendation: deploy iFVG r1.25 Combine + ORB-reentry r0.75 Funded as the two-phase config. Compare to deployed live config to assess phase-switch mechanics needed.
+
+## 2026-06-13T12:00:00Z — session wk1-r4 — RESEARCH (ideation, post-B21 backlog replenishment)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no lockout. Market closed (Saturday).
+- **Session type:** RESEARCH/IDEATION — B21 exhausted the pending backlog.
+- **Ran:**
+  1. Bot health check + Databento ledger audit ($0.00/$20.00 spent).
+  2. WebSearch (via Explore agent): no new mechanism families found. SSRN 6709401 (Apr 2026)
+     tests 14 OHLCV signal families on MNQ 5min 2021-2025, none survive institutional standards.
+     Lesson 6 confirmed 4-for-4. All practitioner ideas reduce to iFVG/ORB already tested.
+  3. **Signal-rank analysis** (scripts/analyze_signal_rank.py + analyze_signal_rank2.py):
+     Loaded research/mfe_mae_ifvg_clean.csv (n=2477, 5y excl 2022); ranked signals by
+     ET-date and intraday timestamp; computed PF by rank (1-7), cumulative PF by cap,
+     and per-rank × per-side breakdown.
+  4. **Config parity audit**: read bot_config.json and equity_export.py to confirm which
+     BotConfig fields are used by benchmarks. Discovered: bot_config.json now has
+     partial_profit_r=1.5, killzones=["all"], swing_stop_lookback=30, target_clarity_mode="off",
+     ifvg_rule_f_enabled=False — all different from BotConfig defaults used in B1-B21.
+  5. Read bot_config.py and scripts/equity_export.py to confirm partial_profit_r IS passed
+     to BacktestConfig (via `--partial-r` arg or bot_cfg fallback).
+- **Key findings:**
+  - Rank-1 PF=1.129, rank-2 PF=0.970 (loss-making), rank-3 PF=1.081, rank-4 PF=0.813.
+  - Rank-2+ shorts: PF=0.841 (n=731); rank-2+ longs: PF=1.139 (n=730).
+  - Cap=1 gives PF=1.129, ~16.9/month. Cap=3 gives PF=1.066, ~43/month. Full: 1.043.
+  - Hybrid (rank-1-all + rank-2+-long): PF=1.133, 29.1/month — but 2023 PF=0.983 (red flag).
+  - B15 long-only (20.4/month, PF=1.136) is approximately equally good quality as cap=1 but
+    with more volume. The rank-based filter does not clearly beat B15.
+  - **Config parity gap**: equity_export uses `bot_cfg.partial_profit_r` as default. The
+    deployed bot_config.json now has partial_r=1.5 vs B1-B21 research baseline of 0. Future
+    benchmarks MUST pass `--partial-r 0 --set swing_stop_lookback=0` to stay on-series.
+  - ORB `orb_range_minutes` is configurable (default 15) but has NEVER been benchmarked at
+    10 or 30. This is the only unexplored structural parameter in the ORB engine.
+- **Numbers:** rank-1 PF=1.129; rank-2 PF=0.970; rank-2+ shorts PF=0.841; rank-2+ longs PF=1.139;
+  hybrid (rank-1+rank-2+-long) PF=1.133, 29.1/month; cap=1 PF=1.129, 16.9/month.
+- **Verdict:** dataset — 2 new BACKLOG items appended (B22, B23). Key negative: signal-rank
+  filtering does not clearly improve on B15 long-only; B15 remains the reference funded filter.
+- **Learned:** The first iFVG signal each day has structurally better PF (1.129) than later signals
+  (rank-2 PF=0.970, loss-making). But capping at 1 signal/day yields less volume than B15 long-only
+  at similar PF — B15 is already near-optimal for the funded phase. The more valuable discovery is the
+  config parity gap: all B1-B21 benchmarks used BotConfig defaults (partial_r=0, named-session killzones,
+  swing_stop_lookback=0) while the deployed bot now has 5 different parameters. Monday: Lawrence must
+  decide whether to re-benchmark B21's recommended config at the deployed config or accept the research
+  baseline as the comparison anchor for the two-phase recommendation.
+- **Next:** B22 (ORB range_minutes sensitivity — no code, clean benchmark) or B23 (iFVG daily cap —
+  small code, funded only). Monday priority: address config parity gap + decision on deploying B21
+  two-phase config (iFVG r1.25 Combine + ORB-reentry r0.75 Funded).

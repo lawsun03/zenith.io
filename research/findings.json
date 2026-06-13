@@ -538,5 +538,32 @@
     "verdict": "candidate",
     "learned": "ORB-reentry (orb_reentry_after_stop=True) at r0.75 combined with iFVG Combine achieves $497/mo and sust 2.62x — beating B3's best pair ($393/mo, 1.26x) by +26% $/mo and +108% sustainability. The mechanism: at r0.75, reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded busts low (13 vs 14). The iFVG combine's 34 passes sustain only 13 reentry busts → 2.62x sust. r1.0 and r1.25 reentry configs are both pipeline-negative (sust 0.83x and 0.71x) — the volume amplification at higher risk creates more busts than the iFVG combine can replace. B21 r0.75 is the new recommended two-phase pipeline config.",
     "links": {"doc": null, "runs": ["research/equity_b21/"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T12:00:00Z",
+    "session": "wk1-r4",
+    "item": "RESEARCH",
+    "variant": "Session wk1-r4: ideation — signal-rank analysis + config parity audit + WebSearch",
+    "objective": "infra",
+    "metrics": {
+      "ifvg_rank1_pf_5y": 1.129,
+      "ifvg_rank2_pf_5y": 0.970,
+      "ifvg_rank3_pf_5y": 1.081,
+      "ifvg_rank2plus_short_pf": 0.841,
+      "ifvg_rank2plus_long_pf": 1.139,
+      "ifvg_hybrid_pf": 1.133,
+      "ifvg_hybrid_monthly_trades": 29.1,
+      "ifvg_rank1_monthly_trades": 16.9,
+      "ifvg_cap1_pf": 1.129,
+      "ifvg_cap3_pf": 1.066,
+      "ifvg_full_pf": 1.043,
+      "config_parity_gap_params": ["partial_profit_r", "enabled_killzones", "swing_stop_lookback", "target_clarity_mode", "ifvg_rule_f_enabled"],
+      "web_ideas_none_new": "SSRN 6709401 tests 14 OHLCV families on MNQ, none survive; Lesson 6 confirmed 4-for-4",
+      "orb_range_minutes_untested": "orb_range_minutes param exists (default 15); no benchmark ever tested 10 or 30",
+      "new_items_added": 2
+    },
+    "verdict": "dataset",
+    "learned": "Per-signal-rank analysis (scripts/analyze_signal_rank.py, 5y MFE/MAE data) reveals that the first iFVG signal of each day (rank-1, PF=1.129) is materially stronger than the aggregate (PF=1.043), and rank-2 signals are net-negative (PF=0.970) driven by loss-making rank-2+ shorts (PF=0.841). A cap at 1 signal/day captures the quality improvement but yields only 16.9/month — insufficient for combine and less volume than B15 long-only (20.4/month, PF=1.136). The B15 long-only filter is therefore approximately optimal for the funded phase. Critical finding: the deployed bot_config.json now differs from the B1-B21 research baseline on 5 parameters; future benchmarks must explicitly restore research-baseline settings to maintain within-series comparability.",
+    "links": {"doc": null, "runs": ["scripts/analyze_signal_rank.py", "scripts/analyze_signal_rank2.py"], "src": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6709401"}
   }
 ]
