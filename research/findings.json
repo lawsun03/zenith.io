@@ -71,7 +71,7 @@
       "recommendation": "orb r0.75 (pipeline borderline sustainable) or r0.5 (firmly positive)"
     },
     "verdict": "candidate",
-    "learned": "All bench variants at full sizing (r1.25) are pipeline-negative â€” combine pass density can't replace busted XFA accounts fast enough. ORB at r0.75 is the only configuration with near-sustainable pipeline metrics (15 combine passes vs 14 XFA busts at h200) AND positive returns across all 5 non-holdout years; it also holds on the 2022 holdout (PF 1.15).",
+    "learned": "All bench variants at full sizing (r1.25) are pipeline-negative \u00e2\u20ac\u201d combine pass density can't replace busted XFA accounts fast enough. ORB at r0.75 is the only configuration with near-sustainable pipeline metrics (15 combine passes vs 14 XFA busts at h200) AND positive returns across all 5 non-holdout years; it also holds on the 2022 holdout (PF 1.15).",
     "links": {
       "doc": "trade_analysis/2026-06-13_B1_funded_objective_scoring.md",
       "runs": [
@@ -316,7 +316,7 @@
     "ts": "2026-06-13T11:30:00Z",
     "session": "wk1-b7",
     "item": "B7",
-    "variant": "kz_levels engine â€” KillzoneLevelTracker (London/NY AM/NY PM H/L sweeps), target_clarity_mode=off, risk 1.25%, 2 contracts, r2.0",
+    "variant": "kz_levels engine \u00e2\u20ac\u201d KillzoneLevelTracker (London/NY AM/NY PM H/L sweeps), target_clarity_mode=off, risk 1.25%, 2 contracts, r2.0",
     "objective": "combine",
     "metrics": {
       "baseline_passes_61mo": 13,
@@ -351,7 +351,7 @@
     "ts": "2026-06-13T12:30Z",
     "session": "wk1-r1",
     "item": "RESEARCH",
-    "variant": "Session wk1-r1: ideation â€” MFE/MAE data mining + WebSearch",
+    "variant": "Session wk1-r1: ideation \u00e2\u20ac\u201d MFE/MAE data mining + WebSearch",
     "objective": "infra",
     "metrics": {
       "ifvg_long_pf_5y": 1.136,
@@ -365,7 +365,7 @@
       "new_items_added": 3
     },
     "verdict": "dataset",
-    "learned": "The iFVG short side is structurally loss-making on NQ 5min (PF 0.960 over 5y, 1251 trades); blocking shorts lifts long-only PF to 1.136 but cuts volume to ~25/month (funded route). ORB late breakouts (10:xx ET) have better PF than early ones (1.276 vs 1.176), supporting a 'reentry after stop' hypothesis; the current max_trades_per_day=2 is the wrong mechanism (fires before stop hits). External web research yielded no new engines â€” all practitioner ideas reduce to iFVG/ORB/KZ already tested.",
+    "learned": "The iFVG short side is structurally loss-making on NQ 5min (PF 0.960 over 5y, 1251 trades); blocking shorts lifts long-only PF to 1.136 but cuts volume to ~25/month (funded route). ORB late breakouts (10:xx ET) have better PF than early ones (1.276 vs 1.176), supporting a 'reentry after stop' hypothesis; the current max_trades_per_day=2 is the wrong mechanism (fires before stop hits). External web research yielded no new engines \u00e2\u20ac\u201d all practitioner ideas reduce to iFVG/ORB/KZ already tested.",
     "links": {
       "doc": null,
       "runs": [],
@@ -381,7 +381,7 @@
     "ts": "2026-06-13T13:00Z",
     "session": "wk1-b8",
     "item": "B8",
-    "variant": "wall-clock flatten backup â€” flatten_wallclock_enabled flag + early-close calendar note",
+    "variant": "wall-clock flatten backup \u00e2\u20ac\u201d flatten_wallclock_enabled flag + early-close calendar note",
     "objective": "infra",
     "metrics": {
       "tests_added": 2,
@@ -393,7 +393,7 @@
       "suite_failures": 0
     },
     "verdict": "shipped",
-    "learned": "The wall-clock backup task (_flatten_clock, every 30s) already existed and ran unconditionally in live mode â€” the B8 core fix was present. What was missing: a flatten_wallclock_enabled flag (now default True, preserving existing behavior), an early-close calendar note listing 8 known CME half-days for 2025-2026 in flatten.py, and two defining-behavior tests (clock-driven flatten without bar arrival, and flag=False gates task creation). The bar-driven path is insufficient alone: on CME early-close days bars stop at noon but the configured flatten time is 15:05 CT. The wall-clock covers this gap.",
+    "learned": "The wall-clock backup task (_flatten_clock, every 30s) already existed and ran unconditionally in live mode \u00e2\u20ac\u201d the B8 core fix was present. What was missing: a flatten_wallclock_enabled flag (now default True, preserving existing behavior), an early-close calendar note listing 8 known CME half-days for 2025-2026 in flatten.py, and two defining-behavior tests (clock-driven flatten without bar arrival, and flag=False gates task creation). The bar-driven path is insufficient alone: on CME early-close days bars stop at noon but the configured flatten time is 15:05 CT. The wall-clock covers this gap.",
     "links": {
       "doc": null,
       "runs": [],
@@ -408,7 +408,7 @@
     "ts": "2026-06-13T14:00Z",
     "session": "wk1-b9",
     "item": "B9",
-    "variant": "ORB Rule-13 UI wiring â€” state() method + strategy_state SSE field + StrategyDebug panel",
+    "variant": "ORB Rule-13 UI wiring \u00e2\u20ac\u201d state() method + strategy_state SSE field + StrategyDebug panel",
     "objective": "infra",
     "metrics": {
       "tests_added": 6,
@@ -426,7 +426,7 @@
       "bot_restarted": true
     },
     "verdict": "shipped",
-    "learned": "All three Rule-13 layers implemented: (1) ORBDetector.on_bar logs when the OR range is first established after the window closes; (2) ORBDetector.state() returns {or_high, or_low, or_established, fired} â€” extracted from CombinedRunner.secondary in the strategy_state publisher in main.py, added as orb_state field in journal.publish_strategy_state; (3) StrategyDebug.tsx renders an ORB section showing the live range and signals-today count. or_established uses _or_range_logged (True only after first post-range bar) so the UI shows 'building...' during the 09:30+15min window and the confirmed range thereafter.",
+    "learned": "All three Rule-13 layers implemented: (1) ORBDetector.on_bar logs when the OR range is first established after the window closes; (2) ORBDetector.state() returns {or_high, or_low, or_established, fired} \u00e2\u20ac\u201d extracted from CombinedRunner.secondary in the strategy_state publisher in main.py, added as orb_state field in journal.publish_strategy_state; (3) StrategyDebug.tsx renders an ORB section showing the live range and signals-today count. or_established uses _or_range_logged (True only after first post-range bar) so the UI shows 'building...' during the 09:30+15min window and the confirmed range thereafter.",
     "links": {
       "doc": null,
       "runs": [],
@@ -444,7 +444,7 @@
     "ts": "2026-06-13T15:00:00Z",
     "session": "wk1-r2",
     "item": "RESEARCH",
-    "variant": "Session wk1-r2: ideation â€” per-side ORB analysis + per-hour iFVG data mining + WebSearch",
+    "variant": "Session wk1-r2: ideation \u00e2\u20ac\u201d per-side ORB analysis + per-hour iFVG data mining + WebSearch",
     "objective": "infra",
     "metrics": {
       "orb_long_pf_5y": 1.32,
@@ -465,7 +465,7 @@
       "new_items_added": 2
     },
     "verdict": "dataset",
-    "learned": "ORB short side (PF=1.109) is measurably weaker than long side (PF=1.320) â€” the same 'tops stall, bottoms sweep' bias confirmed by iFVG (B15). Unlike iFVG shorts (loss-making at PF=0.960), ORB shorts are still profitable; long-only ORB is a funded PF-improvement hypothesis, not loss-removal. iFVG signals in the noon window (12:xx ET PF=0.591) and NY PM tail (14-15:xx PF=0.763-0.946) are negative-expectancy drags that the all_day benchmark config includes; restricting to named sessions for funded phase is a testable no-code config change.",
+    "learned": "ORB short side (PF=1.109) is measurably weaker than long side (PF=1.320) \u00e2\u20ac\u201d the same 'tops stall, bottoms sweep' bias confirmed by iFVG (B15). Unlike iFVG shorts (loss-making at PF=0.960), ORB shorts are still profitable; long-only ORB is a funded PF-improvement hypothesis, not loss-removal. iFVG signals in the noon window (12:xx ET PF=0.591) and NY PM tail (14-15:xx PF=0.763-0.946) are negative-expectancy drags that the all_day benchmark config includes; restricting to named sessions for funded phase is a testable no-code config change.",
     "links": {
       "doc": null,
       "runs": [],
@@ -525,7 +525,7 @@
       "orphaned_entries": 1
     },
     "verdict": "dataset",
-    "learned": "20 rows from trades_2026-06-10.csv backfilled into trades.csv (broker_order_id dedup check, no duplicates). 3 remaining gaps are unrecoverable (no daily file exists for those windows). Root cause: trades.csv is git-tracked; git reset --hard wipes it. Option A (untrack rolling files via .gitignore) is the recommended immediate fix â€” zero code changes, prevents future wipes. Policy decision deferred to Lawrence (Monday).",
+    "learned": "20 rows from trades_2026-06-10.csv backfilled into trades.csv (broker_order_id dedup check, no duplicates). 3 remaining gaps are unrecoverable (no daily file exists for those windows). Root cause: trades.csv is git-tracked; git reset --hard wipes it. Option A (untrack rolling files via .gitignore) is the recommended immediate fix \u00e2\u20ac\u201d zero code changes, prevents future wipes. Policy decision deferred to Lawrence (Monday).",
     "links": {
       "doc": "trade_analysis/2026-06-13_B12_runtime_ledger_policy.md",
       "runs": [],
@@ -536,7 +536,7 @@
     "ts": "2026-06-13T07:35:00Z",
     "session": "wk1-b13",
     "item": "B13",
-    "variant": "exec_slippage column â€” fill vs order_bar_close (close of bar that triggered signal)",
+    "variant": "exec_slippage column \u00e2\u20ac\u201d fill vs order_bar_close (close of bar that triggered signal)",
     "objective": "infra",
     "metrics": {
       "tests_added": 10,
@@ -548,7 +548,7 @@
       "files_changed": 3
     },
     "verdict": "shipped",
-    "learned": "exec_slippage = fill_price âˆ’ order_bar_close (close of the confirmation bar when the signal fired) measures true execution quality: for market orders this is 0â€“2 ticks. The existing slippage column (fill âˆ’ signal_entry, the FVG proximal edge) remains unchanged as 'plan_deviation' â€” it is still useful for diagnosing signal-to-fill price drift but not for execution quality. The watcher pattern (module-level _last_bar_close dict updated by an async on_bar handler registered in main.py) is the cleanest approach: no changes to Signal, no changes to strategy code, backward-compatible column ordering.",
+    "learned": "exec_slippage = fill_price \u00e2\u02c6\u2019 order_bar_close (close of the confirmation bar when the signal fired) measures true execution quality: for market orders this is 0\u00e2\u20ac\u201c2 ticks. The existing slippage column (fill \u00e2\u02c6\u2019 signal_entry, the FVG proximal edge) remains unchanged as 'plan_deviation' \u00e2\u20ac\u201d it is still useful for diagnosing signal-to-fill price drift but not for execution quality. The watcher pattern (module-level _last_bar_close dict updated by an async on_bar handler registered in main.py) is the cleanest approach: no changes to Signal, no changes to strategy code, backward-compatible column ordering.",
     "links": {
       "doc": null,
       "runs": [],
@@ -563,7 +563,7 @@
     "ts": "2026-06-13T08:10Z",
     "session": "wk1-b15",
     "item": "B15",
-    "variant": "long-only iFVG (allowed_sides=long) funded benchmark â€” r0.75/r1.0/r1.25",
+    "variant": "long-only iFVG (allowed_sides=long) funded benchmark \u00e2\u20ac\u201d r0.75/r1.0/r1.25",
     "objective": "funded",
     "metrics": {
       "full_ifvg_r125_trades": 6043,
@@ -592,12 +592,12 @@
       "longonly_r125_sust": 1.13,
       "haircut": 200,
       "killzones": "london+ny_am+ny_pm",
-      "mechanism": "allowed_sides=long (no new code â€” existing parameter)",
+      "mechanism": "allowed_sides=long (no new code \u00e2\u20ac\u201d existing parameter)",
       "test_added": "test_long_passes_when_long_only",
       "total_tests": 629
     },
     "verdict": "candidate",
-    "learned": "Blocking short iFVG signals (PF 0.960, loss-making) via allowed_sides=long flips the standalone funded pipeline from pipeline-negative (sust 0.54x at r1.25) to self-sustaining (sust 1.13x at r1.25, 1.12x at r1.0). Both primary success criteria met: XFA net +41% ($186k vs $132k) and XFA busts -37% (53 vs 84). Trade volume cuts to ~65/month vs ~100/month full iFVG â€” the named-session killzones have a 65% long signal bias (vs 49.5% in all_day config), so long-only retains more volume than expected from the all-day MFE/MAE analysis. No new code needed: allowed_sides='long' already existed and is fully tested.",
+    "learned": "Blocking short iFVG signals (PF 0.960, loss-making) via allowed_sides=long flips the standalone funded pipeline from pipeline-negative (sust 0.54x at r1.25) to self-sustaining (sust 1.13x at r1.25, 1.12x at r1.0). Both primary success criteria met: XFA net +41% ($186k vs $132k) and XFA busts -37% (53 vs 84). Trade volume cuts to ~65/month vs ~100/month full iFVG \u00e2\u20ac\u201d the named-session killzones have a 65% long signal bias (vs 49.5% in all_day config), so long-only retains more volume than expected from the all-day MFE/MAE analysis. No new code needed: allowed_sides='long' already existed and is fully tested.",
     "links": {
       "doc": "trade_analysis/2026-06-13_B15_longonly_ifvg_funded.md",
       "runs": [
@@ -634,7 +634,7 @@
       "total_tests": 628
     },
     "verdict": "candidate",
-    "learned": "ORB reentry after a confirmed stop adds +44% trade volume and improves combine throughput (7/61 â†’ 11/61 at risk 1.0%) and funded net $/month (+35%). The cost is a -5% PF drop (1.213 â†’ 1.153): reentry trades are lower-quality stop-reversal entries that drag average win quality down. Both standalone configs are pipeline-negative at risk 1.0% â€” the full value requires the two-phase model (iFVG combine + ORB funded). Mechanism implemented correctly: ORBComposer.on_stop_loss() re-arms detector exactly once per day via _rearm_count guard.",
+    "learned": "ORB reentry after a confirmed stop adds +44% trade volume and improves combine throughput (7/61 \u00e2\u2020\u2019 11/61 at risk 1.0%) and funded net $/month (+35%). The cost is a -5% PF drop (1.213 \u00e2\u2020\u2019 1.153): reentry trades are lower-quality stop-reversal entries that drag average win quality down. Both standalone configs are pipeline-negative at risk 1.0% \u00e2\u20ac\u201d the full value requires the two-phase model (iFVG combine + ORB funded). Mechanism implemented correctly: ORBComposer.on_stop_loss() re-arms detector exactly once per day via _rearm_count guard.",
     "links": {
       "doc": null,
       "runs": [
@@ -660,7 +660,7 @@
       "sust": 0.54
     },
     "verdict": "rejected",
-    "learned": "inversion_min_body_r=0.15 is a no-op at deployed MNQ settings (min_absolute_body=5.0 pts, stop_buffer=3.0). For the gate to activate, need 0.15 Ã— stop_dist > 5.0 â†’ stop_dist > 33 pts; typical stop_dist on MNQ 5min is 5-20 pts. All three metrics (trades, PF, funded) are identical to the full-iFVG baseline. The 0.15 threshold was designed for the default config (min_absolute_body=1.0); it provides zero marginal value at deployed settings. Infrastructure ships default-off; 3 defining tests added (632 total).",
+    "learned": "inversion_min_body_r=0.15 is a no-op at deployed MNQ settings (min_absolute_body=5.0 pts, stop_buffer=3.0). For the gate to activate, need 0.15 \u00c3\u2014 stop_dist > 5.0 \u00e2\u2020\u2019 stop_dist > 33 pts; typical stop_dist on MNQ 5min is 5-20 pts. All three metrics (trades, PF, funded) are identical to the full-iFVG baseline. The 0.15 threshold was designed for the default config (min_absolute_body=1.0); it provides zero marginal value at deployed settings. Infrastructure ships default-off; 3 defining tests added (632 total).",
     "links": {
       "doc": null,
       "runs": [],
@@ -671,7 +671,7 @@
     "ts": "2026-06-13T09:00:00Z",
     "session": "wk1-b17",
     "item": "B17",
-    "variant": "ORB long-only (orb_long_only=True, r_multiple=2.5) funded benchmark â€” r0.75/r1.0/r1.25",
+    "variant": "ORB long-only (orb_long_only=True, r_multiple=2.5) funded benchmark \u00e2\u20ac\u201d r0.75/r1.0/r1.25",
     "objective": "funded",
     "metrics": {
       "longonly_r075_combine_passes": 18,
@@ -729,7 +729,7 @@
     "ts": "2026-06-13T10:00:00Z",
     "session": "wk1-r3",
     "item": "RESEARCH",
-    "variant": "Session wk1-r3 (wk1-b18): ideation â€” ORB MFE/MAE mining + pipeline methodology analysis + WebSearch",
+    "variant": "Session wk1-r3 (wk1-b18): ideation \u00e2\u20ac\u201d ORB MFE/MAE mining + pipeline methodology analysis + WebSearch",
     "objective": "infra",
     "metrics": {
       "orb_winner_mfe_p25": 1.11,
@@ -750,7 +750,7 @@
       "new_items_added": 3
     },
     "verdict": "dataset",
-    "learned": "ORB winner MFE p75=2.50R (= target): ~75% of winners hit the 2.5R target exactly, ~25% are profitable day-end flattens. At MFE >= 2.0R, winners 37% vs losers 2% â€” excellent separation, but path-through-peak data unavailable (not proposed for excursion ladder). B3's pipeline model uses per-year equity CSVs: ORB r1.0 has 27 funded busts (per-year) vs 59 (flat 5y). B20 (LongOnly-iFVG as funded phase) needs per-year equity CSVs; estimated sust ~1.48x vs B3's 1.26x if per-year busts scale similarly. Web search yielded no new mechanism families (4-for-4 external claim failures, Lesson 6 confirmed again).",
+    "learned": "ORB winner MFE p75=2.50R (= target): ~75% of winners hit the 2.5R target exactly, ~25% are profitable day-end flattens. At MFE >= 2.0R, winners 37% vs losers 2% \u00e2\u20ac\u201d excellent separation, but path-through-peak data unavailable (not proposed for excursion ladder). B3's pipeline model uses per-year equity CSVs: ORB r1.0 has 27 funded busts (per-year) vs 59 (flat 5y). B20 (LongOnly-iFVG as funded phase) needs per-year equity CSVs; estimated sust ~1.48x vs B3's 1.26x if per-year busts scale similarly. Web search yielded no new mechanism families (4-for-4 external claim failures, Lesson 6 confirmed again).",
     "links": {
       "doc": null,
       "runs": [
@@ -765,7 +765,7 @@
     "ts": "2026-06-13T09:22:00Z",
     "session": "wk1-b18",
     "item": "B18",
-    "variant": "iFVG named-sessions killzone benchmark â€” Config A (london,ny_am) + Config B (london,ny_am,ny_pm) vs all-day baseline, r1.25",
+    "variant": "iFVG named-sessions killzone benchmark \u00e2\u20ac\u201d Config A (london,ny_am) + Config B (london,ny_am,ny_pm) vs all-day baseline, r1.25",
     "objective": "funded",
     "metrics": {
       "baseline_trades": 6043,
@@ -787,7 +787,7 @@
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "Named-session filtering of the all-day iFVG config does not meet the +5% PF improvement criterion. Config A (London+NY AM) achieves +1.1% PF and +8.7% net payouts vs all-day with 42% fewer trades â€” real but too small to recommend. Config B (London+NY AM+NY PM, the standard named-sessions config) is strictly worse than all-day on all metrics (PF -1.4%, sust -17%) â€” the overnight/pre-market sessions excluded by named-session filtering make net-positive contributions at the deployed partial_r=1.5 config, reversing the direction of the per-hour MFE/MAE hypothesis. The deployed all-day config is already near-optimal for session filtering purposes.",
+    "learned": "Named-session filtering of the all-day iFVG config does not meet the +5% PF improvement criterion. Config A (London+NY AM) achieves +1.1% PF and +8.7% net payouts vs all-day with 42% fewer trades \u00e2\u20ac\u201d real but too small to recommend. Config B (London+NY AM+NY PM, the standard named-sessions config) is strictly worse than all-day on all metrics (PF -1.4%, sust -17%) \u00e2\u20ac\u201d the overnight/pre-market sessions excluded by named-session filtering make net-positive contributions at the deployed partial_r=1.5 config, reversing the direction of the per-hour MFE/MAE hypothesis. The deployed all-day config is already near-optimal for session filtering purposes.",
     "links": {
       "doc": "trade_analysis/2026-06-13_B18_named_sessions_killzone_benchmark.md",
       "runs": [],
@@ -798,7 +798,7 @@
     "ts": "2026-06-13T10:15:00Z",
     "session": "wk1-b19",
     "item": "B19",
-    "variant": "long-only iFVG + london+ny_am only (no NY PM) â€” funded benchmark, r0.75/r1.0/r1.25",
+    "variant": "long-only iFVG + london+ny_am only (no NY PM) \u00e2\u20ac\u201d funded benchmark, r0.75/r1.0/r1.25",
     "objective": "funded",
     "metrics": {
       "r075_trades": 2640,
@@ -868,7 +868,7 @@
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "LongOnly-iFVG funded creates 2x more XFA account cycles than ORB funded (53 vs 28 over 5y, at r1.0) because account durations are ~half as long (~24d vs ~45d). The iFVG combine produces 34 passes â€” enough to sustain 34 busts (ORB r1.0 needs only 27) but not 52 (LongOnly r1.0 busts). B20's standalone sust metric (B15: 1.12x) was misleading because it assumed the same strategy for combine and funded; the two-phase model exposes that LongOnly-iFVG funded requires MORE combine passes than iFVG can supply. B3 remains the recommended two-phase pair: iFVG Combine + ORB r1.0 Funded ($393/mo, sust 1.26x).",
+    "learned": "LongOnly-iFVG funded creates 2x more XFA account cycles than ORB funded (53 vs 28 over 5y, at r1.0) because account durations are ~half as long (~24d vs ~45d). The iFVG combine produces 34 passes \u00e2\u20ac\u201d enough to sustain 34 busts (ORB r1.0 needs only 27) but not 52 (LongOnly r1.0 busts). B20's standalone sust metric (B15: 1.12x) was misleading because it assumed the same strategy for combine and funded; the two-phase model exposes that LongOnly-iFVG funded requires MORE combine passes than iFVG can supply. B3 remains the recommended two-phase pair: iFVG Combine + ORB r1.0 Funded ($393/mo, sust 1.26x).",
     "links": {
       "doc": "trade_analysis/2026-06-13_B20_ifvg_combine_longonly_funded.md",
       "runs": [
@@ -914,7 +914,7 @@
       "note": "per-year equity CSVs (equity_b21/) with same B3 methodology; success criteria: $/mo >= $393 AND sust >= 1.26x"
     },
     "verdict": "candidate",
-    "learned": "ORB-reentry (orb_reentry_after_stop=True) at r0.75 combined with iFVG Combine achieves $497/mo and sust 2.62x â€” beating B3's best pair ($393/mo, 1.26x) by +26% $/mo and +108% sustainability. The mechanism: at r0.75, reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded busts low (13 vs 14). The iFVG combine's 34 passes sustain only 13 reentry busts â†’ 2.62x sust. r1.0 and r1.25 reentry configs are both pipeline-negative (sust 0.83x and 0.71x) â€” the volume amplification at higher risk creates more busts than the iFVG combine can replace. B21 r0.75 is the new recommended two-phase pipeline config.",
+    "learned": "ORB-reentry (orb_reentry_after_stop=True) at r0.75 combined with iFVG Combine achieves $497/mo and sust 2.62x \u00e2\u20ac\u201d beating B3's best pair ($393/mo, 1.26x) by +26% $/mo and +108% sustainability. The mechanism: at r0.75, reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded busts low (13 vs 14). The iFVG combine's 34 passes sustain only 13 reentry busts \u00e2\u2020\u2019 2.62x sust. r1.0 and r1.25 reentry configs are both pipeline-negative (sust 0.83x and 0.71x) \u00e2\u20ac\u201d the volume amplification at higher risk creates more busts than the iFVG combine can replace. B21 r0.75 is the new recommended two-phase pipeline config.",
     "links": {
       "doc": null,
       "runs": [
@@ -927,7 +927,7 @@
     "ts": "2026-06-13T12:00:00Z",
     "session": "wk1-r4",
     "item": "RESEARCH",
-    "variant": "Session wk1-r4: ideation â€” signal-rank analysis + config parity audit + WebSearch",
+    "variant": "Session wk1-r4: ideation \u00e2\u20ac\u201d signal-rank analysis + config parity audit + WebSearch",
     "objective": "infra",
     "metrics": {
       "ifvg_rank1_pf_5y": 1.129,
@@ -953,7 +953,7 @@
       "new_items_added": 2
     },
     "verdict": "dataset",
-    "learned": "Per-signal-rank analysis (scripts/analyze_signal_rank.py, 5y MFE/MAE data) reveals that the first iFVG signal of each day (rank-1, PF=1.129) is materially stronger than the aggregate (PF=1.043), and rank-2 signals are net-negative (PF=0.970) driven by loss-making rank-2+ shorts (PF=0.841). A cap at 1 signal/day captures the quality improvement but yields only 16.9/month â€” insufficient for combine and less volume than B15 long-only (20.4/month, PF=1.136). The B15 long-only filter is therefore approximately optimal for the funded phase. Critical finding: the deployed bot_config.json now differs from the B1-B21 research baseline on 5 parameters; future benchmarks must explicitly restore research-baseline settings to maintain within-series comparability.",
+    "learned": "Per-signal-rank analysis (scripts/analyze_signal_rank.py, 5y MFE/MAE data) reveals that the first iFVG signal of each day (rank-1, PF=1.129) is materially stronger than the aggregate (PF=1.043), and rank-2 signals are net-negative (PF=0.970) driven by loss-making rank-2+ shorts (PF=0.841). A cap at 1 signal/day captures the quality improvement but yields only 16.9/month \u00e2\u20ac\u201d insufficient for combine and less volume than B15 long-only (20.4/month, PF=1.136). The B15 long-only filter is therefore approximately optimal for the funded phase. Critical finding: the deployed bot_config.json now differs from the B1-B21 research baseline on 5 parameters; future benchmarks must explicitly restore research-baseline settings to maintain within-series comparability.",
     "links": {
       "doc": null,
       "runs": [
@@ -967,7 +967,7 @@
     "ts": "2026-06-13T11:28:00Z",
     "session": "wk1-b22",
     "item": "B22",
-    "variant": "ORB range_minutes sensitivity â€” 10min vs 15min (baseline) vs 30min, combine + funded objectives",
+    "variant": "ORB range_minutes sensitivity \u00e2\u20ac\u201d 10min vs 15min (baseline) vs 30min, combine + funded objectives",
     "objective": "combine",
     "metrics": {
       "orb10_combine_passes_61mo": 10,
@@ -1004,7 +1004,7 @@
       "note": "flat 5y equity for funded; partial_r=0, swing_stop_lookback=0 for parity with B1-B21 research baseline"
     },
     "verdict": "rejected",
-    "learned": "Neither 10-min nor 30-min meets the 13/61 success criterion. 30-min is strictly worse on both metrics (stop rule: rejected). 10-min is a marginal PF improvement (+3pp overall, long side flips from 0.99 to 1.15) with identical combine passes â€” real but insufficient. The 15-min default is near-optimal on NQ 5min. The most notable finding: the 10-min window reverses the long/short PF split (10-min longs beat shorts; 15-min shorts beat longs), suggesting the first 10 minutes capture cleaner directional breakouts before the market 'decides', while the 11-15 min window adds weaker long entries.",
+    "learned": "Neither 10-min nor 30-min meets the 13/61 success criterion. 30-min is strictly worse on both metrics (stop rule: rejected). 10-min is a marginal PF improvement (+3pp overall, long side flips from 0.99 to 1.15) with identical combine passes \u00e2\u20ac\u201d real but insufficient. The 15-min default is near-optimal on NQ 5min. The most notable finding: the 10-min window reverses the long/short PF split (10-min longs beat shorts; 15-min shorts beat longs), suggesting the first 10 minutes capture cleaner directional breakouts before the market 'decides', while the 11-15 min window adds weaker long entries.",
     "links": {
       "doc": null,
       "runs": [
@@ -1088,7 +1088,7 @@
     "ts": "2026-06-13T17:00:00Z",
     "session": "wk1-b24",
     "item": "B24",
-    "variant": "iFVG entry_mode sensitivity: close vs ifvg_edge — combine (61mo r1.25) + funded (LongOnly london+ny_am r1.25)",
+    "variant": "iFVG entry_mode sensitivity: close vs ifvg_edge \u2014 combine (61mo r1.25) + funded (LongOnly london+ny_am r1.25)",
     "objective": "combine+funded",
     "metrics": {
       "combine_edge_passes": 7,
@@ -1123,7 +1123,7 @@
       "note": "combine: risk_pct=1.25, partial_r=0, swing_stop_lookback=0, target_clarity_mode=reject, MNQ overrides r_mult=3.5 stop=3.0 body=5.0; funded: LongOnly london+ny_am same overrides; 2021-2026 bars"
     },
     "verdict": "candidate",
-    "learned": "ifvg_entry_mode='close' (enter at inversion bar close, 100% fill) is materially superior to 'ifvg_edge' (enter at FVG proximal edge) on every metric. Combine: 11/61 (18%) vs 7/61 (11%) passes; PF 1.18 vs 1.00. Funded (LongOnly london+ny_am r1.25): PF 1.1666 vs 1.1229; sust 2.524x vs 0.815x; net payouts $181k vs $158k. The expected mechanism (deeper entry → larger stop → harder target → lower WR) is wrong: confirmed entry at the inversion bar close is a higher-quality structural signal than a limit retrace to the proximal edge; 100% fill rate captures trending setups that 'ifvg_edge' misses; 'ifvg_edge' generates chop-retrace fills on oscillating markets that dilute PF; fixed 2-contract sizing amplifies net P&L when PF > 1. Key implication: the deployed bot config (ifvg_entry_mode='close') is not just acceptable but genuinely superior to the B1-B23 research baseline. 'Close' at r_multiple=3.5 achieves sust 2.524x — materially better than B19's sust 1.600x at r_multiple=2.5. All future iFVG benchmarks should use close mode as the new baseline.",
+    "learned": "ifvg_entry_mode='close' (enter at inversion bar close, 100% fill) is materially superior to 'ifvg_edge' (enter at FVG proximal edge) on every metric. Combine: 11/61 (18%) vs 7/61 (11%) passes; PF 1.18 vs 1.00. Funded (LongOnly london+ny_am r1.25): PF 1.1666 vs 1.1229; sust 2.524x vs 0.815x; net payouts $181k vs $158k. The expected mechanism (deeper entry \u2192 larger stop \u2192 harder target \u2192 lower WR) is wrong: confirmed entry at the inversion bar close is a higher-quality structural signal than a limit retrace to the proximal edge; 100% fill rate captures trending setups that 'ifvg_edge' misses; 'ifvg_edge' generates chop-retrace fills on oscillating markets that dilute PF; fixed 2-contract sizing amplifies net P&L when PF > 1. Key implication: the deployed bot config (ifvg_entry_mode='close') is not just acceptable but genuinely superior to the B1-B23 research baseline. 'Close' at r_multiple=3.5 achieves sust 2.524x \u2014 materially better than B19's sust 1.600x at r_multiple=2.5. All future iFVG benchmarks should use close mode as the new baseline.",
     "links": {
       "doc": null,
       "runs": [
@@ -1203,7 +1203,7 @@
       "close_lookback30_off_pf": 1.17
     },
     "verdict": "rejected",
-    "learned": "swing_stop_lookback=30 is strictly worse than 0 on BOTH combine passes (4/61 vs 7/61) and run PF (0.78 vs 1.00) in ifvg_edge mode — stop rule triggered. Bonus finding: the deployed iFVG combine (close + lookback=30 + target_clarity=off) achieves only 6/61 (10%) passes vs 11/61 (18%) at the B24 research baseline; target_clarity_mode=off costs 4 passes (10->6), lookback=30 costs 1 pass (11->10) in close mode. The deployed Phase A config is materially degraded by both parameters.",
+    "learned": "swing_stop_lookback=30 is strictly worse than 0 on BOTH combine passes (4/61 vs 7/61) and run PF (0.78 vs 1.00) in ifvg_edge mode \u2014 stop rule triggered. Bonus finding: the deployed iFVG combine (close + lookback=30 + target_clarity=off) achieves only 6/61 (10%) passes vs 11/61 (18%) at the B24 research baseline; target_clarity_mode=off costs 4 passes (10->6), lookback=30 costs 1 pass (11->10) in close mode. The deployed Phase A config is materially degraded by both parameters.",
     "links": {
       "doc": null,
       "runs": [],
@@ -1236,14 +1236,14 @@
       "b3_threshold_sust": 1.26,
       "close_vs_edge_phase_a_pass_ratio": "10/34 = 29%",
       "wk1r6_projected_passes": 53,
-      "projection_error": "B24 combined+all-day scale factor (1.571x) applied to B21 ifvg+named-sessions base — incompatible methodologies",
+      "projection_error": "B24 combined+all-day scale factor (1.571x) applied to B21 ifvg+named-sessions base \u2014 incompatible methodologies",
       "debug_close_2024_trades": 149,
       "debug_edge_allday_2024_trades": 3250,
       "mechanism": "close mode fires at inversion bar close (session-bound); ifvg_edge armed trackers persist across session boundaries and fill anytime",
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "iFVG-close Phase A (ifvg engine + named sessions) generates only 10 passes over 5y vs 34 for ifvg_edge — the opposite of the wk1-r6 projection (~53, +57%). Mechanism: close mode signals fire exactly at inversion bar close; if that bar is outside the named session window, the signal is lost. ifvg_edge armed trackers accumulate during sessions and persist across session boundaries, filling whenever price returns to the FVG proximal edge — capturing cross-session fills that close mode misses entirely. The wk1-r6 projection error was applying B24's combined+all-day scale factor (11/7 = 1.571x) to B21's ifvg+named-sessions base — different engine and killzone configs, incompatible methodologies. B21 ($497/mo, sust 2.62x) remains the best two-phase recommendation.",
+    "learned": "iFVG-close Phase A (ifvg engine + named sessions) generates only 10 passes over 5y vs 34 for ifvg_edge \u2014 the opposite of the wk1-r6 projection (~53, +57%). Mechanism: close mode signals fire exactly at inversion bar close; if that bar is outside the named session window, the signal is lost. ifvg_edge armed trackers accumulate during sessions and persist across session boundaries, filling whenever price returns to the FVG proximal edge \u2014 capturing cross-session fills that close mode misses entirely. The wk1-r6 projection error was applying B24's combined+all-day scale factor (11/7 = 1.571x) to B21's ifvg+named-sessions base \u2014 different engine and killzone configs, incompatible methodologies. B21 ($497/mo, sust 2.62x) remains the best two-phase recommendation.",
     "links": {
       "doc": null,
       "runs": [
@@ -1277,12 +1277,12 @@
       "b3_threshold_net_per_month": 393,
       "b3_threshold_sust": 1.26,
       "sust_ceiling_given_10_phase_a_passes": "10/39 = 0.26x (needs <=8 busts for sust>=1.26x)",
-      "flat5y_vs_peryear_longonly_close_busts": "21 flat-5y (B24) vs 39 per-year (B28) — per-year gives MORE busts for iFVG",
+      "flat5y_vs_peryear_longonly_close_busts": "21 flat-5y (B24) vs 39 per-year (B28) \u2014 per-year gives MORE busts for iFVG",
       "orb_reentry_r0p75_reference_busts": 13,
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "LongOnly-close iFVG generates 39 per-year XFA busts — 5x more than the 8 needed for sust>=1.26x with only 10 Phase A passes. Despite matching ORB-reentry r0.75 per-account net ($3,054 vs $3,131), LongOnly-close cycles accounts 3x faster due to higher trade frequency. The per-year methodology gives MORE busts for LongOnly-close iFVG (39) than flat-5y (21), opposite to the ORB correction in Lesson 42 — because iFVG's flat-5y includes 2022 (a drought year with nearly flat equity and few busts), while per-year excludes it. B21 ($497/mo, sust 2.62x) remains the best two-phase pipeline.",
+    "learned": "LongOnly-close iFVG generates 39 per-year XFA busts \u2014 5x more than the 8 needed for sust>=1.26x with only 10 Phase A passes. Despite matching ORB-reentry r0.75 per-account net ($3,054 vs $3,131), LongOnly-close cycles accounts 3x faster due to higher trade frequency. The per-year methodology gives MORE busts for LongOnly-close iFVG (39) than flat-5y (21), opposite to the ORB correction in Lesson 42 \u2014 because iFVG's flat-5y includes 2022 (a drought year with nearly flat equity and few busts), while per-year excludes it. B21 ($497/mo, sust 2.62x) remains the best two-phase pipeline.",
     "links": {
       "doc": null,
       "runs": [
@@ -1296,7 +1296,7 @@
     "ts": "2026-06-13T14:30:00Z",
     "session": "wk1-r6",
     "item": "RESEARCH",
-    "variant": "post-B26 backlog replenishment — close-mode Phase A projection + LongOnly-close Phase B analysis",
+    "variant": "post-B26 backlog replenishment \u2014 close-mode Phase A projection + LongOnly-close Phase B analysis",
     "objective": "infra",
     "metrics": {
       "phase_a_ifvg_edge_passes_5y": 34,
@@ -1313,7 +1313,7 @@
       "new_backlog_items": 3
     },
     "verdict": "dataset",
-    "learned": "The B21 two-phase recommendation ($497/mo, sust 2.62x) used ifvg_edge Phase A equity (BotConfig default), understating the deployed close-mode Phase A by ~57% combine passes (projected 53 vs actual 34 over 5y). B27 will resolve this — projected improvement: $610/mo (+23%) and sust 4.08x (+56%). Close-mode LongOnly-iFVG funded (B24) achieves 2.6x higher per-account net than ORB-reentry r0.75 ($8,206 vs $3,131), but account cycling speed is unknown until B28 runs per-year equity.",
+    "learned": "The B21 two-phase recommendation ($497/mo, sust 2.62x) used ifvg_edge Phase A equity (BotConfig default), understating the deployed close-mode Phase A by ~57% combine passes (projected 53 vs actual 34 over 5y). B27 will resolve this \u2014 projected improvement: $610/mo (+23%) and sust 4.08x (+56%). Close-mode LongOnly-iFVG funded (B24) achieves 2.6x higher per-account net than ORB-reentry r0.75 ($8,206 vs $3,131), but account cycling speed is unknown until B28 runs per-year equity.",
     "links": {
       "doc": null,
       "runs": [
@@ -1357,7 +1357,7 @@
       "note": "per-year equity stitch; Phase A = B27 close-mode iFVG; only r0.75 tested for Phase B"
     },
     "verdict": "rejected",
-    "learned": "ORB-reentry 10-min has 2.3x more XFA busts (30 vs 13) and 50% lower per-account net ($1,554 vs $3,131) than 15-min in the per-year pipeline model — the opposite direction of B22's flat-5y finding (+9% $/mo for 10-min). The two-phase economics are correspondingly worse: $183/mo sust 0.33x vs 15-min $488/mo sust 0.77x (B27 reference). The mechanism: 10-min ORB fires on more days and with reentry after stops, the account is under active P&L stress more frequently per month, accelerating both wins and bust-causing drawdowns. The flat-5y standalone metric masked this by averaging across different account cycling dynamics. B21 ($497/mo, sust 2.62x) remains the undefeated two-phase benchmark.",
+    "learned": "ORB-reentry 10-min has 2.3x more XFA busts (30 vs 13) and 50% lower per-account net ($1,554 vs $3,131) than 15-min in the per-year pipeline model \u2014 the opposite direction of B22's flat-5y finding (+9% $/mo for 10-min). The two-phase economics are correspondingly worse: $183/mo sust 0.33x vs 15-min $488/mo sust 0.77x (B27 reference). The mechanism: 10-min ORB fires on more days and with reentry after stops, the account is under active P&L stress more frequently per month, accelerating both wins and bust-causing drawdowns. The flat-5y standalone metric masked this by averaging across different account cycling dynamics. B21 ($497/mo, sust 2.62x) remains the undefeated two-phase benchmark.",
     "links": {
       "doc": null,
       "runs": [
@@ -1371,7 +1371,7 @@
     "ts": "2026-06-13T17:30:00Z",
     "session": "wk2-r1",
     "item": "RESEARCH",
-    "variant": "Session wk2-r1: post-B29 backlog replenishment — DOW analysis + pipeline risk sensitivity + web research",
+    "variant": "Session wk2-r1: post-B29 backlog replenishment \u2014 DOW analysis + pipeline risk sensitivity + web research",
     "objective": "infra",
     "metrics": {
       "ifvg_dow_tuesday_pf": 0.917,
@@ -1403,7 +1403,7 @@
       "new_backlog_items": 3
     },
     "verdict": "dataset",
-    "learned": "Day-of-week analysis of 5y iFVG and ORB MFE/MAE data (excl 2022) reveals two structural anomalies: iFVG Tuesday is the only loss-making iFVG day (PF=0.917, net=-$15.8k), and ORB Monday+Wednesday are both loss-making (PF=0.898/0.942) while ORB Friday is exceptionally strong (PF=1.775, contributing 60% of ORB net from 20% of trades). These are own-data findings, not external claims; mechanisms (FOMC Wednesday, gap-reversal Monday, consolidation Tuesday, position-squaring Friday) are data-corroborated. Web research found nothing new — Lesson 6 confirmed 5-for-5.",
+    "learned": "Day-of-week analysis of 5y iFVG and ORB MFE/MAE data (excl 2022) reveals two structural anomalies: iFVG Tuesday is the only loss-making iFVG day (PF=0.917, net=-$15.8k), and ORB Monday+Wednesday are both loss-making (PF=0.898/0.942) while ORB Friday is exceptionally strong (PF=1.775, contributing 60% of ORB net from 20% of trades). These are own-data findings, not external claims; mechanisms (FOMC Wednesday, gap-reversal Monday, consolidation Tuesday, position-squaring Friday) are data-corroborated. Web research found nothing new \u2014 Lesson 6 confirmed 5-for-5.",
     "links": {
       "doc": null,
       "runs": [
@@ -1433,7 +1433,7 @@
       "total_tests": 644
     },
     "verdict": "rejected",
-    "learned": "Tuesday PF=0.917 in all-sides all-day data is caused by loss-making shorts and afternoon sessions — both already removed in the close-mode long-only london+ny_am config. Removing Tuesday from this already-filtered subset removes profitable long signals and destroys the edge (PF 1.167->0.996). Rule: always verify DOW PF within the exact config subset being tested, not in the population-level data. The skip_trading_days feature ships default-off; the ORB DOW filter shows $/mo +42% at cost of sust -19% (16 vs 13 busts), failing the strict primary criterion.",
+    "learned": "Tuesday PF=0.917 in all-sides all-day data is caused by loss-making shorts and afternoon sessions \u2014 both already removed in the close-mode long-only london+ny_am config. Removing Tuesday from this already-filtered subset removes profitable long signals and destroys the edge (PF 1.167->0.996). Rule: always verify DOW PF within the exact config subset being tested, not in the population-level data. The skip_trading_days feature ships default-off; the ORB DOW filter shows $/mo +42% at cost of sust -19% (16 vs 13 busts), failing the strict primary criterion.",
     "links": {
       "doc": null,
       "runs": [],
@@ -1471,11 +1471,21 @@
       "phase_b_xfa_net_per_acct": 3131,
       "phase_b_avg_days_per_acct": 73.5,
       "per_year_net_deployed": {
-        "2021_r1p25": 13229, "2021_r1p5": 15073, "2021_r2p0": 20349,
-        "2023_r1p25": 781, "2023_r1p5": 410, "2023_r2p0": 144,
-        "2024_r1p25": 12260, "2024_r1p5": 15561, "2024_r2p0": 21624,
-        "2025_r1p25": 6929, "2025_r1p5": 5215, "2025_r2p0": 7454,
-        "2026_r1p25": 552, "2026_r1p5": -373, "2026_r2p0": -1493
+        "2021_r1p25": 13229,
+        "2021_r1p5": 15073,
+        "2021_r2p0": 20349,
+        "2023_r1p25": 781,
+        "2023_r1p5": 410,
+        "2023_r2p0": 144,
+        "2024_r1p25": 12260,
+        "2024_r1p5": 15561,
+        "2024_r2p0": 21624,
+        "2025_r1p25": 6929,
+        "2025_r1p5": 5215,
+        "2025_r2p0": 7454,
+        "2026_r1p25": 552,
+        "2026_r1p5": -373,
+        "2026_r2p0": -1493
       },
       "deployed_trades_per_year_avg": 220,
       "b21_research_baseline_trades_per_year_2021": 473,
@@ -1484,7 +1494,13 @@
       "notable_2026_loss_making_at_r2p0": "PF 0.983, net -$1493 YTD (Jan-Jun 2 2026) at r=2.0; r=1.25 barely positive ($552)",
       "haircut": 200,
       "reset_fee_per_attempt": 150,
-      "years": ["2021", "2023", "2024", "2025", "2026"],
+      "years": [
+        "2021",
+        "2023",
+        "2024",
+        "2025",
+        "2026"
+      ],
       "tests_added": 0,
       "total_tests": 644
     },
@@ -1524,7 +1540,13 @@
       "reentry_premium_vs_plain_at_r0p75_pct": 31,
       "phase_a_b31_r2p0_passes": 37,
       "haircut": 200,
-      "years": ["2021", "2023", "2024", "2025", "2026"],
+      "years": [
+        "2021",
+        "2023",
+        "2024",
+        "2025",
+        "2026"
+      ],
       "tests_added": 0,
       "total_tests": 644
     },
@@ -1540,6 +1562,34 @@
         "research/mfe_mae_orb_clean.csv"
       ],
       "src": "scripts/research_wk2r2_pipeline.py"
+    }
+  },
+  {
+    "ts": "2026-06-14T18:30:00Z",
+    "session": "wk2-b33",
+    "item": "B33",
+    "variant": "phase1 probe data mining \u2014 sweep+reclaim entry before iFVG inversion",
+    "objective": "combine",
+    "metrics": {
+      "total_sweep_triggers_5y": 44365,
+      "total_ifvg_signals_5y": 2842,
+      "sweep_signal_ratio": 15.6,
+      "conf_rate": 0.083,
+      "stop_hit_rate": 0.564,
+      "target_hit_rate": 0.26,
+      "time_stop_rate": 0.092,
+      "blended_gain_r": 0.025,
+      "probe_only_outcome_r": -0.11,
+      "expected_r": -0.098
+    },
+    "verdict": "rejected",
+    "learned": "The probe fires 15.6x more often than iFVG signals \u2014 56% of triggers hit the swept-extreme stop before displacement/inversion fires. The iFVG chain REQUIRES price to continue past the sweep extreme to form the FVG; entering before inversion means entering before the structural support that makes the stop meaningful. expected_R = -0.098R, clear NO-GO.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/analyze_b33_probe.py"
+      ],
+      "src": null
     }
   }
 ]

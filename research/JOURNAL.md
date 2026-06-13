@@ -964,3 +964,51 @@ Entry format:
 - **Verdict:** dataset — 3 new BACKLOG items appended (B35 ORB-reentry r-sweep, B36 config-parity r=2.0, B37 combined-engine Phase A). B31 winner ($508/mo, sust=2.85x) undefeated. No Databento spend. No code changes. Lessons 70-71 added.
 - **Learned:** ORB is primarily an EOD-flatten strategy (55% SL, 33.6% profitable EOD, 11.4% target hits). The r-multiple directly affects only 11.4% of trades. The ORB-reentry mechanism outperforms plain ORB because it adds profitable reversal-day entries that increase EOD-flatten earnings, not because it improves target-hit dynamics. Higher plain ORB r-multiples accelerate sust collapse before $/mo improves enough — the ORB-reentry mechanism at r=0.75 strictly dominates all plain ORB r-multiples tested on both $/mo and sust.
 - **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk curve). B35 (ORB-reentry r=1.0/r=1.25 — most promising new item; tests if reentry avoids plain ORB's sust collapse at higher r).
+
+## 2026-06-14T18:30:00Z — session wk2-b33 — B33 (anticipatory probe entry — Phase 1 data mining)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B33 (priority item — Lawrence-requested, ranks above B32 per BACKLOG).
+- **Session type:** Phase 1 data-mining ONLY. B33 specifies a Phase 1 go/no-go gate before any engine code. Phase 2 (engine implementation) only if Phase 1 = GO.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Explored iFVG signal chain (LiquidityTracker → DisplacementDetector → SweepDisplacementComposer) to understand sweep event timing vs signal emission.
+  3. Wrote `scripts/analyze_b33_probe.py` — replays 5y bars (2021/2023/2024/2025/2026) through the iFVG detector stack, captures all armed sweep events (the "probe triggers") and all iFVG signals, then post-processes to compute the three Phase 1 metrics: conf_rate, blended_gain, probe_only_loss.
+  4. Ran analysis on all 5 years (283,176 bars, deployed MNQ config: stop_buffer=3.0, min_absolute_body=5.0, all_day killzones).
+- **Numbers:**
+
+  **Per-year sweep/signal counts:**
+  | Year | Bars | Sweeps | iFVG Signals |
+  |------|------|--------|--------------|
+  | 2021 | 39,525 | 6,064 | 376 |
+  | 2023 | 70,689 | 10,913 | 674 |
+  | 2024 | 71,013 | 11,087 | 705 |
+  | 2025 | 70,518 | 11,235 | 751 |
+  | 2026 | 31,431 | 5,066 | 336 |
+  | **TOTAL** | 283,176 | 44,365 | 2,842 |
+
+  **Probe outcome distribution (44,365 triggers, probe_confirm_window=8 bars):**
+  | Outcome | Count | % |
+  |---------|-------|---|
+  | Confirmed (iFVG within 8 bars, stop unhit) | 3,689 | 8.3% |
+  | Probe stop hit before iFVG | 25,044 | 56.4% |
+  | Probe target hit (1.0R, unconfirmed) | 11,551 | 26.0% |
+  | Time-stop (8 bars, no signal) | 4,081 | 9.2% |
+
+  **Key metrics:**
+  - Sweep:Signal ratio = 15.6x (each iFVG signal was preceded by ~15.6 probe triggers on average)
+  - Confirmed blended-entry gain = +0.0253R (mean; positive = probe improves entry)
+  - 58.6% of confirmed probes had POSITIVE blended gain (directionally correct)
+  - Probe-only outcome = −0.110R per unconfirmed trigger (dominated by 56.4% stop-hit rate)
+  - **expected_R = conf_rate × blended_gain − (1−conf_rate) × probe_only_loss**
+    = 0.083 × 0.025 − 0.917 × 0.110 = 0.0021 − 0.1009 = **−0.099R**
+
+- **Stop rule check:** expected_R < 0. Phase 1 NO-GO — do NOT proceed to Phase 2. Stop rule triggered.
+- **Root cause (key insight):** The iFVG formation REQUIRES price to push past the swept extreme (creating the displacement + FVG imbalance) before the inversion confirmation fires. The sweep-reclaim bar close is BEFORE the displacement, which means:
+  1. The "probe entry" at the sweep reclaim bar close has no structural support yet (the FVG hasn't formed)
+  2. The probe stop (at swept_extreme ± stop_buffer) sits exactly where price NEEDS to move through to create the setup — the stop anchor is at the wrong level
+  3. 56% of triggers confirm this: price blows through the swept extreme (what the probe uses as its stop) as part of the normal iFVG chain, before eventually reversing at the FVG level
+- **Additional finding:** 26% of probe triggers reach 1.0R target WITHOUT an iFVG confirming. This suggests sweep+reclaim ALONE has a weak edge but insufficient to overcome the 56% stop rate in net expectancy.
+- **Verdict:** rejected — Phase 1 NO-GO. expected_R = -0.099R, clear negative. Phase 2 engine NOT built. Lesson 72 added.
+- **Learned:** The swept-extreme stop is NOT a durable anchor at the pre-inversion stage — it is the level price must continue through to form the iFVG setup. Lesson 1 ("the iFVG INVERSION is the quality filter") extends to mean: anything entered before the inversion is unfiltered noise. The 15.6x sweep:signal ratio quantifies how often the structural prerequisite (sweep) fires without producing the structural confirmation (displacement+inversion).
+- **Next:** B32 (ORB-reentry Phase B at r=0.5) or B34 (breaker-block+OTE — but Phase 1 falsification also required; do NOT build until Phase 1 data mining confirms positive expectancy). B35 is the most promising new pipeline item (ORB-reentry r=1.0/r=1.25 sensitivity).
+- **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk curve). B35 (ORB-reentry r=1.0/r=1.25 — most promising new item; tests if reentry avoids plain ORB's sust collapse at higher r).

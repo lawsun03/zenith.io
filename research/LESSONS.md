@@ -540,3 +540,17 @@ Appended 2026-06-13 (wk2-r2 research session):
     would make it pipeline-negative). Rule: plain ORB r-multiple is not a reliable $/mo lever — sust collapses
     before $/mo improves enough to meet criteria. The ORB-reentry mechanism at r=0.75 achieves better $/mo
     ($508 vs $387) with better sust (2.85x vs 2.64x), strictly dominating plain ORB across all metrics.
+
+Appended 2026-06-14 (B33 anticipatory probe entry — Phase 1 rejection):
+
+72. **Entering at the sweep-reclaim bar close (before iFVG inversion) bleeds because 56% of triggers hit the
+    probe stop before displacement+inversion fires.** 5y replay (44,365 armed sweep events vs 2,842 iFVG signals
+    = 15.6x ratio): 56.4% stop-hit, 26.0% probe-target-hit (1.0R unconfirmed), 8.3% confirmed by iFVG within
+    8 bars. Blended-entry gain on confirmed cases = only +0.025R (probe 0.33 frac × modest entry improvement).
+    Net expected_R = −0.098R — definitively negative. Root cause: the iFVG chain REQUIRES price to push past
+    the sweep extreme (creating the displacement and FVG imbalance) before the inversion confirmation fires.
+    The swept extreme is NOT a durable stop anchor at the pre-inversion stage — it IS the level price must
+    continue through to form the setup. Rule: Lesson 1 ("the iFVG INVERSION is the quality filter") extends
+    to mean "anything entered before inversion is unfiltered." The swept-extreme stop is meaningful only AFTER
+    the displacement leg confirms the reversal; entering at the sweep bar alone is a pre-structural-confirmation
+    entry with a stop at exactly the wrong level.

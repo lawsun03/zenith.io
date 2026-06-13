@@ -1057,7 +1057,7 @@ lower end of the Phase B risk sensitivity ladder.
 Source: B1 Phase B risk ladder (r=0.5/0.75/1.0/1.25 plain ORB); B21 established r=0.75 reentry
 as the optimum. This item extends the ladder to r=0.5 for reentry ORB.
 
-## B33 — Anticipatory probe entry + scale-up on iFVG confirmation  [pending — PRIORITY: Lawrence-requested 2026-06-13; claim ahead of B32]
+## B33 — Anticipatory probe entry + scale-up on iFVG confirmation  [done — rejected at Phase 1; 56.4% probe stop rate, expected_R = -0.098R; pre-inversion entries bleed (see Lesson 72); Phase 2 engine NOT built]
 Lawrence-requested directly. Rank this ABOVE B32 when claiming fresh.
 
 Hypothesis: enter a SMALL-risk "probe" on a closed-bar S/R reaction (liquidity
