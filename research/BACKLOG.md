@@ -300,7 +300,7 @@ Benchmark:
 
 Source: 5y MFE/MAE data mining (this session): orb_long n=542 PF=1.320, orb_short n=488 PF=1.109.
 
-## B18 — Named-sessions killzone config benchmark (iFVG, funded)  [pending]  (benchmark, no new code)
+## B18 — Named-sessions killzone config benchmark (iFVG, funded)  [done — rejected: Config A (London+NY AM) PF +1.1% misses +5% threshold; Config B (standard named sessions) is strictly worse than all-day on all metrics; deployed all-day config is near-optimal for funded phase; doc trade_analysis/2026-06-13_B18_named_sessions_killzone_benchmark.md]  (benchmark, no new code)
 Hypothesis: the iFVG funded-phase equity curve is dragged down by signals in negative-
 expectancy windows: noon (12:xx ET PF=0.591, n=73), late NY AM / NY PM (11:xx 0.829,
 14:xx 0.946, 15:xx 0.763). These windows occur when the combine harness uses all_day
@@ -333,3 +333,32 @@ per config (equity_export + funded_sim) is sufficient. Record volume change alon
 Source: 5y iFVG MFE/MAE per-hour data mining (this session). Negative-expectancy windows
 identified empirically; hypothesis is that they are genuinely structurally weak (consistent
 with Lesson 8: short-session NQ edges are time-of-day dependent), not random noise.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk1-b18  [pending]
+
+B18 exhausts all existing pending backlog items. The next session must replenish with new
+testable strategy hypotheses. Priority themes based on open threads:
+
+1. **Long-only iFVG + London+NY AM combined** (B15 + B18 intersection): B15 achieved
+   sust 1.12x by removing loss-making shorts; B18 found London+NY AM adds +8.7% net payouts.
+   Hypothesis: `allowed_sides=long` + `enabled_killzones=["london","ny_am"]` stacks both
+   improvements; the long-only filter removes structural losses while London+NY AM removes
+   marginal-quality signals.
+2. **ORB reentry + funded phase** (B14 candidate thread): B14 showed ORB reentry achieves
+   +44% volume, +35% funded $/mo but still pipeline-negative solo. Combined with iFVG Combine
+   (the B3 recommended pipeline), ORB-with-reentry as the funded phase might beat ORB-without.
+3. **ATR-normalized stop_buffer for post-2022 config** (Lesson 3 update): fixed_point stop_buffer
+   3.0 pts is ~2x relatively stricter at NQ 12k vs 21k. A price-scaled stop_buffer (e.g.,
+   0.014% of price) would match today's 3.0 pts at 21k but auto-adjust. Tests: would this
+   change 2021-2023 signal frequency without degrading 2024-2026?
+4. **Per-R excursion ladder for ORB** (B2 follow-on): B2 shipped MFE/MAE infrastructure but
+   only tested be_trail_r=1.0 (which failed). The ORB winner distribution peaks at higher MFE
+   values than iFVG; a partial exit at 1.5R or a trail at 2.0R+ might improve funded PF.
+   Compute ORB-specific MFE/MAE distributions from research/mfe_mae_orb*.csv before proposing.
+
+Run this as a research/ideation session (WebSearch + data mining on excursion CSVs + prior
+lessons), following the RESEARCH session protocol. Output 1-3 new backlog items in mini-spec
+format. Session count at B18+1 session = wk1-b18+1; check 3-session rule for ideation.

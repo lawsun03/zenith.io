@@ -440,5 +440,21 @@
     "verdict": "rejected",
     "learned": "ORB short signals are profitable (PF 1.109), unlike iFVG shorts (PF 0.960). Long-only ORB cuts ~47% of combine volume and hurts all metrics: at r1.0, $/month drops -39% ($1,181 vs $1,943) and sust drops -11pp (0.737 vs 0.847). The B15 success (iFVG long-only) came from removing LOSS-MAKING shorts; B17's mechanism (quality improvement on profitable shorts) fails because volume loss outweighs PF gain. The orb_long_only feature ships default-off (4 tests, 636 total green).",
     "links": {"doc": null, "runs": ["b17_orb_longonly_r0p75", "b17_orb_longonly_r1p0", "b17_orb_longonly_r1p25"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T09:22:00Z",
+    "session": "wk1-b18",
+    "item": "B18",
+    "variant": "iFVG named-sessions killzone benchmark — Config A (london,ny_am) + Config B (london,ny_am,ny_pm) vs all-day baseline, r1.25",
+    "objective": "funded",
+    "metrics": {
+      "baseline_trades": 6043, "baseline_pf": 1.064, "baseline_sust_h200": 0.536, "baseline_net_h200": 132380,
+      "cfgA_trades": 3533, "cfgA_pf": 1.076, "cfgA_sust_h200": 0.606, "cfgA_net_h200": 143849, "cfgA_pf_delta_pct": 1.1, "cfgA_net_delta_pct": 8.7,
+      "cfgB_trades": 3832, "cfgB_pf": 1.049, "cfgB_sust_h200": 0.443, "cfgB_net_h200": 127735, "cfgB_pf_delta_pct": -1.4, "cfgB_net_delta_pct": -3.5,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "Named-session filtering of the all-day iFVG config does not meet the +5% PF improvement criterion. Config A (London+NY AM) achieves +1.1% PF and +8.7% net payouts vs all-day with 42% fewer trades — real but too small to recommend. Config B (London+NY AM+NY PM, the standard named-sessions config) is strictly worse than all-day on all metrics (PF -1.4%, sust -17%) — the overnight/pre-market sessions excluded by named-session filtering make net-positive contributions at the deployed partial_r=1.5 config, reversing the direction of the per-hour MFE/MAE hypothesis. The deployed all-day config is already near-optimal for session filtering purposes.",
+    "links": {"doc": "trade_analysis/2026-06-13_B18_named_sessions_killzone_benchmark.md", "runs": [], "src": null}
   }
 ]

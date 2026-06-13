@@ -204,6 +204,25 @@ Appended 2026-06-13 (B14 ORB reentry after stop):
 
 35. **ORB reentry after a confirmed stop adds volume but lowers per-trade quality.** At risk 1.0%: +44% trades (1,652 → 2,382), +35% funded $/month ($1,911 → $2,578), +57% combine passes (7 → 11 of 61), but PF drops -5% (1.213 → 1.153). Reentry signals are stop-reversal entries — structurally weaker than first-breakout signals. Enable only in the funded phase where volume helps pipeline throughput; the PF cost is acceptable for absolute-payout maximization.
 
+Appended 2026-06-13 (B18 named-sessions killzone benchmark):
+
+40. **Per-hour PF rankings from partial_r=0 MFE/MAE data don't transfer to the deployed
+    partial_r=1.5 funded config.** B18 tested London+NY AM (removes NY PM and all overnight)
+    vs London+NY AM+NY PM (standard named sessions) vs all-day deployed config. Config B
+    (standard named sessions, which excludes overnight and noon) has LOWER PF (1.049) than
+    all-day (1.064), reversing the direction of the per-hour hypothesis. The overnight/pre-
+    market sessions excluded by named-session filtering make net-positive contributions at
+    partial_r=1.5. The deployed `enabled_killzones=["all"]` is near-optimal; adding named-
+    session filtering hurts the funded pipeline. Always benchmark session filters against the
+    deployed config directly.
+
+41. **Config A (London+NY AM only) achieves +8.7% funded net payouts and +13% sustainability
+    with 42% fewer trades vs all-day, but PF improvement is only +1.1% (below the +5%
+    threshold).** This is a real but marginal improvement — notable that 58% of the trades
+    carry 108% of the net payout value. The missing NY PM and overnight signals don't just
+    reduce losses; they also reduce the combine throughput needed to replenish busted XFA
+    accounts. The pipeline remains negative at 0.606x regardless of session filtering.
+
 Appended 2026-06-13 (B17 ORB long-only funded benchmark):
 
 39. **PF improvement from a profitable-but-weaker signal class doesn't justify the volume cost in the funded pipeline.**

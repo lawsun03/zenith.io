@@ -327,3 +327,21 @@ Entry format:
 - **Verdict:** rejected — success criteria not met. ORB short signals are profitable (PF 1.109); removing them cuts ~47% of combine volume and hurts pipeline throughput more than PF gain compensates. Feature ships default-off (`orb_long_only=False`).
 - **Learned:** The B15 success mechanism was removing LOSS-MAKING iFVG short signals (PF 0.960). B17 removes PROFITABLE ORB short signals (PF 1.109) — a very different hypothesis. The funded pipeline depends on combine THROUGHPUT (funded accounts created per month) as much as per-account performance. Cutting volume by 47% halves the account creation rate, so even a higher per-account PF cannot compensate. This confirms Lesson 33: long-only ORB is a PF-improvement hypothesis, not a loss-removal; PF improvement alone is not sufficient when volume is the pipeline bottleneck.
 - **Next:** B18 (named-sessions killzone config benchmark — no-code, iFVG funded) is the only remaining pending item.
+
+## 2026-06-13T09:22Z — session wk1-b18 — B18 (Named-sessions killzone benchmark)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift. Market closed (Sunday).
+- **Ran:** equity_export (risk 1.25%) for three configs in parallel: Config A (`--killzones "london,ny_am"`), Config B (`--killzones "london,ny_am,ny_pm"`), all-day baseline (`--killzones "all"`). Then funded_sim at h0/200/400 for each. No code changes; 636 tests remain green from prior session.
+- **Numbers (equity export + funded_sim h200, 5y full including 2022):**
+
+  | Config | Trades | PF | Passes | XFA Busts | Net Payouts | Sust | $/mo |
+  |--------|--------|-----|--------|-----------|-------------|------|------|
+  | All-day (baseline) | 6,043 | 1.064 | 45 | 84 | $132,380 | 0.536x | $2,206 |
+  | Config A: London+NY AM | 3,533 | 1.076 | 43 | 71 | $143,849 | 0.606x | $2,397 |
+  | Config B: London+NY AM+NY PM | 3,832 | 1.049 | 43 | 97 | $127,735 | 0.443x | $2,129 |
+
+- **Stop rule check:** Config B loses on BOTH PF (-1.4%) and net payouts (-3.5%) → rejected. Config A beats on both metrics (PF +1.1%, net +8.7%) → not stopped.
+- **Success criteria check:** Primary criterion is PF >= +5%. Config A: +1.1% → FAILS. Config B: -1.4% → FAILS.
+- **Verdict:** rejected — primary criterion not met for either config. Config A shows modest improvement (PF +1.1%, sust +13%, net payouts +8.7%) but falls short of the +5% threshold. Config B (standard named sessions) is strictly worse than all-day on all funded metrics. The deployed `enabled_killzones=["all"]` is already near-optimal for the funded phase.
+- **Surprising finding:** bot_config.json uses `"enabled_killzones": ["all"]` (confirmed from deployed config), so all-day IS the current deployed behavior. The "standard named sessions" config (london+ny_am+ny_pm) that the code defaults to is NOT what's actually deployed. Config B is therefore what you'd get if you "fixed" the config to use named sessions — and it performs WORSE. The overnight/pre-market signals excluded by named sessions make net-positive contributions at partial_r=1.5, reversing the direction of the per-hour MFE/MAE hypothesis.
+- **Learned:** Per-hour PF distributions from partial_r=0 MFE/MAE data are unreliable predictors of session-filter performance at the deployed partial_r=1.5 config. The all-day config already filters the bad hours implicitly through the strategy's sweep quality gates; additional session-time filtering at the config level adds noise rather than signal.
+- **Next:** B18 exhausts the pending backlog. Recommend a RESEARCH session to replenish hypotheses before the next build session.
