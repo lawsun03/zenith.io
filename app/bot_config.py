@@ -156,6 +156,11 @@ class StrategyParams(BaseModel):
     # >0 = buffer = stop_anchor * pct. Calibration: 3.0pts / 21000 ≈ 0.000143.
     stop_buffer_pct: Decimal = Decimal("0")
 
+    # Inversion bar quality gate (B16): displacement bar body must be at least
+    # this fraction of the planned stop distance. 0 = disabled (default).
+    # 0.15 = only inversion bars with body >= 15% of stop distance fire.
+    inversion_min_body_r: Decimal = Decimal("0")
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

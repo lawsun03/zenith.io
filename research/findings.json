@@ -409,5 +409,16 @@
     "verdict": "candidate",
     "learned": "ORB reentry after a confirmed stop adds +44% trade volume and improves combine throughput (7/61 → 11/61 at risk 1.0%) and funded net $/month (+35%). The cost is a -5% PF drop (1.213 → 1.153): reentry trades are lower-quality stop-reversal entries that drag average win quality down. Both standalone configs are pipeline-negative at risk 1.0% — the full value requires the two-phase model (iFVG combine + ORB funded). Mechanism implemented correctly: ORBComposer.on_stop_loss() re-arms detector exactly once per day via _rearm_count guard.",
     "links": {"doc": null, "runs": ["b14_orb_reentry_r2p5", "b14_funded_reentry_r1p0", "b14_funded_baseline_r1p0"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T09:00:00Z",
+    "session": "wk1-b16",
+    "item": "B16",
+    "variant": "ifvg inversion_min_body_r=0.15",
+    "objective": "funded",
+    "metrics": {"trades": 6043, "pf": 1.064, "combine_passes": "45/61", "xfa_busts": 84, "net_5y": 132380, "sust": 0.54},
+    "verdict": "rejected",
+    "learned": "inversion_min_body_r=0.15 is a no-op at deployed MNQ settings (min_absolute_body=5.0 pts, stop_buffer=3.0). For the gate to activate, need 0.15 × stop_dist > 5.0 → stop_dist > 33 pts; typical stop_dist on MNQ 5min is 5-20 pts. All three metrics (trades, PF, funded) are identical to the full-iFVG baseline. The 0.15 threshold was designed for the default config (min_absolute_body=1.0); it provides zero marginal value at deployed settings. Infrastructure ships default-off; 3 defining tests added (632 total).",
+    "links": {"doc": null, "runs": [], "src": null}
   }
 ]

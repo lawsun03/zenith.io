@@ -145,6 +145,11 @@ class ComposerConfig:
     # supplies the entry zone instead. Strict superset of iFVG signals.
     confirmation: str = "ifvg"
 
+    # Inversion bar quality gate (B16): the displacement bar's body must be at
+    # least this fraction of the planned stop distance to fire a signal.
+    # 0 = disabled (default). 0.15 = body >= 15% of stop (blocks doji inversions).
+    inversion_min_body_r: Decimal = Decimal("0")
+
 
 @dataclass
 class _Awaiting:
@@ -295,6 +300,23 @@ class SweepDisplacementComposer:
         for awaiting in reversed(self._awaiting):
             if wanted[awaiting.sweep.side] != event.side:
                 continue
+
+            # Inversion bar quality gate (B16): body must be >= min_body_r × stop_dist.
+            _cfg = self.config
+            if _cfg.inversion_min_body_r > 0 and event.fvg is not None:
+                _fvg = event.fvg
+                _sweep_ext = awaiting.sweep.sweep_extreme
+                _buf = (_sweep_ext * _cfg.stop_buffer_pct
+                        if _cfg.stop_buffer_pct > 0
+                        else _cfg.stop_buffer)
+                _stop_dist = (_fvg.high - (_sweep_ext - _buf) if event.side == "bullish"
+                              else (_sweep_ext + _buf) - _fvg.low)
+                if _stop_dist > 0 and event.body_size < _cfg.inversion_min_body_r * _stop_dist:
+                    log.info(
+                        "Signal blocked: inversion bar body %s < min_body_r %s × stop_dist %s",
+                        event.body_size, _cfg.inversion_min_body_r, _stop_dist,
+                    )
+                    continue
 
             if trend_active:
                 assert self._ema is not None

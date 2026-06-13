@@ -188,6 +188,18 @@ Appended 2026-06-13 (B15 long-only iFVG funded):
 37. **Named-session killzones (london+ny_am+ny_pm) have a 65% long signal bias vs 49.5% in all_day config.**
     The London session (02:00–05:00 ET) generates predominantly bullish setups in NQ (overnight continuation), while the negative-expectancy overnight/pre-dawn hours removed by named sessions had more short signals. Consequence: "long-only at named sessions" retains ~65% of full-iFVG volume (3,928 vs 6,043 trades), not the ~50% expected from all_day analysis. Long-only at named sessions is NOT as volume-sparse as the all_day MFE/MAE analysis suggested.
 
+Appended 2026-06-13 (B16 inversion bar quality gate):
+
+38. **Downstream signal filters are dominated by upstream displacement body filters.** B16 tested
+    inversion_min_body_r=0.15 (gate: inversion bar body >= 15% of stop_dist). At the deployed MNQ config
+    (min_absolute_body=5.0 pts, stop_buffer=3.0), every displacement bar already has body >= 5.0 pts
+    while typical stop_dist is 5-20 pts — so 0.15 × stop_dist < 5.0, and the gate NEVER activates.
+    Result: 0 trades blocked, identical PF and funded metrics (6,043 trades, PF 1.064, sust 0.54x).
+    Rule: for a downstream quality gate to add marginal value, its effective threshold must exceed the
+    upstream body floor: inversion_min_body_r × typical_stop_dist > min_absolute_body. At deployed
+    settings, this requires min_body_r > 0.33-1.0+. The 0.15 threshold is calibrated for the default
+    config (min_absolute_body=1.0, stop_buffer=0.30); it is a no-op at deployed MNQ settings.
+
 Appended 2026-06-13 (B14 ORB reentry after stop):
 
 35. **ORB reentry after a confirmed stop adds volume but lowers per-trade quality.** At risk 1.0%: +44% trades (1,652 → 2,382), +35% funded $/month ($1,911 → $2,578), +57% combine passes (7 → 11 of 61), but PF drops -5% (1.213 → 1.153). Reentry signals are stop-reversal entries — structurally weaker than first-breakout signals. Enable only in the funded phase where volume helps pipeline throughput; the PF cost is acceptable for absolute-payout maximization.

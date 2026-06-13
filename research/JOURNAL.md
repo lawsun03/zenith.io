@@ -288,3 +288,22 @@ Entry format:
 - **Verdict:** candidate — long-only iFVG at r1.0/r1.25 flips the funded pipeline from pipeline-negative (0.54x) to self-sustaining (1.12–1.13x). Both primary success criteria met: XFA net +41%, XFA busts -37%.
 - **Learned:** The iFVG short side exclusion is sufficient to achieve pipeline sustainability at named-session killzones. The named-session config has a 65% long signal bias (vs 49.5% in all_day), meaning "long-only at named sessions" retains significantly more volume than the all_day MFE/MAE analysis suggested (~25/month). The allowed_sides parameter was already correctly wired and tested; no new code was needed.
 - **Next:** B16 (iFVG inversion bar quality gate — strategy research, funded) or B17 (ORB long-only — similar structure to B15 but for ORB engine) or B18 (named-sessions killzone config benchmark — no-code benchmark).
+
+## 2026-06-13T09:00Z — session wk1-b16 — B16 (iFVG inversion bar quality gate)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (Saturday).
+- **Ran:** TDD — 3 defining-behavior tests written first (all failing on TypeError), then implemented:
+  1. Added `inversion_min_body_r: Decimal = Decimal("0")` to `ComposerConfig` in `composer.py` (default off).
+  2. Added the gate check inside `on_displacement()` in the `for awaiting in reversed(self._awaiting)` loop, after the direction check: computes stop_dist inline from `fvg.high - (sweep_extreme - stop_buffer)` and skips (`continue`) if `body_size < inversion_min_body_r × stop_dist`. Uses underscore-prefixed locals (`_cfg`, `_fvg`, `_stop_dist`) to avoid shadowing `cfg` in `_build_signal()`.
+  3. Added `inversion_min_body_r: Decimal = Decimal("0")` to `StrategyParams` in `bot_config.py`.
+  4. Wired `inversion_min_body_r=s.inversion_min_body_r` into all 4 `ComposerConfig(...)` constructions (2 in `runner.py`, 2 in `main.py`).
+  5. Ran `equity_export` (risk 1.25%, deployed MNQ config: combined engine, all killzones, min_absolute_body=5.0, stop_buffer=3.0) + `funded_sim --haircut 200`.
+  6. Ran `run_monthly_combine.py` (same config + inversion_min_body_r=0.15).
+- **Numbers:**
+  - **Equity export (B16 gate ON):** 6,043 trades, PF 1.064, net $93,313 — **identical to full-iFVG baseline**
+  - **Funded sim (h200):** 45 Combine passes, 84 XFA busts, $132,380 net (5y), sust 0.54x — **identical to baseline**
+  - **Combine benchmark:** 9/61 (15%), PF 1.15 (combined engine result; longs PF 1.33, shorts PF 0.99)
+  - **Signal reduction:** 0 trades blocked by the gate
+- **Root cause:** `min_absolute_body=5.0` pts (deployed MNQ override) guarantees every displacement bar has body ≥ 5.0 pts. For the B16 gate to fire: need `0.15 × stop_dist > 5.0` → `stop_dist > 33 pts`. Typical MNQ 5min stop_dist = 5-20 pts. Gate threshold never reached. The 0.15 value was calibrated for the default config (min_absolute_body=1.0, stop_buffer=0.30) where typical stop_dist=3-5 pts and threshold=0.45-0.75 pts.
+- **Verdict:** rejected — no marginal benefit at declared threshold (0.15) with deployed MNQ config; success criteria not met (funded PF unchanged). Infrastructure ships default-off; 3 defining tests added (632 total, 0 failures).
+- **Learned:** Downstream signal quality filters are dominated by upstream body quality filters. A later-stage gate only adds value when its effective threshold (min_body_r × stop_dist) exceeds the earlier-stage floor (min_absolute_body). At deployed settings, the gap is 5.0 pts vs 0.45-3.0 pts. Future proposals for inversion quality gates should be calibrated against the actual upstream filter values.
+- **Next:** B17 (ORB long-only funded benchmark — symmetric to B15 but for ORB) or B18 (named-sessions killzone benchmark — no-code benchmark). Both are pending.

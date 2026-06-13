@@ -217,7 +217,7 @@ Secondary: iFVG(Combine) + LongOnly-iFVG(Funded) two-phase pair — does it beat
 Note: two-phase iFVG/LongOnly pairing may be impractical (same instrument, different mode
 in Combine vs Funded requires config switching). Focus on standalone funded comparison.
 
-## B16 — iFVG inversion bar quality gate  [pending]  (strategy research, funded)
+## B16 — iFVG inversion bar quality gate  [done — rejected: inversion_min_body_r=0.15 is a no-op at deployed MNQ config (min_absolute_body=5.0 already exceeds 0.15×stop_dist); 0/0 trade count change; PF/funded metrics identical to baseline; infrastructure default-off; 3 tests, 632 total green]  (strategy research, funded)
 Hypothesis: the inversion bar quality predicts follow-through. A larger inversion body
 (stronger conviction at the FVG level) should produce better winner rates than a "barely
 inverted" bar with a tiny body. Testing a minimum body threshold filters out weak inversions
