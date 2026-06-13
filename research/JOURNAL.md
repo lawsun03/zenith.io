@@ -615,3 +615,41 @@ Entry format:
 - **Key mechanism:** partial exits at 1.5R move the stop to breakeven on the remaining position. This has two effects: (1) converts some full-stop losses into BE exits (reduces bust frequency by cutting deep drawdowns), and (2) caps winner upside when price reaches target without being stopped. For ORB at r_mult=2.5 with partial at 1.5R, ~75% of winners hit the 2.5R target — those winners earn 1.5R×0.5 + 2.5R×0.5 = 2.0R instead of 2.5R (20% payout reduction). The bust reduction (-5.5% XFA, -26.5% combine) is smaller than the payout reduction (-10% net), so standalone sust drops marginally. The combine-bust reduction is the surprising finding: equity curve volatility dampening reduces account resets dramatically.
 - **Learned:** The partial-profit mechanism's primary effect is equity curve dampening (fewer busts), not PF improvement or payout optimization. For ORB-reentry at conservative sizing (r0.75), the bust reduction is insufficient to offset payout loss — net sustainability decreases 1.8%. The larger finding: combine busts (the simulate_combines failure mode) are extremely sensitive to equity volatility. Partial exits reduce combine bust count by 26.5% at the cost of only 7% fewer combine passes — the equity dampening matters most for combine account turnover, not XFA account longevity. The deployed partial_r=1.5 config can remain as-is.
 - **Next:** B26 (swing_stop_lookback=0/15/30 sensitivity for iFVG combine — the last parity-gap item).
+
+## 2026-06-13T14:00:00Z — session wk1-b26 — B26 (swing_stop_lookback sensitivity for iFVG combine)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B26 (last pending item — parity gap characterization).
+- **Ran:** 5 parallel `run_monthly_combine.py` variants (61 months, 2021-2026, MNQ 5min, risk 1.25%, partial-r 0, MNQ overrides applied from bot_config.json):
+  - A: ifvg_edge + lookback=0 + target_clarity=reject (B24 baseline reproduction)
+  - B: ifvg_edge + lookback=15 + target_clarity=reject (new)
+  - C: ifvg_edge + lookback=30 + target_clarity=reject (deployed lookback, research entry mode)
+  - D: close + lookback=30 + target_clarity=reject (B24-style + deployed lookback)
+  - E: close + lookback=30 + target_clarity=off (actual deployed Phase A config)
+- **Numbers:**
+
+  | Config | Passes/61 | Run PF | Long exits/PF | Short exits/PF |
+  |--------|-----------|--------|---------------|----------------|
+  | A: ifvg_edge, lookback=0 | 7 (11%) | 1.00 | 256/1.11 | 211/0.88 |
+  | B: ifvg_edge, lookback=15 | 5 (8%) | 1.00 | 236/1.15 | 207/0.84 |
+  | C: ifvg_edge, lookback=30 | 4 (7%) | 0.78 | 214/0.88 | 175/0.67 |
+  | D: close, lookback=30, reject | 10 (16%) | 1.12 | 320/1.16 | 254/1.07 |
+  | E: close, lookback=30, off (deployed) | 6 (10%) | 1.17 | 305/1.24 | 283/1.09 |
+
+  Run A exactly reproduces B24's ifvg_edge result (7/61, PF 1.00, longs 256/1.11, shorts 211/0.88). ✓
+
+- **Stop rule check (isolated swing_stop_lookback, ifvg_edge mode):**
+  - lookback=15 vs 0: fewer passes (5 vs 7) but same PF (1.00) → NOT stopped, but fails success criteria.
+  - lookback=30 vs 0: fewer passes (4 vs 7) ❌ AND lower PF (0.78 vs 1.00) ❌ → BOTH metrics worse → **stop rule triggered**.
+- **Success criteria check:** "any lookback value achieves >= 15/61 combine passes" → None do (max 7/61 at lookback=0). Criteria NOT met.
+- **Deployed config findings (bonus):**
+  - B24 close+lookback=0+reject: 11/61 (18%), PF 1.18 (prior reference)
+  - Run D close+lookback=30+reject: 10/61 (16%), PF 1.12 → lookback=30 costs 1 pass, -0.06 PF
+  - Run E close+lookback=30+off (DEPLOYED): 6/61 (10%), PF 1.17 → target_clarity=off costs 4 more passes vs D
+  - The deployed Phase A (iFVG combine) achieves only 6/61 (10%) vs 11/61 (18%) at B24 baseline.
+  - Primary culprit: target_clarity_mode="off" (deployed, costs 4 passes: 10→6)
+  - Secondary: swing_stop_lookback=30 (costs 1 pass: 11→10 in close mode)
+- **Verdict:** rejected — lookback=30 strictly dominated on both metrics (stop rule). The parameter plateau extends to swing_stop_lookback. The deployed Phase A config is degraded by both swing_stop_lookback=30 AND target_clarity_mode="off" relative to the research baseline.
+- **Recommendation for Lawrence:** Phase A (iFVG combine) can be significantly improved by setting swing_stop_lookback=0 and target_clarity_mode="reject" in bot_config.json. This restores the combine pass rate from ~6/61 to ~11/61 (nearly 2x). The B21 two-phase pipeline recommendation ($497/mo, sust 2.62x) assumed Phase A at the research baseline; deployed Phase A throughput is materially below that assumption.
+- **Learned:** swing_stop_lookback=30 (wider stop anchored to 30-bar swing low) reduces combine passes by widening the stop distance, making the r=3.5 target harder to reach in a single month. The two-for-one lesson: combining lookback=30 with target_clarity=off (deployed config) halves the Phase A combine pass rate relative to the research baseline. Fixing both would nearly double Phase A throughput without any code changes.
+- **No new code — test suite unchanged.** B26 was benchmark-only. No commits required for test changes.
+- **Next:** Backlog fully exhausted — all B1-B26 items are done. Session concludes. Lawrence to replenish backlog Monday and review the Phase A config recommendation (swing_stop_lookback=0 + target_clarity_mode=reject).

@@ -1183,5 +1183,31 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T14:00:00Z",
+    "session": "wk1-b26",
+    "item": "B26",
+    "variant": "swing_stop_lookback=0/15/30 for iFVG combine + deployed config characterization",
+    "objective": "combine",
+    "metrics": {
+      "lookback0_passes": "7/61",
+      "lookback0_pf": 1.00,
+      "lookback15_passes": "5/61",
+      "lookback15_pf": 1.00,
+      "lookback30_passes": "4/61",
+      "lookback30_pf": 0.78,
+      "close_lookback30_reject_passes": "10/61",
+      "close_lookback30_reject_pf": 1.12,
+      "close_lookback30_off_passes": "6/61",
+      "close_lookback30_off_pf": 1.17
+    },
+    "verdict": "rejected",
+    "learned": "swing_stop_lookback=30 is strictly worse than 0 on BOTH combine passes (4/61 vs 7/61) and run PF (0.78 vs 1.00) in ifvg_edge mode — stop rule triggered. Bonus finding: the deployed iFVG combine (close + lookback=30 + target_clarity=off) achieves only 6/61 (10%) passes vs 11/61 (18%) at the B24 research baseline; target_clarity_mode=off costs 4 passes (10->6), lookback=30 costs 1 pass (11->10) in close mode. The deployed Phase A config is materially degraded by both parameters.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

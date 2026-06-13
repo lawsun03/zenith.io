@@ -374,3 +374,31 @@ Appended 2026-06-13 (B25 partial_profit_r sensitivity):
     are never a free lunch — they trade payout capacity for drawdown protection. For the deployed
     partial_r=1.5 with ORB-reentry r0.75, this tradeoff is acceptable but not beneficial.
     Deployed config can remain unchanged.
+
+Appended 2026-06-13 (B26 swing_stop_lookback sensitivity):
+
+57. **swing_stop_lookback=30 degrades iFVG combine pass rate by making the r=3.5 target harder
+    to reach.** B26 tested 0/15/30 in ifvg_edge mode: lookback=30 loses on BOTH metrics vs
+    lookback=0 (4/61 PF 0.78 vs 7/61 PF 1.00) — stop rule triggered. Mechanism: wider stop
+    (anchored to 30-bar swing low, below the immediate sweep extreme) increases the absolute
+    stop distance → same r_multiple target requires a larger absolute move → fewer monthly pass
+    thresholds reached. This joins swing_stop_lookback in the parameter plateau (increasing the
+    value only hurts).
+
+58. **target_clarity_mode="off" (deployed) halves the Phase A iFVG combine pass rate vs "reject".**
+    B26 bonus finding: deployed Phase A (close + lookback=30 + target_clarity=off) = 6/61 (10%)
+    passes vs B24 baseline (close + lookback=0 + target_clarity=reject) = 11/61 (18%). The two
+    deployed-vs-research differences contribute: target_clarity=off costs 4 passes (10→6, primary
+    driver) and lookback=30 costs 1 pass (11→10, secondary driver). Rule: don't use
+    target_clarity_mode="off" for the Phase A combine config; "reject" is the correct setting to
+    focus combine months on high-structural-quality setups that are more likely to reach the $3k
+    target. The B21 two-phase pipeline ($497/mo, sust 2.62x) assumed Phase A at the research
+    baseline; deployed Phase A throughput is nearly half that assumption — both parameters should
+    be fixed before deploying the B21 recommendation.
+
+59. **The parity gap between research and deployed Phase A is actionable with zero code changes.**
+    Setting swing_stop_lookback=0 and target_clarity_mode="reject" in bot_config.json restores
+    Phase A from ~6/61 (10%) to ~11/61 (18%) combine passes — a ~83% improvement. This requires
+    only config changes, no strategy logic changes. The bot supports these config values already
+    (both are StrategyParams fields). Priority action for Lawrence on Monday: update Phase A config
+    and re-run a B21-style pipeline projection with the corrected Phase A pass rate.

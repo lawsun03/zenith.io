@@ -690,7 +690,7 @@ since the dominant outcome is target-hits, and those are penalized. ~30% neutral
 Source: B21 methodology + deployed bot_config.json + ORB winner MFE analysis (B3/wk1-r3:
 ~75% of winners hit 2.5R target; partial at 1.5R cuts gross payout for ~75% of winners).
 
-## B26 — swing_stop_lookback sensitivity for iFVG combine (0 vs 30)  [pending]
+## B26 — swing_stop_lookback sensitivity for iFVG combine (0 vs 30)  [done — rejected: lookback=30 loses on BOTH combine passes (4/61, PF 0.78) AND run PF vs lookback=0 baseline (7/61, PF 1.00) in ifvg_edge mode — stop rule; bonus finding: deployed Phase A (close+lookback=30+target_clarity=off) achieves 6/61 (10%) vs 11/61 (18%) at B24 baseline; target_clarity=off costs 4 passes (primary driver); swing_stop_lookback=0 + target_clarity=reject recommended for Phase A]
 Hypothesis: the deployed bot uses swing_stop_lookback=30 (stop anchored to the lowest point of
 last 30 bars, not the immediate sweep extreme). The research baseline used 0 (stop at sweep
 extreme). B1-B23 iFVG combine benchmarks all used lookback=0. The deployed iFVG combine
