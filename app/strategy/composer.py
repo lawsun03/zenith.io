@@ -102,6 +102,10 @@ class ComposerConfig:
     # Stop placement: ticks past the sweep extreme. Buffer for noise.
     stop_buffer: Decimal = Decimal("0.30")  # /MGC = 3 ticks
 
+    # Price-normalized stop buffer (B6). 0 = use fixed stop_buffer.
+    # >0 = buffer = stop_anchor * pct. Calibration: 3.0pts / 21000 ≈ 0.000143.
+    stop_buffer_pct: Decimal = Decimal("0")
+
     # Target: fixed R-multiple. R = |entry - stop|. 2R = take 2x risk.
     # Override in the future to use opposing liquidity instead.
     r_multiple: Decimal = Decimal("2.0")
@@ -401,7 +405,10 @@ class SweepDisplacementComposer:
                 stop_anchor = min(swing_anchor, awaiting.sweep.sweep_extreme)
             else:
                 stop_anchor = awaiting.sweep.sweep_extreme
-            stop = stop_anchor - cfg.stop_buffer
+            buf = (stop_anchor * cfg.stop_buffer_pct
+                   if cfg.stop_buffer_pct > 0
+                   else cfg.stop_buffer)
+            stop = stop_anchor - buf
             r = entry - stop
             target = entry + r * cfg.r_multiple
         else:
@@ -412,7 +419,10 @@ class SweepDisplacementComposer:
                 stop_anchor = max(swing_anchor, awaiting.sweep.sweep_extreme)
             else:
                 stop_anchor = awaiting.sweep.sweep_extreme
-            stop = stop_anchor + cfg.stop_buffer
+            buf = (stop_anchor * cfg.stop_buffer_pct
+                   if cfg.stop_buffer_pct > 0
+                   else cfg.stop_buffer)
+            stop = stop_anchor + buf
             r = stop - entry
             target = entry - r * cfg.r_multiple
 
@@ -423,12 +433,16 @@ class SweepDisplacementComposer:
         if cfg.max_stop_atr > 0 and event.atr_at_event > 0:
             cap = cfg.max_stop_atr * event.atr_at_event
             if r > cap:
+                extreme = awaiting.sweep.sweep_extreme
+                fallback_buf = (extreme * cfg.stop_buffer_pct
+                                if cfg.stop_buffer_pct > 0
+                                else cfg.stop_buffer)
                 if side == "long":
-                    stop = awaiting.sweep.sweep_extreme - cfg.stop_buffer
+                    stop = extreme - fallback_buf
                     r = entry - stop
                     target = entry + r * cfg.r_multiple
                 else:
-                    stop = awaiting.sweep.sweep_extreme + cfg.stop_buffer
+                    stop = extreme + fallback_buf
                     r = stop - entry
                     target = entry - r * cfg.r_multiple
                 if r > cap or r <= 0:

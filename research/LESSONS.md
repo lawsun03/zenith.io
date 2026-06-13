@@ -118,3 +118,20 @@ Appended 2026-06-13 (B5 ORB prior-day-range qualifier):
     gate" was a regime_switch artifact (gating whole-day strategy routing, not
     individual trade quality). Day-level range gates join day-level regime gates
     (Lesson 4) as mechanisms that fail to time intraday ORB quality.
+
+Appended 2026-06-13 (B6 ATR-normalized displacement thresholds):
+
+27. **The 2022-23 iFVG drought is structure-poverty, not threshold sensitivity.**
+    B6 tested body_pct=0.000238 — at NQ 12k that relaxes the floor from 5.0 to
+    2.86 pts (a 43% reduction) — yet 2022 monthly trade counts are IDENTICAL to
+    baseline (2-18 trades). The months with 2-5 trades don't become 30-trade
+    months when the threshold loosens; the sweep+inversion setups simply don't
+    occur in 2022. Lesson 3 ("fixed-point thresholds are the drought mechanism")
+    is wrong about causation; the regime-fragility of fixed thresholds is real
+    but it is not what drives the drought. Update prior: threshold-loosening is
+    not a drought fix — only regime-level structural changes can wake up those
+    months. Additional finding: extra marginal displacements (bodies just above
+    the new, looser floor) consume composer sweep states and degrade high-quality
+    months (2021-11: 65->50 trades, PF 1.53->1.07). Features with pct>0 are
+    available default-off but should not be enabled without a clear positive
+    signal from the benchmark.

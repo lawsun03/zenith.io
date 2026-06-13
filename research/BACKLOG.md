@@ -68,7 +68,7 @@ fetch (`scripts/fetch_bars.py --symbol MNQ --days 7`).
 
 ## B5 — ORB prior-day-range qualifier  [done — rejected: combine identical (12/61, PF 1.10 both ways); funded net -61% ($63k vs $163k h200) from 50% trade-volume cut with only +2.4% PF gain; prior-day range does not predict ORB quality]
 
-## B6 — ATR-normalized displacement thresholds  [pending]
+## B6 — ATR-normalized displacement thresholds  [done — rejected: iFVG 12/61 (20%) PF 1.10 vs baseline 13/61 (21%) PF 1.18; 2022 drought unchanged (2-18 trades/mo); drought is structure-poverty, not threshold-sensitivity; feature default-off]
 The 2022-23 drought mechanism: fixed-point min_absolute_body (5.0) / stop_buffer
 (3.0) are ~2x relatively stricter at NQ 11-16k than at 21k+. Add default-off
 alternative: thresholds specified as %-of-price or ATR-multiples (pick ONE

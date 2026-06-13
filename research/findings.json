@@ -162,5 +162,38 @@
     "verdict": "rejected",
     "learned": "PDR cuts ~50% of ORB volume for only +2.4% PF improvement. Funded net drops 61% ($63k vs $163k at h200) because fewer combine attempts mean fewer funded accounts. Both variants are pipeline-negative at risk 1.25; PDR makes the pipeline slower without improving quality. The '2024 PF 1.45 regime gate' finding was from the regime_switch engine (which gated entire-day strategy routing, not individual trade quality).",
     "links": {"doc": null, "runs": ["b5_orb_r25_pdr"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T07:00:00Z",
+    "session": "wk1-b6",
+    "item": "B6",
+    "variant": "ATR-normalized displacement: min_absolute_body_pct=0.000238, stop_buffer_pct=0.000143 (iFVG-only and combined)",
+    "objective": "combine",
+    "metrics": {
+      "ifvg_baseline_passes_61mo": 13,
+      "ifvg_baseline_pass_pct": 21,
+      "ifvg_baseline_pf": 1.18,
+      "ifvg_body_pct_passes_61mo": 12,
+      "ifvg_body_pct_pass_pct": 20,
+      "ifvg_body_pct_pf": 1.10,
+      "combined_baseline_passes_61mo": 9,
+      "combined_baseline_pass_pct": 15,
+      "combined_baseline_pf": 1.15,
+      "combined_body_pct_passes_61mo": 9,
+      "combined_body_pct_pass_pct": 15,
+      "combined_body_pct_pf": 1.14,
+      "drought_2022_trades_baseline_range": "2-18",
+      "drought_2022_trades_pct_range": "2-18",
+      "drought_2021_nov_trades_baseline": 65,
+      "drought_2021_nov_trades_pct": 50,
+      "displacement_events_2023_12_baseline": 470,
+      "displacement_events_2023_12_pct": 515,
+      "pct_threshold_at_12k_nq": 2.86,
+      "pct_threshold_at_16k_nq": 3.81,
+      "pct_threshold_at_21k_nq": 5.0
+    },
+    "verdict": "rejected",
+    "learned": "Loosening min_absolute_body from 5.0 to 3.9 pts at 16k NQ (pct=0.000238) generates 45 more displacement events per month in 2023-12 but leaves 2022-23 trade counts unchanged (same 2-18 per month). The 2022-23 drought is NOT caused by fixed-point threshold strictness -- it is structure-poverty (no iFVG setups, not filtered setups). The extra marginal displacements (bodies in 3.9-5.0 pt range) consume sweep states in the composer, slightly degrading high-quality months like 2021-11 (65->50 trades, PF 1.53->1.07). Feature shipped default-off; the infrastructure is sound but the hypothesis is wrong.",
+    "links": {"doc": null, "runs": [], "src": ["app/bot_config.py", "app/strategy/displacement.py", "app/strategy/composer.py", "app/backtest/runner.py", "app/main.py", "tests/test_b6_atr_normalized.py"]}
   }
 ]

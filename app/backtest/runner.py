@@ -260,11 +260,13 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 min_body_to_range_ratio=s.min_body_to_range_ratio,
                 min_absolute_body=s.min_absolute_body,
                 atr_ref_lag_bars=s.atr_ref_lag_bars,
+                min_absolute_body_pct=s.min_absolute_body_pct,
             )),
             composer=SweepDisplacementComposer(ComposerConfig(
                 instrument=cfg.instrument,
                 displacement_window_bars=s.displacement_window_bars,
                 stop_buffer=s.stop_buffer,
+                stop_buffer_pct=s.stop_buffer_pct,
                 r_multiple=s.r_multiple,
                 killzones=zones,
                 trend_ema_period=s.trend_ema_period,

@@ -100,6 +100,11 @@ class DisplacementConfig:
     # just because ATR is also tiny. /MGC: $1.00 = 10 ticks.
     min_absolute_body: Decimal = Decimal("1.0")
 
+    # Price-normalized floor (B6): when > 0, threshold = bar_close * pct
+    # instead of the fixed min_absolute_body. 0 = disabled (default).
+    # Calibration: 5.0pts / 21000 ≈ 0.000238 matches MNQ at 2024+ prices.
+    min_absolute_body_pct: Decimal = Decimal("0")
+
     # Use the ATR from N bars ago as the body threshold reference (0 = off,
     # current behavior). Rationale: a volatility flush inflates ATR exactly
     # when the reversal displacement prints, raising the bar pro-cyclically —
@@ -287,7 +292,10 @@ class DisplacementDetector:
         body = abs(b2.close - b2.open)
         bar_range = b2.high - b2.low
 
-        if body < cfg.min_absolute_body:
+        min_body = (b2.close * cfg.min_absolute_body_pct
+                    if cfg.min_absolute_body_pct > 0
+                    else cfg.min_absolute_body)
+        if body < min_body:
             return None
         if bar_range == 0:
             return None
@@ -335,7 +343,10 @@ class DisplacementDetector:
         body = abs(b2.close - b2.open)
         bar_range = b2.high - b2.low
 
-        if body < cfg.min_absolute_body:
+        min_body = (b2.close * cfg.min_absolute_body_pct
+                    if cfg.min_absolute_body_pct > 0
+                    else cfg.min_absolute_body)
+        if body < min_body:
             return None
         if bar_range == 0:
             return None

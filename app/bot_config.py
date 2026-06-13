@@ -145,6 +145,16 @@ class StrategyParams(BaseModel):
     # MFE 1.64R, loser MFE p90 1.29R → trial values: 1.0R and 1.5R).
     be_trail_r: Decimal = Decimal("0")
 
+    # ATR-normalized displacement floor (B6). 0 = use fixed min_absolute_body.
+    # >0 = threshold = bar_close * pct (price-era-normalized). Calibration:
+    # 5.0pts / 21000 ≈ 0.000238 matches the deployed MNQ threshold at 2024+ prices;
+    # at 12k NQ (2022) the effective floor drops to ~2.86pts instead of 5.0.
+    min_absolute_body_pct: Decimal = Decimal("0")
+
+    # ATR-normalized stop buffer (B6). 0 = use fixed stop_buffer.
+    # >0 = buffer = stop_anchor * pct. Calibration: 3.0pts / 21000 ≈ 0.000143.
+    stop_buffer_pct: Decimal = Decimal("0")
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var
