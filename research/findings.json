@@ -119,5 +119,48 @@
     "verdict": "candidate",
     "learned": "The two-phase model (iFVG for Combine + ORB r1.0 for Funded) generates $393/month -- 18% more than the best sustainable single-phase option (ORB r0.75: $333/month) -- because iFVG's fast combine cycle (6.0 days/attempt, 28.6 days/funded account) lets the pipeline support a more aggressive funded config while remaining sustainable (1.26x ratio). The key variable is combine pass speed, not combine pass rate -- iFVG produces funded accounts in 28.6 trading days while ORB r0.75 takes 68.6 days, even though ORB has a higher per-attempt pass rate (52% vs 21%).",
     "links": {"doc": "trade_analysis/2026-06-13_B3_phase_policy.md", "runs": ["scripts/run_b3_pipeline.py"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T04:45:00Z",
+    "session": "wk1-b5",
+    "item": "B5",
+    "variant": "ORB r2.5 + pdr_enabled (60-day median gate)",
+    "objective": "combine",
+    "metrics": {
+      "pass_test": "12/61",
+      "pass_test_pct": 20,
+      "pf": 1.10,
+      "baseline_pass_test": "12/61",
+      "baseline_pf": 1.10
+    },
+    "verdict": "rejected",
+    "learned": "The prior-day-range gate cuts ~50% of ORB trading days but leaves combine pass rate and PF completely unchanged (12/61, PF 1.10 both ways). Prior-day range as a pct-of-close does not predict ORB trade quality; the filter selects a random ~50% of days with equal win rate.",
+    "links": {"doc": null, "runs": ["b5_orb_r25_pdr"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T04:45:00Z",
+    "session": "wk1-b5",
+    "item": "B5",
+    "variant": "ORB r2.5 + pdr_enabled (60-day median gate)",
+    "objective": "funded",
+    "metrics": {
+      "trades_pdr": 819,
+      "trades_baseline": 1661,
+      "pf_pdr": 1.238,
+      "pf_baseline": 1.209,
+      "xfa_net_pdr": 63411,
+      "xfa_net_baseline": 163122,
+      "combine_passes_pdr": 28,
+      "combine_passes_baseline": 68,
+      "combine_busts_pdr": 53,
+      "combine_busts_baseline": 167,
+      "sust_pdr": 0.53,
+      "sust_baseline": 0.41,
+      "haircut": 200,
+      "note": "both runs include 2022 in 5yr equity; baseline comparison uses same full-5yr file"
+    },
+    "verdict": "rejected",
+    "learned": "PDR cuts ~50% of ORB volume for only +2.4% PF improvement. Funded net drops 61% ($63k vs $163k at h200) because fewer combine attempts mean fewer funded accounts. Both variants are pipeline-negative at risk 1.25; PDR makes the pipeline slower without improving quality. The '2024 PF 1.45 regime gate' finding was from the regime_switch engine (which gated entire-day strategy routing, not individual trade quality).",
+    "links": {"doc": null, "runs": ["b5_orb_r25_pdr"], "src": null}
   }
 ]

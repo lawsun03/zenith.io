@@ -238,6 +238,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                     range_minutes=s.orb_range_minutes,
                     r_multiple=s.orb_r_multiple,
                     max_trades_per_day=s.orb_max_trades_per_day,
+                    pdr_enabled=s.orb_pdr_enabled,
                 )),
                 strategy_cfg=s,
             )

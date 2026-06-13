@@ -66,12 +66,7 @@ fetch (`scripts/fetch_bars.py --symbol MNQ --days 7`).
 - Deliverable: trade_analysis weekly forensics doc + findings entries +
   archived session bars under `bars/live_archive/` (new dir ok).
 
-## B5 — ORB prior-day-range qualifier  [pending]
-The inverted regime gate (ORB-on-large-range-days) printed 2024 PF 1.45 — as a
-qualifier for ORB'S OWN trades (skip ORB on below-median prior-day range), not
-as an account router. Implement as default-off ORB config flag (one fixed rule:
-prior ET-day range %-of-close >= trailing 60-day median → ORB may trade).
-Benchmark ORB-solo both objectives vs ORB baseline.
+## B5 — ORB prior-day-range qualifier  [done — rejected: combine identical (12/61, PF 1.10 both ways); funded net -61% ($63k vs $163k h200) from 50% trade-volume cut with only +2.4% PF gain; prior-day range does not predict ORB quality]
 
 ## B6 — ATR-normalized displacement thresholds  [pending]
 The 2022-23 drought mechanism: fixed-point min_absolute_body (5.0) / stop_buffer

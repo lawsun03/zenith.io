@@ -117,6 +117,7 @@ class StrategyParams(BaseModel):
     orb_range_minutes: int = 15
     orb_r_multiple: Decimal = Decimal("2.0")
     orb_max_trades_per_day: int = 1
+    orb_pdr_enabled: bool = False         # prior-day-range qualifier (default-off)
     vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")

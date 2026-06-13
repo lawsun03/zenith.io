@@ -13,6 +13,8 @@ it plugs into ExecutionEngine/run_backtest unchanged (solo benchmark).
 from __future__ import annotations
 
 import logging
+import statistics
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -36,6 +38,8 @@ class ORBConfig:
     range_minutes: int = 15
     r_multiple: Decimal = Decimal("2.0")
     max_trades_per_day: int = 1
+    pdr_enabled: bool = False       # prior-day-range qualifier (default-off)
+    pdr_lookback: int = 60          # trading days; waits until window full
 
 
 class ORBDetector:
@@ -49,13 +53,36 @@ class ORBDetector:
         self._or_high: Decimal | None = None
         self._or_low: Decimal | None = None
         self._fired = 0
+        # Prior-day-range qualifier state
+        self._pdr_ranges: deque[Decimal] = deque(maxlen=config.pdr_lookback)
+        self._pdr_day_high: Decimal | None = None
+        self._pdr_day_low: Decimal | None = None
+        self._pdr_day_close: Decimal | None = None
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         et = bar.ts.astimezone(ET)
+
         if et.date() != self._day:
+            # Commit the completed day's range into the PDR deque before resetting
+            if (self._day is not None and self._pdr_day_high is not None
+                    and self._pdr_day_close and self._pdr_day_close > 0):
+                rng_pct = (self._pdr_day_high - self._pdr_day_low) / self._pdr_day_close
+                self._pdr_ranges.append(rng_pct)
             self._day = et.date()
             self._or_high = self._or_low = None
             self._fired = 0
+            self._pdr_day_high = None
+            self._pdr_day_low = None
+            self._pdr_day_close = None
+
+        # Track running high/low/close for the current ET day (all bars)
+        if self._pdr_day_high is None:
+            self._pdr_day_high = bar.high
+            self._pdr_day_low = bar.low
+        else:
+            self._pdr_day_high = max(self._pdr_day_high, bar.high)
+            self._pdr_day_low = min(self._pdr_day_low, bar.low)
+        self._pdr_day_close = bar.close
 
         start = datetime.combine(et.date(), self._open_t, tzinfo=ET)
         end = start + timedelta(minutes=self.config.range_minutes)
@@ -71,6 +98,13 @@ class ORBDetector:
         if self._fired >= self.config.max_trades_per_day:
             return None
 
+        # Prior-day-range qualifier: only engage once the lookback window is full
+        if self.config.pdr_enabled and len(self._pdr_ranges) >= self.config.pdr_lookback:
+            prior = self._pdr_ranges[-1]  # most recent completed day
+            median = Decimal(str(statistics.median(self._pdr_ranges)))
+            if prior < median:
+                return None  # below-median prior-day range → skip ORB today
+
         if bar.close > self._or_high:
             side, stop, broken = "long", self._or_low, self._or_high
         elif bar.close < self._or_low:
@@ -85,9 +119,9 @@ class ORBDetector:
         target = entry + r * self.config.r_multiple if side == "long" \
             else entry - r * self.config.r_multiple
         self._fired += 1
-        log.info("ORB breakout: %s %s close=%s OR=[%s-%s] stop=%s target=%s",
+        log.info("ORB breakout: %s %s close=%s OR=[%s-%s] stop=%s target=%s pdr_enabled=%s",
                  self.config.instrument, side, entry,
-                 self._or_low, self._or_high, stop, target)
+                 self._or_low, self._or_high, stop, target, self.config.pdr_enabled)
         return Signal(
             instrument=self.config.instrument,
             side=side,

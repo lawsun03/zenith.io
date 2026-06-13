@@ -109,3 +109,12 @@ Appended 2026-06-13 (B2 MFE/MAE excursion ladder):
     mfe_pts, mae_pts, r_mfe, r_mae for every closed trade. Analysis CSVs are in
     research/mfe_mae_*.csv. The be_trail_r parameter is wired and default-off —
     future exit-mode candidates can use it without new code.
+
+Appended 2026-06-13 (B5 ORB prior-day-range qualifier):
+
+26. **Prior-day range does not predict ORB trade quality.** The 60-day median
+    gate cuts ~50% of ORB days with no improvement in win rate or PF (combine:
+    12/61, PF 1.10 both ways; funded PF +2.4% only). The "2024 PF 1.45 regime
+    gate" was a regime_switch artifact (gating whole-day strategy routing, not
+    individual trade quality). Day-level range gates join day-level regime gates
+    (Lesson 4) as mechanisms that fail to time intraday ORB quality.
