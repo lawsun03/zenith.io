@@ -180,6 +180,14 @@ Appended 2026-06-13 (wk1-r2 research session):
     (London + NY AM) for the funded phase removes ~265 negative-expectancy trades over 5y
     without new code.
 
+Appended 2026-06-13 (B15 long-only iFVG funded):
+
+36. **Blocking loss-making short iFVG signals is sufficient to make the funded pipeline self-sustaining.**
+    Long-only iFVG (allowed_sides=long) at r1.0/r1.25 achieves sust 1.12x–1.13x vs full iFVG's 0.54x at the same risk level. No new code — the existing allowed_sides parameter handles it. The mechanism: removing shorts (PF 0.960) eliminates the equity curve drag that causes accounts to bust near MLL floor.
+
+37. **Named-session killzones (london+ny_am+ny_pm) have a 65% long signal bias vs 49.5% in all_day config.**
+    The London session (02:00–05:00 ET) generates predominantly bullish setups in NQ (overnight continuation), while the negative-expectancy overnight/pre-dawn hours removed by named sessions had more short signals. Consequence: "long-only at named sessions" retains ~65% of full-iFVG volume (3,928 vs 6,043 trades), not the ~50% expected from all_day analysis. Long-only at named sessions is NOT as volume-sparse as the all_day MFE/MAE analysis suggested.
+
 Appended 2026-06-13 (B14 ORB reentry after stop):
 
 35. **ORB reentry after a confirmed stop adds volume but lowers per-trade quality.** At risk 1.0%: +44% trades (1,652 → 2,382), +35% funded $/month ($1,911 → $2,578), +57% combine passes (7 → 11 of 61), but PF drops -5% (1.213 → 1.153). Reentry signals are stop-reversal entries — structurally weaker than first-breakout signals. Enable only in the funded phase where volume helps pipeline throughput; the PF cost is acceptable for absolute-payout maximization.

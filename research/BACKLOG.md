@@ -184,7 +184,7 @@ Note: `orb_max_trades_per_day` stays at 1; the reentry mechanism is orthogonal a
 via the on_stop_loss callback. Do NOT use max_trades_per_day=2 — it fires the second signal
 immediately on the second trending bar, not after a stop.
 
-## B15 — Long-only iFVG funded benchmark  [pending]  (strategy research, funded)
+## B15 — Long-only iFVG funded benchmark  [done — candidate: long-only sust 1.13x (r1.25) / 1.12x (r1.0) vs full iFVG 0.54x; +41% net, -37% XFA busts; NO NEW CODE needed (allowed_sides=long already existed); doc trade_analysis/2026-06-13_B15_longonly_ifvg_funded.md]  (strategy research, funded)
 Hypothesis: the iFVG short side is structurally loss-making on NQ 5min (5y PF=0.960 from
 MFE/MAE data: 1251 short trades, WR 28.9%). Blocking shorts lifts long-only PF to 1.136
 (+9%) which should reduce funded-phase bust rates and improve XFA payouts.

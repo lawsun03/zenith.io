@@ -265,3 +265,26 @@ Entry format:
 - **Verdict:** candidate — both funded success criteria met ($/month and sustainability both improve); combine secondary improved (11 vs 7) though still below 1.25%-risk baseline of 12/61; PF trades off against volume.
 - **Learned:** The reentry mechanism works correctly: a second ORB signal fires only after a confirmed stop, and at most once per day. It adds +44% volume and improves both combine throughput and funded payouts, but reentry trades are lower-quality (stop-reversal, not first-breakout) which drags PF -5%. The standalone ORB r1.0 pipeline is negative either way at this sizing; the reentry's value requires the two-phase model (iFVG as combine phase feeds ORB funded accounts).
 - **Next:** B15 (long-only iFVG funded benchmark) or B16 (iFVG inversion bar quality gate). B15 is the next pending item by rank.
+
+## 2026-06-13T08:10Z — session wk1-b15 — B15 (long-only iFVG funded benchmark)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (Saturday).
+- **Ran:**
+  1. Identified that `allowed_sides="long"` already exists in StrategyParams and is fully tested — no new code needed per Rule 2 (Simplicity first).
+  2. Added one missing defining-behavior test: `test_long_passes_when_long_only` (B15 spec item 2: long signal must not be blocked when allowed_sides=long). All 13 ablation tests pass.
+  3. Ran `equity_export` with `--set allowed_sides=long` at r0.75/r1.0/r1.25 in parallel against the full 5y bars file. Killzones: default `london+ny_am+ny_pm` (bot_config.json was empty, fell back to BotConfig defaults).
+  4. Ran `funded_sim --haircut 200` on each output, plus a direct full iFVG (both sides) baseline at r1.25 for comparison.
+- **Numbers (h200, london+ny_am+ny_pm killzones):**
+
+  | Config | Trades | PF | Passes | XFA busts | Net (5y) | Sust |
+  |---|---|---|---|---|---|---|
+  | Full iFVG r1.25 (baseline) | 6,043 | 1.064 | 45 | 84 | $132,380 | 0.54x |
+  | LongOnly r0.75 | 3,931 | 1.139 | 42 | 64 | $135,472 | 0.66x |
+  | LongOnly r1.0 | 3,946 | 1.127 | 56 | 50 | $177,542 | **1.12x** |
+  | LongOnly r1.25 | 3,928 | 1.121 | 60 | 53 | $186,214 | **1.13x** |
+
+  Long-only at r1.0/r1.25: self-sustaining. Full iFVG at r1.25: pipeline-negative.
+  Volume retained: 3,928/6,043 = 65% (higher than expected 50% — named sessions are long-biased).
+  Tests: 629 (up 1 from 628), 0 failures.
+- **Verdict:** candidate — long-only iFVG at r1.0/r1.25 flips the funded pipeline from pipeline-negative (0.54x) to self-sustaining (1.12–1.13x). Both primary success criteria met: XFA net +41%, XFA busts -37%.
+- **Learned:** The iFVG short side exclusion is sufficient to achieve pipeline sustainability at named-session killzones. The named-session config has a 65% long signal bias (vs 49.5% in all_day), meaning "long-only at named sessions" retains significantly more volume than the all_day MFE/MAE analysis suggested (~25/month). The allowed_sides parameter was already correctly wired and tested; no new code was needed.
+- **Next:** B16 (iFVG inversion bar quality gate — strategy research, funded) or B17 (ORB long-only — similar structure to B15 but for ORB engine) or B18 (named-sessions killzone config benchmark — no-code benchmark).

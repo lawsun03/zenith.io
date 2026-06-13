@@ -27,6 +27,32 @@ def _cfg(**kw):
     return ComposerConfig(instrument="MNQ", trend_ema_period=0, **kw)
 
 
+def _long_setup(composer, with_fvg=True):
+    """Low-side sweep then bullish displacement -> LONG candidate."""
+    ts0 = ny_am(0)
+    b_sweep = bar(ts0, "21000", "21005", "20985", "21002")
+    sweep = SweepEvent(
+        side="low",
+        swept_swing=Swing(kind="low", price=Decimal("20992"),
+                          bar_ts=ts0, confirmed_ts=ts0),
+        pattern="B_one_bar",
+        sweep_extreme=Decimal("20985"),
+        completed_at=ts0,
+        sweep_bar=b_sweep,
+    )
+    composer.on_sweep(b_sweep, sweep)
+    composer.on_bar_close(b_sweep)
+    ts1 = ny_am(1)
+    b_disp = bar(ts1, "21002", "21030", "21001", "21028")
+    fvg = FairValueGap(side="bullish", low=Decimal("21005"),
+                       high=Decimal("21020"), created_at=ts1) if with_fvg else None
+    event = DisplacementEvent(
+        side="bullish", displacement_bar=b_disp, body_size=Decimal("26"),
+        atr_at_event=Decimal("5"), body_to_atr=Decimal("5.2"), fvg=fvg,
+    )
+    return composer.on_displacement(b_disp, event), b_disp
+
+
 def _short_setup(composer, with_fvg=True):
     """High-side sweep then bearish displacement -> SHORT candidate."""
     ts0 = ny_am(0)
@@ -62,6 +88,12 @@ class TestAllowedSides:
         signal, _ = _short_setup(SweepDisplacementComposer(_cfg()))
         assert signal is not None
         assert signal.side == "short"
+
+    def test_long_passes_when_long_only(self):
+        """B15: long signal must not be blocked when allowed_sides='long'."""
+        signal, _ = _long_setup(SweepDisplacementComposer(_cfg(allowed_sides="long")))
+        assert signal is not None
+        assert signal.side == "long"
 
 
 class TestTrail1R:

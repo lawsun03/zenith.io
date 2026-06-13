@@ -361,6 +361,27 @@
     "links": {"doc": null, "runs": [], "src": ["app/journaling.py", "app/main.py", "tests/test_b13_exec_slippage.py"]}
   },
   {
+    "ts": "2026-06-13T08:10Z",
+    "session": "wk1-b15",
+    "item": "B15",
+    "variant": "long-only iFVG (allowed_sides=long) funded benchmark — r0.75/r1.0/r1.25",
+    "objective": "funded",
+    "metrics": {
+      "full_ifvg_r125_trades": 6043, "full_ifvg_r125_pf": 1.064, "full_ifvg_r125_combine_passes": 45, "full_ifvg_r125_xfa_busts": 84, "full_ifvg_r125_xfa_net_h200": 132380, "full_ifvg_r125_sust": 0.54,
+      "longonly_r075_trades": 3931, "longonly_r075_pf": 1.139, "longonly_r075_combine_passes": 42, "longonly_r075_xfa_busts": 64, "longonly_r075_xfa_net_h200": 135472, "longonly_r075_sust": 0.66,
+      "longonly_r100_trades": 3946, "longonly_r100_pf": 1.127, "longonly_r100_combine_passes": 56, "longonly_r100_xfa_busts": 50, "longonly_r100_xfa_net_h200": 177542, "longonly_r100_sust": 1.12,
+      "longonly_r125_trades": 3928, "longonly_r125_pf": 1.121, "longonly_r125_combine_passes": 60, "longonly_r125_xfa_busts": 53, "longonly_r125_xfa_net_h200": 186214, "longonly_r125_sust": 1.13,
+      "haircut": 200,
+      "killzones": "london+ny_am+ny_pm",
+      "mechanism": "allowed_sides=long (no new code — existing parameter)",
+      "test_added": "test_long_passes_when_long_only",
+      "total_tests": 629
+    },
+    "verdict": "candidate",
+    "learned": "Blocking short iFVG signals (PF 0.960, loss-making) via allowed_sides=long flips the standalone funded pipeline from pipeline-negative (sust 0.54x at r1.25) to self-sustaining (sust 1.13x at r1.25, 1.12x at r1.0). Both primary success criteria met: XFA net +41% ($186k vs $132k) and XFA busts -37% (53 vs 84). Trade volume cuts to ~65/month vs ~100/month full iFVG — the named-session killzones have a 65% long signal bias (vs 49.5% in all_day config), so long-only retains more volume than expected from the all-day MFE/MAE analysis. No new code needed: allowed_sides='long' already existed and is fully tested.",
+    "links": {"doc": "trade_analysis/2026-06-13_B15_longonly_ifvg_funded.md", "runs": ["equity_b15_ifvg_longonly_r075.csv", "equity_b15_ifvg_longonly_r100.csv", "equity_b15_ifvg_longonly_r125.csv"], "src": null}
+  },
+  {
     "ts": "2026-06-13T08:00Z",
     "session": "wk1-b14",
     "item": "B14",
