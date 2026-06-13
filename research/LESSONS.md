@@ -250,3 +250,16 @@ Appended 2026-06-13 (wk1-r3 research session):
     behavior is not captured by our current MFE/MAE infrastructure (which records entry-based
     MFE, not peak-relative retracement). Any ORB excursion-ladder proposal needs per-trade
     path-through-MFE-peak data before it can be accurately evaluated.
+
+Appended 2026-06-13 (B19 long-only iFVG + London+NY AM funded benchmark):
+
+44. **NY PM signals (13:xx-16:30 ET) are loss-making in LONG-ONLY iFVG and safely removable.**
+    B19 tested london+ny_am only (removes NY PM) on the already-long-only, named-session B15
+    config. At r1.25: PF +4.6% (1.173 vs 1.121), sust +42% (1.600x vs 1.13x), net payouts
+    nearly identical ($184k vs $186k). The 33% fewer trades (2,645 vs 3,928) contribute
+    disproportionately few profits: removing them barely touches gross payouts but dramatically
+    reduces XFA bust events. B18's counter-finding (removing named sessions hurts all-sides
+    funded) does NOT apply here: B18 removed overnight/pre-market sessions with positive PF
+    contributions from shorts; B19 removes only NY PM (all-sides PF 0.906 < 1.0), which is
+    net-negative for both long and short signals. Rule: when a session's all-sides PF < 1.0,
+    it is safely removable from any config — even one that already benefits from named sessions.

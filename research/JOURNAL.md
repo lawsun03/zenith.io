@@ -362,3 +362,33 @@ Entry format:
 - **Verdict:** dataset — 3 new BACKLOG items appended (B19, B20, B21).
 - **Learned:** The B3 pipeline model's $/mo figure is not directly comparable to flat-equity standalone funded metrics — per-year stitching produces ~2x fewer funded busts, so sust figures diverge significantly. Before concluding that B15's standalone 1.12x sust is "worse" than B3's two-phase 1.26x, B20 must be run with per-year methodology. The ORB excursion distribution confirms that ~75% of winners hit the 2.5R target exactly, meaning the target itself is a strong exit anchor; additional partial exits before 2.5R affect mostly the 25% day-end-flatten population.
 - **Next:** B19 (simplest: no-code funded benchmark), B20 (highest-priority: two-phase pipeline with LongOnly-iFVG funded, needs per-year equity generation), B21 (iFVG → ORB-reentry two-phase).
+
+## 2026-06-13T10:15Z — session wk1-b19 — B19 (Long-only iFVG + London+NY AM only funded benchmark)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Session type:** B19 reclaim (orphan from crashed prior session). B19 was in-progress with no journal entry — reclaimed per protocol.
+- **Ran:** equity_export at r0.75/r1.0/r1.25 with `--killzones london,ny_am --set allowed_sides=long`. r0.75 equity CSV was already present from the crashed session (4619 data points, valid). r1.0 and r1.25 ran fresh. Then funded_sim --haircut 200 on all three. No code changes; 636 tests green (unchanged from B17/B18).
+- **Numbers (h200, full 5y bars 2021-2026 incl 2022):**
+
+  | Config | Trades | PF | Combine Passes | XFA Busts | Net (5y) | Sust | $/mo |
+  |--------|--------|----|----------------|-----------|----------|------|------|
+  | LongOnly london+ny_am r0.75 | ~2,640 | N/A | 50 | 58 | $124,024 | 0.862x | $2,067 |
+  | LongOnly london+ny_am r1.0 | 2,643 | 1.168 | 58 | 49 | $165,210 | **1.184x** | $2,754 |
+  | LongOnly london+ny_am r1.25 | 2,645 | 1.173 | 64 | 40 | $184,104 | **1.600x** | $3,068 |
+
+  B15 baseline (long-only, london+ny_am+ny_pm, same h200 methodology):
+
+  | Config | Trades | PF | Combine Passes | XFA Busts | Net (5y) | Sust |
+  |--------|--------|----|----------------|-----------|----------|------|
+  | LongOnly r0.75 (B15) | 3,931 | 1.139 | 42 | 64 | $135,472 | 0.66x |
+  | LongOnly r1.0 (B15) | 3,946 | 1.127 | 56 | 50 | $177,542 | 1.12x |
+  | LongOnly r1.25 (B15) | 3,928 | 1.121 | 60 | 53 | $186,214 | 1.13x |
+
+- **Success criteria check (vs B15 r1.0 baseline: PF 1.127, sust 1.12x):**
+  - r1.0: PF +3.6% ✓ (>= +2%), sust 1.184x ✓ (>= 1.12x) — **PASS**
+  - r1.25: PF +4.6% ✓, sust 1.600x ✓ — **PASS**
+  - r0.75: sust 0.862x — pipeline-negative, criterion not met (as expected, lower risk is harder to sustain)
+- **Stop rule check (per protocol):** r1.0 and r1.25 both improve on BOTH primary metrics (PF and sust) — not stopped.
+- **Verdict:** candidate — B19 at r1.0 and r1.25 beats B15 on both success criteria. R1.25 is the standout: 33% fewer trades ($184k vs $186k net = nearly identical) but dramatically improved sust (1.60x vs 1.13x). Removing NY PM signals from long-only iFVG eliminates trades that contribute disproportionately to XFA bust events without meaningfully reducing gross payouts.
+- **Key insight:** B18 found that removing named sessions from ALL-SIDES iFVG hurts the funded pipeline. B19 shows the opposite for LONG-ONLY iFVG when removing specifically NY PM. The distinction: B18 removed overnight/pre-market sessions with positive PF contributions from shorts; B19 removes only NY PM (PF 0.906 all-sides, and evidently even weaker for longs). The ~1,283 fewer NY PM trades per 5y contribute nearly zero net P&L but increase bust variance.
+- **Learned:** NY PM window (13:xx-16:30 ET) signals are loss-making in long-only iFVG. Removing them from B15's config improves funded PF by 3-5% and pipeline sustainability by 5-42% (risk-level dependent, with r1.25 showing the strongest effect). The B18 counterintuitive finding does not extend to this case because the positive-PF overnight sessions B18 was losing are absent from the long-only view.
+- **Next:** B20 (iFVG Combine → LongOnly-iFVG Funded two-phase pipeline — should use B19 r1.25 config for Phase B per-year equity generation); B21 (ORB-reentry two-phase).

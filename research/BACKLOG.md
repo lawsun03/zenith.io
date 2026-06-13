@@ -380,7 +380,7 @@ Key data findings driving the 3 proposals (2026-06-13):
   tested-positive mechanisms (4-for-4 failure of external claims, Lesson 6 confirmed).
   One SSRN paper on Ladder exits (5095349) noted as weak prior; not incorporated.
 
-## B19 — Long-only iFVG + London+NY AM only (funded benchmark, no new code)  [pending]
+## B19 — Long-only iFVG + London+NY AM only (funded benchmark, no new code)  [done — candidate: r1.0 PF +3.6% sust 1.184x; r1.25 PF +4.6% sust 1.600x vs B15 baseline; 33% fewer trades, nearly identical net payouts at r1.25; doc trade_analysis/2026-06-13_B19_longonly_london_ny_am_funded.md]
 Hypothesis: B15 (long-only iFVG) uses london+ny_am+ny_pm. NY PM signals (13:xx-15:xx ET)
 have PF 0.906 in the full all-sides config (B18 data). For LONG-ONLY iFVG, NY PM long signals
 may drag down PF (the B18 session removal was hurt by removing positive overnight long signals;
