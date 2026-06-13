@@ -228,19 +228,25 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 strategy_cfg=s,
             )
         if s.engine == "orb":
-            from app.strategy.orb import ORBConfig, ORBDetector, ORBRunner
+            from app.strategy.orb import ORBComposer, ORBConfig, ORBDetector, ORBRunner
+            _det = ORBDetector(ORBConfig(
+                instrument=cfg.instrument,
+                open_et=s.orb_open_et,
+                range_minutes=s.orb_range_minutes,
+                r_multiple=s.orb_r_multiple,
+                max_trades_per_day=s.orb_max_trades_per_day,
+                pdr_enabled=s.orb_pdr_enabled,
+                reentry_after_stop=s.orb_reentry_after_stop,
+            ))
             return ORBRunner(
                 instrument=cfg.instrument,
                 timeframe=cfg.timeframe,
-                detector=ORBDetector(ORBConfig(
-                    instrument=cfg.instrument,
-                    open_et=s.orb_open_et,
-                    range_minutes=s.orb_range_minutes,
-                    r_multiple=s.orb_r_multiple,
-                    max_trades_per_day=s.orb_max_trades_per_day,
-                    pdr_enabled=s.orb_pdr_enabled,
-                )),
+                detector=_det,
                 strategy_cfg=s,
+                composer=ORBComposer(
+                    detector=_det,
+                    reentry_after_stop=s.orb_reentry_after_stop,
+                ),
             )
         if s.engine == "kz_levels":
             from app.strategy.kz_levels import KillzoneLevelTracker, KZLevelsRunner

@@ -150,7 +150,7 @@ Key data findings driving the 3 proposals:
 - Web research found no new mechanisms beyond iFVG/ORB/KZ; all practitioner ideas map to
   existing tested engines (Opening Rip = ORB; Liquidity Sweep = iFVG; VWAP = rejected)
 
-## B14 — ORB reentry after stop  [pending]  (strategy research, combine+funded)
+## B14 — ORB reentry after stop  [done — candidate: 11/61 combine (18%) PF 1.13 vs 7/61 (11%) PF 1.16 baseline; funded $2,578/mo sust 0.99x vs $1,911/mo sust 0.85x; +44% volume, -5% PF; both standalone configs pipeline-negative at risk 1.0%]  (strategy research, combine+funded)
 Hypothesis: a failed ORB breakout (first signal stopped) followed by a second breakout of
 the same range is a higher-conviction "false breakout → true breakout" signal. The existing
 max_trades_per_day=2 fires a second signal at the SECOND bar above the range (before the first

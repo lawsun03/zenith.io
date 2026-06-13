@@ -359,5 +359,34 @@
     "verdict": "shipped",
     "learned": "exec_slippage = fill_price − order_bar_close (close of the confirmation bar when the signal fired) measures true execution quality: for market orders this is 0–2 ticks. The existing slippage column (fill − signal_entry, the FVG proximal edge) remains unchanged as 'plan_deviation' — it is still useful for diagnosing signal-to-fill price drift but not for execution quality. The watcher pattern (module-level _last_bar_close dict updated by an async on_bar handler registered in main.py) is the cleanest approach: no changes to Signal, no changes to strategy code, backward-compatible column ordering.",
     "links": {"doc": null, "runs": [], "src": ["app/journaling.py", "app/main.py", "tests/test_b13_exec_slippage.py"]}
+  },
+  {
+    "ts": "2026-06-13T08:00Z",
+    "session": "wk1-b14",
+    "item": "B14",
+    "variant": "ORB reentry after stop (orb_reentry_after_stop=True, r_multiple=2.5, risk 1.0%)",
+    "objective": "combine+funded",
+    "metrics": {
+      "combine_passes_reentry": "11/61",
+      "combine_pct_reentry": 18,
+      "combine_pf_reentry": 1.13,
+      "combine_passes_baseline": "7/61",
+      "combine_pct_baseline": 11,
+      "combine_pf_baseline": 1.16,
+      "funded_trades_reentry": 2382,
+      "funded_trades_baseline": 1652,
+      "funded_pf_reentry": 1.153,
+      "funded_pf_baseline": 1.213,
+      "funded_net_mo_reentry": 2578,
+      "funded_net_mo_baseline": 1911,
+      "funded_sust_reentry": 0.99,
+      "funded_sust_baseline": 0.85,
+      "haircut": 200,
+      "tests_added": 5,
+      "total_tests": 628
+    },
+    "verdict": "candidate",
+    "learned": "ORB reentry after a confirmed stop adds +44% trade volume and improves combine throughput (7/61 → 11/61 at risk 1.0%) and funded net $/month (+35%). The cost is a -5% PF drop (1.213 → 1.153): reentry trades are lower-quality stop-reversal entries that drag average win quality down. Both standalone configs are pipeline-negative at risk 1.0% — the full value requires the two-phase model (iFVG combine + ORB funded). Mechanism implemented correctly: ORBComposer.on_stop_loss() re-arms detector exactly once per day via _rearm_count guard.",
+    "links": {"doc": null, "runs": ["b14_orb_reentry_r2p5", "b14_funded_reentry_r1p0", "b14_funded_baseline_r1p0"], "src": null}
   }
 ]

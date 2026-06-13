@@ -244,3 +244,24 @@ Entry format:
 - **Verdict:** shipped — `exec_slippage` column live; `slippage` column unchanged.
 - **Learned:** The `slippage` column (fill − FVG proximal edge) is genuinely useful as a plan-deviation diagnostic but measures nothing about execution quality. `exec_slippage` (fill − confirmation-bar close) isolates real fill quality: on market entries this is 0–2 ticks (consistent with B4 forensics: mean 0.78 pts). The watcher pattern (module-level dict + async on_bar handler) keeps the change fully contained in `journaling.py` with no modifications to Signal, strategy code, or the broker.
 - **Next:** B14 (ORB reentry after stop — highest-priority new strategy item) or B15 (long-only iFVG funded benchmark).
+
+## 2026-06-13T08:00Z — session wk1-b14 — B14 (ORB reentry after stop)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (Sunday).
+- **Ran:** TDD — 5 defining-behavior tests written first (all failing on import), then implemented:
+  1. Added `reentry_after_stop: bool = False` to `ORBConfig`.
+  2. Added `_rearm_count: int = 0` to `ORBDetector.__init__`; reset to 0 on day change.
+  3. Added `ORBDetector._rearm()`: resets `_fired = 0` and increments `_rearm_count` — gated to fire only once per day (`_rearm_count == 0`).
+  4. Created `ORBComposer(detector, reentry_after_stop)` dataclass — replaces `_NoopComposer`; `on_stop_loss()` calls `detector._rearm()` if flag enabled.
+  5. Updated `ORBRunner.composer` field to `ORBComposer`; added `__post_init__` default for backward compat.
+  6. Added `orb_reentry_after_stop: bool = False` to `StrategyParams`.
+  7. Wired in `_build_runner` in both `runner.py` (backtest) and `main.py` (live): constructs `ORBDetector` and `ORBComposer` separately, passes `composer=` to `ORBRunner`.
+  8. Benchmarked: Combine (risk 1.0%, r_multiple=2.5, 61 months full 5y) and Funded (equity_export + funded_sim, h200).
+  9. Generated direct baseline (no reentry, same risk) for comparison.
+- **Numbers (risk 1.0%, r_multiple=2.5, h200):**
+  - **Combine — reentry:** 11/61 (18%), PF 1.13 | **baseline:** 7/61 (11%), PF 1.16
+  - **Trade volume:** 2,382 vs 1,652 (+44%); funded PF 1.153 vs 1.213 (-5%)
+  - **Funded $/month:** $2,578 vs $1,911 (+35%); sustainability 0.99x vs 0.85x (+16pp)
+  - Both standalone configs remain pipeline-negative at risk 1.0% (reentry: sust 0.99x < 1.0)
+- **Verdict:** candidate — both funded success criteria met ($/month and sustainability both improve); combine secondary improved (11 vs 7) though still below 1.25%-risk baseline of 12/61; PF trades off against volume.
+- **Learned:** The reentry mechanism works correctly: a second ORB signal fires only after a confirmed stop, and at most once per day. It adds +44% volume and improves both combine throughput and funded payouts, but reentry trades are lower-quality (stop-reversal, not first-breakout) which drags PF -5%. The standalone ORB r1.0 pipeline is negative either way at this sizing; the reentry's value requires the two-phase model (iFVG as combine phase feeds ORB funded accounts).
+- **Next:** B15 (long-only iFVG funded benchmark) or B16 (iFVG inversion bar quality gate). B15 is the next pending item by rank.

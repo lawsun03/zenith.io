@@ -40,6 +40,7 @@ class ORBConfig:
     max_trades_per_day: int = 1
     pdr_enabled: bool = False       # prior-day-range qualifier (default-off)
     pdr_lookback: int = 60          # trading days; waits until window full
+    reentry_after_stop: bool = False  # re-arm once per day after a confirmed stop
 
 
 class ORBDetector:
@@ -53,6 +54,7 @@ class ORBDetector:
         self._or_high: Decimal | None = None
         self._or_low: Decimal | None = None
         self._fired = 0
+        self._rearm_count = 0  # max 1 re-arm per day; prevents two stops from doubling entries
         self._or_range_logged = False  # avoid re-logging established range each bar
         # Prior-day-range qualifier state
         self._pdr_ranges: deque[Decimal] = deque(maxlen=config.pdr_lookback)
@@ -72,6 +74,7 @@ class ORBDetector:
             self._day = et.date()
             self._or_high = self._or_low = None
             self._fired = 0
+            self._rearm_count = 0
             self._or_range_logged = False
             self._pdr_day_high = None
             self._pdr_day_low = None
@@ -146,6 +149,12 @@ class ORBDetector:
             sweep_bar_range=self._or_high - self._or_low,
         )
 
+    def _rearm(self) -> None:
+        """Allow one more signal this day — called by ORBComposer on a confirmed stop."""
+        if self._rearm_count == 0:
+            self._fired = 0
+            self._rearm_count = 1
+
     def state(self) -> dict:
         """Current OR range and signal count — for the live dashboard. Never mutates.
 
@@ -160,11 +169,16 @@ class ORBDetector:
         }
 
 
-class _NoopComposer:
-    """Stop-fill hook the engine calls on every runner; ORB has no cooldown."""
+@dataclass
+class ORBComposer:
+    """Stop-fill hook for ORB. Re-arms the detector once per day when enabled."""
+
+    detector: ORBDetector
+    reentry_after_stop: bool = False
 
     def on_stop_loss(self) -> None:
-        pass
+        if self.reentry_after_stop:
+            self.detector._rearm()
 
 
 @dataclass
@@ -178,8 +192,12 @@ class ORBRunner:
     vp: None = None                       # engine skips VP when None
     signal_instrument: str = ""
     last_reject: None = field(default=None, init=False)
-    composer: _NoopComposer = field(default_factory=_NoopComposer)
+    composer: ORBComposer = field(default=None)  # set by _build_runner; default built in __post_init__
     grader: SetupGrader = field(default_factory=SetupGrader)  # empty swings → no TP1
+
+    def __post_init__(self) -> None:
+        if self.composer is None:
+            self.composer = ORBComposer(detector=self.detector)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         return self.detector.on_bar(bar)

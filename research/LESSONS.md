@@ -179,3 +179,7 @@ Appended 2026-06-13 (wk1-r2 research session):
     1.235, 09:xx 1.178) windows carry the quality edge. Restricting to named sessions
     (London + NY AM) for the funded phase removes ~265 negative-expectancy trades over 5y
     without new code.
+
+Appended 2026-06-13 (B14 ORB reentry after stop):
+
+35. **ORB reentry after a confirmed stop adds volume but lowers per-trade quality.** At risk 1.0%: +44% trades (1,652 → 2,382), +35% funded $/month ($1,911 → $2,578), +57% combine passes (7 → 11 of 61), but PF drops -5% (1.213 → 1.153). Reentry signals are stop-reversal entries — structurally weaker than first-breakout signals. Enable only in the funded phase where volume helps pipeline throughput; the PF cost is acceptable for absolute-payout maximization.
