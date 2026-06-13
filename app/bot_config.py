@@ -179,6 +179,15 @@ class StrategyParams(BaseModel):
     # (prior-day high for longs, prior-day low for shorts). Default off.
     daily_bias_gate_enabled: bool = False
 
+    # B36: stop placement mode.
+    # "swing" (default) = stop just past the sweep extreme (current behavior).
+    # "fvg_mid" = stop at the FVG zone midpoint (tighter stop, target scaled by
+    #   the new smaller r_distance × r_multiple).
+    # "fvg_mid_abs" = FVG midpoint stop, but keep the original absolute target
+    #   distance (so the tighter stop raises the effective R multiple).
+    # Ignored (falls back to "swing") when no FVG zone is present (displacement_only).
+    stop_mode: str = "swing"
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

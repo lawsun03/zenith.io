@@ -1256,7 +1256,7 @@ Benchmark (BOTH objectives; parity flags `--partial-r 0 --set swing_stop_lookbac
 Success: improves PF AND the objective vs gate-off. Stop rule: loses on BOTH ->
 reject. No tuning of the bias definition beyond the one declared rule.
 
-## B36 — FVG-midpoint stop placement  [pending — Lawrence-requested 2026-06-13 (JadeCap video); rank with B35]
+## B36 — FVG-midpoint stop placement  [done — rejected 2026-06-14]
 Source: same video — "stop loss at 50% of the Fair Value Gap" (vs our current
 stop = beyond the swept extreme / swing + stop_buffer).
 

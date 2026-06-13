@@ -1672,5 +1672,35 @@
       "runs": ["equity_b32/orb_reentry_r0p5_*.csv"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T19:00Z",
+    "session": "B36-2026-06-14T19:00Z",
+    "item": "B36",
+    "variant": "FVG-midpoint stop placement (fvg_mid + fvg_mid_abs vs swing baseline)",
+    "objective": "both",
+    "metrics": {
+      "baseline_combine_passes": 7,
+      "baseline_combine_months": 61,
+      "baseline_combine_pf": 1.00,
+      "fvg_mid_combine_passes": 1,
+      "fvg_mid_combine_pf": 0.67,
+      "fvg_mid_abs_combine_passes": 2,
+      "fvg_mid_abs_combine_pf": 1.01,
+      "fvg_mid_trades_5y": 14874,
+      "fvg_mid_net_5y": -42692,
+      "fvg_mid_pf_5y": 0.795,
+      "fvg_mid_abs_trades_5y": 14872,
+      "fvg_mid_abs_net_5y": -38483,
+      "fvg_mid_abs_pf_5y": 0.831,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "The FVG zone midpoint lies inside the normal gap-fill retracement path that price traverses during valid iFVG development. Placing a stop at the midpoint guarantees premature stop-outs on setups that would otherwise resolve in favor of the signal. Both fvg_mid and fvg_mid_abs lost on BOTH objectives vs the swing-stop baseline. Root cause is geometric: for iFVG entries, the stop must be placed OUTSIDE the FVG zone (at or beyond the distal edge). The swept-extreme stop is geometrically correct — it sits past the liquidity sweep that price must not revisit for the trade thesis to hold.",
+    "links": {
+      "doc": null,
+      "runs": ["research/equity_b36_fvg_mid.csv", "research/equity_b36_fvg_mid_abs.csv"],
+      "src": "tests/test_fvg_mid_stop.py"
+    }
   }
 ]

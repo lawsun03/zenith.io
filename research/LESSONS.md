@@ -598,3 +598,17 @@ Appended 2026-06-14 (B32 ORB-reentry r=0.5 risk floor):
     reach payout. Rule: in a pipeline-constrained model, the funded risk level must balance (a) per-account
     net high enough for meaningful $/mo and (b) bust frequency low enough for sust >= Phase A pass rate.
     At r=0.5, (a) fails. At r>=1.0, (b) fails. r=0.75 satisfies both.
+
+Appended 2026-06-14 (B36 FVG-midpoint stop):
+
+77. **The FVG zone midpoint is inside the normal gap-fill retracement path — placing a stop there guarantees premature stop-outs.**
+    B36 tested two modes: fvg_mid (stop = FVG midpoint, target scaled by new smaller r) and fvg_mid_abs
+    (same stop, original absolute target). Both modes triggered stop rule on BOTH objectives: combine passes
+    fell from 7/61 (PF 1.00 baseline) to 1-2/61 (PF 0.67-1.01), and 5y funded net fell to -$38k to -$43k
+    (PF 0.79-0.83 vs baseline PF >1). Root cause: in the iFVG setup, price must retrace into the FVG zone
+    (between proximal and distal edges) before the displacement completes — the midpoint sits squarely on
+    this required path. A stop there is hit during normal iFVG development, not only on failures. Rule: for
+    iFVG signals, stops must be placed OUTSIDE the FVG zone (distal edge or beyond); any stop inside the
+    zone midpoint or nearer will be wicked out during valid setup development. The swept-extreme stop
+    (current baseline) is geometrically correct because it sits past the liquidity sweep that triggers the
+    signal — price must not revisit that level for the trade thesis to hold.

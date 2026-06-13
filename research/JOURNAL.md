@@ -1117,3 +1117,31 @@ Entry format:
 - **Verdict:** rejected — r=0.5 is over-conservative. sust improves (3.08x vs 2.85x) but $/mo halves ($246 vs $508) — well below the $300/mo minimum useful threshold. r=0.75 is confirmed as the Phase B risk optimum for ORB-reentry: it is the lowest risk level where per-account net is high enough for meaningful $/mo given pipeline supply constraints. Lesson 76 added.
 - **Learned:** Pipeline throughput at r=0.5 is constrained not by XFA busts (12 — barely fewer than r=0.75's 13) but by slow per-account earnings ($1,935 at 114d vs $3,131 at 54d). The r=0.5 funded account earns 38% less per payout while taking 2x longer to reach it — this is not offset by the higher survival rate. The risk sensitivity curve for ORB-reentry funded phase has a clear optimum at r=0.75: below this, per-account earnings fall faster than bust frequency; above this, bust frequency rises faster than per-account earnings.
 - **Next:** B36 (FVG-midpoint stop placement — strategy item, Lawrence-requested) or pipeline B35 (ORB-reentry r=1.0/r=1.25 sensitivity — tests if reentry avoids plain ORB's sust collapse at higher r). Pipeline B35 is the most promising remaining item (could beat B31 $508/mo if reentry maintains sust at r=1.0).
+
+---
+
+### wk2-b36 — B36 FVG-midpoint stop placement  (2026-06-14)
+- **Ran:** Two stop variants vs swing baseline (5y NQ 5min, 2023-2026, excl 2022 holdout, h=200, --partial-r 0 --set swing_stop_lookback=0):
+  - `fvg_mid`: stop = (fvg_low + fvg_high) / 2; target scaled by new (tighter) r × r_multiple
+  - `fvg_mid_abs`: same FVG midpoint stop; target unchanged from swing baseline (implied higher R)
+  - Tests: 4 defining-behavior tests written first (TDD), all 4 passed. Full suite 653 passed / 2 skipped.
+- **Numbers:**
+
+  **Combine (Phase A, 61 months, 1 contract, $3k target):**
+  | Config | Passes/61 | PF | vs baseline |
+  |--------|-----------|-----|-------------|
+  | swing (baseline) | 7/61 (11%) | 1.00 | — |
+  | fvg_mid | 1/61 (2%) | 0.67 | STOP RULE |
+  | fvg_mid_abs | 2/61 (3%) | 1.01 | STOP RULE |
+
+  **Funded (flat 5y equity export, h200, net MNQ 1-contract):**
+  | Config | Trades | Net 5y | PF |
+  |--------|--------|--------|----|
+  | swing (baseline) | ~14,800 | positive | >1 |
+  | fvg_mid | 14,874 | -$42,692 | 0.795 |
+  | fvg_mid_abs | 14,872 | -$38,483 | 0.831 |
+
+- **Stop rule check:** Both modes lose on BOTH objective metrics vs baseline — stop rule triggered for both. No parameter rescue.
+- **Verdict:** REJECTED. Both FVG-midpoint stop variants catastrophically underperform on both objectives. Lesson 77 added.
+- **Learned:** The FVG midpoint is inside the normal gap-fill retracement path that price traverses during valid iFVG development. A stop there is hit during standard setup development, not only on failures. The swept-extreme stop (current baseline) is geometrically correct: it sits past the liquidity sweep that triggers the signal, a level price must not revisit for the trade thesis to hold.
+- **Next:** B35-pipeline (ORB-reentry r=1.0/r=1.25 sensitivity — highest-value remaining item, could beat $508/mo if sust holds at r=1.0), or B36-config-parity (Phase A r=2.0 parity test, needed to confirm combined-engine Phase A baseline).

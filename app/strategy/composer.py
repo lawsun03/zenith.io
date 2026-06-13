@@ -165,6 +165,11 @@ class ComposerConfig:
     # B35: daily directional bias gate. See StrategyParams.daily_bias_gate_enabled.
     daily_bias_gate_enabled: bool = False
 
+    # B36: stop placement mode. "swing" = sweep extreme (default).
+    # "fvg_mid" = FVG zone midpoint (tighter, target scaled by new r).
+    # "fvg_mid_abs" = FVG midpoint stop, original absolute target (higher R).
+    stop_mode: str = "swing"
+
 
 @dataclass
 class _Awaiting:
@@ -589,6 +594,27 @@ class SweepDisplacementComposer:
                     "Stop cap: swing anchor too wide — fell back to sweep "
                     "extreme (r=%s, cap=%s)", r, cap,
                 )
+
+        # B36: FVG-midpoint stop override (applied after max_stop_atr check)
+        if cfg.stop_mode in ("fvg_mid", "fvg_mid_abs") and zone_low is not None and zone_high is not None:
+            fvg_mid = (zone_low + zone_high) / 2
+            orig_target = target
+            new_stop = fvg_mid
+            new_r = (entry - new_stop) if side == "long" else (new_stop - entry)
+            if new_r <= 0:
+                log.info(
+                    "fvg_mid stop invalid (r=%s <= 0); skipping (entry=%s, fvg_mid=%s)",
+                    new_r, entry, fvg_mid,
+                )
+                return None
+            stop = new_stop
+            r = new_r
+            if cfg.stop_mode == "fvg_mid_abs":
+                target = orig_target
+            elif side == "long":
+                target = entry + r * cfg.r_multiple
+            else:
+                target = entry - r * cfg.r_multiple
 
         fvg_desc = (f"{zone_kind} {zone_low}–{zone_high}" if zone_low is not None
                     else "no-FVG (displacement-only)")
