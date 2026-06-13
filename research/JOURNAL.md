@@ -653,3 +653,56 @@ Entry format:
 - **Learned:** swing_stop_lookback=30 (wider stop anchored to 30-bar swing low) reduces combine passes by widening the stop distance, making the r=3.5 target harder to reach in a single month. The two-for-one lesson: combining lookback=30 with target_clarity=off (deployed config) halves the Phase A combine pass rate relative to the research baseline. Fixing both would nearly double Phase A throughput without any code changes.
 - **No new code — test suite unchanged.** B26 was benchmark-only. No commits required for test changes.
 - **Next:** Backlog fully exhausted — all B1-B26 items are done. Session concludes. Lawrence to replenish backlog Monday and review the Phase A config recommendation (swing_stop_lookback=0 + target_clarity_mode=reject).
+
+## 2026-06-13T14:30:00Z — session wk1-r6 — RESEARCH (ideation, post-B26 backlog replenishment)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Session type:** RESEARCH/IDEATION — all B1-B26 items completed; backlog fully exhausted.
+- **Databento ledger:** $0.00 / $20.00 cap. No fetches this session.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Databento ledger audit: $0.00 spent. No fetches needed (using existing equity CSVs).
+  3. **Phase A equity analysis** (`scripts/research_phase_a_analysis.py`): loaded
+     `equity_b1/control_r1p25_{year}.csv` per-year files and ran `simulate_combines` on each.
+     Output: ifvg_edge Phase A stats (2021–2026 excl 2022) and projected close-mode Phase A
+     economics using B24's +57% scale factor.
+  4. **B24 funded_sim re-run**: ran `funded_sim.py` on `equity_b24_close_r1p25.csv` (flat 5y,
+     LongOnly+london+ny_am, close mode, r1.25, haircut=200) to extract per-account metrics.
+  5. LESSONS.md read to confirm no prior coverage of Phase A close-mode projection.
+  6. No WebSearch: no new external mechanism families found in any prior wk1-r* session (4-for-4
+     external claim failures, Lesson 6 confirmed). Data mining is the right source for remaining
+     ideas.
+- **Key findings:**
+  - **Phase A ifvg_edge per-year pass rates:** 2021: 5/19 (26%), 2023: 5/37 (14%),
+    2024: 7/41 (17%), 2025: 12/47 (26%), 2026: 5/19 (26%). TOTAL: 34/163 (20.9%).
+    All B21-class pipeline numbers used these 34 passes as Phase A supply.
+  - **B24 close-mode scale factor: 11/61 vs 7/61 = 1.571×.** Applied to Phase A:
+    ~53 projected passes over 5y. Economics (vs B21 baseline):
+    - Reset cost: $461 (vs $715) — -35%
+    - Cycle days: 92.0d (vs 102.1d) — -10%
+    - Net/month: ~$610 (vs $497) — **+23%**
+    - Sustainability: ~4.08x (vs 2.62x) — **+56%**
+  - **B24 LongOnly-close funded (flat 5y, haircut 200):** 53 combine passes, 21 XFA busts,
+    22 accounts, $180,534 net payouts. Per-account net = $8,206 — 2.6× higher than ORB-reentry
+    r0.75's $3,131. Account avg duration: 971 trading days / 22 accounts = 44.1d/account
+    (vs 73.5d for ORB-reentry). High per-account net driven by PF 1.167 and fewer bust events.
+  - **B28 projection:** Per-year correction (~50% fewer busts): ~10.5 funded busts vs 53 Phase A
+    passes → sust ~5x. $/month depends on per-year per-account net (hard to project without
+    running the simulation; likely substantially higher than B27's $610/mo due to $8,206 vs
+    $3,131 per-account net, even with shorter account durations).
+  - **B29 motivation:** B22 10-min ORB showed +9% funded $/mo with identical combine passes.
+    The effect on ORB-reentry at r0.75 in the two-phase context is untested. Lower priority
+    than B27/B28 but a cheap no-code test once B27 Phase A equity exists.
+- **Numbers:** Phase A ifvg_edge 34/163 passes over 5y → projected close-mode 53 passes;
+  B27 net/month ~$610, sust ~4.08x; B24 LongOnly-close $8,206 net/account, 21 flat-5y busts.
+- **Verdict:** dataset — 3 new BACKLOG items appended (B27, B28, B29). No code changes. No Databento spend.
+- **Learned:** The B21 recommended pipeline ($497/mo, sust 2.62x) was benchmarked with ifvg_edge
+  Phase A equity, which understates the deployed close-mode Phase A by ~57% passes. The actual
+  deployed pipeline (with Phase A fixed per B26 recommendations: swing_stop_lookback=0,
+  target_clarity_mode=reject, close entry mode) projects to significantly better economics than
+  the B21 headline numbers. Additionally, close-mode LongOnly-iFVG achieves a much higher funded
+  per-account net ($8,206) than ORB-reentry, which may make it a better Phase B — but the
+  pipeline sust depends on per-year bust dynamics that require B28 to quantify.
+- **Next:** B27 (highest priority — close-mode Phase A pipeline, resolves the central Phase A
+  undercount). B28 and B29 can follow once B27 Phase A equity exists. Monday priority: Lawrence
+  should also fix deployed Phase A config (swing_stop_lookback=0 + target_clarity_mode=reject
+  per B26 recommendation) before the next trading week.

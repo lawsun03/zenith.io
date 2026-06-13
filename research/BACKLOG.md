@@ -726,3 +726,142 @@ false-stop-out protection helps.
 
 Source: Lesson 50 (config parity gap), deployed bot_config.json. The combine-pass-rate effect
 of swing_stop_lookback has not been measured in any prior session.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk1-r6 (post-B26 backlog replenishment)  [done — 3 items appended: B27 close-mode Phase A pipeline, B28 close-mode LongOnly-iFVG Phase B, B29 ORB-reentry 10min Phase B]
+
+B26 exhausted the backlog. This session replenishes with new testable hypotheses.
+Primary source: Phase A equity analysis (scripts/research_phase_a_analysis.py) + B24 close-mode funded stats.
+
+Key data findings driving the 3 proposals:
+- **Phase A ifvg_edge per-year pass rates (equity_b1/control_r1p25)**: 2021: 5/19 (26%), 2023: 5/37
+  (14%), 2024: 7/41 (17%), 2025: 12/47 (26%), 2026: 5/19 (26%) — TOTAL: 34/163 (21%).
+  These were all generated with BotConfig default ifvg_entry_mode="ifvg_edge".
+- **B24 showed close mode gives +57% more combine passes** (11/61 vs 7/61 per 61 months).
+  Applying scale factor 1.571: projected close-mode Phase A passes over 5y = ~53 (vs 34).
+  Projected B27 economics (close Phase A + B21 ORB-reentry r0.75 Phase B):
+  - Attempts/funded: 3.08 (vs 4.76 ifvg_edge) → reset cost $461 (vs $715)
+  - Days/funded: 18.5d (vs 28.6d) → cycle days 92.0d (vs 102.1d)
+  - Net/month: ~$610/mo (vs $497/mo, +23%) — sustainability: ~4.08x (vs 2.62x, +56%)
+- **B24 close-mode LongOnly-iFVG flat 5y funded** (london+ny_am, r1.25, haircut 200):
+  53 combine passes, 21 XFA busts, 22 accounts, $180,534 net payouts.
+  Per-account net = $180,534/22 = $8,206 (2.6x higher than ORB-reentry r0.75's $3,131).
+  Reason: higher PF + longer account durations in LongOnly-close configuration.
+  Projected two-phase sust (per-year correction, ~50% fewer busts): 53/~10.5 = ~5x.
+- **B22 10-min ORB** (no reentry): +9% funded $/mo vs 15min at r1.0 with same combine passes.
+  Whether this advantage holds for ORB-reentry at r0.75 in the two-phase model is untested.
+- B27 must run before B28 and B29 (all three share the close-mode Phase A equity from equity_b27/).
+
+## B27 — Close-mode Phase A: re-run B21 two-phase pipeline with ifvg_entry_mode=close  [pending]
+Hypothesis: The B21 pipeline ($497/mo, sust 2.62x) used equity_b1/control_r1p25 as Phase A,
+generated with BotConfig default ifvg_entry_mode="ifvg_edge". B24 confirmed close mode gives
++57% more combine passes (11/61 vs 7/61). Regenerating Phase A equity with close mode should
+produce ~53 passes over 5y (vs 34) — reducing reset cost from $715 to ~$461 and improving
+sust from 2.62x to ~4.08x. This validates whether the deployed config (which uses close mode)
+produces materially better pipeline economics than the B21 recommendation implies.
+
+Mechanism: no new code. Generate per-year iFVG-close equity CSVs via equity_export.py:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 1.25 --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject
+   --set ifvg_entry_mode=close --out research/equity_b27/close_r1p25_{year}.csv`
+Also at risk 1.0 (secondary):
+  `--risk-pct 1.0 --out research/equity_b27/close_r1p0_{year}.csv`
+Write scripts/run_b27_pipeline.py (clone of run_b21_pipeline.py) substituting:
+  Phase A: equity_b27/close_r1p25_{year}.csv
+  Phase B: equity_b21/orb_reentry_r0p75_{year}.csv (unchanged from B21)
+
+Fixed defaults: `ifvg_entry_mode=close`, `partial_r=0`, `swing_stop_lookback=0`,
+`target_clarity_mode=reject` (research baseline with close mode — same as B24).
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B21: $497/mo, sust 2.62x):
+- Primary: net/month and sust both improve vs B21 → close-mode Phase A is the correct config
+- If sust improves but $/mo decreases: still a win (sustainability is the harder constraint)
+- If neither improves: close mode's combine improvement does not translate to pipeline economics
+  (unexpected but informative — would mean the ifvg_edge Phase A had compensating per-account value)
+
+Note: B28 and B29 depend on the equity_b27/ Phase A equity generated here.
+Run B27 before B28 or B29.
+
+Prior: ~85% that B27 beats B21 on both criteria. The phase A undercount is structural (+57%
+more passes = +57% fewer reset costs), and the Phase B is unchanged. The projection is approximate
+but the direction is clear and the magnitude is large.
+
+Source: scripts/research_phase_a_analysis.py (this session); B24 combine results.
+
+## B28 — Close-mode LongOnly-iFVG as funded Phase B (two-phase, vs B27 ORB-reentry)  [pending]
+Hypothesis: B20 tested LongOnly-iFVG (ifvg_edge) as Phase B and found sust 0.65x (rejected:
+52 funded busts vs 34 Phase A passes). B24 showed close mode dramatically changes the funded picture:
+LongOnly-close flat 5y has 21 XFA busts (vs 52 for ifvg_edge B20). With close-mode Phase A (~53
+passes, from B27), the two-phase sust projects to ~53/10.5 = ~5x (per-year). Per-account net
+($8,206) is 2.6x higher than ORB-reentry r0.75 ($3,131), projecting dramatically higher $/mo.
+
+Mechanism: no new code. Generate per-year close-mode LongOnly-iFVG equity CSVs:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 1.25 --partial-r 0 --set swing_stop_lookback=0 --set ifvg_entry_mode=close
+   --set allowed_sides=long --killzones london,ny_am
+   --out research/equity_b28/longonly_close_r1p25_{year}.csv`
+Also at r1.0 (secondary).
+Write scripts/run_b28_pipeline.py using:
+  Phase A: equity_b27/close_r1p25_{year}.csv (from B27 — B27 must run first)
+  Phase B: equity_b28/longonly_close_r1p25_{year}.csv
+
+Fixed defaults: `ifvg_entry_mode=close`, `allowed_sides=long`, `killzones=london,ny_am`,
+`partial_r=0`, `swing_stop_lookback=0`.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B27: projected ~$610/mo, ~4.08x sust):
+- Primary: net/month >= B27 AND sust >= B27 → LongOnly-close Phase B beats ORB-reentry Phase B
+- If $/mo >> B27 but sust < B27: note as a high-volume option (user risk tolerance decides)
+- If sust < 2.62x (B21 baseline): B28 fails to beat B21 Phase B even with close mode
+
+Caution: flat 5y sust 2.524x for B24-LongOnly-close does NOT translate directly to two-phase
+sust. The per-year busts and per-account net in the two-phase model depend on the funded_sim
+running over the stitched per-year equity — same correction (~50% fewer busts) used in B3/B21.
+
+Prerequisite: B27 must complete first (B28 Phase A equity = equity_b27/).
+Prior: ~55% that B28 beats B21 on $/mo but uncertain on sust. The per-account net is much higher
+($8,206 vs $3,131) which drives $/mo strongly upward, but LongOnly-iFVG may cycle accounts
+faster (higher volume), requiring more Phase A passes to sustain.
+
+Source: B24 flat 5y funded_sim output (53 passes, 21 busts, 22 accounts, $180,534 net); B20
+per-year methodology analysis (Lesson 42); scripts/research_phase_a_analysis.py projection.
+
+## B29 — ORB-reentry with 10-minute opening range as Phase B in B27 two-phase pipeline  [pending]
+Hypothesis: B22 showed ORB 10-min (no reentry) has +9% funded $/mo vs 15-min at r1.0 flat 5y,
+with identical combine passes (10/61 each). B21 uses ORB-reentry at 15-min as Phase B. Switching
+Phase B to 10-min ORB-reentry at r0.75 may improve $/mo in the two-phase model. The 10-min window
+captures cleaner directional breakout structure (longs PF 1.15 vs 0.99 at 15-min per B22), which
+should translate to better per-account funded earnings.
+
+Mechanism: no new code. Generate per-year ORB-reentry 10-min equity CSVs:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 0.75 --partial-r 0 --set swing_stop_lookback=0 --set engine=orb
+   --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True --set orb_range_minutes=10
+   --out research/equity_b29/orb_reentry_10min_r0p75_{year}.csv`
+Write scripts/run_b29_pipeline.py using:
+  Phase A: equity_b27/close_r1p25_{year}.csv (from B27 — B27 must run first)
+  Phase B: equity_b29/orb_reentry_10min_r0p75_{year}.csv
+
+Fixed defaults: `orb_range_minutes=10`, `orb_reentry_after_stop=True`, `partial_r=0`,
+`swing_stop_lookback=0`.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B27 ORB-reentry 15min: projected ~$610/mo, ~4.08x sust):
+- Primary: net/month improves vs B27 with sust still >= 2.62x (B21 baseline)
+- If $/mo improves but sust drops: report as high-yield option with lower pipeline buffer
+- The 10-min window effect on reentry specifically (second signal after stop) is untested;
+  10-min longs outperform 15-min (B22 PF 1.15 vs 0.99), but reentry direction may differ
+
+Prerequisite: B27 must complete first (Phase A equity).
+Prior: ~40% that B29 improves B27's $/mo. The 10-min ORB improvement (+9% $/mo in B22)
+was for non-reentry ORB at r1.0; at r0.75 and with reentry, the effect may differ. Combine
+passes with 10-min may differ enough to change sust. Low code risk, cheap test.
+
+Source: B22 ORB range_minutes benchmark (10-min +9% funded $/mo); B22 long/short PF reversal
+at 10-min (longs 1.15 vs 0.99 at 15-min); wk1-b18 RESEARCH theme 4.

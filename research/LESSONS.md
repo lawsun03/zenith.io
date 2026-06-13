@@ -402,3 +402,21 @@ Appended 2026-06-13 (B26 swing_stop_lookback sensitivity):
     only config changes, no strategy logic changes. The bot supports these config values already
     (both are StrategyParams fields). Priority action for Lawrence on Monday: update Phase A config
     and re-run a B21-style pipeline projection with the corrected Phase A pass rate.
+
+Appended 2026-06-13 (wk1-r6 research session):
+
+60. **The B21 two-phase recommendation uses ifvg_edge Phase A, understating the deployed close-mode
+    pipeline by ~57% combine passes.** Per-year equity_b1/control_r1p25 data: 34 passes / 163
+    attempts over 5y (21% pass rate). B24 showed close mode gives 11/61 (18%) vs 7/61 (11%) —
+    a 1.571× scale factor. Projected close-mode Phase A: ~53 passes over 5y. Applied to B21
+    two-phase: reset cost drops $715→$461, cycle days 102.1→92.0, projected net/month $497→$610
+    (+23%) and sust 2.62x→4.08x (+56%). B27 quantifies this exactly. Never quote B21 numbers
+    as representative of the deployed config — they use ifvg_edge Phase A.
+
+61. **Close-mode LongOnly-iFVG funded per-account net ($8,206) is 2.6× higher than ORB-reentry
+    r0.75 ($3,131) but cycles ~2× faster** (22 accounts / 971 trading days = 44.1 days/account
+    vs 73.5 days for ORB-reentry). The high per-account net comes from higher PF (1.167) and
+    longer survival in the funded phase. Whether this translates to better two-phase pipeline
+    economics than ORB-reentry depends on per-year funded bust frequency (flat 5y: 21 busts,
+    per-year projected: ~10–11). B28 tests this directly. Rule: high per-account net does not
+    automatically mean better pipeline — account cycling speed and bust frequency both matter.

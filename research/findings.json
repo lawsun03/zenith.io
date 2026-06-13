@@ -1209,5 +1209,33 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T14:30:00Z",
+    "session": "wk1-r6",
+    "item": "RESEARCH",
+    "variant": "post-B26 backlog replenishment — close-mode Phase A projection + LongOnly-close Phase B analysis",
+    "objective": "infra",
+    "metrics": {
+      "phase_a_ifvg_edge_passes_5y": 34,
+      "phase_a_ifvg_edge_attempts_5y": 163,
+      "phase_a_ifvg_edge_pass_rate_pct": 20.9,
+      "phase_a_close_projected_passes_5y": 53,
+      "phase_a_close_scale_factor": 1.571,
+      "b27_projected_net_per_month": 610,
+      "b27_projected_sust": 4.08,
+      "b24_longonly_close_flat5y_combine_passes": 53,
+      "b24_longonly_close_flat5y_xfa_busts": 21,
+      "b24_longonly_close_flat5y_net_payouts": 180534,
+      "b24_longonly_close_per_account_net": 8206,
+      "new_backlog_items": 3
+    },
+    "verdict": "dataset",
+    "learned": "The B21 two-phase recommendation ($497/mo, sust 2.62x) used ifvg_edge Phase A equity (BotConfig default), understating the deployed close-mode Phase A by ~57% combine passes (projected 53 vs actual 34 over 5y). B27 will resolve this — projected improvement: $610/mo (+23%) and sust 4.08x (+56%). Close-mode LongOnly-iFVG funded (B24) achieves 2.6x higher per-account net than ORB-reentry r0.75 ($8,206 vs $3,131), but account cycling speed is unknown until B28 runs per-year equity.",
+    "links": {
+      "doc": null,
+      "runs": ["wk1-r6-phase-a-analysis"],
+      "src": null
+    }
   }
 ]
