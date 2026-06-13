@@ -307,5 +307,16 @@
     "verdict": "dataset",
     "learned": "ORB short side (PF=1.109) is measurably weaker than long side (PF=1.320) — the same 'tops stall, bottoms sweep' bias confirmed by iFVG (B15). Unlike iFVG shorts (loss-making at PF=0.960), ORB shorts are still profitable; long-only ORB is a funded PF-improvement hypothesis, not loss-removal. iFVG signals in the noon window (12:xx ET PF=0.591) and NY PM tail (14-15:xx PF=0.763-0.946) are negative-expectancy drags that the all_day benchmark config includes; restricting to named sessions for funded phase is a testable no-code config change.",
     "links": {"doc": null, "runs": [], "src": ["research/mfe_mae_orb_clean.csv", "research/mfe_mae_ifvg_clean.csv"]}
+  },
+  {
+    "ts": "2026-06-13T07:10:00Z",
+    "session": "wk1-b10",
+    "item": "B10",
+    "variant": "funded_sim --save-id registry output",
+    "objective": "infra",
+    "metrics": {"tests_added": 5, "total_tests": 609, "failures": 0},
+    "verdict": "shipped",
+    "learned": "funded_sim.py now accepts --save-id and writes a backtests/<id>.json with both funded_pipeline.combine and funded_pipeline.xfa blocks populated, identical shape to run_monthly_combine's registry output. The UI's FundedPipelineDetail component renders both blocks without any frontend changes.",
+    "links": {"doc": null, "runs": [], "src": null}
   }
 ]

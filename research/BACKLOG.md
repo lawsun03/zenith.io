@@ -94,7 +94,7 @@ defines the three layers). Pure additive; frontend build required
 (`npm run build` in frontend/). Note: server changes need a bot restart — do it
 only while market closed AND flat, per run-bot procedure.
 
-## B10 — funded_sim --save-id registry output  [pending]  (infra)
+## B10 — funded_sim --save-id registry output  [done — shipped: funded_sim now accepts --save-id/--save-label/--instrument/--timeframe; writes backtests/<id>.json with funded_pipeline.combine + funded_pipeline.xfa; 5 defining-behavior tests; 609 total tests green]  (infra)
 Give funded_sim (or equity_export) a `--save-id` that writes a UI-registry
 JSON (shape like run_monthly_combine._save_ui_result, with the funded metrics
 in a `funded_pipeline` block) so payout-frontier results render in the
