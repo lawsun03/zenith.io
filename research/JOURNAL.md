@@ -1548,3 +1548,62 @@ Entry format:
   3. `run_b44_pipeline.py`: reusable 4-config funded pipeline comparison script (per-year stitch + funded_sim summary table).
 
 - **Next:** B46 (B42+B43 deployed pipeline benchmark — no code; validates orb_signal_window_mins=60 at deployed partial_r=1.5; prior=70%). Or B45 (ORB OR width filter — Phase 1 data mining only). B46 is higher priority as it directly validates whether to enable B43 in the deployed bot.
+
+## 2026-06-15T00:30:00Z — session wk2-b45 — B45 (ORB opening-range width quality filter — Phase 1 data mining)
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no lockout. Market closed (weekend).
+- **Claimed:** B45 (top pending item — Phase 1 data mining only; no code until GO verdict).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Wrote `scripts/analyze_b45_orb_range.py`:
+     - Loads 1-min bars from yearly CSVs, aggregates to 5-min buckets per day.
+     - For each trading day: OR high/low = max/min of 9:30-9:44 ET window.
+     - ATR(14) = mean of 14 5-min true-range values ending just before 9:30 ET.
+     - OR/ATR ratio = OR_width / ATR14.
+     - Matches each of 1030 ORB trades (mfe_mae_orb_clean.csv) to its day's ratio.
+     - Buckets by quintile; computes WR, PF, hold-time distribution per bucket.
+  3. Ran analysis: 1031 days with valid OR/ATR, 1030/1030 trades matched (100%).
+  4. Test suite: **664 passed, 2 skipped** — no code changes.
+
+- **Numbers:**
+
+  **Quintile Analysis (n=206 per bucket, 5y excl 2022):**
+  | Bucket | n | WR% | PF | Net$ | %EOD(>4h) |
+  |--------|---|-----|-----|------|-----------|
+  | Q1 narrowest (ratio < 3.25) | 206 | 41.7% | **1.214** | +11,695 | 46.6% |
+  | Q2 (ratio 3.25-4.18) | 206 | 40.3% | 1.066 | +3,542 | 50.0% |
+  | Q3 (ratio 4.18-5.28) | 206 | 45.6% | **1.439** | +19,303 | 51.9% |
+  | Q4 (ratio 5.28-6.80) | 206 | 49.5% | 1.221 | +9,680 | 64.6% |
+  | Q5 widest (ratio > 6.80) | 206 | 47.6% | **1.154** | +5,732 | **75.2%** |
+
+  **GO/NO-GO criterion:**
+  - Bottom 40% (narrow, ratio < 4.18): n=412, WR=41.0%, PF=1.141
+  - Top 40% (wide, ratio >= 5.28): n=412, WR=48.5%, PF=1.190
+  - Wide/Narrow PF ratio: **1.044** (need >= **1.4**) — FAR BELOW threshold
+  - n=412 each (above 40 minimum) ✓ but PF criterion fails decisively
+
+  **VERDICT: NO-GO — Phase 2 code NOT warranted.**
+
+  **Hold-time analysis:**
+  | Bucket | %early (<2h) | %EOD (>4h) |
+  |--------|-------------|-----------|
+  | Q1 narrowest | 41.3% | 46.6% |
+  | Q2 | 33.5% | 50.0% |
+  | Q3 | 35.0% | 51.9% |
+  | Q4 | 25.2% | 64.6% |
+  | Q5 widest | **14.6%** | **75.2%** |
+
+  **Long/Short by OR width:**
+  - Narrow (Q1+Q2): long PF=1.518, short PF=0.821
+  - Wide (Q4+Q5): long PF=1.142, short PF=1.244
+
+- **Key findings:**
+  1. **OR width is a non-monotonic predictor of ORB quality.** The middle bucket (Q3, ratio 4.18-5.28) has the HIGHEST PF (1.439), not the widest bucket (Q5, PF=1.154). The hypothesis (narrow=bad/false breakout, wide=good/sustained) is empirically wrong: Q1 narrowest (PF=1.214) actually OUTPERFORMS Q5 widest (PF=1.154).
+  2. **The hold-time pattern IS real.** Wide OR days produce 75% EOD-flatten trades vs 47% for narrow OR. The structural mechanism (wide pre-market range → decisive direction → EOD-flatten) is plausible. But it doesn't translate to better PF because narrow-OR EOD-flattens are also profitable.
+  3. **Long/short PF inverts by OR width.** Narrow OR: longs dominate (long PF=1.518 vs short 0.821). Wide OR: shorts become more profitable (short PF=1.244 > long 1.142). Wide OR days create genuine two-way uncertainty.
+  4. **B45 extends the day-level range predictor rejection set.** Both prior-day range (B5) and current-day OR width fail to predict ORB signal quality. The ORB mechanism appears robust to how compressed the opening range was.
+
+- **Verdict:** rejected — Phase 1 NO-GO. Wide/Narrow PF ratio = 1.044 < 1.4 threshold. Phase 2 engine NOT built. No code changes. Lesson 90 added. `scripts/analyze_b45_orb_range.py` committed for reproducibility.
+
+- **Learned:** Current-day OR/ATR width does not reliably improve ORB signal selection: the relationship between OR width and subsequent PF is non-monotonic (peak at medium width). The hold-time shift (wide OR → more EOD flattens) is structurally real but doesn't map to better P&L because early-stop narrow-OR days also produce profitable EOD flattens. OR width joins prior-day range (B5) as a day-level ORB quality predictor that fails in NQ 5min data.
+
+- **Next:** B46 (B42+B43 deployed-config full pipeline benchmark — no code, prior 70%; closes the gap between research benchmarks and live config; highest value remaining item).

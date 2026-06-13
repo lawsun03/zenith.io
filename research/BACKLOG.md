@@ -1696,7 +1696,7 @@ institutional lunch break (major liquidity providers step back 11:00-13:00 ET da
 pattern was observed in B18's per-hour data but was not isolated as a testable mechanism
 because B18 tested whole-session block/keep decisions.
 
-## B45 — ORB opening-range width quality filter (Phase 1 data mining + Phase 2 code if GO)  [pending]
+## B45 — ORB opening-range width quality filter (Phase 1 data mining + Phase 2 code if GO)  [done — rejected at Phase 1: wide/narrow PF ratio=1.044 (need >=1.4); OR width is non-monotonic predictor (Q3 mid-range PF=1.439 beats both Q1 narrow 1.214 and Q5 wide 1.154); hold-time pattern real but doesn't translate to PF; Phase 2 NOT built; Lesson 90]
 Hypothesis: a narrow opening range (first 15 minutes of trading) indicates low pre-market
 conviction and produces false breakout ORB signals. A wide range indicates a decisive overnight
 move being digested, producing stronger breakout signals when price finally resolves direction.

@@ -775,3 +775,20 @@ Appended 2026-06-13 (B44 iFVG mid-session block):
     The B18 precedent (named-session filter that removed overnight sessions with POSITIVE close-mode PF)
     was not sufficient warning because B44's data was presented as "per-hour" rather than "per-session,"
     making it appear more granular and reliable — the same trap in a different form.
+
+Appended 2026-06-15 (B45 ORB range-width filter Phase 1):
+
+90. **Current-day OR/ATR ratio is NOT a reliable monotonic predictor of ORB trade quality.**
+    B45 Phase 1 (n=1030 matched trades, 5y excl 2022): Wide OR (top 40%, ratio >= 5.28) PF=1.190 vs
+    Narrow OR (bottom 40%, ratio < 4.18) PF=1.141 — a 1.044x PF ratio, far below the 1.4x GO threshold.
+    The relationship is non-monotonic: the MIDDLE bucket (OR/ATR ratio 4.18-5.28) has the HIGHEST PF
+    (Q3=1.439), while both extremes underperform it. The hypothesis (narrow=false breakout, wide=sustained
+    move) is structurally plausible but empirically wrong: narrow OR days (ratio < 3.25) produce PF=1.214,
+    actually HIGHER than wide OR days (ratio > 6.80, PF=1.154). The hold-time pattern IS real (wide OR
+    days: 75% EOD flattens vs narrow 47%), but this structural difference does not translate to better PF.
+    B45 joins B5 (prior-day range) as day-level ORB-quality predictors that fail on NQ 5min data.
+    Rule: OR width (whether current-day or prior-day) does not predict ORB signal quality; the opening
+    range breakout mechanism captures the day's momentum regardless of how compressed the opening range was.
+    Notable side finding: long/short PF inverts by OR width (narrow: long PF=1.518 vs short PF=0.821;
+    wide: long PF=1.142 vs short PF=1.244). Wide OR days produce more balanced long/short outcomes,
+    possibly because large pre-market moves create genuine two-way uncertainty at the regular session open.

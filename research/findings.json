@@ -1666,10 +1666,12 @@
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "ORB-reentry r=0.5 achieves higher sust (3.08x with B31 Phase A) than B21's r=0.75 (2.85x) but $/mo collapses to $246 vs $508 — far below the $300/mo useful threshold. The pipeline is throughput-constrained at r=0.5: only 13 funded accounts open over 5 years (vs 14 at r=0.75), earning $1,935/account (vs $3,131) with 126-day average durations. r=0.75 is confirmed as the Phase B optimum: it is the lowest risk level where per-account net is high enough for meaningful $/mo given pipeline supply constraints.",
+    "learned": "ORB-reentry r=0.5 achieves higher sust (3.08x with B31 Phase A) than B21's r=0.75 (2.85x) but $/mo collapses to $246 vs $508 \u00e2\u20ac\u201d far below the $300/mo useful threshold. The pipeline is throughput-constrained at r=0.5: only 13 funded accounts open over 5 years (vs 14 at r=0.75), earning $1,935/account (vs $3,131) with 126-day average durations. r=0.75 is confirmed as the Phase B optimum: it is the lowest risk level where per-account net is high enough for meaningful $/mo given pipeline supply constraints.",
     "links": {
       "doc": null,
-      "runs": ["equity_b32/orb_reentry_r0p5_*.csv"],
+      "runs": [
+        "equity_b32/orb_reentry_r0p5_*.csv"
+      ],
       "src": null
     }
   },
@@ -1682,7 +1684,7 @@
     "metrics": {
       "baseline_combine_passes": 7,
       "baseline_combine_months": 61,
-      "baseline_combine_pf": 1.00,
+      "baseline_combine_pf": 1.0,
       "fvg_mid_combine_passes": 1,
       "fvg_mid_combine_pf": 0.67,
       "fvg_mid_abs_combine_passes": 2,
@@ -1696,10 +1698,13 @@
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "The FVG zone midpoint lies inside the normal gap-fill retracement path that price traverses during valid iFVG development. Placing a stop at the midpoint guarantees premature stop-outs on setups that would otherwise resolve in favor of the signal. Both fvg_mid and fvg_mid_abs lost on BOTH objectives vs the swing-stop baseline. Root cause is geometric: for iFVG entries, the stop must be placed OUTSIDE the FVG zone (at or beyond the distal edge). The swept-extreme stop is geometrically correct — it sits past the liquidity sweep that price must not revisit for the trade thesis to hold.",
+    "learned": "The FVG zone midpoint lies inside the normal gap-fill retracement path that price traverses during valid iFVG development. Placing a stop at the midpoint guarantees premature stop-outs on setups that would otherwise resolve in favor of the signal. Both fvg_mid and fvg_mid_abs lost on BOTH objectives vs the swing-stop baseline. Root cause is geometric: for iFVG entries, the stop must be placed OUTSIDE the FVG zone (at or beyond the distal edge). The swept-extreme stop is geometrically correct \u00e2\u20ac\u201d it sits past the liquidity sweep that price must not revisit for the trade thesis to hold.",
     "links": {
       "doc": null,
-      "runs": ["research/equity_b36_fvg_mid.csv", "research/equity_b36_fvg_mid_abs.csv"],
+      "runs": [
+        "research/equity_b36_fvg_mid.csv",
+        "research/equity_b36_fvg_mid_abs.csv"
+      ],
       "src": "tests/test_fvg_mid_stop.py"
     }
   },
@@ -1711,7 +1716,7 @@
     "objective": "funded",
     "metrics": {
       "r1p0_net_per_month_b31a": 431,
-      "r1p0_sust_b31a": 0.90,
+      "r1p0_sust_b31a": 0.9,
       "r1p0_net_per_month_b21a": 412,
       "r1p0_sust_b21a": 0.83,
       "r1p25_net_per_month_b31a": 545,
@@ -1732,7 +1737,9 @@
     "learned": "ORB-reentry's sust advantage over plain ORB (0.21x at r=0.75) reverses at r=1.0: reentry generates 41 funded busts (sust 0.83-0.90x) vs plain ORB's 27 busts (sust 1.37x) at the same r-multiple. The second-entry mechanism amplifies bust frequency faster than it improves per-account earnings at aggressive sizing. r=1.25 hits $523-545/mo but sust collapses to 0.71-0.77x. r=0.75 is confirmed as the Phase B risk optimum from both below (B32: r=0.5) and above (B38: r=1.0/r=1.25). The B31 winner ($508/mo, sust 2.85x) remains undefeated.",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b38_pipeline.py"],
+      "runs": [
+        "scripts/run_b38_pipeline.py"
+      ],
       "src": null
     }
   },
@@ -1759,10 +1766,12 @@
       "haircut": 200
     },
     "verdict": "rejected",
-    "learned": "B31's r=2.0 advantage over B21 is entirely config-specific, not from the risk level itself. At the research baseline (engine=ifvg, named sessions, no MNQ overrides), r=2.0 Phase A generates only 12 passes over 82 attempts — far fewer than r=1.25's 34/162 — producing $394/mo, sust 0.92x (worse than B21 on both metrics, stop rule triggered). The deployed config generates 25 more passes at the same r=2.0 risk level: the combined engine + all-day killzones produce more monthly trades, shifting the monthly P&L distribution toward passing rather than busting. Do not recommend r=2.0 as a universal Phase A upgrade — it only helps in the deployed (high-frequency) config.",
+    "learned": "B31's r=2.0 advantage over B21 is entirely config-specific, not from the risk level itself. At the research baseline (engine=ifvg, named sessions, no MNQ overrides), r=2.0 Phase A generates only 12 passes over 82 attempts \u00e2\u20ac\u201d far fewer than r=1.25's 34/162 \u00e2\u20ac\u201d producing $394/mo, sust 0.92x (worse than B21 on both metrics, stop rule triggered). The deployed config generates 25 more passes at the same r=2.0 risk level: the combined engine + all-day killzones produce more monthly trades, shifting the monthly P&L distribution toward passing rather than busting. Do not recommend r=2.0 as a universal Phase A upgrade \u00e2\u20ac\u201d it only helps in the deployed (high-frequency) config.",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b39_pipeline.py"],
+      "runs": [
+        "scripts/run_b39_pipeline.py"
+      ],
       "src": null
     }
   },
@@ -1780,7 +1789,7 @@
       "combined_pf": 1.02,
       "combined_trades_per_mo": 9.1,
       "pass_rate_ratio": 2.0,
-      "pf_improvement": 0.20
+      "pf_improvement": 0.2
     },
     "verdict": "candidate",
     "learned": "engine=combined gives exactly 2x more Phase A combine passes than engine=ifvg at the B21 research baseline (10/61 vs 5/61; PF 1.02 vs 0.85). The ORB signals added by the combined engine fill the volume gap that makes named-session iFVG-only too sparse for the $3k monthly target. Both longs (PF 1.13 vs 0.96) and shorts (PF 0.91 vs 0.75) improve under combined engine, suggesting ORB adds positive-expectancy entries in months where iFVG alone is insufficient.",
@@ -1811,7 +1820,9 @@
     "learned": "ORB signals after 10:30 ET are loss-making over 5 years (PF 0.963-0.622); early session (9:45-10:30 ET) carries virtually all edge (PF ~1.21 blended). B40 engine=combined finding projects ~68 Phase A passes over 5y (2x B21 ifvg-only baseline), which would push pipeline to sust ~5x and ~$560-600/month if confirmed by B41. Deployed config full simulation (B42) is the Monday-critical item to answer what Lawrence's actual bot is expected to earn.",
     "links": {
       "doc": null,
-      "runs": ["_research_mining.py"],
+      "runs": [
+        "_research_mining.py"
+      ],
       "src": "arxiv:2505.17388,2508.06788"
     }
   },
@@ -1837,10 +1848,13 @@
       "vs_b31_sust": 2.85
     },
     "verdict": "rejected",
-    "learned": "The B40 combine-harness result (10/61 monthly passes, 2x better than ifvg-only) does NOT transfer to better funded pipeline throughput. The combine harness forces one attempt per calendar month; the funded pipeline model runs CONTINUOUS attempts. Combined engine's higher trade frequency (9.1/month vs 4.3/month for ifvg-only) damps per-attempt equity variance, meaning each attempt takes longer to resolve (12.7d vs 6.0d). Fewer total attempts = fewer total funded accounts (10 vs 34 over 5y). The higher per-attempt pass rate (24% vs 21%) is overwhelmed by 4x fewer total attempts. Lesson: combine-harness pass rate and funded-pipeline throughput are structurally decoupled — more trades per unit time slows the attempt cycle by dampening variance, not accelerating it.",
+    "learned": "The B40 combine-harness result (10/61 monthly passes, 2x better than ifvg-only) does NOT transfer to better funded pipeline throughput. The combine harness forces one attempt per calendar month; the funded pipeline model runs CONTINUOUS attempts. Combined engine's higher trade frequency (9.1/month vs 4.3/month for ifvg-only) damps per-attempt equity variance, meaning each attempt takes longer to resolve (12.7d vs 6.0d). Fewer total attempts = fewer total funded accounts (10 vs 34 over 5y). The higher per-attempt pass rate (24% vs 21%) is overwhelmed by 4x fewer total attempts. Lesson: combine-harness pass rate and funded-pipeline throughput are structurally decoupled \u00e2\u20ac\u201d more trades per unit time slows the attempt cycle by dampening variance, not accelerating it.",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b41_pipeline.py", "research/equity_b41/"],
+      "runs": [
+        "scripts/run_b41_pipeline.py",
+        "research/equity_b41/"
+      ],
       "src": null
     }
   },
@@ -1866,10 +1880,13 @@
       "phase_b_2022_pf": 1.0724
     },
     "verdict": "candidate",
-    "learned": "The deployed Phase A config (combined+close+all-day+r_multiple=3.5) generates 42 passes over 5y (vs B31's 37, B21's 34), achieving $549/mo sust=3.23x — the best 5y two-phase pipeline result. However, the 2022 holdout reveals a material weakness: the deployed Phase A loses in 2022 (PF=0.934, net=-$11.8k) because the high signal frequency (1097 trades vs <200 for pure iFVG) amplifies drought losses. The 6y pipeline including 2022 drops to $424/mo sust=2.19x — below B21 baseline. Standalone deployed config (same strategy both phases) is pipeline-negative at r=1.0% (sust=0.79x) — the Phase B switch to ORB-reentry r=0.75 is essential. Key actionable: deployed config at r=1.0% is the best 5y Phase A driver but 2022-regime risk is real and should be monitored live.",
+    "learned": "The deployed Phase A config (combined+close+all-day+r_multiple=3.5) generates 42 passes over 5y (vs B31's 37, B21's 34), achieving $549/mo sust=3.23x \u00e2\u20ac\u201d the best 5y two-phase pipeline result. However, the 2022 holdout reveals a material weakness: the deployed Phase A loses in 2022 (PF=0.934, net=-$11.8k) because the high signal frequency (1097 trades vs <200 for pure iFVG) amplifies drought losses. The 6y pipeline including 2022 drops to $424/mo sust=2.19x \u00e2\u20ac\u201d below B21 baseline. Standalone deployed config (same strategy both phases) is pipeline-negative at r=1.0% (sust=0.79x) \u00e2\u20ac\u201d the Phase B switch to ORB-reentry r=0.75 is essential. Key actionable: deployed config at r=1.0% is the best 5y Phase A driver but 2022-regime risk is real and should be monitored live.",
     "links": {
       "doc": "trade_analysis/2026-06-13_B42_deployed_pipeline.md",
-      "runs": ["scripts/run_b42_pipeline.py", "research/equity_b42/"],
+      "runs": [
+        "scripts/run_b42_pipeline.py",
+        "research/equity_b42/"
+      ],
       "src": null
     }
   },
@@ -1907,7 +1924,11 @@
     "learned": "ORB signals after 10:30 ET (60 min post-open, n=84 over 5y) are structurally loss-making (PF 0.622-0.963). Cutting them with orb_signal_window_mins=60 removes 8% of signals while: (1) keeping all 10/61 combine passes, (2) improving combine PF 1.15->1.21 (+5.2%), (3) reducing Phase B busts from 25 to 22 (-12%), (4) improving two-phase sust 1.68x->1.91x (+14%). The parity-baseline comparison (all runs use --partial-r 0 --set swing_stop_lookback=0) shows the window cutoff itself is the cause of improvement, not confounding from partial profits. The deployed config (with partial_r=1.5) would see proportionally similar bust reduction. w=90 has same bust reduction but better $/acct ($1,932 vs $1,725) at cost of 1 combine pass. w=60 is the recommended value: cleaner (no pass degradation), mechanically sound (removes exactly the documented loss-making 10:30-11:30 ET segment).",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b43_pipeline.py", "research/equity_b43/", "tests/test_orb_signal_window.py"],
+      "runs": [
+        "scripts/run_b43_pipeline.py",
+        "research/equity_b43/",
+        "tests/test_orb_signal_window.py"
+      ],
       "src": "research/BACKLOG.md (wk2-r3 ORB timing analysis, n=1030 excl 2022)"
     }
   },
@@ -1961,10 +1982,12 @@
       "new_lessons": 2
     },
     "verdict": "dataset",
-    "learned": "iFVG signals in 11:00-14:00 ET are structurally loss-making (PF<1 in 4/5 years, n=232, net=-$12,268) — the CME institutional lunch break creates low-liquidity mean-reverting conditions. The dead zone ends at 14:00 ET (14:xx PF=1.108, positive). ORB value is entirely concentrated in the 4h+ EOD-flatten cohort (n=573, WR=68.6%, PF=4.129, +$152k); all shorter holds are deeply negative (0-30m PF=0.144). ORB is structurally an EOD-flatten strategy — any mechanism that filters early-reversal days could unlock meaningfully better funded economics. Three new backlog items appended: B44 (iFVG lunch block), B45 (ORB range-width filter, Phase 1 gate), B46 (B42+B43 deployed pipeline benchmark).",
+    "learned": "iFVG signals in 11:00-14:00 ET are structurally loss-making (PF<1 in 4/5 years, n=232, net=-$12,268) \u00e2\u20ac\u201d the CME institutional lunch break creates low-liquidity mean-reverting conditions. The dead zone ends at 14:00 ET (14:xx PF=1.108, positive). ORB value is entirely concentrated in the 4h+ EOD-flatten cohort (n=573, WR=68.6%, PF=4.129, +$152k); all shorter holds are deeply negative (0-30m PF=0.144). ORB is structurally an EOD-flatten strategy \u00e2\u20ac\u201d any mechanism that filters early-reversal days could unlock meaningfully better funded economics. Three new backlog items appended: B44 (iFVG lunch block), B45 (ORB range-width filter, Phase 1 gate), B46 (B42+B43 deployed pipeline benchmark).",
     "links": {
       "doc": null,
-      "runs": ["scripts/_research_wk2r4_mining.py"],
+      "runs": [
+        "scripts/_research_wk2r4_mining.py"
+      ],
       "src": "research/mfe_mae_orb_clean.csv, research/mfe_mae_ifvg_clean.csv"
     }
   },
@@ -1972,13 +1995,13 @@
     "ts": "2026-06-13T22:43:00Z",
     "session": "wk2-b44",
     "item": "B44",
-    "variant": "ifvg_block_hours=[11,12,13] — iFVG signal suppression 11:00-14:00 ET",
+    "variant": "ifvg_block_hours=[11,12,13] \u00e2\u20ac\u201d iFVG signal suppression 11:00-14:00 ET",
     "objective": "funded",
     "metrics": {
       "combine_lo_close_baseline_passes": 45,
       "combine_lo_close_baseline_pf": 1.11,
       "combine_lo_close_block_passes": 39,
-      "combine_lo_close_block_pf": 1.00,
+      "combine_lo_close_block_pf": 1.0,
       "combine_pass_delta": -6,
       "combine_pf_delta": -0.11,
       "funded_lo_close_baseline_accounts": 19,
@@ -2005,8 +2028,35 @@
     "learned": "Per-hour PF analysis must be validated within the EXACT deployed config subset. The wk2-r4 per-hour analysis (ifvg_edge, all-sides, all-day) showed 11-13 ET at PF<1. In close-mode LongOnly all-day, the same hours are PROFITABLE: blocking them reduced combine passes 45->39 (-13%), combine PF 1.11->1.00, long net $25k->$5.8k over 61 months (51 fewer exits, avg $380/trade profit lost). The funded pipeline (LO+close+all-day) shows sust 1.05x (block) vs 1.06x (baseline) -- both far below B24's 2.524x (which uses london+ny_am named sessions). The block cannot bridge the gap because the all-day config's lower sust comes from VOLUME (more trades = more volatility = more busts), not from the lunch hours specifically. Close mode fires at FVG inversion confirmation (later, more selective) -- these confirmations happen to cluster in the lunch window and ARE valid even at low liquidity. Two infrastructure improvements shipped: CLI --set coercion fix for list[int] fields (regression test added) and --exclude-years flag for equity_export.py (holdout protocol compliance).",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b44_pipeline.py"],
+      "runs": [
+        "scripts/run_b44_pipeline.py"
+      ],
       "src": "bars/yearly/bars_MNQ_dbv_{year}.csv (2021,2023,2024,2025,2026)"
+    }
+  },
+  {
+    "ts": "2026-06-15T00:30:00Z",
+    "session": "wk2-b45",
+    "item": "B45",
+    "variant": "OR/ATR width filter Phase 1 data mining",
+    "objective": "combine+funded",
+    "metrics": {
+      "narrow_pf": 1.141,
+      "wide_pf": 1.19,
+      "pf_ratio": 1.044,
+      "q3_mid_pf": 1.439,
+      "q1_narrowest_pf": 1.214,
+      "q5_widest_pf": 1.154,
+      "n_matched": 1030,
+      "narrow_hold_eod_pct": 0.466,
+      "wide_hold_eod_pct": 0.752
+    },
+    "verdict": "rejected",
+    "learned": "OR/ATR ratio does NOT monotonically predict ORB trade quality. The middle bucket (ratio 4.18-5.28, PF=1.439) outperforms both narrow (PF=1.214) and wide (PF=1.154) buckets. Wide OR days do produce more EOD flattens (75% vs 47%) but this does not translate to better PF because narrow OR days still generate profitable EOD trades. Phase 2 code not built: B5 lesson about day-level range predictors extends to current-day OR width.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
     }
   }
 ]
