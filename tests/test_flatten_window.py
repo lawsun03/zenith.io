@@ -150,3 +150,64 @@ def test_failed_flatten_retries_next_tick():
         assert engine._flattened_today is not None
 
     asyncio.run(go())
+
+
+def test_clock_driven_flatten_no_bar():
+    """Wall-clock fires in flatten window even when no bar arrives.
+
+    Why: on CME early-close days (~5/yr) bars stop arriving at noon but the
+    configured flatten_time_ct is 15:05. Bar-driven _enforce_flatten never
+    fires. The wall-clock backup calls _enforce_flatten(datetime.now()) every
+    30s and must close any open position at 15:05 CT.
+    """
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=Decimal("0"))
+    engine = ExecutionEngine(
+        broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+        runners=[], replay_mode=True,
+        flatten_enabled=True, flatten_time_ct="15:05",
+    )
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        # Open position at 14:00 CT — no more bars arrive after this
+        await broker.inject_bar(_bar(_utc(2026, 1, 15, 20, 0)))
+        await broker.place_bracket("MGC", "long", 1,
+                                   Decimal("100"), Decimal("95"), Decimal("110"))
+        assert len(broker.open_brackets()) == 1
+        # Wall-clock fires at 15:10 CT (21:10 UTC); no bar injected in the window
+        await engine._enforce_flatten(_utc(2026, 1, 15, 21, 10))
+        assert broker.open_brackets() == []
+
+    asyncio.run(go())
+
+
+def test_flatten_wallclock_disabled_no_task():
+    """flatten_wallclock_enabled=False: background clock task not started.
+
+    Why: the flag lets the operator disable the wall-clock backup (e.g. in
+    paper-replay setups where wall-clock timestamps interfere with bar replay).
+    When the flag is off the asyncio task is never created.
+    """
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=Decimal("0"))
+    engine = ExecutionEngine(
+        broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+        runners=[], replay_mode=False,
+        flatten_wallclock_enabled=False,
+    )
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        assert engine._flatten_task is None, "clock task must not be started when flag is off"
+        await engine.stop()
+
+    asyncio.run(go())

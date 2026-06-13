@@ -242,5 +242,22 @@
     "verdict": "dataset",
     "learned": "The iFVG short side is structurally loss-making on NQ 5min (PF 0.960 over 5y, 1251 trades); blocking shorts lifts long-only PF to 1.136 but cuts volume to ~25/month (funded route). ORB late breakouts (10:xx ET) have better PF than early ones (1.276 vs 1.176), supporting a 'reentry after stop' hypothesis; the current max_trades_per_day=2 is the wrong mechanism (fires before stop hits). External web research yielded no new engines — all practitioner ideas reduce to iFVG/ORB/KZ already tested.",
     "links": {"doc": null, "runs": [], "src": ["research/mfe_mae_ifvg_clean.csv", "research/mfe_mae_orb_clean.csv", "scripts/research_ideation_analysis.py", "scripts/research_ideation_analysis2.py"]}
+  },
+  {
+    "ts": "2026-06-13T13:00Z",
+    "session": "wk1-b8",
+    "item": "B8",
+    "variant": "wall-clock flatten backup — flatten_wallclock_enabled flag + early-close calendar note",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 2,
+      "new_engine_fields": ["flatten_wallclock_enabled"],
+      "early_close_dates_documented": 8,
+      "suite_total": 598,
+      "suite_failures": 0
+    },
+    "verdict": "shipped",
+    "learned": "The wall-clock backup task (_flatten_clock, every 30s) already existed and ran unconditionally in live mode — the B8 core fix was present. What was missing: a flatten_wallclock_enabled flag (now default True, preserving existing behavior), an early-close calendar note listing 8 known CME half-days for 2025-2026 in flatten.py, and two defining-behavior tests (clock-driven flatten without bar arrival, and flag=False gates task creation). The bar-driven path is insufficient alone: on CME early-close days bars stop at noon but the configured flatten time is 15:05 CT. The wall-clock covers this gap.",
+    "links": {"doc": null, "runs": [], "src": ["app/execution/engine.py", "app/risk/flatten.py", "tests/test_flatten_window.py"]}
   }
 ]

@@ -418,6 +418,7 @@ class ExecutionEngine:
         flatten_enabled: bool = True,
         flatten_time_ct: str = "15:05",
         entry_cutoff_time_ct: str = "14:30",
+        flatten_wallclock_enabled: bool = True,
         phase: "PhaseTracker | None" = None,
     ) -> None:
         self.broker = broker
@@ -443,6 +444,7 @@ class ExecutionEngine:
         self.flatten_enabled = flatten_enabled            # hot-applied via PATCH /api/config
         self.flatten_time_ct = flatten_time_ct
         self.entry_cutoff_time_ct = entry_cutoff_time_ct
+        self.flatten_wallclock_enabled = flatten_wallclock_enabled  # startup-only; restart to change
         self.phase = phase  # hot-applied via PATCH /api/config
         self._phase_day: "date | None" = None
         self._flatten_task: asyncio.Task | None = None
@@ -523,7 +525,7 @@ class ExecutionEngine:
         self._started = True
         if not self._replay_mode:
             self._poll_task = asyncio.create_task(self._poll_forming_bars())
-            if self._flatten_task is None:
+            if self._flatten_task is None and self.flatten_wallclock_enabled:
                 self._flatten_task = asyncio.create_task(self._flatten_clock())
         log.info(
             "ExecutionEngine started: %d instruments tracked, forming_bar_entries=%s",

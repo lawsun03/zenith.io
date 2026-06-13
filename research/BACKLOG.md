@@ -79,7 +79,7 @@ Success: 2021/2023 months wake up (trades/mo, PF >= 1) without changing 2024+.
 
 ## B7 — kz_levels master-branch benchmark  [done — rejected: 0/61 passes (0%) vs baseline 21%; PF 1.18 matches iFVG but trade frequency ~7/mo is too sparse to compound into a combine pass; session ranges lock once per session → 10x fewer signals than swing-based sweeps]
 
-## B8 — Wall-clock flatten fix  [pending]  (code quality, live-risk)
+## B8 — Wall-clock flatten fix  [done — shipped: flatten_wallclock_enabled flag + early-close calendar note + 2 defining-behavior tests; wall-clock task was already present unconditionally]  (code quality, live-risk)
 Bar-driven `_enforce_flatten` never fires on CME early-close days (~5-7/yr) —
 flatten-rule violation risk found by cross-engine validation. Add a wall-clock
 asyncio task in the engine (default-OFF flag `flatten_wallclock_enabled` in

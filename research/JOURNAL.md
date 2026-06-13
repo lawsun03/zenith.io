@@ -161,3 +161,17 @@ Entry format:
 - **Verdict:** dataset — 3 new BACKLOG items appended.
 - **Learned:** The iFVG short side has been a structural drag across all 5 years (long-only PF=1.136 vs full PF=1.043), and the correct ORB second-entry mechanism requires the on_stop_loss callback (not just bumping max_trades_per_day). External web research yielded nothing beyond what we already have — consistent with Lesson 6.
 - **Next:** B8 (wall-clock flatten fix) is still the top non-research pending item; B11 (excursion instrument filter) is the smallest. B14 (ORB reentry) is the highest-priority new item from this session.
+
+## 2026-06-13T13:00Z — session wk1-b8 — B8 (wall-clock flatten fix)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 trades, no drift, no lockout. Market closed (Sunday).
+- **Ran:** Read engine.py and discovered `_flatten_clock()` (30s wall-clock backup) already exists and starts unconditionally in live mode (`not self._replay_mode`). The B8 spec was written before this task was added. Missing pieces were: (1) a `flatten_wallclock_enabled` flag to make the task explicitly controllable, (2) an early-close calendar note in `app/risk/flatten.py`, (3) defining-behavior tests for the clock-driven path.
+  - Added `flatten_wallclock_enabled: bool = True` to `ExecutionEngine.__init__` (default True = preserves existing always-on behavior).
+  - Gated `_flatten_task` creation on `self.flatten_wallclock_enabled` in `start()`.
+  - Added early-close calendar to `app/risk/flatten.py` docstring: 8 known CME half-days for 2025-2026, description of the gap between noon early close and 15:05 CT flatten window, and recommendation to set `entry_cutoff_time_ct="11:30"` on those days.
+  - Added 2 defining-behavior tests to `tests/test_flatten_window.py`:
+    - `test_clock_driven_flatten_no_bar`: position open, NO bar in flatten window, `_enforce_flatten(15:10 CT)` called directly (as clock task would) → position closed.
+    - `test_flatten_wallclock_disabled_no_task`: `flatten_wallclock_enabled=False, replay_mode=False` → `engine._flatten_task is None` after start.
+- **Numbers:** 598 tests (up from 596), 0 failures, 2 skipped. 2 new tests, 0 regressions.
+- **Verdict:** shipped — B8 core was already done; this session adds explicit flag, early-close docs, and defining tests.
+- **Learned:** The wall-clock safety net was already in place since at least the June 12 baseline. The gap on CME early-close days (~5-7/yr) is not fully covered by either bar-driven or wall-clock flatten alone: bars stop at noon, the 15:05 wall-clock fires but the market has already auto-closed positions. The practical recommendation is to set `entry_cutoff_time_ct="11:30"` manually on early-close days (listed in flatten.py) to prevent entering near the close. Bar-driven and clock-driven flatten paths are equivalent in behavior — both call `_enforce_flatten` — and the existing test suite already validates retry logic.
+- **Next:** B9 (ORB Rule-13 UI wiring — adds dashboard state for live ORB), B11 (excursion instrument filter — small, unblocks clean live data), B14 (ORB reentry — first new research item from wk1-r1).
