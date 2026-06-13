@@ -66,6 +66,7 @@ from app.journaling import (
     _TRADES_CSV,
     _append_excursion_csv,
     _daily_csv_path,
+    _make_bar_close_watcher,
     _make_fill_journaler,
     _make_pre_place,
     _make_reject_journaler,
@@ -1163,6 +1164,7 @@ async def _async_main() -> int:
     async def _excursion_on_bar(b):
         excursion_tracker.on_bar(b)
     broker.on_bar(_excursion_on_bar)
+    broker.on_bar(_make_bar_close_watcher())
 
     eod_scheduler = EndOfDayScheduler(
         journal=journal,

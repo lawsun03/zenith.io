@@ -340,5 +340,24 @@
     "verdict": "dataset",
     "learned": "20 rows from trades_2026-06-10.csv backfilled into trades.csv (broker_order_id dedup check, no duplicates). 3 remaining gaps are unrecoverable (no daily file exists for those windows). Root cause: trades.csv is git-tracked; git reset --hard wipes it. Option A (untrack rolling files via .gitignore) is the recommended immediate fix — zero code changes, prevents future wipes. Policy decision deferred to Lawrence (Monday).",
     "links": {"doc": "trade_analysis/2026-06-13_B12_runtime_ledger_policy.md", "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T07:35:00Z",
+    "session": "wk1-b13",
+    "item": "B13",
+    "variant": "exec_slippage column — fill vs order_bar_close (close of bar that triggered signal)",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 10,
+      "total_tests": 623,
+      "failures": 0,
+      "new_column": "exec_slippage",
+      "existing_column_unchanged": "slippage",
+      "bar_close_lag_live_ticks_modeled": 2,
+      "files_changed": 3
+    },
+    "verdict": "shipped",
+    "learned": "exec_slippage = fill_price − order_bar_close (close of the confirmation bar when the signal fired) measures true execution quality: for market orders this is 0–2 ticks. The existing slippage column (fill − signal_entry, the FVG proximal edge) remains unchanged as 'plan_deviation' — it is still useful for diagnosing signal-to-fill price drift but not for execution quality. The watcher pattern (module-level _last_bar_close dict updated by an async on_bar handler registered in main.py) is the cleanest approach: no changes to Signal, no changes to strategy code, backward-compatible column ordering.",
+    "links": {"doc": null, "runs": [], "src": ["app/journaling.py", "app/main.py", "tests/test_b13_exec_slippage.py"]}
   }
 ]

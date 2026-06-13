@@ -122,7 +122,7 @@ were destroyed by a git tree-restore (reflog: `reset: moving to HEAD` 06-10
 from trades_2026-06-10.csv into the rolling file first. NEVER resolve this by
 running git restore/reset on a live tree with unsynced ledgers.
 
-## B13 — Split the slippage column: execution vs plan-deviation  [pending]  (small)
+## B13 — Split the slippage column: execution vs plan-deviation  [done — shipped: exec_slippage column added (fill vs order_bar_close); slippage column unchanged for backward compat; 10 defining-behavior tests; 623 total tests green]  (small)
 From B4 forensics: `slippage = fill − signal_entry` (app/journaling.py:178-191)
 where signal_entry is the FVG proximal edge → 111.5 "slippage" on 0.5pt of real
 slippage. Add `exec_slippage` (fill vs last bar close at order time — broker

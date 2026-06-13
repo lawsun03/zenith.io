@@ -229,3 +229,18 @@ Entry format:
 - **Verdict:** dataset — backfill done; policy decision deferred to Lawrence (Monday).
 - **Learned:** The git-wipe hazard is entirely preventable at zero cost: adding `trades/*.csv` rolling files to `.gitignore` (Option A) means `git reset --hard` can never touch them. The daily snapshot files are already untracked and already survived — Option A just extends that protection to the rolling file. This one-line `.gitignore` change is the immediate fix; the Outbox-based cloud sync (Option C) is the clean long-term architecture.
 - **Next:** B13 (split slippage column — small infra, adds exec_slippage column) or B14 (ORB reentry after stop — highest-priority strategy research item). B14 has the most research value; B13 is faster.
+
+## 2026-06-13T07:35Z — session wk1-b13 — B13 (split slippage column)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (Sunday).
+- **Ran:** TDD — 10 defining-behavior tests written first (all failing on import), then implemented:
+  1. Added `_last_bar_close: dict[str, Decimal] = {}` module-level dict to `journaling.py`.
+  2. Added `_make_bar_close_watcher()` factory — returns an async `on_bar` handler that updates `_last_bar_close` keyed by root instrument (`_root_instrument()` normalisation already present).
+  3. Updated `_make_pre_place` to capture `_last_bar_close.get(_root_instrument(signal.instrument))` as `order_bar_close` in `_pending_signal_meta` at order time.
+  4. Added `_exec_slippage(fill, meta)` — `fill_price − order_bar_close` for ENTRY rows; `""` otherwise or if `order_bar_close` absent (legacy rows, exit fills).
+  5. Added `"exec_slippage"` to `_TRADES_HEADERS` (after `"slippage"` — backward-compat column preserved at same position).
+  6. Added `_exec_slippage(fill, meta)` to the row list in `_append_fill_csv`.
+  7. In `main.py`: imported `_make_bar_close_watcher`, registered `broker.on_bar(_make_bar_close_watcher())` alongside the existing bar subscribers.
+- **Numbers:** 10 tests added (total 623), 0 failures, 2 skipped. 3 files changed (journaling.py, main.py, tests/test_b13_exec_slippage.py).
+- **Verdict:** shipped — `exec_slippage` column live; `slippage` column unchanged.
+- **Learned:** The `slippage` column (fill − FVG proximal edge) is genuinely useful as a plan-deviation diagnostic but measures nothing about execution quality. `exec_slippage` (fill − confirmation-bar close) isolates real fill quality: on market entries this is 0–2 ticks (consistent with B4 forensics: mean 0.78 pts). The watcher pattern (module-level dict + async on_bar handler) keeps the change fully contained in `journaling.py` with no modifications to Signal, strategy code, or the broker.
+- **Next:** B14 (ORB reentry after stop — highest-priority new strategy item) or B15 (long-only iFVG funded benchmark).

@@ -52,6 +52,7 @@ def _make_pre_place(config_path: Path | None = None):
 
     async def pre_place(signal: Signal, size: int) -> None:
         cfg_snap = load_bot_config(config_path) if config_path else BotConfig()
+        bar_close = _last_bar_close.get(_root_instrument(signal.instrument))
         _pending_signal_meta[signal.instrument] = {
             "signal_entry":      str(signal.entry),
             "stop":              str(signal.stop),
@@ -71,6 +72,7 @@ def _make_pre_place(config_path: Path | None = None):
             "grade":             signal.setup_grade.grade if signal.setup_grade else "",
             "grade_reason":      signal.setup_grade.reason if signal.setup_grade else "",
             "score":             str(signal.setup_grade.score) if signal.setup_grade else "",
+            "order_bar_close":   str(bar_close) if bar_close is not None else "",
         }
 
     return pre_place
@@ -165,7 +167,7 @@ _TRADES_HEADERS = [
     "contracts", "entry_mode", "r_multiple", "stop_buffer",
     "body_atr_multiple", "vp_enabled",
     # Grade + execution quality (ENTRY rows)
-    "grade", "grade_reason", "score", "slippage",
+    "grade", "grade_reason", "score", "slippage", "exec_slippage",
 ]
 
 # Keyed by instrument (written in on_pre_place, before HTTP round-trip) then
@@ -173,6 +175,11 @@ _TRADES_HEADERS = [
 # Falls back to instrument key in _append_fill_csv for market orders that fill
 # during the HTTP await before journal_signal can re-key.
 _pending_signal_meta: dict[str, dict] = {}
+
+# Tracks the close of the last bar seen per root instrument.  Written by the
+# on_bar handler registered by _make_bar_close_watcher(); read by pre_place to
+# capture the "decision-bar close" so exec_slippage can be computed at fill time.
+_last_bar_close: dict[str, Decimal] = {}
 
 
 def _daily_csv_path(offset_days: int = 0) -> Path:
@@ -195,6 +202,35 @@ def _entry_slippage(fill: Fill, meta: dict) -> str:
         return str(Decimal(str(fill.fill_price)) - Decimal(str(entry)))
     except Exception:
         return ""
+
+
+def _exec_slippage(fill: Fill, meta: dict) -> str:
+    """fill_price - order_bar_close for ENTRY rows; '' otherwise or if unknown.
+
+    Measures real execution quality (fill vs market at signal time) as opposed
+    to `slippage` / _entry_slippage which measures fill vs FVG proximal edge
+    (plan-deviation). On market entries this is typically 0–2 ticks; the large
+    values in the `slippage` column come from the FVG-edge reference, not from
+    poor execution.
+    """
+    if not fill.is_entry:
+        return ""
+    bar_close = meta.get("order_bar_close")
+    if not bar_close:
+        return ""
+    try:
+        return str(Decimal(str(fill.fill_price)) - Decimal(str(bar_close)))
+    except Exception:
+        return ""
+
+
+def _make_bar_close_watcher():
+    """Return an async on_bar handler that keeps _last_bar_close up to date."""
+
+    async def on_bar(bar) -> None:
+        _last_bar_close[_root_instrument(bar.instrument)] = bar.close
+
+    return on_bar
 
 
 def _append_fill_csv(fill: Fill) -> None:
@@ -248,6 +284,7 @@ def _append_fill_csv(fill: Fill) -> None:
         meta.get("grade_reason", ""),
         meta.get("score", ""),
         _entry_slippage(fill, meta),
+        _exec_slippage(fill, meta),
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:
