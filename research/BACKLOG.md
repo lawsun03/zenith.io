@@ -1014,7 +1014,7 @@ Session 39 (39 % 3 == 0) + last 2 completed items B30/B31 are build items → pr
 - **B31 winner confirmed:** iFVG r=2.0 deployed + ORB-reentry r=0.75 = $508/mo sust=2.85x. No plain ORB Phase B meets primary sust criterion.
 - **No new mechanism families** -- Lesson 6 confirmed 6-for-6.
 
-## B32 — ORB-reentry Phase B at r=0.5 (below-optimum risk floor)  [pending]
+## B32 — ORB-reentry Phase B at r=0.5 (below-optimum risk floor)  [done — rejected: over-conservative; sust 3.08x (vs 2.85x at r=0.75) BUT $/mo only $246 (vs $508) — pipeline throughput-constrained at r=0.5 (only 13 accounts/5y, $1,935/acct); r=0.75 confirmed as Phase B risk optimum]
 Hypothesis: B21's Phase B optimum is r=0.75 (sust 2.62x, $3,131/account, 13 busts). B1 showed
 plain ORB r=0.5 standalone had 6 XFA busts (flat 5y) vs 8 Combine passes — "genuinely positive."
 ORB-reentry at r=0.5 should have fewer busts than r=0.75 (smaller per-trade risk → smaller daily

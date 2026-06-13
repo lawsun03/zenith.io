@@ -1086,3 +1086,34 @@ Entry format:
 - **Verdict:** rejected — gate-on 4/61 (7%) PF 0.84 vs baseline 7/61 (11%) PF 1.00. Stop rule triggered on BOTH metrics. `daily_bias_gate_enabled` ships default-off (no behavior change to live bot). Lesson 75 added.
 - **Learned:** Prior-day directional bias (close vs open) does not predict intraday iFVG signal quality on NQ 5min. The ICT "Power of Three" direction filter extends Lesson 4 (day-level gates cannot time engines) to DIRECTION filters: the prior day's close vs open contains no actionable information for the iFVG chain. The room-to-target gate further amplifies the volume collapse. External ICT claims have now failed 5-for-5 (Lesson 6 updated).
 - **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk ladder) or B36 (FVG-midpoint stop placement — strategy item, Lawrence-requested, ranks with B35) or the pipeline B35 (ORB-reentry r=1.0/r=1.25 — most promising pipeline extension).
+
+## 2026-06-14T19:30:00Z — session wk2-b32 — B32 (ORB-reentry Phase B at r=0.5 — risk floor)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B32 (top pending item — closes the lower end of the reentry risk ladder; no code required).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Generated per-year ORB-reentry r=0.5 equity CSVs in equity_b32/ (5 files, years 2021/2023/2024/2025/2026, parallel jobs). Config: `--set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True --risk-pct 0.5 --partial-r 0 --set swing_stop_lookback=0`.
+  3. Wrote `scripts/run_b32_pipeline.py` (cloned from run_b29_pipeline.py). Phase A configs: B21 (iFVG-edge r1.25, 34 passes) and B31 (iFVG r2.0 deployed, 37 passes). Phase B: equity_b32/ r0.5 vs equity_b21/ r0.75 reference.
+  4. Ran pipeline analysis.
+  5. Test suite: **649 passed, 2 skipped** — no code changes.
+- **Numbers:**
+
+  **Phase B standalone stats (per-year, 5y excl 2022, h200):**
+  | Config | Accounts | Busts | Net 5y | $/acct | Sust standalone | Avg days |
+  |--------|----------|-------|--------|--------|-----------------|----------|
+  | ORB-reentry r0.5 (B32) | 13 | 12 | $25,155 | $1,935 | 0.75x | 114.3d |
+  | ORB-reentry r0.75 (B21 ref) | 14 | 13 | $43,834 | $3,131 | 1.46x | 54.2d |
+
+  **Two-phase pipeline matrix:**
+  | Phase A | Phase B | Reset$/acct | XFA$/acct | Cycle d | Net/mo | Sust |
+  |---------|---------|-------------|-----------|---------|--------|------|
+  | iFVG r2.0 (B31 A) | ORB-reentry r0.75 (B21 ref) | $681 | $3,131 | 101.3d | **$508** | **2.85x** |
+  | iFVG-edge r1.25 (B21 A) | ORB-reentry r0.75 (B21 ref) | $715 | $3,131 | 102.1d | **$497** | **2.62x** |
+  | iFVG r2.0 (B31 A) | ORB-reentry r0.5 (B32) | $681 | $1,935 | 107.0d | $246 | 3.08x |
+  | iFVG-edge r1.25 (B21 A) | ORB-reentry r0.5 (B32) | $715 | $1,935 | 107.7d | $238 | 2.83x |
+
+- **Stop rule check:** r=0.5 does NOT lose on sust vs B21 (2.83-3.08x vs 2.62x — better). But $/mo ($238-246) is far below B21 ($497-508) AND below the $300 useful minimum. Pipeline-constrained: only 13 accounts over 5y, earning $1,935/acct over 114d average durations.
+- **Key finding:** r=0.5 improves sust marginally (+8-21% vs B21/B31) but collapses $/mo to less than half. At r=0.5, the pipeline opens only 13 funded accounts over 5 years (vs 14 at r=0.75 — nearly identical), but each account earns $1,935 instead of $3,131 (-38%) over nearly 2x longer durations (114d vs 54d). The longer durations don't generate more total earnings because trades are smaller — they just mean accounts survive longer before slowly accumulating to payout. The mechanism: at r=0.5, positions size too small to compound meaningfully over 2+ months before hitting payouts; the pipeline is throughput-starved.
+- **Verdict:** rejected — r=0.5 is over-conservative. sust improves (3.08x vs 2.85x) but $/mo halves ($246 vs $508) — well below the $300/mo minimum useful threshold. r=0.75 is confirmed as the Phase B risk optimum for ORB-reentry: it is the lowest risk level where per-account net is high enough for meaningful $/mo given pipeline supply constraints. Lesson 76 added.
+- **Learned:** Pipeline throughput at r=0.5 is constrained not by XFA busts (12 — barely fewer than r=0.75's 13) but by slow per-account earnings ($1,935 at 114d vs $3,131 at 54d). The r=0.5 funded account earns 38% less per payout while taking 2x longer to reach it — this is not offset by the higher survival rate. The risk sensitivity curve for ORB-reentry funded phase has a clear optimum at r=0.75: below this, per-account earnings fall faster than bust frequency; above this, bust frequency rises faster than per-account earnings.
+- **Next:** B36 (FVG-midpoint stop placement — strategy item, Lawrence-requested) or pipeline B35 (ORB-reentry r=1.0/r=1.25 sensitivity — tests if reentry avoids plain ORB's sust collapse at higher r). Pipeline B35 is the most promising remaining item (could beat B31 $508/mo if reentry maintains sust at r=1.0).

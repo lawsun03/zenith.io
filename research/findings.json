@@ -1640,5 +1640,37 @@
       "runs": [],
       "src": "https://youtu.be/ZqPEuatIYMc"
     }
+  },
+  {
+    "ts": "2026-06-14T19:30:00Z",
+    "session": "wk2-b32",
+    "item": "B32",
+    "variant": "ORB-reentry r=0.5 as Phase B (below-optimum risk floor)",
+    "objective": "funded",
+    "metrics": {
+      "b21_phase_a_passes": 34,
+      "b31_phase_a_passes": 37,
+      "b32_xfa_busts": 12,
+      "b32_xfa_accounts": 13,
+      "b32_xfa_net_5y": 25155,
+      "b32_xfa_per_account": 1935,
+      "b32_sust_standalone": 0.75,
+      "b21_phase_a_net_per_month": 238,
+      "b21_phase_a_sust": 2.83,
+      "b31_phase_a_net_per_month": 246,
+      "b31_phase_a_sust": 3.08,
+      "b21_ref_net_per_month": 497,
+      "b21_ref_sust": 2.62,
+      "b31_ref_net_per_month": 508,
+      "b31_ref_sust": 2.85,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "ORB-reentry r=0.5 achieves higher sust (3.08x with B31 Phase A) than B21's r=0.75 (2.85x) but $/mo collapses to $246 vs $508 — far below the $300/mo useful threshold. The pipeline is throughput-constrained at r=0.5: only 13 funded accounts open over 5 years (vs 14 at r=0.75), earning $1,935/account (vs $3,131) with 126-day average durations. r=0.75 is confirmed as the Phase B optimum: it is the lowest risk level where per-account net is high enough for meaningful $/mo given pipeline supply constraints.",
+    "links": {
+      "doc": null,
+      "runs": ["equity_b32/orb_reentry_r0p5_*.csv"],
+      "src": null
+    }
   }
 ]

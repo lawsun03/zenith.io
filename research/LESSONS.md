@@ -586,3 +586,15 @@ Appended 2026-06-14 (B35 daily-bias directional gate):
     bottoms sweep" mechanism (Lesson 8) is structural and independent of whether the prior day was bearish.
     Rule: prior-day directional bias extends Lesson 4 (day-level gates cannot time engines) to DIRECTION
     filters: the prior close vs open is not actionable information for NQ 5min iFVG signal quality.
+
+Appended 2026-06-14 (B32 ORB-reentry r=0.5 risk floor):
+
+76. **The ORB-reentry funded Phase B risk optimum is r=0.75 — confirmed from both below (B32) and above (B14/B21).**
+    B32 tested r=0.5 as Phase B: sust improves to 3.08x (vs 2.85x at r=0.75) but $/mo collapses to $246
+    (vs $508) — below the $300/mo useful threshold. The mechanism: at r=0.5, only 13 funded accounts open
+    over 5y (nearly same as r=0.75's 14), but each earns $1,935 over 114 trading days vs $3,131 over 54d.
+    Smaller position size means slower equity compounding — accounts survive longer but earn proportionally
+    less. The throughput benefit of higher sust (fewer busts) is offset by each account needing 2x longer to
+    reach payout. Rule: in a pipeline-constrained model, the funded risk level must balance (a) per-account
+    net high enough for meaningful $/mo and (b) bust frequency low enough for sust >= Phase A pass rate.
+    At r=0.5, (a) fails. At r>=1.0, (b) fails. r=0.75 satisfies both.
