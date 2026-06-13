@@ -1141,3 +1141,69 @@ Source: Lawrence direct request 2026-06-13 — anticipatory S/R-reaction entry a
 small risk, scale up risk/reward when the FVG/iFVG actually appears. Connects
 existing sweep detection (awaiting_sweeps / sweep_bos) to iFVG confirmation as a
 two-stage pyramid entry.
+
+## B34 — Breaker-block entry + OTE retracement zone  [pending — PRIORITY: Lawrence-requested 2026-06-13; claim after B33, ahead of B32]
+Lawrence-requested (ICT "FVG and OTE entry" reference video, Gold chart). Rank
+ABOVE B32, AFTER B33.
+
+Hypothesis: an ICT breaker-block + OTE setup improves entry quality. Sequence:
+liquidity sweep (sell-stops/buy-stops taken) -> break of structure the other way
+-> the "breaker" (last opposing order block before the BOS move) is the entry
+zone -> require price to retrace into the OTE window (0.62-0.79 Fibonacci of the
+impulse leg) before entering -> target the opposing liquidity pool.
+
+READ FIRST -- strong adverse priors (this is mostly recombined, partly already
+rejected):
+- Memory `project_fib_filter_finding`: a Fibonacci-retracement filter was proven
+  to have NO edge over 2.5y of MGC -- every fib bucket was equally negative.
+  OTE is a fib-retracement concept. Do not assume it works; the burden of proof
+  is high. (Caveat justifying a re-test: that test was MGC/2.5y; this is MNQ/5y
+  and the user trades MNQ.)
+- The `sweep_bos` engine ALREADY implements sweep -> break-of-structure ->
+  order-block fallback zone. A "breaker block" is essentially sweep_bos's OB leg
+  with the violation/retest refinement. Build on sweep_bos; do NOT write a new
+  engine from scratch. Diff against what sweep_bos already does before adding.
+- LESSONS: external/practitioner claims have failed to transfer here 4-for-4.
+  ICT-concept videos are exactly that class. Falsify cheaply, don't trust.
+
+PHASE 1 -- cheap falsification FIRST (re-test the fib prior on MNQ; go/no-go):
+No engine code. Reuse the iFVG/sweep_bos signal replay + excursion tooling over
+MNQ 5min, 2021/2023/2024/2025-26 (NOT 2022):
+1. For each impulse leg following a sweep+BOS, bucket the eventual entry/retrace
+   depth into fib bands (<0.5, 0.5-0.62, 0.62-0.79 [=OTE], 0.79-1.0) and measure
+   forward PF / win-rate / MFE per bucket.
+2. GO/NO-GO: proceed to Phase 2 ONLY if the 0.62-0.79 (OTE) bucket shows
+   MATERIAL positive separation from the others (not "all buckets equally
+   negative" as on MGC). If no separation -> REJECT here, document that the MGC
+   fib no-edge finding replicates on MNQ, build nothing.
+
+PHASE 2 -- engine refinement (only if Phase 1 = GO):
+Default-off MODE on `sweep_bos` (reuse its sweep + BOS + OB detection):
+- StrategyParams (default-off / 0):
+  - `breaker_ote_enabled: bool = False`
+  - `ote_low: Decimal = Decimal("0.62")`, `ote_high: Decimal = Decimal("0.79")`
+  - `breaker_require_violation: bool = True`  (OB must be violated->retested =
+    a true breaker, vs a plain OB)
+- Entry: after sweep+BOS, arm the breaker zone; enter only when a CLOSED bar
+  retraces into BOTH the breaker zone AND the OTE fib window of the impulse leg,
+  in the BOS direction. Stop beyond the breaker / swept extreme + stop_buffer.
+  Target = opposing liquidity / full r_multiple (reuse sweep_bos target logic).
+- Closed-bar confirmation only. Exits via runner.exit_request.
+
+Defining-behavior tests (tests/test_breaker_ote.py):
+1. breaker_ote_enabled=False (default): sweep_bos output byte-identical to baseline.
+2. Sweep+BOS, retrace into breaker zone AND 0.62-0.79 -> Signal at the OTE bar close.
+3. Retrace into breaker zone but only to 0.5 (shallower than OTE) -> no Signal.
+4. breaker_require_violation=True: OB never violated/retested -> no breaker, no Signal.
+5. Retrace deeper than 0.79 (blew past OTE) -> no Signal.
+
+Benchmark (BOTH objectives; parity flags `--partial-r 0 --set swing_stop_lookback=0`):
+- vs sweep_bos baseline (breaker_ote off) AND vs control / B21 best.
+
+Success criteria: breaker+OTE must improve PF AND the objective vs sweep_bos
+baseline. Stop rule: loses on BOTH vs baseline -> reject. NO fib-band tuning
+beyond the one declared 0.62/0.79 default -- mechanism test, not a sweep.
+
+Source: Lawrence ICT reference (FVG + OTE entry, breaker blocks). Mechanism =
+sweep_bos + OB-violation refinement + OTE fib gate. Directly tests whether the
+documented MGC fib no-edge result holds on MNQ.
