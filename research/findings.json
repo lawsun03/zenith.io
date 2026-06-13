@@ -1702,5 +1702,38 @@
       "runs": ["research/equity_b36_fvg_mid.csv", "research/equity_b36_fvg_mid_abs.csv"],
       "src": "tests/test_fvg_mid_stop.py"
     }
+  },
+  {
+    "ts": "2026-06-14T21:00:00Z",
+    "session": "wk2-b38",
+    "item": "B38",
+    "variant": "ORB-reentry r=1.0 and r=1.25 Phase B sensitivity",
+    "objective": "funded",
+    "metrics": {
+      "r1p0_net_per_month_b31a": 431,
+      "r1p0_sust_b31a": 0.90,
+      "r1p0_net_per_month_b21a": 412,
+      "r1p0_sust_b21a": 0.83,
+      "r1p25_net_per_month_b31a": 545,
+      "r1p25_sust_b31a": 0.77,
+      "r1p25_net_per_month_b21a": 523,
+      "r1p25_sust_b21a": 0.71,
+      "b31_ref_net_per_month": 508,
+      "b31_ref_sust": 2.85,
+      "haircut": 200,
+      "orb_reentry_r1p0_xfa_busts": 41,
+      "orb_reentry_r1p0_xfa_accounts": 42,
+      "orb_reentry_r1p0_net_per_acct": 1754,
+      "orb_reentry_r1p25_xfa_busts": 48,
+      "orb_reentry_r1p25_xfa_accounts": 49,
+      "orb_reentry_r1p25_net_per_acct": 1949
+    },
+    "verdict": "rejected",
+    "learned": "ORB-reentry's sust advantage over plain ORB (0.21x at r=0.75) reverses at r=1.0: reentry generates 41 funded busts (sust 0.83-0.90x) vs plain ORB's 27 busts (sust 1.37x) at the same r-multiple. The second-entry mechanism amplifies bust frequency faster than it improves per-account earnings at aggressive sizing. r=1.25 hits $523-545/mo but sust collapses to 0.71-0.77x. r=0.75 is confirmed as the Phase B risk optimum from both below (B32: r=0.5) and above (B38: r=1.0/r=1.25). The B31 winner ($508/mo, sust 2.85x) remains undefeated.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b38_pipeline.py"],
+      "src": null
+    }
   }
 ]

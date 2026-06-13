@@ -612,3 +612,17 @@ Appended 2026-06-14 (B36 FVG-midpoint stop):
     zone midpoint or nearer will be wicked out during valid setup development. The swept-extreme stop
     (current baseline) is geometrically correct because it sits past the liquidity sweep that triggers the
     signal — price must not revisit that level for the trade thesis to hold.
+
+Appended 2026-06-14 (B38 ORB-reentry r-multiple sensitivity):
+
+78. **ORB-reentry's sust advantage over plain ORB inverts above r=0.75.** At r=0.75, reentry
+    sust (2.85x) exceeds plain ORB sust (2.64x) by 0.21. At r=1.0, reentry has 41 funded busts
+    (sust 0.83-0.90x) vs plain ORB's 27 busts (sust 1.37x) — 52% MORE busts with reentry. The
+    second-entry mechanism amplifies bust frequency faster than per-account earnings at aggressive
+    sizing: each stop-reversal entry at r=1.0 carries full-sized risk, landing harder on the funded
+    account and accelerating MLL approach. At r=0.75, second-entry losses are small enough not to
+    materially increase bust timing. At r=1.25, sust collapses to 0.71-0.77x despite $523-545/mo
+    (pipeline-negative). Rule: the ORB-reentry Phase B risk optimum is r=0.75, confirmed from below
+    (B32: r=0.5, $/mo $246) and above (B38: r=1.0, stop rule; r=1.25, sust 0.77x). Do not propose
+    ORB-reentry Phase B at r>=1.0 without a fundamentally different mechanism to reduce bust frequency
+    at higher sizing (e.g., partial exits, session gating, DOW filtering — none of which has yet worked).

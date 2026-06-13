@@ -1144,4 +1144,42 @@ Entry format:
 - **Stop rule check:** Both modes lose on BOTH objective metrics vs baseline — stop rule triggered for both. No parameter rescue.
 - **Verdict:** REJECTED. Both FVG-midpoint stop variants catastrophically underperform on both objectives. Lesson 77 added.
 - **Learned:** The FVG midpoint is inside the normal gap-fill retracement path that price traverses during valid iFVG development. A stop there is hit during standard setup development, not only on failures. The swept-extreme stop (current baseline) is geometrically correct: it sits past the liquidity sweep that triggers the signal, a level price must not revisit for the trade thesis to hold.
-- **Next:** B35-pipeline (ORB-reentry r=1.0/r=1.25 sensitivity — highest-value remaining item, could beat $508/mo if sust holds at r=1.0), or B36-config-parity (Phase A r=2.0 parity test, needed to confirm combined-engine Phase A baseline).
+- **Next:** B38 (ORB-reentry r=1.0/r=1.25 sensitivity — highest-value remaining pipeline item; formerly "pipeline B35", renamed to avoid collision with done strategy B35).
+
+## 2026-06-14T21:00:00Z — session wk2-b38 — B38 (ORB-reentry Phase B r-multiple sensitivity r=1.0/r=1.25)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B38 (top pending item — formerly "pipeline B35", renamed to fix numbering collision with done strategy B35/B36). No research session required: last 2 completed items were B36-FVG-midpoint (build) and B32 (no-code benchmark); the alternation breaks the "last 2 build items" trigger.
+- **Backlog fix:** Pipeline items previously named B35/B36/B37 renamed B38/B39/B40 to avoid collision with done strategy items of the same number.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow XFA running, no issues.
+  2. Verified existing equity_b21/ already contains orb_reentry_r1p0 and r1p25 per-year CSVs (generated during B21 session, not previously analyzed as Phase B). No new equity_export runs needed.
+  3. Wrote `scripts/run_b38_pipeline.py` (cloned from run_b32_pipeline.py). Phase A: equity_b31/ (B31 r2.0 deployed, 37 passes) and equity_b1/ (B21 r1.25, 34 passes). Phase B: equity_b21/ at r0.75/r1.0/r1.25.
+  4. Ran pipeline analysis.
+  5. Test suite: **649 passed, 2 skipped** — no code changes.
+
+- **Numbers:**
+
+  **Phase B standalone stats (per-year, 5y excl 2022, h200):**
+  | Config | Accounts | Busts | Net 5y | $/acct | Sust standalone | Avg days |
+  |--------|----------|-------|--------|--------|-----------------|----------|
+  | ORB-reentry r0.75 (B21 ref) | 14 | 13 | $43,834 | $3,131 | 1.46x | 73.5d |
+  | ORB-reentry r1.0 (B38) | 42 | 41 | $73,686 | $1,754 | 0.83x | 24.5d |
+  | ORB-reentry r1.25 (B38) | 49 | 48 | $95,481 | $1,949 | 0.85x | 21.0d |
+
+  **Two-phase pipeline matrix:**
+  | Phase A -> Phase B | Reset$/acct | XFA$/acct | Cycle d | Net/mo | Sust |
+  |--------------------|-------------|-----------|---------|--------|------|
+  | B31 (r2.0) -> reentry r0.75 (ref) | $681 | $3,131 | 101.3d | **$508** | **2.85x** |
+  | B21 (r1.25) -> reentry r0.75 (ref) | $715 | $3,131 | 102.1d | **$497** | **2.62x** |
+  | B31 (r2.0) -> reentry r1.25 | $681 | $1,949 | 48.8d | $545 | 0.77x |
+  | B21 (r1.25) -> reentry r1.25 | $715 | $1,949 | 49.6d | $523 | 0.71x |
+  | B31 (r2.0) -> reentry r1.0 | $681 | $1,754 | 52.3d | $431 | 0.90x |
+  | B21 (r1.25) -> reentry r1.0 | $715 | $1,754 | 53.1d | $412 | 0.83x |
+
+- **Stop rule check:**
+  - r=1.0: BOTH metrics below B31 winner ($431 < $508 AND 0.90x < 2.85x) → stop rule triggered.
+  - r=1.25: $/mo $523-545 (BEATS B31 on $/mo) but sust 0.71-0.77x (fails 2.62x criterion). NOT a candidate.
+- **Key structural finding:** ORB-reentry's sust advantage over plain ORB at r=0.75 (reentry 2.85x vs plain 2.64x, +0.21) REVERSES at r=1.0. Plain ORB at r=1.0 had 27 busts (sust 1.37x); reentry at r=1.0 has 41 busts (sust 0.83-0.90x) — the reentry mechanism creates 52% MORE busts than plain ORB at r=1.0. The second-entry mechanism amplifies bust frequency faster than per-account earnings at aggressive sizing. The r=0.75 sust advantage is a conservative-sizing regime phenomenon only.
+- **Verdict:** rejected — r=1.0 triggers stop rule; r=1.25 is pipeline-negative (sust 0.77x). The B31 winner (iFVG r2.0 + ORB-reentry r0.75: $508/mo, sust 2.85x) remains undefeated. r=0.75 is now confirmed as the Phase B risk optimum from BOTH below (B32: r=0.5) and above (B38: r=1.0/r=1.25). Lesson 78 added.
+- **Learned:** The ORB-reentry second signal is a stop-reversal entry (fires only after a confirmed stop). At r=0.75, this adds profitable reversal-day EOD flattens without proportionally increasing bust frequency — the sizing is conservative enough that the second entry's per-trade loss barely moves the funded account toward MLL. At r=1.0+, each reentry loss carries full-sized risk, accelerating account drawdowns toward MLL far faster than at r=0.75. The mechanism's asymmetric bust amplification at higher r explains why the sust advantage inverts: the second-entry benefit (additional winners) is outweighed by second-entry losses landing harder on the account.
+- **Next:** B39 (research-baseline Phase A r=2.0 config-parity test — needed to confirm whether B31's improvement is real or an artifact of the deployed vs research config difference). B40 (combined-engine vs iFVG-only Phase A sensitivity). Both are no-code benchmarks.

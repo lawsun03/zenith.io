@@ -1297,10 +1297,11 @@ B35 room-to-target gate.)
 
 ## RESEARCH — Session wk2-r2 appendix: pipeline research items
 
-Items B35-B37 are pure-pipeline research (no new strategy code). They extend the
+Items B38-B40 are pure-pipeline research (no new strategy code). They extend the
 funded-pipeline optimization thread started by B21/B31.
+(Named B38-B40 to avoid collision with strategy B35/B36 done items above.)
 
-## B35 — ORB-reentry Phase B r-multiple sensitivity (r=1.0 and r=1.25)  [pending]
+## B38 — ORB-reentry Phase B r-multiple sensitivity (r=1.0 and r=1.25)  [done — rejected: r=1.0 stop rule (both metrics below B31: $431/mo sust 0.90x); r=1.25 sust collapses to 0.77x despite $545/mo; ORB-reentry sust advantage over plain ORB at r=0.75 reverses at r=1.0 (reentry 0.90x < plain ORB 1.37x); r=0.75 confirmed as Phase B optimum from both below (B32) and above (B38)]
 Hypothesis: ORB-reentry at r=0.75 gives $508/mo sust=2.85x (B31 winner). This session
 showed plain ORB's sust collapses at r>=1.0 (r=1.0: sust=1.37x; r=1.25: sust=1.03x).
 But the ORB-reentry mechanism adds profitable reversal entries without proportionally
@@ -1343,7 +1344,7 @@ plain ORB at r=1.0 = $408/mo sust=1.37x; plain ORB at r=1.25 = $531/mo sust=1.03
 The sust advantage of reentry over plain (0.21x at r=0.75) is the only empirical basis
 for projecting r=1.0 reentry -- the actual result could be substantially different.
 
-## B36 — B21 research-baseline Phase A config-parity test at r=2.0  [pending]
+## B39 — B21 research-baseline Phase A config-parity test at r=2.0  [pending]
 Hypothesis: B31's candidate ($508/mo, sust=2.85x) used deployed Phase A settings
 (engine=combined, all-day killzones, MNQ body=5.0/stop=3.0 overrides). B21's benchmark
 ($497/mo, sust=2.62x) used the research baseline (engine=ifvg, named sessions,
@@ -1379,7 +1380,7 @@ The risk level is what drives the cycle-duration reduction, not the config.
 Source: B31 config discrepancy (JOURNAL wk2-b31); Lesson 69 (cycle-speed mechanism).
 Needed to confirm B31's candidate before Lawrence deploys higher risk live.
 
-## B37 — Combined-engine vs iFVG-only Phase A in the combine (engine sensitivity)  [pending]
+## B40 — Combined-engine vs iFVG-only Phase A in the combine (engine sensitivity)  [pending]
 Hypothesis: B21 used engine=ifvg (iFVG-only signals) for Phase A combine. The deployed
 bot uses engine=combined (iFVG + ORB signals both contribute to the combine phase).
 B31 also used engine=combined for Phase A. We have never isolated the engine= parameter's
@@ -1414,5 +1415,5 @@ variance and more bust-months.
 
 Source: B31 Phase A config discrepancy analysis; Lesson 50 (config parity gap).
 Note: this is a combine-only test. The two-phase pipeline implication is indirect --
-if combined Phase A gives more passes, the pipeline supply improves, which B36 can
+if combined Phase A gives more passes, the pipeline supply improves, which B39 can
 quantify once the pass count is known.
