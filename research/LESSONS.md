@@ -674,3 +674,17 @@ Appended 2026-06-14 (wk2-r3 research session):
     requires per-trade time-series MAE instrumentation (current infrastructure tracks only final MAE
     per trade, not time-of-day MAE evolution). Don't propose MAE-gating without this new
     instrumentation. The clean-run WR/PF is not actionable with existing backtest infrastructure.
+
+Appended 2026-06-13 (B41 combined-engine Phase A pipeline):
+
+83. **Combine-harness monthly pass rate and funded-pipeline account throughput are structurally
+    decoupled.** B41 tested combined engine (9.1 trades/month) as Phase A: 10 per-year passes vs
+    34 for iFVG-only (4.3 trades/month) despite the B40 combine-harness showing 2x better monthly
+    pass rate (10/61 vs 5/61). Root cause: the funded pipeline runs CONTINUOUS attempts; higher trade
+    frequency damps per-attempt equity variance → each attempt takes longer to resolve (12.7d vs
+    6.0d) → fewer total attempts over 5y (41 vs 162) → fewer total passes (10 vs 34). The 2x
+    monthly-quality improvement becomes a 4x throughput penalty in continuous operation. Rule: never
+    use the combine-harness monthly pass rate as a proxy for funded-pipeline throughput. Always model
+    pipeline throughput with funded_sim's continuous attempt simulation. A strategy that improves
+    monthly quality by taking smaller/more-frequent bets may SLOW the pipeline by smoothing the
+    equity curve's path to resolution.

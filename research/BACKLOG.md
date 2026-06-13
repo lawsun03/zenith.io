@@ -1447,7 +1447,7 @@ data mining (scripts/_research_mining.py) + WebSearch + B40 projection analysis.
   novel mechanism (not in our rejection list) but requires tick-level order book data not available
   in our OHLCV bars. Not testable without expensive new data. No other new mechanism families found.
 
-## B41 — Combined-engine research-baseline Phase A two-phase pipeline  [pending]
+## B41 — Combined-engine research-baseline Phase A two-phase pipeline  [done — rejected: combined Phase A gives 10/41 passes over 5y (vs 34/162 for ifvg-only B21) because higher trade frequency damps equity variance → longer attempts (12.7d vs 6.0d) → fewer total pipeline cycles; net $421/mo sust 0.77x — stop rule on both metrics vs B21 ($497, 2.62x); B40 combine-harness 2x advantage does not transfer to funded pipeline throughput; Lesson 83]
 Hypothesis: B40 showed engine=combined at B21 research baseline (named sessions, ifvg_edge, no MNQ
 overrides) gives 2x more Phase A combine passes than ifvg-only (10/61 vs 5/61, PF 1.02 vs 0.85).
 The B21 pipeline ($497/mo, sust 2.62x) used ifvg-only Phase A (5/61 per period, ~34 passes/5y).

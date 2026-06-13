@@ -1814,5 +1814,34 @@
       "runs": ["_research_mining.py"],
       "src": "arxiv:2505.17388,2508.06788"
     }
+  },
+  {
+    "ts": "2026-06-13T21:00:00Z",
+    "session": "wk2-b41",
+    "item": "B41",
+    "variant": "combined-engine Phase A r1.25 -> ORB-reentry r0.75",
+    "objective": "combine+funded",
+    "metrics": {
+      "phase_a_passes": 10,
+      "phase_a_attempts": 41,
+      "phase_a_days_per_attempt": 12.7,
+      "phase_a_days_per_funded": 52.0,
+      "phase_a_reset_per_funded": 615,
+      "phase_b_busts": 13,
+      "phase_b_net_per_acct": 3131,
+      "net_per_month": 421,
+      "sustainability": 0.77,
+      "vs_b21_net_per_month": 497,
+      "vs_b21_sust": 2.62,
+      "vs_b31_net_per_month": 508,
+      "vs_b31_sust": 2.85
+    },
+    "verdict": "rejected",
+    "learned": "The B40 combine-harness result (10/61 monthly passes, 2x better than ifvg-only) does NOT transfer to better funded pipeline throughput. The combine harness forces one attempt per calendar month; the funded pipeline model runs CONTINUOUS attempts. Combined engine's higher trade frequency (9.1/month vs 4.3/month for ifvg-only) damps per-attempt equity variance, meaning each attempt takes longer to resolve (12.7d vs 6.0d). Fewer total attempts = fewer total funded accounts (10 vs 34 over 5y). The higher per-attempt pass rate (24% vs 21%) is overwhelmed by 4x fewer total attempts. Lesson: combine-harness pass rate and funded-pipeline throughput are structurally decoupled — more trades per unit time slows the attempt cycle by dampening variance, not accelerating it.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b41_pipeline.py", "research/equity_b41/"],
+      "src": null
+    }
   }
 ]

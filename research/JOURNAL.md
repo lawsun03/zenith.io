@@ -1262,3 +1262,48 @@ Entry format:
 - **Verdict:** dataset — research session complete; 3 new items prioritized and written. No code changes. Test suite unchanged (653 passed, 2 skipped).
 - **Learned:** ORB signals have a structural timing split at 10:30 ET: the early session (9:45-10:30 ET) carries the edge while the lunch window is loss-making. The B40 combined-engine finding has the highest-value untested pipeline implication — doubling Phase A passes projects to the best pipeline economics yet seen ($560-600/month, sust ~5x), pending confirmation by B41.
 - **Next:** B41 (combined-engine Phase A pipeline simulation — the highest-priority pending item; no code, direct B40 follow-up with projected dramatic pipeline improvement).
+
+## 2026-06-13T21:00:00Z — session wk2-b41 — B41 (Combined-engine Phase A pipeline simulation)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B41 (top pending item — tests whether the B40 combined-engine combine-harness advantage translates to better funded pipeline throughput; no new code).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Created research/equity_b41/ directory.
+  3. Generated 5 per-year equity CSVs (2021/2023/2024/2025/2026) using combined engine at B21 research baseline (engine=combined, ifvg_entry_mode=ifvg_edge, partial_r=0, swing_stop_lookback=0, target_clarity_mode=reject, min_absolute_body=1.0, stop_buffer=0.30, killzones=london,ny_am,ny_pm, risk=1.25%). Ran 5 parallel jobs.
+  4. Wrote scripts/run_b41_pipeline.py (cloned from run_b21_pipeline.py with B41 Phase A equity and B31/B21 references).
+  5. Ran pipeline analysis: combined Phase A + ORB-reentry r0.75 Phase B.
+  6. Test suite: **653 passed, 2 skipped** — no code changes.
+
+- **Numbers:**
+
+  **Phase A standalone stats (per-year, 5y excl 2022, h200):**
+  | Config | Passes/Attempts | d/attempt | d/funded | Reset$/funded |
+  |--------|----------------|-----------|----------|---------------|
+  | combined r1.25 (B41) | 10/41 | 12.7d | 52.0d | $615 |
+  | iFVG r1.25 (B21 ref) | 34/162 | 6.0d | 28.6d | $715 |
+  | iFVG r2.0 deployed (B31 ref) | 37/168 | 6.1d | 27.8d | $681 |
+
+  **Phase B standalone (ORB-reentry r0.75, unchanged):**
+  13 busts / 14 accounts, $3,131/acct, 73.5d/acct, sust standalone 1.46x
+
+  **Two-phase pipeline matrix:**
+  | Phase A -> Phase B | Reset$ | XFA$ | Net/cycle | Cycle d | Net/mo | Sust |
+  |--------------------|--------|------|-----------|---------|--------|------|
+  | iFVG r2.0 deployed (B31 ref) -> ORB-reentry r0.75 | $681 | $3,131 | $2,450 | 101.3d | **$508** | **2.85x** |
+  | iFVG r1.25 (B21 ref) -> ORB-reentry r0.75 | $715 | $3,131 | $2,416 | 102.1d | **$497** | **2.62x** |
+  | combined r1.25 (B41) -> ORB-reentry r0.75 | $615 | $3,131 | $2,516 | 125.5d | **$421** | **0.77x** |
+
+- **Stop rule check:** B41 combined Phase A loses on BOTH metrics vs B21: $/mo $421 < $497, sust 0.77x < 2.62x. **Stop rule triggered. B41 rejected.**
+
+- **Root cause analysis (key finding):**
+  The B40 combine-harness showed combined engine gives 10/61 monthly passes vs 5/61 for ifvg-only (2x better). But the funded pipeline measures CONTINUOUS attempts, not one-attempt-per-calendar-month. The crucial difference:
+  - iFVG-only: 4.3 trades/month, LOW variance per unit time → accounts resolve quickly (6.0d/attempt) → 162 total attempts over 5y → 34 passes
+  - Combined engine: 9.1 trades/month, HIGHER trade frequency but LOWER per-attempt variance → each attempt takes 2x longer to resolve (12.7d) → only 41 total attempts over 5y → 10 passes
+  More frequent, smaller bets = smoother equity curve = slower drift to $3k/$2k extremes = longer attempts = fewer total pipeline cycles.
+  The B40 combine-harness advantage (10/61 vs 5/61) exists because the harness resets fresh each month regardless of account state. In continuous operation, the combined engine's smoother variance means the same time window generates far fewer account resolutions.
+
+- **Verdict:** rejected — $421/mo sust 0.77x (both below B21 threshold). The B40 combined-engine combine-harness result is a QUALITY improvement but NOT a pipeline-throughput improvement. B31 ($508/mo, sust 2.85x) remains the best pipeline. Lesson 83 added.
+
+- **Learned:** Combine-harness monthly pass rate and funded-pipeline account throughput are structurally decoupled metrics. Higher trade frequency slows the pipeline by dampening per-attempt equity variance — the account takes longer to reach either the $3k pass threshold or the MLL bust floor. The B40 "2x better" finding was real for quality (more months where the strategy would succeed) but translates to 4x fewer total pipeline cycles, not 2x more. Rule: when evaluating pipeline throughput, model it with continuous funded_sim, not with the combine-harness monthly pass rate.
+
+- **Next:** B42 (deployed config full end-to-end pipeline simulation — tests what the actual deployed bot earns in the funded pipeline; no new code) or B43 (ORB late-session signal cutoff — requires 1 new StrategyParams field and 4 defining-behavior tests).
