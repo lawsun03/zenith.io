@@ -1617,5 +1617,28 @@
       "runs": [],
       "src": "youtu.be/ZqPEuatIYMc"
     }
+  },
+  {
+    "ts": "2026-06-14T18:50:00Z",
+    "session": "wk2-b35",
+    "item": "B35",
+    "variant": "daily_bias_gate ifvg combine+funded",
+    "objective": "combine",
+    "metrics": {
+      "passes_gate_on": "4/61",
+      "pf_gate_on": 0.84,
+      "passes_baseline": "7/61",
+      "pf_baseline": 1.0,
+      "trades_per_month": 5.6,
+      "longs_pf": 0.98,
+      "shorts_pf": 0.66
+    },
+    "verdict": "rejected",
+    "learned": "Prior-day directional bias (close vs open) does not predict iFVG signal quality on NQ 5min \u2014 the gate reduces volume by 86% and worsens both PF (0.84 vs 1.00) and combine passes (4/61 vs 7/61). Short signals on short-bias days scored PF 0.66, confirming Lesson 8 (tops stall, bottoms sweep) is structural and independent of prior-day direction. Day-level bias gates extend the failure mode of Lesson 4 to directional filters.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": "https://youtu.be/ZqPEuatIYMc"
+    }
   }
 ]

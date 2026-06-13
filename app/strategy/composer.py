@@ -162,6 +162,9 @@ class ComposerConfig:
     # Names match strftime("%A"): "Monday", ..., "Sunday".
     skip_trading_days: list[str] = field(default_factory=list)
 
+    # B35: daily directional bias gate. See StrategyParams.daily_bias_gate_enabled.
+    daily_bias_gate_enabled: bool = False
+
 
 @dataclass
 class _Awaiting:
@@ -214,6 +217,17 @@ class SweepDisplacementComposer:
         # B23: daily signal cap state (reset at ET-day boundary).
         self._daily_signal_count: int = 0
         self._current_et_day: date | None = None
+        # B35: daily bias gate — running current-day OHLC and committed prior-day OHLC.
+        # Tracking happens in on_bar_close; gate applied in on_displacement.
+        self._bias_current_day: date | None = None
+        self._bias_current_open: Decimal | None = None
+        self._bias_current_high: Decimal | None = None
+        self._bias_current_low: Decimal | None = None
+        self._bias_last_close: Decimal | None = None
+        self._bias_prior_open: Decimal | None = None
+        self._bias_prior_high: Decimal | None = None
+        self._bias_prior_low: Decimal | None = None
+        self._bias_prior_close: Decimal | None = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -268,6 +282,47 @@ class SweepDisplacementComposer:
             et_weekday = bar.ts.astimezone(_ET).strftime("%A")
             if et_weekday in self.config.skip_trading_days:
                 return None
+
+        # B35: daily directional bias gate — suppress signals against prior-day bias
+        # and when price has already consumed the prior-day target level.
+        if self.config.daily_bias_gate_enabled:
+            _et_day = bar.ts.astimezone(_ET).date()
+            # on_displacement is called before on_bar_close for the same bar, so on
+            # the first bar of a new ET day the day transition hasn't been committed.
+            # In that case, use the accumulated current-day data as the prior-day ref.
+            if _et_day != self._bias_current_day and self._bias_current_day is not None:
+                _p_open, _p_high, _p_low, _p_close = (
+                    self._bias_current_open, self._bias_current_high,
+                    self._bias_current_low, self._bias_last_close,
+                )
+            else:
+                _p_open, _p_high, _p_low, _p_close = (
+                    self._bias_prior_open, self._bias_prior_high,
+                    self._bias_prior_low, self._bias_prior_close,
+                )
+            if _p_open is not None and _p_close is not None:
+                _is_long = event.side == "bullish"
+                _bias_long = _p_close > _p_open
+                if _is_long != _bias_long:
+                    log.info(
+                        "Signal blocked: daily bias gate — %s bias, counter-bias signal suppressed",
+                        "long" if _bias_long else "short",
+                    )
+                    return None
+                if _is_long and _p_high is not None and bar.close >= _p_high:
+                    log.info(
+                        "Signal blocked: daily bias gate — long suppressed "
+                        "(price %s >= prior high %s)",
+                        bar.close, _p_high,
+                    )
+                    return None
+                if not _is_long and _p_low is not None and bar.close <= _p_low:
+                    log.info(
+                        "Signal blocked: daily bias gate — short suppressed "
+                        "(price %s <= prior low %s)",
+                        bar.close, _p_low,
+                    )
+                    return None
 
         if event.fvg is None:
             if self.config.confirmation == "displacement_only":
@@ -402,6 +457,26 @@ class SweepDisplacementComposer:
         Call this AFTER on_sweep/on_displacement for the bar — otherwise
         a sweep that fires on bar N would be aged by 1 immediately.
         """
+        # B35: daily bias gate OHLC tracking — commit day transitions and update running data.
+        if self.config.daily_bias_gate_enabled:
+            _et_day = bar.ts.astimezone(_ET).date()
+            if _et_day != self._bias_current_day:
+                if self._bias_current_day is not None:
+                    self._bias_prior_open = self._bias_current_open
+                    self._bias_prior_high = self._bias_current_high
+                    self._bias_prior_low = self._bias_current_low
+                    self._bias_prior_close = self._bias_last_close
+                self._bias_current_day = _et_day
+                self._bias_current_open = bar.open
+                self._bias_current_high = bar.high
+                self._bias_current_low = bar.low
+            else:
+                if self._bias_current_high is not None:
+                    self._bias_current_high = max(self._bias_current_high, bar.high)
+                if self._bias_current_low is not None:
+                    self._bias_current_low = min(self._bias_current_low, bar.low)
+            self._bias_last_close = bar.close
+
         self._bar_lows.append(bar.low)
         self._bar_highs.append(bar.high)
 

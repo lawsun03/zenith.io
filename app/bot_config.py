@@ -173,6 +173,12 @@ class StrategyParams(BaseModel):
     # iFVG Tuesday PF=0.917 (loss-making); ORB Monday/Wednesday PF=0.898/0.942 (loss-making).
     skip_trading_days: list[str] = Field(default_factory=list)
 
+    # B35: daily directional bias gate (ICT "Power of Three"). When True, suppresses
+    # iFVG signals that oppose the prior ET-day's directional bias (close vs open) and
+    # also suppresses signals when price has already consumed the prior day's target
+    # (prior-day high for longs, prior-day low for shorts). Default off.
+    daily_bias_gate_enabled: bool = False
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

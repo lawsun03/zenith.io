@@ -1215,7 +1215,7 @@ Source: Lawrence ICT reference (FVG + OTE entry, breaker blocks). Mechanism =
 sweep_bos + OB-violation refinement + OTE fib gate. Directly tests whether the
 documented MGC fib no-edge result holds on MNQ.
 
-## B35 — Daily-bias directional gate (ICT "Power of Three")  [pending — Lawrence-requested 2026-06-13 (JadeCap video); rank ahead of B32, after B33/B34]
+## B35 — Daily-bias directional gate (ICT "Power of Three")  [done — rejected: gate-on 4/61 (7%) PF 0.84 vs gate-off 7/61 (11%) PF 1.00; stop rule triggered on BOTH PF and passes; short-bias day PF 0.66 (worse than baseline — Lesson 8 extends to DOW bias); volume collapsed 86% (5.6/mo); daily_bias_gate_enabled ships default-off; 5 tests, 649 total green]
 Source: JadeCap "The EASIEST Way to Trade ICT in 2025" (youtu.be/ZqPEuatIYMc).
 The one part of that video NOT already covered by iFVG/sweep_bos/B33/B34.
 

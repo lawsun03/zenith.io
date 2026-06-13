@@ -1055,3 +1055,34 @@ Entry format:
   Phase 2 engine NOT built. Lessons 73-74 added.
 - **Learned:** NQ 5min BOS signals show maximum edge when price does NOT retrace (WR 84.4%, PF 18.90). Each additional fib of retrace correlates with weaker forward performance. The OTE zone (0.62-0.79) produces the second-worst performance among non-stopped buckets. Waiting for "optimal" structural entry via deeper retrace is actually waiting for a weaker setup. The confirmation-step rule (Lesson 74) is the structural explanation: iFVG's 3-step confirmation produces far lower stop-out rates than BOS's 2-step.
 - **Next:** B32 (ORB-reentry r=0.5 risk floor) or B35 (ORB-reentry r=1.0/r=1.25 -- most promising pipeline item; tests whether reentry maintains sust at higher r where plain ORB collapses).
+
+## 2026-06-14T18:35:00Z — session wk2-b35 — B35 (Daily-bias directional gate)
+- **Bot health:** /api/status OK — XFA, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B35 (strategy item — Daily-bias directional gate, Lawrence-requested/JadeCap video; ranked ahead of B32 after B33/B34 per BACKLOG).
+- **Session type:** Strategy code + benchmark. Gate implements the ICT "Power of Three" concept: prior ET-day close vs open as directional bias filter + "room to target" gate (prior day high/low).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Implemented `daily_bias_gate_enabled: bool = False` in StrategyParams + ComposerConfig.
+  3. Added per-day OHLC tracking in `SweepDisplacementComposer.on_bar_close()`: detects ET-day changes, commits prior-day OHLC. Handles the on_displacement-before-on_bar_close timing (first bar of new day: uses accumulated current-day data as prior reference).
+  4. Added gate check in `on_displacement()` (after DOW filter, before FVG check): direction gate + room-to-target gate.
+  5. Wired `daily_bias_gate_enabled` through to all 4 ComposerConfig construction sites (runner.py ×2, main.py ×2).
+  6. Wrote 5 defining-behavior tests (tests/test_daily_bias_gate.py): gate-off no-op, long-bias, short-bias, room-to-target, ET-day rollover. All 5 passed.
+  7. Full suite: **649 passed, 2 skipped** (5 new tests added).
+  8. Benchmark: `run_monthly_combine.py --partial-r 0 --set swing_stop_lookback=0 --set daily_bias_gate_enabled=True` (61-month combine, MNQ 5min, ifvg_edge mode).
+
+- **Numbers:**
+
+  **Combine benchmark (gate-on vs gate-off):**
+  | Config | Passes/61 | % | Run PF | Trades/mo | Notes |
+  |--------|-----------|---|--------|-----------|-------|
+  | B35 gate-on | 4 | 7% | 0.84 | 5.6 | longs PF 0.98, shorts PF 0.66 |
+  | Baseline (ifvg_edge, gate-off) | 7 | 11% | 1.00 | ~19 | B24 reference |
+
+  Volume collapse: 343 total exits over 61 months = 5.6/month (vs ~19/month baseline). The direction filter cuts ~50% of signals, and the room-to-target gate further reduces volume.
+
+- **Stop rule check:** Gate-on loses on BOTH combine passes (4/61 vs 7/61) AND PF (0.84 vs 1.00). **Stop rule triggered. B35 rejected.**
+- **Root cause (direction gate):** The prior close vs open is not informative for NQ 5min iFVG signal quality. Short-bias days produce shorts with PF 0.66 — WORSE than the full baseline (PF 0.98 for shorts without the gate). The "tops stall, bottoms sweep" mechanism (Lesson 8) means short signals on NQ are structurally negative regardless of whether the prior day closed bearishly. The gate selects for a weaker signal subset.
+- **Root cause (room-to-target gate):** Further reduces volume without quality benefit. On NQ, frequent new highs/lows mean the prior-day extreme is often consumed by mid-morning, silencing many high-quality signals.
+- **Verdict:** rejected — gate-on 4/61 (7%) PF 0.84 vs baseline 7/61 (11%) PF 1.00. Stop rule triggered on BOTH metrics. `daily_bias_gate_enabled` ships default-off (no behavior change to live bot). Lesson 75 added.
+- **Learned:** Prior-day directional bias (close vs open) does not predict intraday iFVG signal quality on NQ 5min. The ICT "Power of Three" direction filter extends Lesson 4 (day-level gates cannot time engines) to DIRECTION filters: the prior day's close vs open contains no actionable information for the iFVG chain. The room-to-target gate further amplifies the volume collapse. External ICT claims have now failed 5-for-5 (Lesson 6 updated).
+- **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk ladder) or B36 (FVG-midpoint stop placement — strategy item, Lawrence-requested, ranks with B35) or the pipeline B35 (ORB-reentry r=1.0/r=1.25 — most promising pipeline extension).

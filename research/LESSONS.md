@@ -575,3 +575,14 @@ Appended 2026-06-14 (B34 breaker-block + OTE Phase 1 falsification):
     requires one fewer structural confirmation step. Rule: the stop failure rate scales inversely with
     the number of confirmation steps -- more confirmations = fewer false stops = higher edge.
     This generalization applies to any new entry proposal: count the confirmation steps.
+
+Appended 2026-06-14 (B35 daily-bias directional gate):
+
+75. **Prior-day directional bias (close vs open) does not predict iFVG signal quality on NQ 5min.**
+    B35 tested the ICT "Power of Three" concept: suppress signals that oppose the prior-day close vs
+    open direction, and suppress longs once price has reached the prior-day high (room to target). Gate
+    reduced volume by 86% (5.6 vs ~19 trades/month) and WORSENED both metrics: combine 4/61 (7%) PF 0.84
+    vs baseline 7/61 (11%) PF 1.00. Short signals on short-bias days scored PF 0.66 — the "tops stall,
+    bottoms sweep" mechanism (Lesson 8) is structural and independent of whether the prior day was bearish.
+    Rule: prior-day directional bias extends Lesson 4 (day-level gates cannot time engines) to DIRECTION
+    filters: the prior close vs open is not actionable information for NQ 5min iFVG signal quality.
