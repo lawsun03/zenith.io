@@ -1499,5 +1499,47 @@
       ],
       "src": "scripts/run_b31_pipeline.py"
     }
+  },
+  {
+    "ts": "2026-06-13T17:35:00Z",
+    "session": "wk2-r2",
+    "item": "RESEARCH",
+    "variant": "plain ORB Phase B r-multiple sweep (r=0.5/0.75/1.0/1.25) + exit structure analysis",
+    "objective": "pipeline",
+    "metrics": {
+      "orb_exit_structure_sl_pct": 55.0,
+      "orb_exit_structure_eod_flatten_pct": 33.6,
+      "orb_exit_structure_target_hit_pct": 11.4,
+      "orb_n_trades": 1030,
+      "plain_orb_r0p5_net_per_mo": 300,
+      "plain_orb_r0p5_sust": 6.17,
+      "plain_orb_r0p75_net_per_mo": 387,
+      "plain_orb_r0p75_sust": 2.64,
+      "plain_orb_r1p0_net_per_mo": 408,
+      "plain_orb_r1p0_sust": 1.37,
+      "plain_orb_r1p25_net_per_mo": 531,
+      "plain_orb_r1p25_sust": 1.03,
+      "orb_reentry_r0p75_net_per_mo": 508,
+      "orb_reentry_r0p75_sust": 2.85,
+      "reentry_premium_vs_plain_at_r0p75_pct": 31,
+      "phase_a_b31_r2p0_passes": 37,
+      "haircut": 200,
+      "years": ["2021", "2023", "2024", "2025", "2026"],
+      "tests_added": 0,
+      "total_tests": 644
+    },
+    "verdict": "dataset",
+    "learned": "ORB is primarily an EOD-flatten strategy (55% SL, 33.6% profitable EOD flatten, 11.4% target hits). The r-multiple directly affects only 11.4% of trades. The ORB-reentry mechanism generates 31% more $/month than plain ORB at r=0.75 ($508 vs $387) with similar sust (2.85x vs 2.64x) by adding profitable reversal-day EOD flattens. Plain ORB sust collapses at r>=1.0 (1.37x at r=1.0; 1.03x at r=1.25) -- primary criterion (sust>=2.62x) fails at r>=1.0. B31 winner ($508/mo, sust=2.85x) remains undefeated. New backlog items B35 (ORB-reentry r=1.0/r=1.25 sensitivity), B36 (Phase A config-parity test at r=2.0), B37 (combined-engine vs ifvg-only Phase A) appended.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b1/orb_r0p5_*.csv",
+        "research/equity_b1/orb_r0p75_*.csv",
+        "research/equity_b1/orb_r1_*.csv",
+        "research/equity_b1/orb_r1p25_*.csv",
+        "research/mfe_mae_orb_clean.csv"
+      ],
+      "src": "scripts/research_wk2r2_pipeline.py"
+    }
   }
 ]

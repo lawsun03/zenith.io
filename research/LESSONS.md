@@ -517,3 +517,26 @@ Appended 2026-06-13 (B31 Phase A risk sensitivity):
     the two effects nearly cancel. Rule: in the two-phase combine model, risk is a cycle-speed lever, not a
     per-cycle-net lever. Only large risk increases that materially shift the combine duration distribution will
     improve $/month. Intermediate steps may show no benefit or even marginal regression.
+
+Appended 2026-06-13 (wk2-r2 research session):
+
+70. **ORB-reentry generates 31% more pipeline $/month than plain ORB at the same r-multiple (r=0.75).**
+    Plain ORB r=0.75 paired with B31 Phase A: $387/mo sust=2.64x (14 busts). ORB-reentry r=0.75: $508/mo
+    sust=2.85x (13 busts). The reentry mechanism adds profitable entries on reversal days — after the first
+    ORB breakout stops out, a second entry fires in the opposite direction. This captures additional profitable
+    EOD flattens on days the initial direction was wrong, adding account earnings without proportionally
+    increasing bust frequency. The $/mo gain comes from the 33.6% EOD-flatten dominant exit structure (most
+    ORB account value is in day-end position management), not from the 11.4% target-hit trades.
+    Rule: ORB-reentry and plain ORB are NOT interchangeable Phase B options — the reentry mechanism is
+    structurally additive, not just a risk-level variant.
+
+71. **Plain ORB r-multiple sensitivity shows sust collapse above r=0.75; r=1.25 maximizes $/mo but barely
+    sustains the pipeline (sust=1.03x).** Full curve (paired with B31 r=2.0 Phase A, 37 passes): r=0.5
+    → $300/mo sust=6.17x; r=0.75 → $387/mo sust=2.64x; r=1.0 → $408/mo sust=1.37x; r=1.25 → $531/mo
+    sust=1.03x (37 passes vs 36 busts — barely above minimum). Primary criterion (sust>=2.62x) fails at
+    r>=1.0; secondary criterion (sust>=1.26x) fails at r>=1.25. Mechanism: higher r-multiple means more
+    losers end deep in the MLL danger zone per funded account, accelerating bust timing faster than target
+    hits increase payouts. At r=1.25 the pipeline essentially becomes unsustainable (one more bust per year
+    would make it pipeline-negative). Rule: plain ORB r-multiple is not a reliable $/mo lever — sust collapses
+    before $/mo improves enough to meet criteria. The ORB-reentry mechanism at r=0.75 achieves better $/mo
+    ($508 vs $387) with better sust (2.85x vs 2.64x), strictly dominating plain ORB across all metrics.

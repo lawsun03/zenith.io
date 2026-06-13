@@ -1003,9 +1003,16 @@ Warning: do NOT use 2022 for any r=2.0 equity generation (frozen holdout per pro
 Source: Phase A pipeline analysis (wk2-r1); B1-B21 Phase A stats. This is the only Phase A risk
 level we haven't tested (B1 tested r=0.5/0.75/1.0/1.25 for Phase B ORB; Phase A was always r=1.25).
 
-## RESEARCH — Session wk2-r2  [in-progress — session 2026-06-13T17:35Z]
+## RESEARCH — Session wk2-r2  [done — 3 items appended: B35 ORB-reentry r-sweep, B36 Phase A config-parity r=2.0, B37 combined-engine Phase A test]
 
 Session 39 (39 % 3 == 0) + last 2 completed items B30/B31 are build items → protocol mandates research/ideation. B32 (pending) will be claimed in the next session.
+
+**Key data findings:**
+- **ORB exit structure (n=1,030, 5y excl 2022):** 55.0% SL, 33.6% profitable EOD flatten, 11.4% target hits (MFE>=2.5R). The r-multiple directly affects only 11.4% of trades. EOD management is the primary value driver.
+- **Plain ORB r-sweep paired with B31 Phase A (r=2.0, 37 passes):** r=0.5: $300/mo sust=6.17x; r=0.75: $387/mo sust=2.64x; r=1.0: $408/mo sust=1.37x; r=1.25: $531/mo sust=1.03x. Primary criterion (sust>=2.62x) fails at r>=1.0. Secondary (sust>=1.26x) fails at r>=1.25.
+- **ORB-reentry vs plain ORB at r=0.75:** reentry $508/mo sust=2.85x vs plain $387/mo sust=2.64x (+31% $/mo, similar sust). The reentry mechanism captures profitable reversal-day EOD flattens.
+- **B31 winner confirmed:** iFVG r=2.0 deployed + ORB-reentry r=0.75 = $508/mo sust=2.85x. No plain ORB Phase B meets primary sust criterion.
+- **No new mechanism families** -- Lesson 6 confirmed 6-for-6.
 
 ## B32 — ORB-reentry Phase B at r=0.5 (below-optimum risk floor)  [pending]
 Hypothesis: B21's Phase B optimum is r=0.75 (sust 2.62x, $3,131/account, 13 busts). B1 showed
@@ -1207,3 +1214,128 @@ beyond the one declared 0.62/0.79 default -- mechanism test, not a sweep.
 Source: Lawrence ICT reference (FVG + OTE entry, breaker blocks). Mechanism =
 sweep_bos + OB-violation refinement + OTE fib gate. Directly tests whether the
 documented MGC fib no-edge result holds on MNQ.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk2-r2 appendix: pipeline research items
+
+Items B35-B37 are pure-pipeline research (no new strategy code). They extend the
+funded-pipeline optimization thread started by B21/B31.
+
+## B35 — ORB-reentry Phase B r-multiple sensitivity (r=1.0 and r=1.25)  [pending]
+Hypothesis: ORB-reentry at r=0.75 gives $508/mo sust=2.85x (B31 winner). This session
+showed plain ORB's sust collapses at r>=1.0 (r=1.0: sust=1.37x; r=1.25: sust=1.03x).
+But the ORB-reentry mechanism adds profitable reversal entries without proportionally
+increasing bust frequency -- at r=0.75, reentry sust (2.85x) is better than plain ORB
+sust (2.64x) at the same r. The question: does the reentry mechanism's sust advantage
+persist at r=1.0 and r=1.25, or does reentry accelerate busts at higher r just as
+plain ORB does? If reentry at r=1.0 gives sust >= 2.62x AND $/mo > $508, it beats B31.
+
+Mechanism: no new code. Generate per-year ORB-reentry equity CSVs at r=1.0 and r=1.25:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 1.0 --partial-r 0 --set swing_stop_lookback=0 --set engine=orb
+   --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+   --out research/equity_b35/orb_reentry_r1p0_{year}.csv`
+  Repeat at risk-pct 1.25. Write scripts/run_b35_pipeline.py using:
+    Phase A: equity_b31/ifvg_r2p0_{year}.csv (B31 winner Phase A)
+    Phase B: equity_b35/orb_reentry_r1p0_{year}.csv and r1p25
+
+Also run Phase A from equity_b1/control_r1p25 (B21 Phase A) for full matrix:
+  B21 Phase A x ORB-reentry r=1.0, r=1.25 (2 more combos)
+
+Fixed defaults: orb_reentry_after_stop=True, orb_r_multiple=2.5, partial_r=0, lookback=0.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B31 winner: $508/mo, sust 2.85x):
+- Primary: $/mo > $508 AND sust >= 2.62x (beats B31 on $/mo, stays in B21 sust range)
+- If sust drops below 2.62x at any tested r: apply stop rule (reject that r-level)
+
+Prior: ~35% that r=1.0 reentry maintains sust >= 2.62x. The plain ORB data shows
+sust collapses to 1.37x at r=1.0; if reentry adds ~0.2-0.3 sust vs plain at r=1.0
+(proportionally similar to the 0.21-point gain at r=0.75), estimated reentry sust = ~1.57x
+-- still below criterion. However, the reentry mechanism's bust reduction is nonlinear
+and untested at higher r. Worth one test run.
+
+Stop rule: if any r level loses on BOTH $/mo and sust vs B31 winner, that level is
+rejected immediately (no further tuning).
+
+Source: wk2-r2 plain ORB r-sweep data. ORB-reentry at r=0.75 = $508/mo sust=2.85x (B31);
+plain ORB at r=1.0 = $408/mo sust=1.37x; plain ORB at r=1.25 = $531/mo sust=1.03x.
+The sust advantage of reentry over plain (0.21x at r=0.75) is the only empirical basis
+for projecting r=1.0 reentry -- the actual result could be substantially different.
+
+## B36 — B21 research-baseline Phase A config-parity test at r=2.0  [pending]
+Hypothesis: B31's candidate ($508/mo, sust=2.85x) used deployed Phase A settings
+(engine=combined, all-day killzones, MNQ body=5.0/stop=3.0 overrides). B21's benchmark
+($497/mo, sust=2.62x) used the research baseline (engine=ifvg, named sessions,
+ifvg_edge, no MNQ body/stop overrides). These are different configs -- we can't cleanly
+isolate the r=2.0 contribution from the config differences.
+
+Clean test: rerun B21 research-baseline Phase A at r=2.0 (same as B21 but risk=2.0%):
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 2.0 --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject
+   --set ifvg_entry_mode=ifvg_edge --out research/equity_b36/ifvg_edge_r2p0_{year}.csv`
+  Note: NO MNQ overrides (body=1.0, stop=0.30, named sessions) -- exact B21 baseline.
+
+Pair with B21 Phase B (equity_b21/orb_reentry_r0p75). Compare to:
+  - B21 (ifvg_edge r=1.25 + reentry r=0.75): $497/mo, sust=2.62x
+  - B31 (deployed r=2.0 + reentry r=0.75): $508/mo, sust=2.85x
+
+This answers: is r=2.0's +$11/mo improvement real and config-agnostic, or an artifact
+of the deployed Phase A config being different from B21?
+
+Fixed defaults: ifvg_entry_mode=ifvg_edge, partial_r=0, swing_stop_lookback=0,
+target_clarity_mode=reject, NO MNQ overrides (standard body/stop thresholds).
+Defining-behavior tests: none needed.
+
+Success criteria (vs B21: $497/mo, sust 2.62x):
+- Primary: $/mo > $497 AND sust >= 2.62x at r=2.0 (research baseline confirms r=2.0 advantage)
+- If r=2.0 research baseline is WORSE than B21: r=2.0 advantage is config-specific, not
+  from the risk level itself -- do not recommend r=2.0 as a general upgrade
+
+Prior: ~55% that r=2.0 shows improvement even in research-baseline config. The mechanism
+(faster combine cycling from higher volatility) is independent of body/stop overrides.
+The risk level is what drives the cycle-duration reduction, not the config.
+
+Source: B31 config discrepancy (JOURNAL wk2-b31); Lesson 69 (cycle-speed mechanism).
+Needed to confirm B31's candidate before Lawrence deploys higher risk live.
+
+## B37 — Combined-engine vs iFVG-only Phase A in the combine (engine sensitivity)  [pending]
+Hypothesis: B21 used engine=ifvg (iFVG-only signals) for Phase A combine. The deployed
+bot uses engine=combined (iFVG + ORB signals both contribute to the combine phase).
+B31 also used engine=combined for Phase A. We have never isolated the engine= parameter's
+effect on combine pass rate.
+
+Test: run_monthly_combine.py with engine=ifvg vs engine=combined, holding all other
+parameters at B21 research baseline (named sessions, ifvg_edge, lookback=0, partial_r=0,
+target_clarity=reject). Compare combine passes/61 and run PF.
+
+If engine=combined gives materially more Phase A passes than engine=ifvg at the same
+research baseline, this validates the deployed combined-engine Phase A. If not, the
+B21 ifvg-only Phase A is optimal and the deployed combined engine adds noise.
+
+Mechanism: no new code. StrategyParams already supports engine=combined.
+
+Fixed defaults: both modes use B21 research baseline (ifvg_edge, named sessions,
+lookback=0, partial_r=0, target_clarity=reject). Only engine= differs.
+
+Defining-behavior tests: none needed (no code change).
+
+Success criteria (vs B21 Phase A baseline: 34/162 passes over 5y, ~7/61 monthly):
+- engine=combined achieves materially more combine passes than engine=ifvg at same config:
+  >= 10/61 (43% more passes vs ifvg baseline 7/61) = signal that combined Phase A is better
+- If engine=combined <= engine=ifvg on passes AND run PF: stop rule triggered (combined
+  Phase A rejected; recommend ifvg-only for the combine phase)
+
+Prior: ~40% that combined gives more Phase A passes. ORB signals during the combine phase
+may help reach the $3k monthly target in ORB-favorable months (B21 pure-iFVG misses those).
+Risk: ORB months that BUST the combine (drawdown months) get double-counted. The combine
+objective favors strategies with positive monthly PF; ORB+iFVG combined may have more
+variance and more bust-months.
+
+Source: B31 Phase A config discrepancy analysis; Lesson 50 (config parity gap).
+Note: this is a combine-only test. The two-phase pipeline implication is indirect --
+if combined Phase A gives more passes, the pipeline supply improves, which B36 can
+quantify once the pass count is known.

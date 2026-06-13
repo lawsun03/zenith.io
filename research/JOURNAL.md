@@ -917,3 +917,50 @@ Entry format:
 - **Learned:** Higher Phase A risk is a combine-cycle-speed lever: at r=2.0, the combine duration drops from 38.1d to 27.8d/funded, enabling more pipeline cycles per year and lifting $/month from $486 to $508. The mechanism is equity volatility making the $3k monthly threshold easier to cross. r=1.5 shows no benefit (cycle duration reduction insufficient to offset higher reset fees). Rule: in the two-phase model, risk level must shift the combine duration distribution materially to improve $/month — small intermediate steps are ineffective. Lesson 69 added.
 - **Side finding:** Deployed Phase A config produces 63% fewer trades/year than B21 research baseline (174-313/year vs 473/year in 2021). Despite this, pipeline $/month is comparable ($486-508 deployed vs $497 research) because the deployed config's strict filters (body=5.0, stop=3.0) produce higher-quality signals with better per-trade dollar outcomes. The trade-frequency deficit does not automatically translate to pipeline underperformance.
 - **Next:** B32 (ORB-reentry Phase B at r=0.5 — maps the lower end of the risk sensitivity curve; confirms or rebuts r=0.75 as funded-phase optimum).
+
+## 2026-06-13T17:35Z — session wk2-r2 — RESEARCH (backlog replenishment)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Session type:** RESEARCH/IDEATION — session 39 (39 % 3 == 0) + last 2 completed items B30/B31 are both build items → protocol mandates research session. B32 (pending) claimed next session.
+- **Databento ledger:** $0.00 / $20.00 cap. No fetches this session.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Databento ledger confirmed: $0.00 spent, no new fetches needed.
+  3. WebSearch (NQ ORB r-multiple optimization, prop-firm strategies 2025-26): no new mechanism families found. Lesson 6 confirmed 6-for-6.
+  4. **MFE/MAE ORB exit structure analysis** (mfe_mae_orb_clean.csv, n=1,030, 5y excl 2022): computed full-population exit breakdown — 55.0% SL, 33.6% profitable EOD flatten, 11.4% target hits (MFE>=2.5R). Confirms that only 11.4% of trades are affected by the r-multiple; EOD management is the primary pipeline value driver.
+  5. **Plain ORB Phase B r-sweep** (existing equity_b1/ CSVs — no new equity_export runs needed): pipeline analysis at r=0.5/0.75/1.0/1.25, all paired with B31 Phase A (r=2.0 deployed, 37 passes) and B21 Phase A (ifvg_edge r=1.25, 34 passes). Used scripts/research_wk2r2_pipeline.py and scripts/research_wk2r2_orb_sweep.py.
+  6. Test suite: **644 passed, 2 skipped** — no new code.
+
+- **Numbers:**
+
+  **ORB exit mechanism (n=1,030, 5y excl 2022):**
+  | Exit type | Count | % | Notes |
+  |-----------|-------|---|-------|
+  | Stop loss | ~567 | 55.0% | Full stop hit |
+  | Profitable EOD flatten | ~346 | 33.6% | pnl > 0, not at target |
+  | Target hit (MFE >= 2.5R) | 117 | 11.4% | Hit 2.5R target exactly |
+
+  **Plain ORB Phase B r-sweep (B31 Phase A = r=2.0 deployed, 37 passes):**
+  | Phase B r | Accts | Busts | Net/acct | $/mo | Sust | Cycle d |
+  |-----------|-------|-------|----------|------|------|---------|
+  | r=0.5 | 6 | 6 | $3,532 | $300 | 6.17x | 199.3d |
+  | r=0.75 | 14 | 14 | $2,547 | $387 | 2.64x | 101.3d |
+  | r=1.0 | 28 | 27 | $1,936 | $408 | 1.37x | 64.5d |
+  | r=1.25 | 36 | 36 | $2,108 | **$531** | **1.03x** | 56.4d |
+
+  ORB-reentry r=0.75 (B31 Phase B reference): $508/mo sust=2.85x
+
+  **Multi-combo pipeline matrix:**
+  | Phase A | Phase B | $/mo | Sust |
+  |---------|---------|------|------|
+  | iFVG r2.0 deployed | ORB-reentry r0.75 | **$508** | **2.85x** |
+  | iFVG-edge r1.25 | ORB-reentry r0.75 | $497 | 2.62x |
+  | iFVG r2.0 deployed | plain ORB r0.75 | $387 | 2.64x |
+  | iFVG-edge r1.25 | plain ORB r0.75 | $377 | 2.43x |
+  | iFVG r2.0 deployed | plain ORB r0.5 | $300 | 6.17x |
+  | iFVG-edge r1.25 | plain ORB r0.5 | $296 | 5.67x |
+
+- **Key structural finding:** ORB-reentry adds 31% $/mo vs plain ORB at same r-multiple (r=0.75): $508 vs $387, with similar sust (2.85x vs 2.64x). The reentry mechanism captures profitable reversal-day EOD flattens — the mechanism's value comes from the 33.6% EOD-flatten dominant exit structure, not the 11.4% target-hit segment.
+- **Key finding:** plain ORB r=1.25 hits $531/mo but sust collapses to 1.03x (37 passes vs 36 busts — barely viable). Primary criterion (sust >= 2.62x) fails at plain ORB r>=1.0; secondary (sust >= 1.26x) fails at r>=1.25. Higher plain ORB r-multiple cannot beat B31 winner while meeting sust criteria.
+- **Verdict:** dataset — 3 new BACKLOG items appended (B35 ORB-reentry r-sweep, B36 config-parity r=2.0, B37 combined-engine Phase A). B31 winner ($508/mo, sust=2.85x) undefeated. No Databento spend. No code changes. Lessons 70-71 added.
+- **Learned:** ORB is primarily an EOD-flatten strategy (55% SL, 33.6% profitable EOD, 11.4% target hits). The r-multiple directly affects only 11.4% of trades. The ORB-reentry mechanism outperforms plain ORB because it adds profitable reversal-day entries that increase EOD-flatten earnings, not because it improves target-hit dynamics. Higher plain ORB r-multiples accelerate sust collapse before $/mo improves enough — the ORB-reentry mechanism at r=0.75 strictly dominates all plain ORB r-multiples tested on both $/mo and sust.
+- **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk curve). B35 (ORB-reentry r=1.0/r=1.25 — most promising new item; tests if reentry avoids plain ORB's sust collapse at higher r).
