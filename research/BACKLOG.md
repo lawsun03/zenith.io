@@ -1215,6 +1215,83 @@ Source: Lawrence ICT reference (FVG + OTE entry, breaker blocks). Mechanism =
 sweep_bos + OB-violation refinement + OTE fib gate. Directly tests whether the
 documented MGC fib no-edge result holds on MNQ.
 
+## B35 — Daily-bias directional gate (ICT "Power of Three")  [pending — Lawrence-requested 2026-06-13 (JadeCap video); rank ahead of B32, after B33/B34]
+Source: JadeCap "The EASIEST Way to Trade ICT in 2025" (youtu.be/ZqPEuatIYMc).
+The one part of that video NOT already covered by iFVG/sweep_bos/B33/B34.
+
+Hypothesis: a daily directional bias + "room to target" gate improves quality.
+Rules from the video, made deterministic:
+- Daily bias (ONE fixed definition): bias is LONG if the prior completed ET-day
+  closed above its open, SHORT if it closed below. (No discretion; computed from
+  the daily bar.)
+- Direction gate: on a LONG-bias day, suppress all SHORT signals; on a
+  SHORT-bias day, suppress all LONG signals.
+- "Room to target" gate: target = prior ET-day HIGH (long) / LOW (short). Only
+  allow longs while current price < prior-day-high; only allow shorts while
+  current price > prior-day-low. Once price has reached the prior-day extreme
+  (target hit), suppress further same-direction entries for the rest of the day
+  ("do not trade if the market has already hit the target").
+
+Priors: B5 (prior-day RANGE qualifier) was REJECTED — but that was a volatility
+gate, not a DIRECTION gate; different mechanism. Lesson: "day-level gates can't
+time engines" is a caution, but this gates DIRECTION + target-room, not entry
+timing. Medium-low prior (~30%). External ICT claims are 4-for-4 failures here.
+
+Mechanism: default-off `daily_bias_gate_enabled: bool = False` in StrategyParams.
+Needs the prior ET-day OHLC (open/high/low/close). The backtest already feeds
+bars; compute the prior completed daily bar from the 5min stream (track
+rolling per-ET-day OHLC, freeze at ET-day rollover) — no HTF feed dependency.
+Gate is applied in the iFVG signal path (suppress at emission, keep detector
+state). Closed-bar only.
+
+Defining-behavior tests (tests/test_daily_bias_gate.py):
+1. Gate off (default): signals unchanged vs baseline.
+2. Prior day closed up (long bias): a short signal is suppressed; a long fires.
+3. Prior day closed down (short bias): a long is suppressed; a short fires.
+4. Long bias, price already >= prior-day-high: long suppressed (target hit).
+5. ET-day rollover: bias/target recompute from the newly completed daily bar.
+
+Benchmark (BOTH objectives; parity flags `--partial-r 0 --set swing_stop_lookback=0`):
+- run_monthly_combine + equity_export/funded_sim, gate-on vs control.
+Success: improves PF AND the objective vs gate-off. Stop rule: loses on BOTH ->
+reject. No tuning of the bias definition beyond the one declared rule.
+
+## B36 — FVG-midpoint stop placement  [pending — Lawrence-requested 2026-06-13 (JadeCap video); rank with B35]
+Source: same video — "stop loss at 50% of the Fair Value Gap" (vs our current
+stop = beyond the swept extreme / swing + stop_buffer).
+
+Hypothesis: a stop at the FVG midpoint (50% between proximal and distal edges)
+is tighter than the swing/swept-extreme stop, raising R per winner. On the
+FUNDED objective (R-sensitive, payout-driven) a tighter stop could lift $/trade
+IF the win rate doesn't collapse. The risk: NQ 5min displacement bars are large,
+so a mid-FVG stop sits close to entry and may get wicked out far more often.
+
+Mechanism: default-off `stop_mode: str = "swing"` (current behavior) with new
+value `"fvg_mid"` in StrategyParams. When `fvg_mid`: stop = midpoint of the FVG
+zone that produced the signal (the engine already has the FVG proximal/distal
+prices). All other logic (target = r_multiple from entry, sizing) unchanged —
+note that a tighter stop with the SAME r_multiple means a nearer target too;
+ALSO benchmark a variant that keeps the absolute target distance (so the tighter
+stop genuinely raises the R multiple). Report both.
+
+Defining-behavior tests (tests/test_fvg_mid_stop.py):
+1. stop_mode="swing" (default): stop placement byte-identical to baseline.
+2. stop_mode="fvg_mid": stop = (fvg_proximal + fvg_distal)/2 for a known FVG.
+3. fvg_mid stop is tighter than the swing stop for a wide-swing setup (assert
+   distance ordering).
+4. Sizing respects the new (smaller) stop distance (risk-pct held constant).
+
+Benchmark (BOTH objectives; parity flags `--partial-r 0 --set swing_stop_lookback=0`):
+- equity_export/funded_sim + run_monthly_combine, fvg_mid vs swing baseline.
+Success: improves PF AND the objective vs swing stop. Stop rule: loses on BOTH
+-> reject. Prior ~35% (tighter stop helps funded R but NQ wicks may dominate).
+
+(Other JadeCap video elements map to existing/queued work and are NOT separately
+queued: FVG=core iFVG; MSS=sweep_bos BOS; Turtle Soup=B33 sweep+reclaim probe;
+Breaker Block + Premium/Discount/OTE=B34; 9:30-11:30 EST=killzone filter / B18;
+no-overnight=EOD flatten. "Trade smaller if price already expanded" overlaps the
+B35 room-to-target gate.)
+
 ---
 (Research sessions append new items below this line.)
 
