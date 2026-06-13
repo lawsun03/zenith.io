@@ -84,6 +84,12 @@ Appended 2026-06-13 (B1 funded-objective scoring):
     variant. Route trail-1R ideas to the research-only bin unless pipeline
     sustainability is explicitly modeled.
 
+Appended 2026-06-13 (B3 two-phase pipeline policy):
+
+23. **Combine speed is more valuable than combine pass rate for pipeline economics.** iFVG generates funded accounts in 28.6 trading days (avg 6d/attempt, 4.76 attempts) vs ORB r0.75's 68.6 days (35.5d/attempt, 1.93 attempts) -- slower cycle but higher per-attempt pass rate (52% vs 21%). Because cost and time compound, the FASTER combine wins the pipeline clock even at higher total attempt count. Two-phase (iFVG Combine + ORB r1.0 Funded): $393/mo vs single-phase ORB r0.75: $333/mo (+18%).
+24. **Sustainability ratio (combine passes / XFA busts over same 5y window) is the key pipeline filter.** The highest single-phase $/month configs (ORB r1.25: $596, ORB r1.0: $405) are pipeline-negative (sust 0.89x and 0.85x) and collapse long-run. Only filter on sust >= 1.0 before comparing $/month. The iFVG combine + ORB r1.0 funded pair achieves sust 1.26x while still beating all sustainable single-phase options.
+25. **b1_results.json ORB r0.75 entry is corrupted (only 2022 holdout data).** The 5y equity CSVs (orb_r0p75_202{1,3,4,5,6}.csv) are valid; re-stitching them gives the correct numbers matching the B1 journal (15 passes / 14 busts / $35.7k net at h200). The corruption was likely caused by writing only the 2022 confirmatory-run result to b1_results.json without the full 5y scoring. Regenerate b1_results.json for ORB r0.75 before quoting B1 numbers from the JSON file.
+
 Appended 2026-06-13 (B2 MFE/MAE excursion ladder):
 
 20. **be_trail_r=1.0 kills "two-thrust" winners and hurts both objectives on both

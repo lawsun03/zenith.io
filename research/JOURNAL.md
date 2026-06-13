@@ -91,3 +91,18 @@ Entry format:
 - **Verdict:** rejected (be_trail_r=1.0); dataset (MFE/MAE infrastructure shipped).
 - **Learned:** be_trail_r at 1.0R destroys "two-thrust" winning trades — price crosses 1.0R favorable, stop moves to BE, price consolidates to entry (or below), scratch instead of running to target. The loser-MFE and winner-MAE distributions overlap at 1.0R with no clean separation threshold. The MFE/MAE dataset is now available in BacktestResult.trades for all future runs.
 - **Next:** B3 (two-phase policy sim, B1 now done) or B5 (ORB prior-day-range qualifier). B11 (excursion instrument filter, small fix) is highest-value quality item if market opens before next session.
+
+## 2026-06-13T08:30Z — session wk1-b3 — B3 (two-phase pipeline policy)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 trades, no drift.
+- **Reclaimed B3:** prior claim (2026-06-13T01:00Z) was an orphan — that timestamp belonged to wk1-b4. No B3 journal entry existed. Also found: b1_results.json had corrupted ORB r0.75 entry (only 2022 holdout data); re-stitched 5y series confirms B1 journal numbers (15 passes / 14 busts at h200 / $35.7k net).
+- **Ran:** `scripts/run_b3_pipeline.py` (new script) — loaded existing B1 equity CSVs (2021/2023/2024/2025/2026, no 2022), computed per-phase simulate_combines + simulate_xfa_chain stats for 5 configs, then built analytic pipeline model for all A->B two-phase combinations and single-phase benchmarks. Metric: net $/trading-month with sustainability constraint (A.passes / B.busts >= 1.0).
+- **Numbers (all h200, $150/attempt):**
+  - Best sustainable two-phase: iFVG r1.25 (A) + ORB r1.0 (B) = **$393/mo**, sustainability 1.26x
+  - Conservative two-phase: iFVG r1.25 (A) + ORB r0.75 (B) = **$377/mo**, sustainability 2.43x
+  - Best sustainable single-phase: ORB r0.75 = **$333/mo**, sustainability 1.07x (B1 recommendation)
+  - Pipeline-negative but highest raw $/mo: ORB r1.25 single = $596/mo, sust 0.89x (collapses long-run)
+  - iFVG combine speed: 28.6 trading days to get one funded account (vs 68.6d for ORB r0.75 combine)
+  - The two-phase improvement is driven by combine SPEED: iFVG needs 4.76x more attempts but each is only 6d vs 35.5d, yielding funded accounts 2.4x faster
+- **Verdict:** candidate — iFVG (Combine) + ORB r1.0 (Funded) recommended as B3 two-phase pair; conservative alternative is iFVG + ORB r0.75 (2.43x pipeline buffer)
+- **Learned:** The combine strategy doesn't need to produce large profits -- it needs to produce combine PASSES quickly and cheaply. iFVG generates funded accounts in 28.6 trading days (vs 68.6d for ORB r0.75 as combiner) because each attempt terminates fast (avg 6d). This speed lets the pipeline support a more aggressive funded phase (ORB r1.0) while remaining self-sustaining (1.26x), producing $393/mo vs $333/mo for single-phase ORB r0.75.
+- **Next:** B5 (ORB prior-day-range qualifier) or B11 (excursion instrument filter -- small, unblocks clean live data). B5 is the next pending non-infra research item.

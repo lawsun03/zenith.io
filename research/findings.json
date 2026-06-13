@@ -44,11 +44,11 @@
     "ts": "2026-06-13T02:30:00Z",
     "session": "wk1-b1",
     "item": "B1",
-    "variant": "ORB r0.75 — 2022 holdout confirmatory",
+    "variant": "ORB r0.75 -- 2022 holdout confirmatory",
     "objective": "funded",
     "metrics": {"trades": 286, "net": 5551, "pf": 1.147, "combine_passes": 2, "combine_attempts": 8, "xfa_accounts": 6, "xfa_busts": 5, "xfa_net_h200": 4404},
     "verdict": "candidate",
-    "learned": "ORB r0.75 holds positive edge in the 2022 holdout year (PF 1.15, +$5,551) despite the rate-hike/tech-crash regime. Combine pass rate drops from 52% to 25% in 2022, but the strategy stays profitable — more robust to the low-price regime than the fixed-point iFVG filters.",
+    "learned": "ORB r0.75 holds positive edge in the 2022 holdout year (PF 1.15, +$5,551) despite the rate-hike/tech-crash regime. Combine pass rate drops from 52% to 25% in 2022, but the strategy stays profitable -- more robust to the low-price regime than the fixed-point iFVG filters.",
     "links": {"doc": "trade_analysis/2026-06-13_B1_funded_objective_scoring.md", "runs": [], "src": null}
   },
   {
@@ -78,7 +78,7 @@
       "orb_loser_mfe_p90_r": 1.29
     },
     "verdict": "rejected",
-    "learned": "be_trail_r=1.0 hurts the Combine objective on both iFVG and ORB (both metrics worse for both strategies). The mechanism kills 'two-thrust' winners: price crosses 1.0R favorable, stop moves to BE, price consolidates back to entry and stops out instead of running to target. The distributions of loser-MFE and winner-MAE overlap at 1.0R — there is no clean separation threshold that saves losers without also killing winners.",
+    "learned": "be_trail_r=1.0 hurts the Combine objective on both iFVG and ORB (both metrics worse for both strategies). The mechanism kills 'two-thrust' winners: price crosses 1.0R favorable, stop moves to BE, price consolidates back to entry and stops out instead of running to target. The distributions of loser-MFE and winner-MAE overlap at 1.0R -- there is no clean separation threshold that saves losers without also killing winners.",
     "links": {"doc": "trade_analysis/2026-06-13_B2_mfe_mae_excursion.md", "runs": ["backtests/ab_be_trail_r10_ifvg.json", "backtests/ab_be_trail_r10_orb25.json", "backtests/ab_orb25_baseline.json"], "src": ["app/broker/paper.py", "app/backtest/runner.py", "tests/test_mfe_mae.py"]}
   },
   {
@@ -96,5 +96,28 @@
     "verdict": "dataset",
     "learned": "Per-trade MFE/MAE now ships with every backtest run as r_mfe/r_mae fields on BacktestResult.trades. The be_trail_r mechanism is wired and default-off. Four analysis CSVs cover iFVG and ORB (clean: partial_r=0; deployed: partial_r=1.5) for future exit-mode research.",
     "links": {"doc": null, "runs": [], "src": ["app/broker/paper.py", "app/backtest/runner.py", "app/bot_config.py", "scripts/analyze_mfe_mae.py", "tests/test_mfe_mae.py"]}
+  },
+  {
+    "ts": "2026-06-13T08:30:00Z",
+    "session": "wk1-b3",
+    "item": "B3",
+    "variant": "two-phase pipeline: iFVG r1.25 (combine) + ORB r0.75 and ORB r1.0 (funded)",
+    "objective": "funded",
+    "metrics": {
+      "best_sustainable_combo": "iFVG r1.25 -> ORB r1.0",
+      "best_net_per_month": 393,
+      "best_sustainability_ratio": 1.26,
+      "conservative_combo": "iFVG r1.25 -> ORB r0.75",
+      "conservative_net_per_month": 377,
+      "conservative_sustainability_ratio": 2.43,
+      "single_phase_orb_r075_net_per_month": 333,
+      "single_phase_orb_r075_sustainability": 1.07,
+      "two_phase_vs_single_improvement_pct": 18,
+      "haircut": 200,
+      "reset_fee_per_attempt": 150
+    },
+    "verdict": "candidate",
+    "learned": "The two-phase model (iFVG for Combine + ORB r1.0 for Funded) generates $393/month -- 18% more than the best sustainable single-phase option (ORB r0.75: $333/month) -- because iFVG's fast combine cycle (6.0 days/attempt, 28.6 days/funded account) lets the pipeline support a more aggressive funded config while remaining sustainable (1.26x ratio). The key variable is combine pass speed, not combine pass rate -- iFVG produces funded accounts in 28.6 trading days while ORB r0.75 takes 68.6 days, even though ORB has a higher per-attempt pass rate (52% vs 21%).",
+    "links": {"doc": "trade_analysis/2026-06-13_B3_phase_policy.md", "runs": ["scripts/run_b3_pipeline.py"], "src": null}
   }
 ]

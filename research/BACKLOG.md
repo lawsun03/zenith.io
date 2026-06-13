@@ -42,10 +42,10 @@ adverse excursion in the backtest, then derive exit levels from data.
   BOTH objectives.
 - Success: beats control on either objective per stop rules.
 
-## B3 — Two-stage phase policy (pass config + milk config)  [pending]
+## B3 — Two-stage phase policy (pass config + milk config)  [done — candidate: iFVG r1.25 (Combine) + ORB r1.0 (Funded) = $393/mo, sust 1.26x; conservative: iFVG + ORB r0.75 = $377/mo, sust 2.43x; doc trade_analysis/2026-06-13_B3_phase_policy.md]
 The bot already switches behavior via `account_phase`. Formalize: config A
 optimized to PASS (Combine objective winner), config B optimized for XFA
-payouts (B1 winner). Simulate the full pipeline: attempts at A → funded at B.
+payouts (B1 winner). Simulate the full pipeline: attempts at A -> funded at B.
 - Needs B1 done. Deliverable: recommended per-phase pair + pipeline numbers
   (expected $/month including reset costs), trade_analysis doc.
 
