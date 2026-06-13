@@ -187,3 +187,16 @@ Entry format:
 - **Verdict:** shipped — all Rule-13 layers complete; ORB state visible in dashboard next live session.
 - **Learned:** The `or_established` flag needs a "first post-range bar" signal, not just "both values set" — or_high/or_low accumulate during the window itself. Using `_or_range_logged` (which triggers the range-established log) as the establishment sentinel naturally maps to the dashboard-correct semantics: "building…" while the window is open, confirmed range once it closes. CombinedRunner.secondary is the clean extraction point for ORB state without modifying the combined runner's interface.
 - **Next:** B10 (funded_sim --save-id registry) or B11 (excursion instrument filter — small, unblocks clean live data) or B14 (ORB reentry after stop — first strategy research item from wk1-r1).
+
+## 2026-06-13T15:00Z — session wk1-r2 — RESEARCH (ideation, session #12)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 trades, no drift, no lockout. Market closed (Sunday).
+- **Session type:** RESEARCH/IDEATION (last 2 items B8+B9 were build items; session #12, 12 % 3 == 0).
+- **Ran:** (1) WebSearch: NQ ORB improvements + MNQ microstructure academic literature 2025-2026; (2) Python data mining on `research/mfe_mae_orb_clean.csv` and `research/mfe_mae_ifvg_clean.csv` — per-side ORB PF, per-hour iFVG PF.
+- **Key findings:**
+  - **ORB per-side (5y, n=1030):** long PF=1.320 (n=542, WR=48.5%) vs short PF=1.109 (n=488, WR=41.0%). Both profitable; 19% PF gap confirms "tops stall, bottoms sweep" extends to ORB. Unlike iFVG (shorts at PF=0.960, loss-making), ORB shorts still have positive expectancy — blocking them is a PF improvement, not loss-removal.
+  - **iFVG per-hour (5y, n=2477):** Worst hours: 12:xx ET PF=0.591 (n=73, noon), 00:xx 0.618, 15:xx 0.763, 11:xx 0.829, 14:xx 0.946. Best hours: 05:xx 1.433 (London), 04:xx 1.307, 16:xx 1.296, 21:xx 1.306, 10:xx 1.235, 09:xx 1.178. The all_day benchmark config includes the worst hours; named-sessions config (London + NY AM) would remove ~$265/month in negative-expectancy drag on the funded phase.
+  - **WebSearch:** Academic paper (arxiv 2605.04004) tested 14 OHLCV signal families on MNQ 5min 2021-2025 — no family satisfies all criteria; gross edge 0.07-1.50 pts/trade pre-cost. Confirms Lesson 6. A second paper (SSRN 6750442) on volatility-volume-gap classifier found T=1.46 but 2024 net -26.75pts (regime-fragile). No new mechanism families found.
+- **Numbers:** ORB long PF=1.320 vs short 1.109 (both profitable, gap 19%); iFVG 12:xx ET PF=0.591; iFVG 05:xx ET PF=1.433.
+- **Verdict:** dataset — 2 new BACKLOG items appended (B17, B18).
+- **Learned:** ORB exhibits the same long/short bias as iFVG but less severely — shorts are still profitable, making long-only ORB a funded PF improvement rather than a loss-removal. The all_day benchmark config includes well-documented negative-expectancy windows (noon, NY PM tail) that cost the funded phase ~$265/month; the fix requires no new code, just a config param change in equity_export runs.
+- **Next:** B10 (infra, funded_sim save-id) or B11 (excursion instrument filter, small) or B14 (ORB reentry — highest-priority strategy item).

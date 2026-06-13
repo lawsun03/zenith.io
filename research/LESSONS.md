@@ -162,3 +162,20 @@ Appended 2026-06-13 (wk1-r1 research session):
     retest after the stop. Correct implementation: ORBComposer.on_stop_loss() resets
     `detector._fired=0`, allowing one more signal only after a confirmed stop-out.
     ExecutionEngine already calls `runner.composer.on_stop_loss()` on stops — the wiring exists.
+
+Appended 2026-06-13 (wk1-r2 research session):
+
+33. **ORB short side is profitable but materially weaker than long side (PF 1.109 vs 1.320
+    over 5y, n=488/542).** The "tops stall, bottoms sweep" pattern (Lesson 8) extends to ORB
+    but is less severe than iFVG (where shorts are outright loss-making at PF 0.960). Long-only
+    ORB is a funded-objective PF improvement hypothesis, NOT a loss-removal — both sides are
+    positive. Route to funded objective only (long-only ORB is ~12 trades/month, too sparse
+    for Combine).
+
+34. **iFVG signals in the noon window (12:xx ET) and NY PM tail (14-15:xx ET) are
+    negative-expectancy drags.** 12:xx: PF=0.591 (n=73); 11:xx: PF=0.829 (n=109); 14:xx:
+    PF=0.946; 15:xx: PF=0.763. These occur in the benchmark because `enabled_killzones=["all"]`
+    is the combine-harness default. The London (05:xx 1.433, 04:xx 1.307) and NY AM (10:xx
+    1.235, 09:xx 1.178) windows carry the quality edge. Restricting to named sessions
+    (London + NY AM) for the funded phase removes ~265 negative-expectancy trades over 5y
+    without new code.

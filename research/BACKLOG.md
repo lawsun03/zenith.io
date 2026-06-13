@@ -138,6 +138,7 @@ strategy question, needs a backtest before recommending).
 (Research sessions append new items below this line.)
 
 ## RESEARCH — Session wk1-r1  [done — 3 items appended: B14 ORB reentry, B15 long-only iFVG, B16 inversion quality gate]
+
 Replenish strategy-hypothesis backlog. Last 2 completed were build items (B6, B7);
 session #9 (9 % 3 == 0). Sources: WebSearch + data mining on MFE/MAE excursion CSVs.
 
@@ -250,3 +251,85 @@ further than that). Combine objective: secondary; must not destroy the 13/61 pas
 
 Source: first-principles ("large inversion body = strong rejection at FVG level"); no direct
 academic citation — this is a data-falsifiable hypothesis derived from our own trade anatomy.
+
+## RESEARCH — Session wk1-r2  [done — 2 items appended: B17 ORB long-only, B18 named-sessions killzone benchmark]
+Session #12 (12 % 3 == 0); last 2 completed were build items (B8, B9). Sources: WebSearch +
+per-side/per-hour data mining on 5y MFE/MAE CSVs.
+
+Key data findings driving the 2 proposals:
+- ORB long side PF=1.320 (n=542) vs short side PF=1.109 (n=488) over 5y — both profitable,
+  but 19% PF gap; "tops stall, bottoms sweep" extends to ORB though shorts are still positive
+- iFVG per-hour: noon (12:xx ET) PF=0.591 (n=73), 11:xx ET PF=0.829 (n=109), NY PM 14-15:xx
+  ET PF=0.763-0.946 — all negative or borderline; London (05:xx 1.433, 04:xx 1.307) and
+  NY AM (10:xx 1.235, 09:xx 1.178) are the quality windows
+- Academic paper (arxiv 2605.04004): 14 OHLCV signal families on MNQ 5min 2021-2025 — no
+  signal family survives; gross edge 0.07-1.50 pts/trade pre-cost. Confirms Lesson 6.
+- Volatility-volume-gap classifier (SSRN 6750442): T=1.46 mean net +7.80pts/127 trades but
+  2024 net loss -26.75pts — regime fragility, consistent with Lessons 3-4.
+- No new mechanism families found beyond iFVG/ORB/KZ; web search returned same ideas as wk1-r1.
+
+## B17 — ORB long-only funded benchmark  [pending]  (strategy research, funded)
+Hypothesis: ORB short side (PF=1.109, n=488) is materially weaker than long side (PF=1.320,
+n=542) over 5 years. Blocking shorts should improve funded-phase PF and reduce bust rates.
+Unlike B15 (iFVG shorts PF=0.960, loss-making), ORB shorts are still profitable — so this
+is a PF-improvement hypothesis, not loss-removal. Volume impact: halves signal count from
+~23 to ~12/month; already too sparse for Combine, so route to funded objective only.
+
+Mechanism:
+- Add `orb_long_only: bool = False` to StrategyParams (default off)
+- In ORBDetector.on_bar, when `self.config.orb_long_only`:
+  skip bearish breakout (bar.close < or_low) → return None
+  long breakout unchanged
+- The OR range still builds on both sides; only signal emission is gated
+
+Fixed defaults: `orb_long_only=False` (off; enable for benchmark)
+Defining-behavior tests (tests/test_orb_long_only.py):
+1. orb_long_only=True: bar breaks below or_low → on_bar returns None
+2. orb_long_only=True: bar breaks above or_high → on_bar returns Signal (long) as normal
+3. orb_long_only=False: bearish breakout → Signal returned (existing behavior preserved)
+
+Success criteria (vs B3 ORB r1.0 funded baseline: $393/mo, sust 1.26x):
+- Funded: XFA net $/month or sustainability ratio improves vs ORB r1.0 funded (same risk 1.0)
+- Combine (secondary): not the primary route; pass rate is likely ~6-8/61 (expected); report it
+- Route: equity_export + funded_sim only; no Combine benchmark needed
+
+Benchmark:
+1. equity_export + funded_sim --set engine=orb --set orb_r_multiple=2.5 --set orb_long_only=True
+   at risk 0.75, 1.0, 1.25 (same sizing sweep as B1)
+2. Compare to B3 ORB r1.0 funded ($393/mo, sust 1.26x) — same risk level
+
+Source: 5y MFE/MAE data mining (this session): orb_long n=542 PF=1.320, orb_short n=488 PF=1.109.
+
+## B18 — Named-sessions killzone config benchmark (iFVG, funded)  [pending]  (benchmark, no new code)
+Hypothesis: the iFVG funded-phase equity curve is dragged down by signals in negative-
+expectancy windows: noon (12:xx ET PF=0.591, n=73), late NY AM / NY PM (11:xx 0.829,
+14:xx 0.946, 15:xx 0.763). These windows occur when the combine harness uses all_day
+(enabled_killzones=["all"]); restricting to named sessions (London + NY AM) would remove
+them and improve funded PF without touching strategy code.
+
+Data (5y MFE/MAE, all_day config):
+- London only (02-05:xx ET): n=611, blended PF ~1.185 (04:xx 1.307, 05:xx 1.433)
+- NY AM only (08-10:xx ET): n=665, blended PF ~1.020 (09:xx 1.178, 10:xx 1.235, 08:xx 0.927)
+- NY PM (13-15:xx ET): n=216, blended PF ~0.906 (negative net ~-$5,200 over 5y)
+- Noon gap (11-12:xx ET): n=182, blended PF ~0.748 (negative net ~-$16,000 over 5y)
+- Pre-market / overnight (00-07:xx ET excl. London): n=603, blended PF ~0.854 (negative)
+
+Mechanism: no new code. The `enabled_killzones` StrategyParams field already accepts named
+sessions. Test with:
+  `--set enabled_killzones=["London","NY AM"]`  (best two windows; removes all bad ones)
+  `--set enabled_killzones=["London","NY AM","NY PM"]`  (adds NY PM despite weak stats)
+These override the all_day default in equity_export.py runs only.
+
+Fixed defaults: no change (this is a benchmark-only item; production killzone config unchanged)
+
+Success criteria (vs iFVG r1.25 funded baseline from B1/B3 — $167/mo solo, pipeline-negative):
+- Primary: does PF improve materially (>= +5%) on funded equity run?
+- Secondary: does the pipeline sustainability ratio improve vs all_day config?
+- Volume cut must not exceed 50% (if London+NY AM removes > half the signals, it's too sparse)
+
+Note: this item requires NO defining-behavior tests (no code change). A single benchmark run
+per config (equity_export + funded_sim) is sufficient. Record volume change alongside PF.
+
+Source: 5y iFVG MFE/MAE per-hour data mining (this session). Negative-expectancy windows
+identified empirically; hypothesis is that they are genuinely structurally weak (consistent
+with Lesson 8: short-session NQ edges are time-of-day dependent), not random noise.

@@ -279,5 +279,33 @@
     "verdict": "shipped",
     "learned": "All three Rule-13 layers implemented: (1) ORBDetector.on_bar logs when the OR range is first established after the window closes; (2) ORBDetector.state() returns {or_high, or_low, or_established, fired} — extracted from CombinedRunner.secondary in the strategy_state publisher in main.py, added as orb_state field in journal.publish_strategy_state; (3) StrategyDebug.tsx renders an ORB section showing the live range and signals-today count. or_established uses _or_range_logged (True only after first post-range bar) so the UI shows 'building...' during the 09:30+15min window and the confirmed range thereafter.",
     "links": {"doc": null, "runs": [], "src": ["app/strategy/orb.py", "app/api/journal.py", "app/main.py", "frontend/src/types.ts", "frontend/src/components/StrategyDebug.tsx", "tests/test_orb_ui_state.py"]}
+  },
+  {
+    "ts": "2026-06-13T15:00:00Z",
+    "session": "wk1-r2",
+    "item": "RESEARCH",
+    "variant": "Session wk1-r2: ideation — per-side ORB analysis + per-hour iFVG data mining + WebSearch",
+    "objective": "infra",
+    "metrics": {
+      "orb_long_pf_5y": 1.320,
+      "orb_long_n": 542,
+      "orb_short_pf_5y": 1.109,
+      "orb_short_n": 488,
+      "orb_all_pf_5y": 1.214,
+      "ifvg_noon_12xx_pf": 0.591,
+      "ifvg_noon_12xx_n": 73,
+      "ifvg_11xx_pf": 0.829,
+      "ifvg_11xx_n": 109,
+      "ifvg_14xx_pf": 0.946,
+      "ifvg_15xx_pf": 0.763,
+      "ifvg_best_hour_05xx_pf": 1.433,
+      "ifvg_best_hour_04xx_pf": 1.307,
+      "ifvg_10xx_pf": 1.235,
+      "web_ideas_none_new": "academic paper (arxiv 2605.04004) confirms no OHLCV signal family survives on MNQ 5min",
+      "new_items_added": 2
+    },
+    "verdict": "dataset",
+    "learned": "ORB short side (PF=1.109) is measurably weaker than long side (PF=1.320) — the same 'tops stall, bottoms sweep' bias confirmed by iFVG (B15). Unlike iFVG shorts (loss-making at PF=0.960), ORB shorts are still profitable; long-only ORB is a funded PF-improvement hypothesis, not loss-removal. iFVG signals in the noon window (12:xx ET PF=0.591) and NY PM tail (14-15:xx PF=0.763-0.946) are negative-expectancy drags that the all_day benchmark config includes; restricting to named sessions for funded phase is a testable no-code config change.",
+    "links": {"doc": null, "runs": [], "src": ["research/mfe_mae_orb_clean.csv", "research/mfe_mae_ifvg_clean.csv"]}
   }
 ]
