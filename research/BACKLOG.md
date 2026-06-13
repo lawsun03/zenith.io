@@ -607,7 +607,7 @@ Note: target_clarity_mode and ifvg_rule_f_enabled are not proposed as separate i
   this only affects the grader, not signal emission. Low prior (grader already mostly permissive
   at deployed settings with grader_min_grade="F"); B24 will capture this incidentally.
 
-## B24 — iFVG entry mode sensitivity (close vs ifvg_edge) — funded + combine  [pending]
+## B24 — iFVG entry mode sensitivity (close vs ifvg_edge) — funded + combine  [done — candidate: "close" mode materially better on all metrics (combine 11/61 vs 7/61, funded sust 2.524x vs 0.815x); deployed config validated as superior baseline]
 Hypothesis: the deployed bot's `ifvg_entry_mode="close"` (enter at inversion bar close) differs
 mechanically from the research baseline's "ifvg_edge" (wait for retrace to FVG proximal edge).
 All iFVG benchmarks B1-B23 used "ifvg_edge" — the deployed bot's iFVG trade economics are

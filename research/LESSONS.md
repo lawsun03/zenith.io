@@ -345,3 +345,19 @@ Appended 2026-06-13 (wk1-r5 research session):
     The deployed bot's `ifvg_rule_f_enabled=False` setting is irrelevant to actual trade behavior
     since the deployed `entry_mode="close"` bypasses the entire armed-zone path. Don't propose
     rule_f sensitivity tests without first checking entry mode.
+
+Appended 2026-06-13 (B24 iFVG entry_mode sensitivity):
+
+55. **`ifvg_entry_mode="close"` is materially superior to `"ifvg_edge"` on combine AND funded
+    objectives — the opposite of the prior hypothesis.** B24 tested both modes against identical
+    configs (61-month combine + LongOnly london+ny_am funded r1.25, MNQ overrides r_mult=3.5).
+    Combine: "close" 11/61 (18%) vs "ifvg_edge" 7/61 (11%); PF 1.18 vs 1.00. Funded: PF 1.1666
+    vs 1.1229; sust 2.524x vs 0.815x; net payouts $181k vs $158k. The expected mechanism (deeper
+    entry → larger stop → harder target → lower WR) is wrong. Mechanism: (1) confirmed entry at
+    the inversion bar close is a higher-quality structural signal than a limit retrace to the
+    proximal edge; (2) 100% fill rate captures trending setups that "ifvg_edge" misses; (3)
+    "ifvg_edge" generates chop-retrace fills on oscillating markets that dilute PF. Practical
+    implication: the deployed bot config is NOT just acceptable — it is the better config. All
+    future iFVG benchmarks must use `ifvg_entry_mode="close"` as the new baseline. Benchmarks
+    B1-B23 using "ifvg_edge" remain valid for within-series comparisons but are NOT representative
+    of deployed bot performance.

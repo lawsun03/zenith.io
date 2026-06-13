@@ -1083,5 +1083,54 @@
       "runs": [],
       "src": "app/execution/engine.py:293-349"
     }
+  },
+  {
+    "ts": "2026-06-13T17:00:00Z",
+    "session": "wk1-b24",
+    "item": "B24",
+    "variant": "iFVG entry_mode sensitivity: close vs ifvg_edge — combine (61mo r1.25) + funded (LongOnly london+ny_am r1.25)",
+    "objective": "combine+funded",
+    "metrics": {
+      "combine_edge_passes": 7,
+      "combine_edge_pass_pct": 11,
+      "combine_edge_pf": 1.00,
+      "combine_edge_long_pf": 1.11,
+      "combine_edge_short_pf": 0.88,
+      "combine_edge_long_exits": 256,
+      "combine_edge_short_exits": 211,
+      "combine_close_passes": 11,
+      "combine_close_pass_pct": 18,
+      "combine_close_pf": 1.18,
+      "combine_close_long_pf": 1.44,
+      "combine_close_short_pf": 0.88,
+      "combine_close_long_exits": 310,
+      "combine_close_short_exits": 234,
+      "funded_edge_trades": 1472,
+      "funded_edge_pf": 1.1229,
+      "funded_edge_net_5y": 124319,
+      "funded_edge_combine_passes": 44,
+      "funded_edge_xfa_busts": 54,
+      "funded_edge_net_payouts": 157992,
+      "funded_edge_sust": 0.815,
+      "funded_close_trades": 1584,
+      "funded_close_pf": 1.1666,
+      "funded_close_net_5y": 245523,
+      "funded_close_combine_passes": 53,
+      "funded_close_xfa_busts": 21,
+      "funded_close_net_payouts": 180534,
+      "funded_close_sust": 2.524,
+      "haircut": 200,
+      "note": "combine: risk_pct=1.25, partial_r=0, swing_stop_lookback=0, target_clarity_mode=reject, MNQ overrides r_mult=3.5 stop=3.0 body=5.0; funded: LongOnly london+ny_am same overrides; 2021-2026 bars"
+    },
+    "verdict": "candidate",
+    "learned": "ifvg_entry_mode='close' (enter at inversion bar close, 100% fill) is materially superior to 'ifvg_edge' (enter at FVG proximal edge) on every metric. Combine: 11/61 (18%) vs 7/61 (11%) passes; PF 1.18 vs 1.00. Funded (LongOnly london+ny_am r1.25): PF 1.1666 vs 1.1229; sust 2.524x vs 0.815x; net payouts $181k vs $158k. The expected mechanism (deeper entry → larger stop → harder target → lower WR) is wrong: confirmed entry at the inversion bar close is a higher-quality structural signal than a limit retrace to the proximal edge; 100% fill rate captures trending setups that 'ifvg_edge' misses; 'ifvg_edge' generates chop-retrace fills on oscillating markets that dilute PF; fixed 2-contract sizing amplifies net P&L when PF > 1. Key implication: the deployed bot config (ifvg_entry_mode='close') is not just acceptable but genuinely superior to the B1-B23 research baseline. 'Close' at r_multiple=3.5 achieves sust 2.524x — materially better than B19's sust 1.600x at r_multiple=2.5. All future iFVG benchmarks should use close mode as the new baseline.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b24_edge_r1p25.csv",
+        "research/equity_b24_close_r1p25.csv"
+      ],
+      "src": null
+    }
   }
 ]

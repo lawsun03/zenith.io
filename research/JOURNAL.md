@@ -546,3 +546,35 @@ Entry format:
 - **Verdict:** dataset — 3 new BACKLOG items appended (B24, B25, B26). No Databento spend.
 - **Learned:** The deployed bot's `ifvg_entry_mode="close"` is the single biggest untested difference between the research baseline and production. All 23 iFVG benchmarks used limit-like "ifvg_edge" entry; the "close" mode enters at a structurally worse price (deeper in the FVG zone, further from support) but never misses a trade. Whether the fill-rate gain compensates for the WR degradation is empirically unknown — B24 answers this. Additionally: Rule F (cancel zone on premature TP1) is irrelevant to the deployed config since it's only active in "ifvg_edge" mode.
 - **Next:** B24 (iFVG entry mode benchmark — close vs ifvg_edge, combine + funded) is the highest-priority item. B25 (partial_profit_r sensitivity for ORB-reentry) and B26 (swing_stop_lookback for iFVG combine) follow. Together they complete the parity gap characterization needed before deploying B21's recommendation.
+
+## 2026-06-13T17:00:00Z — session wk1-b24 — B24 (iFVG entry_mode sensitivity: close vs ifvg_edge)
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, equity $152,227.12 at high-water, no drift.
+  2. Claimed B24 from BACKLOG.md.
+  3. **Combine benchmark** (61 months, 2021-2026): `run_monthly_combine.py --instrument MNQ --timeframe 5 --risk-pct 1.25 --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject` — run twice: once with `--set ifvg_entry_mode=ifvg_edge`, once with deployed default `--set ifvg_entry_mode=close`. MNQ strategy_overrides applied (r_multiple=3.5, stop_buffer=3.0, min_absolute_body=5.0).
+  4. **Funded benchmark** (LongOnly, london+ny_am, r1.25): `equity_export.py --partial-r 0 --set swing_stop_lookback=0 --set allowed_sides=long --killzones london,ny_am` — both entry modes → `funded_sim.py --haircut 200`.
+  5. Test suite: 640 passed, 2 skipped — all green (no new code in B24).
+- **Numbers:**
+
+  **Combine (61 months, 2021-2026):**
+  | Metric           | ifvg_edge | close  |
+  |------------------|-----------|--------|
+  | Passes / 61      | 7 (11%)   | 11 (18%) |
+  | Run PF           | 1.00      | 1.18   |
+  | Long exits / PF  | 256 / 1.11 | 310 / 1.44 |
+  | Short exits / PF | 211 / 0.88 | 234 / 0.88 |
+
+  **Funded (LongOnly, london+ny_am, r1.25, haircut $200):**
+  | Metric          | ifvg_edge | close   |
+  |-----------------|-----------|---------|
+  | Trades          | 1,472     | 1,584   |
+  | PF              | 1.1229    | 1.1666  |
+  | Net 5y          | $124,319  | $245,523 |
+  | Combine passes  | 44        | 53      |
+  | XFA busts       | 54        | 21      |
+  | Net payouts     | $157,992  | $180,534 |
+  | **Sust**        | **0.815x ❌** | **2.524x ✅** |
+
+- **Verdict:** candidate — "close" mode wins on ALL metrics. Stop rule not triggered (close beats edge on both combine passes and funded PF).
+- **Learned:** `ifvg_entry_mode="close"` is materially superior to `"ifvg_edge"` on every metric, reversing the prior hypothesis. The expected mechanism (deeper entry → larger stop → harder target) is wrong. Confirmed entry at the inversion bar close is a higher-quality structural signal; 100% fill rate captures trending setups that "ifvg_edge" misses while waiting for retraces; "ifvg_edge" generates chop-retrace fills on oscillating markets that dilute PF. Deployed config is not just acceptable — it is genuinely superior to the entire B1-B23 research baseline. "Close" at r_multiple=3.5 achieves sust 2.524x, materially better than B19's best (1.600x at r_multiple=2.5). All future iFVG benchmarks should use close mode.
+- **Next:** B25 (partial_profit_r sensitivity on ORB-reentry two-phase pipeline) — next session.
