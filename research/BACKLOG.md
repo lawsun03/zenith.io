@@ -112,7 +112,7 @@ different instruments, inject a bar for one, assert the other's mfe/mae/flags
 untouched. Note in trade_analysis that pre-06-12 multi-instrument rows stay
 unusable (no backfill possible).
 
-## B12 — Tracked runtime-ledger policy (git-wipe hazard)  [pending]  (decision for Lawrence)
+## B12 — Tracked runtime-ledger policy (git-wipe hazard)  [done — backfill complete (20 rows); policy options doc written; decision deferred to Lawrence: Option A (untrack rolling files via .gitignore) recommended; doc trade_analysis/2026-06-13_B12_runtime_ledger_policy.md]
 From B4 forensics: 22 rows of trades/trades.csv (06-10T01:32Z→06-12T14:59Z)
 were destroyed by a git tree-restore (reflog: `reset: moving to HEAD` 06-10
 23:35 PT); writer was healthy. Conflict: .gitignore comment says trades/ is

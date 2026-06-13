@@ -329,5 +329,16 @@
     "verdict": "shipped",
     "learned": "Added instrument field to ExcursionWindow and filter in on_bar: windows now only advance when the bar's root instrument matches the window's instrument (empty = no filter, legacy behavior). SDK contract symbols (CON.F.US.MNQ.M26) are normalised to root in on_bar and at all three open() call sites in journaling.py. Pre-06-12 multi-instrument excursion rows remain unusable; 06-12+ MNQ-only rows are clean.",
     "links": {"doc": null, "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T08:30:00Z",
+    "session": "wk1-b12",
+    "item": "B12",
+    "variant": "runtime ledger policy + backfill",
+    "objective": "infra",
+    "metrics": {"rows_backfilled": 20, "rows_unrecoverable": 2, "orphaned_entries": 1},
+    "verdict": "dataset",
+    "learned": "20 rows from trades_2026-06-10.csv backfilled into trades.csv (broker_order_id dedup check, no duplicates). 3 remaining gaps are unrecoverable (no daily file exists for those windows). Root cause: trades.csv is git-tracked; git reset --hard wipes it. Option A (untrack rolling files via .gitignore) is the recommended immediate fix — zero code changes, prevents future wipes. Policy decision deferred to Lawrence (Monday).",
+    "links": {"doc": "trade_analysis/2026-06-13_B12_runtime_ledger_policy.md", "runs": [], "src": null}
   }
 ]
