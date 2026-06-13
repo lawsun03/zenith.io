@@ -61,3 +61,25 @@ Appended 2026-06-13 (B4 weekly forensics):
 15. **Multi-instrument excursion rows 06-07..06-11 are unusable** — the live
     ExcursionTracker had no instrument filter, so MGC/MES/MNQ bars cross-
     contaminated mfe/mae/outcome (B11 fixes; MNQ-only rows 06-12+ are clean).
+
+Appended 2026-06-13 (B1 funded-objective scoring):
+
+16. **All full-sizing bench variants are pipeline-negative on the funded objective.**
+    At r1.25, every config needs more funded accounts than the Combine-pass density
+    can supply (e.g., trail_1r: 46 XFA busts vs 21 Combine passes over 5 years).
+    "Net payouts" of $75–100k assume an infinite account supply; model the pipeline
+    explicitly before quoting funded-objective numbers.
+17. **ORB's Combine pass rate is 2–3× better than iFVG variants** (39–57% vs
+    16–21%) across all sizing levels. ORB's cleaner breakout structure produces
+    better risk/reward on the Combine timescale. This is the structural funded-
+    objective advantage of ORB over the iFVG chain.
+18. **Only ORB at reduced sizing produces a self-sustaining funded pipeline.**
+    ORB r0.5: 8 Combine passes vs 6 XFA busts (h200) — genuinely positive.
+    ORB r0.75: 15 vs 14 — borderline. Above r1.0: pipeline deficit grows.
+    Recommended Phase-B config: ORB r0.75 (sustainable, 2022-confirmed, PF 1.15+
+    across all years).
+19. **Trail-1R concentrates gains in single outlier days and produces the worst
+    pipeline sustainability.** 2024's $49k net looks great in isolation but the
+    stitched pipeline (21 passes vs 46 busts at r1.25) is the worst ratio of any
+    variant. Route trail-1R ideas to the research-only bin unless pipeline
+    sustainability is explicitly modeled.

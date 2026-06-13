@@ -1,0 +1,1010 @@
+[
+  {
+    "variant": "control",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 473,
+        "net": "6985.700000",
+        "pf": 1.0654037502132314
+      },
+      "2023": {
+        "trades": 866,
+        "net": "-23351.820000",
+        "pf": 0.8626151148542257
+      },
+      "2024": {
+        "trades": 915,
+        "net": "19053.010000",
+        "pf": 1.082482540923276
+      },
+      "2025": {
+        "trades": 976,
+        "net": "25105.510000",
+        "pf": 1.0820202733138993
+      },
+      "2026": {
+        "trades": 437,
+        "net": "15277.470000",
+        "pf": 1.151513531665126
+      }
+    },
+    "total_net": "43069.870000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 149,
+          "passes": 33,
+          "busts": 115,
+          "median_days_to_pass": 7
+        },
+        "xfa": {
+          "accounts": 66,
+          "busts": 65,
+          "gross_payouts": "111591.8250000",
+          "net_payouts": "100432.642500000",
+          "median_days_to_first_payout": 8.0
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 162,
+          "passes": 34,
+          "busts": 127,
+          "median_days_to_pass": 7.5
+        },
+        "xfa": {
+          "accounts": 74,
+          "busts": 73,
+          "gross_payouts": "111395.8650000",
+          "net_payouts": "100256.278500000",
+          "median_days_to_first_payout": 8.0
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 185,
+          "passes": 37,
+          "busts": 147,
+          "median_days_to_pass": 7
+        },
+        "xfa": {
+          "accounts": 81,
+          "busts": 80,
+          "gross_payouts": "112737.5100000",
+          "net_payouts": "101463.759000000",
+          "median_days_to_first_payout": 8
+        }
+      }
+    }
+  },
+  {
+    "variant": "frozen_atr",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 476,
+        "net": "5589.410000",
+        "pf": 1.050573888740901
+      },
+      "2023": {
+        "trades": 887,
+        "net": "-18316.910000",
+        "pf": 0.9011904566677269
+      },
+      "2024": {
+        "trades": 950,
+        "net": "19861.440000",
+        "pf": 1.0910488089836379
+      },
+      "2025": {
+        "trades": 971,
+        "net": "10176.430000",
+        "pf": 1.037060154144207
+      },
+      "2026": {
+        "trades": 437,
+        "net": "12434.080000",
+        "pf": 1.109049755977088
+      }
+    },
+    "total_net": "29744.450000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 129,
+          "passes": 29,
+          "busts": 99,
+          "median_days_to_pass": 6
+        },
+        "xfa": {
+          "accounts": 66,
+          "busts": 65,
+          "gross_payouts": "95665.452500000",
+          "net_payouts": "86098.90725000000",
+          "median_days_to_first_payout": 8
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 144,
+          "passes": 31,
+          "busts": 112,
+          "median_days_to_pass": 6
+        },
+        "xfa": {
+          "accounts": 72,
+          "busts": 71,
+          "gross_payouts": "98460.0650000",
+          "net_payouts": "88614.058500000",
+          "median_days_to_first_payout": 7.0
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 166,
+          "passes": 32,
+          "busts": 133,
+          "median_days_to_pass": 6.0
+        },
+        "xfa": {
+          "accounts": 84,
+          "busts": 83,
+          "gross_payouts": "93720.8550000",
+          "net_payouts": "84348.769500000",
+          "median_days_to_first_payout": 7
+        }
+      }
+    }
+  },
+  {
+    "variant": "trail_1r",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 351,
+        "net": "9459.38000",
+        "pf": 1.1051610091671724
+      },
+      "2023": {
+        "trades": 652,
+        "net": "-9635.10000",
+        "pf": 0.9490165778271457
+      },
+      "2024": {
+        "trades": 665,
+        "net": "49117.84000",
+        "pf": 1.1789240233768397
+      },
+      "2025": {
+        "trades": 713,
+        "net": "26403.42000",
+        "pf": 1.0913388120297007
+      },
+      "2026": {
+        "trades": 323,
+        "net": "5064.94000",
+        "pf": 1.0609658305642602
+      }
+    },
+    "total_net": "80410.48000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 120,
+          "passes": 21,
+          "busts": 98,
+          "median_days_to_pass": 10
+        },
+        "xfa": {
+          "accounts": 43,
+          "busts": 42,
+          "gross_payouts": "112692.200000",
+          "net_payouts": "101422.98000000",
+          "median_days_to_first_payout": 9
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 131,
+          "passes": 21,
+          "busts": 109,
+          "median_days_to_pass": 7
+        },
+        "xfa": {
+          "accounts": 47,
+          "busts": 46,
+          "gross_payouts": "110943.870000",
+          "net_payouts": "99849.48300000",
+          "median_days_to_first_payout": 9
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 137,
+          "passes": 21,
+          "busts": 115,
+          "median_days_to_pass": 7
+        },
+        "xfa": {
+          "accounts": 51,
+          "busts": 50,
+          "gross_payouts": "110943.870000",
+          "net_payouts": "99849.48300000",
+          "median_days_to_first_payout": 9
+        }
+      }
+    }
+  },
+  {
+    "variant": "stop_cap",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 476,
+        "net": "7123.150000",
+        "pf": 1.0662073179527638
+      },
+      "2023": {
+        "trades": 870,
+        "net": "-22683.520000",
+        "pf": 0.8715947316270838
+      },
+      "2024": {
+        "trades": 919,
+        "net": "17131.310000",
+        "pf": 1.0726342895989631
+      },
+      "2025": {
+        "trades": 977,
+        "net": "23845.910000",
+        "pf": 1.07797362123407
+      },
+      "2026": {
+        "trades": 439,
+        "net": "14957.580000",
+        "pf": 1.1455547906853996
+      }
+    },
+    "total_net": "40374.430000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 141,
+          "passes": 30,
+          "busts": 110,
+          "median_days_to_pass": 8.0
+        },
+        "xfa": {
+          "accounts": 67,
+          "busts": 66,
+          "gross_payouts": "112605.0850000",
+          "net_payouts": "101344.576500000",
+          "median_days_to_first_payout": 8
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 155,
+          "passes": 31,
+          "busts": 123,
+          "median_days_to_pass": 7
+        },
+        "xfa": {
+          "accounts": 78,
+          "busts": 77,
+          "gross_payouts": "111056.8000000",
+          "net_payouts": "99951.120000000",
+          "median_days_to_first_payout": 8
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 187,
+          "passes": 36,
+          "busts": 150,
+          "median_days_to_pass": 6.0
+        },
+        "xfa": {
+          "accounts": 83,
+          "busts": 82,
+          "gross_payouts": "110644.8700000",
+          "net_payouts": "99580.383000000",
+          "median_days_to_first_payout": 7.5
+        }
+      }
+    }
+  },
+  {
+    "variant": "orb",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 184,
+        "net": "17158.540000",
+        "pf": 1.4858956504108094
+      },
+      "2023": {
+        "trades": 330,
+        "net": "4709.810000",
+        "pf": 1.064036739808366
+      },
+      "2024": {
+        "trades": 343,
+        "net": "25642.090000",
+        "pf": 1.3168360151406606
+      },
+      "2025": {
+        "trades": 320,
+        "net": "15980.810000",
+        "pf": 1.2201092832651874
+      },
+      "2026": {
+        "trades": 143,
+        "net": "3667.610000",
+        "pf": 1.1328510149984026
+      }
+    },
+    "total_net": "67158.860000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 76,
+          "passes": 32,
+          "busts": 44,
+          "median_days_to_pass": 11.0
+        },
+        "xfa": {
+          "accounts": 38,
+          "busts": 38,
+          "gross_payouts": "90858.7007812500000",
+          "net_payouts": "81772.830703125000000",
+          "median_days_to_first_payout": 11.5
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 82,
+          "passes": 32,
+          "busts": 50,
+          "median_days_to_pass": 12.5
+        },
+        "xfa": {
+          "accounts": 36,
+          "busts": 36,
+          "gross_payouts": "84313.1245312500000",
+          "net_payouts": "75881.812078125000000",
+          "median_days_to_first_payout": 15
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 93,
+          "passes": 32,
+          "busts": 60,
+          "median_days_to_pass": 10.5
+        },
+        "xfa": {
+          "accounts": 46,
+          "busts": 45,
+          "gross_payouts": "85034.7268750000000",
+          "net_payouts": "76531.254187500000000",
+          "median_days_to_first_payout": 13
+        }
+      }
+    }
+  },
+  {
+    "variant": "rs_invert",
+    "risk": "1.25",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 273,
+        "net": "-5421.150000",
+        "pf": 0.9108361727029725
+      },
+      "2023": {
+        "trades": 627,
+        "net": "-14107.190000",
+        "pf": 0.8904310219486068
+      },
+      "2024": {
+        "trades": 651,
+        "net": "48677.460000",
+        "pf": 1.2847463682999216
+      },
+      "2025": {
+        "trades": 661,
+        "net": "5591.950000",
+        "pf": 1.031884157297951
+      },
+      "2026": {
+        "trades": 252,
+        "net": "11719.970000",
+        "pf": 1.2227011745426823
+      }
+    },
+    "total_net": "46461.040000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 105,
+          "passes": 26,
+          "busts": 79,
+          "median_days_to_pass": 11.5
+        },
+        "xfa": {
+          "accounts": 47,
+          "busts": 46,
+          "gross_payouts": "89542.43000000",
+          "net_payouts": "80588.1870000000",
+          "median_days_to_first_payout": 11
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 127,
+          "passes": 30,
+          "busts": 97,
+          "median_days_to_pass": 10.0
+        },
+        "xfa": {
+          "accounts": 57,
+          "busts": 56,
+          "gross_payouts": "90143.74000000",
+          "net_payouts": "81129.3660000000",
+          "median_days_to_first_payout": 10.5
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 134,
+          "passes": 30,
+          "busts": 104,
+          "median_days_to_pass": 10.0
+        },
+        "xfa": {
+          "accounts": 66,
+          "busts": 65,
+          "gross_payouts": "90191.40500000",
+          "net_payouts": "81172.2645000000",
+          "median_days_to_first_payout": 10
+        }
+      }
+    }
+  },
+  {
+    "variant": "trail_1r",
+    "risk": "0.5",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 352,
+        "net": "5903.30000",
+        "pf": 1.167345976105014
+      },
+      "2023": {
+        "trades": 653,
+        "net": "-1420.84000",
+        "pf": 0.9807052803685014
+      },
+      "2024": {
+        "trades": 670,
+        "net": "17879.32000",
+        "pf": 1.2169086478992301
+      },
+      "2025": {
+        "trades": 715,
+        "net": "13037.00000",
+        "pf": 1.1470841085983223
+      },
+      "2026": {
+        "trades": 323,
+        "net": "2239.34000",
+        "pf": 1.0692401498501622
+      }
+    },
+    "total_net": "37638.12000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 33,
+          "passes": 11,
+          "busts": 21,
+          "median_days_to_pass": 19
+        },
+        "xfa": {
+          "accounts": 32,
+          "busts": 31,
+          "gross_payouts": "58211.8781250000",
+          "net_payouts": "52390.690312500000",
+          "median_days_to_first_payout": 15
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 36,
+          "passes": 11,
+          "busts": 24,
+          "median_days_to_pass": 15
+        },
+        "xfa": {
+          "accounts": 37,
+          "busts": 36,
+          "gross_payouts": "58829.016250000",
+          "net_payouts": "52946.11462500000",
+          "median_days_to_first_payout": 13.0
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 49,
+          "passes": 13,
+          "busts": 35,
+          "median_days_to_pass": 18
+        },
+        "xfa": {
+          "accounts": 46,
+          "busts": 45,
+          "gross_payouts": "60098.51250000",
+          "net_payouts": "54088.6612500000",
+          "median_days_to_first_payout": 14
+        }
+      }
+    }
+  },
+  {
+    "variant": "trail_1r",
+    "risk": "0.75",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 352,
+        "net": "6827.76000",
+        "pf": 1.1268249371704118
+      },
+      "2023": {
+        "trades": 653,
+        "net": "-3073.42000",
+        "pf": 0.9736191743938561
+      },
+      "2024": {
+        "trades": 669,
+        "net": "27322.62000",
+        "pf": 1.1925287408968075
+      },
+      "2025": {
+        "trades": 715,
+        "net": "19615.22000",
+        "pf": 1.1304123857333708
+      },
+      "2026": {
+        "trades": 323,
+        "net": "3484.24000",
+        "pf": 1.0723786162926254
+      }
+    },
+    "total_net": "54176.42000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 55,
+          "passes": 14,
+          "busts": 40,
+          "median_days_to_pass": 14.5
+        },
+        "xfa": {
+          "accounts": 44,
+          "busts": 43,
+          "gross_payouts": "85535.4650000",
+          "net_payouts": "76981.918500000",
+          "median_days_to_first_payout": 10
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 72,
+          "passes": 17,
+          "busts": 54,
+          "median_days_to_pass": 14
+        },
+        "xfa": {
+          "accounts": 53,
+          "busts": 52,
+          "gross_payouts": "89773.9550000",
+          "net_payouts": "80796.559500000",
+          "median_days_to_first_payout": 10.0
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 77,
+          "passes": 17,
+          "busts": 59,
+          "median_days_to_pass": 13
+        },
+        "xfa": {
+          "accounts": 61,
+          "busts": 60,
+          "gross_payouts": "88655.860000",
+          "net_payouts": "79790.27400000",
+          "median_days_to_first_payout": 10
+        }
+      }
+    }
+  },
+  {
+    "variant": "trail_1r",
+    "risk": "1",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 352,
+        "net": "8597.32000",
+        "pf": 1.1191662416003194
+      },
+      "2023": {
+        "trades": 653,
+        "net": "-5035.76000",
+        "pf": 0.9682051414155726
+      },
+      "2024": {
+        "trades": 668,
+        "net": "39955.24000",
+        "pf": 1.190050534920904
+      },
+      "2025": {
+        "trades": 715,
+        "net": "24187.12000",
+        "pf": 1.10870940148506
+      },
+      "2026": {
+        "trades": 323,
+        "net": "4672.58000",
+        "pf": 1.072147174318794
+      }
+    },
+    "total_net": "72376.50000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 97,
+          "passes": 19,
+          "busts": 77,
+          "median_days_to_pass": 9
+        },
+        "xfa": {
+          "accounts": 42,
+          "busts": 41,
+          "gross_payouts": "108426.8000000",
+          "net_payouts": "97584.120000000",
+          "median_days_to_first_payout": 9.5
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 107,
+          "passes": 20,
+          "busts": 86,
+          "median_days_to_pass": 9.0
+        },
+        "xfa": {
+          "accounts": 47,
+          "busts": 46,
+          "gross_payouts": "108426.8000000",
+          "net_payouts": "97584.120000000",
+          "median_days_to_first_payout": 9.5
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 118,
+          "passes": 20,
+          "busts": 97,
+          "median_days_to_pass": 7.5
+        },
+        "xfa": {
+          "accounts": 53,
+          "busts": 52,
+          "gross_payouts": "108061.3600000",
+          "net_payouts": "97255.224000000",
+          "median_days_to_first_payout": 10
+        }
+      }
+    }
+  },
+  {
+    "variant": "orb",
+    "risk": "0.5",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 163,
+        "net": "4543.630000",
+        "pf": 1.3854381747201867
+      },
+      "2023": {
+        "trades": 288,
+        "net": "2291.110000",
+        "pf": 1.0905330166871485
+      },
+      "2024": {
+        "trades": 287,
+        "net": "5434.110000",
+        "pf": 1.2020970209702098
+      },
+      "2025": {
+        "trades": 278,
+        "net": "11023.950000",
+        "pf": 1.3690207916576285
+      },
+      "2026": {
+        "trades": 115,
+        "net": "433.670000",
+        "pf": 1.0274973115825141
+      }
+    },
+    "total_net": "23726.470000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 14,
+          "passes": 8,
+          "busts": 5,
+          "median_days_to_pass": 75.0
+        },
+        "xfa": {
+          "accounts": 5,
+          "busts": 4,
+          "gross_payouts": "23639.595781250000",
+          "net_payouts": "21275.63620312500000",
+          "median_days_to_first_payout": 78.5
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 14,
+          "passes": 8,
+          "busts": 6,
+          "median_days_to_pass": 78.5
+        },
+        "xfa": {
+          "accounts": 6,
+          "busts": 6,
+          "gross_payouts": "23547.849531250000",
+          "net_payouts": "21193.06457812500000",
+          "median_days_to_first_payout": 86.5
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 16,
+          "passes": 8,
+          "busts": 7,
+          "median_days_to_pass": 75.0
+        },
+        "xfa": {
+          "accounts": 7,
+          "busts": 6,
+          "gross_payouts": "22987.54593750000",
+          "net_payouts": "20688.7913437500000",
+          "median_days_to_first_payout": 98
+        }
+      }
+    }
+  },
+  {
+    "variant": "orb",
+    "risk": "0.75",
+    "years": [
+      "2022"
+    ],
+    "per_year": {
+      "2022": {
+        "trades": 286,
+        "net": "5550.770000",
+        "pf": 1.1466806156877336
+      }
+    },
+    "total_net": "5550.770000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 7,
+          "passes": 2,
+          "busts": 4,
+          "median_days_to_pass": 36.5
+        },
+        "xfa": {
+          "accounts": 4,
+          "busts": 3,
+          "gross_payouts": "4846.55750000",
+          "net_payouts": "4361.9017500000",
+          "median_days_to_first_payout": 36.5
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 8,
+          "passes": 2,
+          "busts": 5,
+          "median_days_to_pass": 41.0
+        },
+        "xfa": {
+          "accounts": 6,
+          "busts": 5,
+          "gross_payouts": "4893.53250000",
+          "net_payouts": "4404.1792500000",
+          "median_days_to_first_payout": 41.0
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 11,
+          "passes": 2,
+          "busts": 8,
+          "median_days_to_pass": 31.5
+        },
+        "xfa": {
+          "accounts": 8,
+          "busts": 7,
+          "gross_payouts": "4890.02750000",
+          "net_payouts": "4401.0247500000",
+          "median_days_to_first_payout": 31.5
+        }
+      }
+    }
+  },
+  {
+    "variant": "orb",
+    "risk": "1",
+    "years": [
+      "2021",
+      "2023",
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "per_year": {
+      "2021": {
+        "trades": 182,
+        "net": "12767.160000",
+        "pf": 1.4766796896001722
+      },
+      "2023": {
+        "trades": 328,
+        "net": "4612.820000",
+        "pf": 1.0810641913562131
+      },
+      "2024": {
+        "trades": 343,
+        "net": "19181.910000",
+        "pf": 1.314060280471456
+      },
+      "2025": {
+        "trades": 317,
+        "net": "15592.550000",
+        "pf": 1.287793532773566
+      },
+      "2026": {
+        "trades": 133,
+        "net": "2384.940000",
+        "pf": 1.119154178894641
+      }
+    },
+    "total_net": "54539.380000",
+    "funded": {
+      "0": {
+        "combine": {
+          "attempts": 50,
+          "passes": 24,
+          "busts": 25,
+          "median_days_to_pass": 21.0
+        },
+        "xfa": {
+          "accounts": 17,
+          "busts": 16,
+          "gross_payouts": "60087.020312500000",
+          "net_payouts": "54078.31828125000000",
+          "median_days_to_first_payout": 17.5
+        }
+      },
+      "200": {
+        "combine": {
+          "attempts": 56,
+          "passes": 23,
+          "busts": 32,
+          "median_days_to_pass": 16
+        },
+        "xfa": {
+          "accounts": 28,
+          "busts": 27,
+          "gross_payouts": "60222.3270312500000",
+          "net_payouts": "54200.094328125000000",
+          "median_days_to_first_payout": 18
+        }
+      },
+      "400": {
+        "combine": {
+          "attempts": 65,
+          "passes": 24,
+          "busts": 40,
+          "median_days_to_pass": 18.5
+        },
+        "xfa": {
+          "accounts": 33,
+          "busts": 32,
+          "gross_payouts": "59674.882187500000",
+          "net_payouts": "53707.39396875000000",
+          "median_days_to_first_payout": 19
+        }
+      }
+    }
+  }
+]

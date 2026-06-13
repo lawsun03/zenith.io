@@ -5,7 +5,7 @@ Research/ideation sessions (every ~3rd) APPEND new items as mini-specs.
 
 ---
 
-## B1 — Funded-objective re-scoring of the rejected bench  [in-progress — session 2026-06-12T23:35Z]
+## B1 — Funded-objective re-scoring of the rejected bench  [done — candidate: ORB r0.75 is funded Phase-B recommendation; doc trade_analysis/2026-06-13_B1_funded_objective_scoring.md]
 The whole bench was rejected on COMBINE pass-rate grounds; several had the best
 PF we ever measured. Score them on the XFA payout metric instead.
 - Variants (fixed configs, no sweeps): control (iFVG frontier, risk 1.25);

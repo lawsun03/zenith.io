@@ -51,3 +51,29 @@ Entry format:
   contract.
 - **Next:** B2 (MFE/MAE ladder) unless B1 still in progress; B11 (excursion
   instrument filter) is the highest-value small fix.
+
+## 2026-06-13T02:30Z — session wk1-b1 — B1 (funded-objective bench scoring)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12, flat, no drift.
+- **Ran:** reclaimed orphaned B1 (prior session crashed after control_2023.csv only);
+  created `bars/yearly/` splits (2021-2026) from Databento 5y file; ran
+  `scripts/run_b1_funded.py` for all 6 variants at r1.25 (30 export tasks, 4 workers),
+  then sizing sweep for orb and trail_1r at r0.5/0.75/1.0 (30 more); finally 2022
+  holdout confirmatory for ORB r0.75. All scored at haircut 0/200/400.
+- **Numbers (h200):**
+  - All r1.25 variants: pipeline NEGATIVE (combine passes < XFA busts). Best raw XFA
+    net: control $100k, trail_1r $100k, stop_cap $100k — but each needs 46–77 funded
+    accounts while producing only 21–34 Combine passes over 5 years.
+  - ORB combine pass rate: 39% (r1.25) to 57% (r0.5) vs 16–21% for iFVG variants.
+  - **ORB r0.75 winner:** 15 Combine passes / 14 XFA busts at h200 (borderline
+    sustainable); $35.7k XFA net over 5 years; median 32 days to pass Combine, 33
+    days to first payout; 2022 holdout PF 1.15, net +$5,551 ✓.
+  - ORB r0.5: firmly pipeline-positive (8 passes vs 6 busts) but only $21k net/5yr.
+  - Trail_1R: worst pipeline (21 passes vs 46 busts at r1.25) despite best raw payouts.
+- **Verdict:** candidate — ORB r0.75 recommended as Phase-B (funded) config for B3.
+- **Learned:** "Net XFA payouts" is a misleading metric without pipeline accounting —
+  trail_1r looks best at $100k but needs 2× more funded accounts than the strategy
+  can produce Combine passes. ORB's structural edge for the funded objective is its
+  2–3× higher Combine pass rate (39–57% vs 16–21%), not raw payout size.
+- **Next:** B11 (excursion instrument filter — small, high value) is the next pending
+  item that unblocks clean live data; B2 (MFE/MAE) follows; B3 (phase-policy pipeline
+  sim) needs B1 done (now done) — can begin next session.

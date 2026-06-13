@@ -20,5 +20,35 @@
     "verdict": "dataset",
     "learned": "Real MNQ execution slippage is ~2 ticks (the trades.csv slippage column measures distance-from-FVG-edge, not execution; the scary 111.5pt value was 0.5pt of real slippage). Three data-integrity bugs found: excursion tracker mixes instruments (06-07..11 rows unusable), git tree-restores wiped 22 tracked trades.csv rows, and roll-week fetch_bars returns the new front contract (~+292pts vs what live traded).",
     "links": {"doc": "trade_analysis/2026-06-12_weekly_forensics.md", "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T02:30:00Z",
+    "session": "wk1-b1",
+    "item": "B1",
+    "variant": "full bench at r1.25 (6 variants) + orb/trail_1r sizing sweep (r0.5/0.75/1.0)",
+    "objective": "funded",
+    "metrics": {
+      "control_r125_xfa_net": 100256, "control_r125_combine_passes": 34, "control_r125_xfa_busts": 73,
+      "trail1r_r125_xfa_net": 99849, "trail1r_r125_combine_passes": 21, "trail1r_r125_xfa_busts": 46,
+      "orb_r125_xfa_net": 75882, "orb_r125_combine_passes": 32, "orb_r125_xfa_busts": 36,
+      "orb_r075_xfa_net": 35653, "orb_r075_combine_passes": 15, "orb_r075_xfa_busts": 14,
+      "orb_r05_xfa_net": 21193, "orb_r05_combine_passes": 8, "orb_r05_xfa_busts": 6,
+      "haircut": 200,
+      "recommendation": "orb r0.75 (pipeline borderline sustainable) or r0.5 (firmly positive)"
+    },
+    "verdict": "candidate",
+    "learned": "All bench variants at full sizing (r1.25) are pipeline-negative — combine pass density can't replace busted XFA accounts fast enough. ORB at r0.75 is the only configuration with near-sustainable pipeline metrics (15 combine passes vs 14 XFA busts at h200) AND positive returns across all 5 non-holdout years; it also holds on the 2022 holdout (PF 1.15).",
+    "links": {"doc": "trade_analysis/2026-06-13_B1_funded_objective_scoring.md", "runs": ["b1_results.json"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T02:30:00Z",
+    "session": "wk1-b1",
+    "item": "B1",
+    "variant": "ORB r0.75 — 2022 holdout confirmatory",
+    "objective": "funded",
+    "metrics": {"trades": 286, "net": 5551, "pf": 1.147, "combine_passes": 2, "combine_attempts": 8, "xfa_accounts": 6, "xfa_busts": 5, "xfa_net_h200": 4404},
+    "verdict": "candidate",
+    "learned": "ORB r0.75 holds positive edge in the 2022 holdout year (PF 1.15, +$5,551) despite the rate-hike/tech-crash regime. Combine pass rate drops from 52% to 25% in 2022, but the strategy stays profitable — more robust to the low-price regime than the fixed-point iFVG filters.",
+    "links": {"doc": "trade_analysis/2026-06-13_B1_funded_objective_scoring.md", "runs": [], "src": null}
   }
 ]
