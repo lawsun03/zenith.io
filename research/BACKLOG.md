@@ -1344,7 +1344,7 @@ plain ORB at r=1.0 = $408/mo sust=1.37x; plain ORB at r=1.25 = $531/mo sust=1.03
 The sust advantage of reentry over plain (0.21x at r=0.75) is the only empirical basis
 for projecting r=1.0 reentry -- the actual result could be substantially different.
 
-## B39 — B21 research-baseline Phase A config-parity test at r=2.0  [pending]
+## B39 — B21 research-baseline Phase A config-parity test at r=2.0  [done — rejected: r=2.0 at research baseline gives 12/82 Phase A passes (vs B21's 34/162), reset $1,025/funded, pipeline $394/mo sust=0.92x — stop rule on both metrics; B31's r=2.0 advantage is config-specific (deployed combined+all-day generates 25 more passes at same risk); do NOT recommend r=2.0 as universal Phase A upgrade; Lesson 79]
 Hypothesis: B31's candidate ($508/mo, sust=2.85x) used deployed Phase A settings
 (engine=combined, all-day killzones, MNQ body=5.0/stop=3.0 overrides). B21's benchmark
 ($497/mo, sust=2.62x) used the research baseline (engine=ifvg, named sessions,

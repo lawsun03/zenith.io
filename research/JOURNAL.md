@@ -1183,3 +1183,36 @@ Entry format:
 - **Verdict:** rejected — r=1.0 triggers stop rule; r=1.25 is pipeline-negative (sust 0.77x). The B31 winner (iFVG r2.0 + ORB-reentry r0.75: $508/mo, sust 2.85x) remains undefeated. r=0.75 is now confirmed as the Phase B risk optimum from BOTH below (B32: r=0.5) and above (B38: r=1.0/r=1.25). Lesson 78 added.
 - **Learned:** The ORB-reentry second signal is a stop-reversal entry (fires only after a confirmed stop). At r=0.75, this adds profitable reversal-day EOD flattens without proportionally increasing bust frequency — the sizing is conservative enough that the second entry's per-trade loss barely moves the funded account toward MLL. At r=1.0+, each reentry loss carries full-sized risk, accelerating account drawdowns toward MLL far faster than at r=0.75. The mechanism's asymmetric bust amplification at higher r explains why the sust advantage inverts: the second-entry benefit (additional winners) is outweighed by second-entry losses landing harder on the account.
 - **Next:** B39 (research-baseline Phase A r=2.0 config-parity test — needed to confirm whether B31's improvement is real or an artifact of the deployed vs research config difference). B40 (combined-engine vs iFVG-only Phase A sensitivity). Both are no-code benchmarks.
+
+## 2026-06-13T20:30Z — session wk2-b39 — B39 (research-baseline Phase A config-parity test at r=2.0)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B39 (top pending item — no code required; isolates whether B31's r=2.0 advantage is from the risk level or from the deployed config differences).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow XFA running, no issues.
+  2. Generated 5 per-year equity CSVs in equity_b39/ for iFVG-edge r=2.0 at the exact B21 research baseline (engine=ifvg, min_absolute_body=1.0, stop_buffer=0.30, r_multiple=2.5, killzones=london,ny_am,ny_pm, swing_stop_lookback=0, target_clarity_mode=reject, partial_r=0). Explicitly overrode MNQ strategy_overrides back to defaults.
+  3. Wrote scripts/run_b39_pipeline.py with Phase A = equity_b39/, Phase B = equity_b21/orb_reentry_r0p75 (unchanged). Includes three-way comparison: B39 (r=2.0 research), B21 (r=1.25 research), B31 (r=2.0 deployed).
+  4. Ran pipeline analysis.
+  5. No code changes — test suite remains 649 passed / 2 skipped.
+- **Numbers:**
+
+  **Phase A standalone stats:**
+  | Config | Passes/Attempts | d/attempt | d/funded | Reset$/funded |
+  |--------|----------------|-----------|----------|---------------|
+  | B21 ref (ifvg_edge r=1.25) | 34/162 | 6.0d | 28.6d | $715 |
+  | B31 ref (deployed r=2.0) | 37/168 | 6.1d | 27.8d | $681 |
+  | B39 clean (ifvg_edge r=2.0) | **12/82** | 5.7d | **38.7d** | **$1,025** |
+
+  **Two-phase pipeline results:**
+  | Phase A | Net/mo | Sust | vs B21 |
+  |---------|--------|------|--------|
+  | B31 deployed r=2.0 | $508 | 2.85x | BEATS B21 [ref] |
+  | B21 ifvg_edge r=1.25 | $497 | 2.62x | [B21 ref] |
+  | B39 ifvg_edge r=2.0 | **$394** | **0.92x** | STOP RULE |
+
+- **Stop rule check:** B39 loses on BOTH $/mo ($394 < $497) AND sust (0.92x < 2.62x) vs B21. **Stop rule triggered. B39 rejected.**
+- **Config-isolation finding (the key result):**
+  - B39 vs B21 (same config, different risk): r=2.0 at research baseline gives 12 passes vs 34 — 65% FEWER passes. Higher risk + fewer trades/month = more MLL busts without more $3k passes.
+  - B31 vs B39 (same risk r=2.0, different config): deployed config generates 25 MORE passes at r=2.0. The mechanism: engine=combined + all-day killzones produce ~80-100 trades/month vs ~25/month at research baseline. More trades/month means monthly P&L has higher expected value, shifting the distribution toward $3k passes rather than MLL busts at r=2.0.
+- **Verdict:** rejected — B39 stop rule triggered on both metrics. The B31 r=2.0 advantage over B21 is entirely config-specific: it comes from the deployed config's higher monthly trade frequency (combined engine + all-day KZ + MNQ overrides), NOT from the risk level itself. Raising risk to r=2.0 in the research-baseline config (low-frequency named-session iFVG-only) HURTS Phase A by amplifying MLL busts without proportionally increasing passes. Lesson 79 added.
+- **Learned:** At the research baseline's ~25 trades/month (named sessions, iFVG-only), monthly P&L variance is too low for r=2.0 to shift more months across the $3k combine threshold — instead, higher risk just means more months breach MLL. The deployed config (~80-100/month combined+all-day) has high enough monthly expected value that r=2.0's extra variance creates more passing months than busting months. The "r=2.0 improves Phase A cycling" finding (B31) is conditional on being in the high-frequency regime.
+- **Next:** B40 (combined-engine vs iFVG-only Phase A sensitivity — the last pending backlog item; tests whether engine=combined itself adds combine passes at the research baseline vs ifvg-only).

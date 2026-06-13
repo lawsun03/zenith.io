@@ -1735,5 +1735,35 @@
       "runs": ["scripts/run_b38_pipeline.py"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T20:30Z",
+    "session": "wk2-b39",
+    "item": "B39",
+    "variant": "iFVG-edge r=2.0 research baseline Phase A",
+    "objective": "combine",
+    "metrics": {
+      "b39_clean_passes": 12,
+      "b39_clean_attempts": 82,
+      "b39_clean_days_per_funded": 38.7,
+      "b39_clean_reset_per_funded": 1025,
+      "b39_net_per_month": 394,
+      "b39_sust": 0.92,
+      "b21_ref_passes": 34,
+      "b21_ref_net_per_month": 497,
+      "b21_ref_sust": 2.62,
+      "b31_ref_passes": 37,
+      "b31_ref_net_per_month": 508,
+      "b31_ref_sust": 2.85,
+      "config_pass_delta_b31_vs_b39": 25,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "B31's r=2.0 advantage over B21 is entirely config-specific, not from the risk level itself. At the research baseline (engine=ifvg, named sessions, no MNQ overrides), r=2.0 Phase A generates only 12 passes over 82 attempts — far fewer than r=1.25's 34/162 — producing $394/mo, sust 0.92x (worse than B21 on both metrics, stop rule triggered). The deployed config generates 25 more passes at the same r=2.0 risk level: the combined engine + all-day killzones produce more monthly trades, shifting the monthly P&L distribution toward passing rather than busting. Do not recommend r=2.0 as a universal Phase A upgrade — it only helps in the deployed (high-frequency) config.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b39_pipeline.py"],
+      "src": null
+    }
   }
 ]

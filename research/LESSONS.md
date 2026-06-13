@@ -626,3 +626,16 @@ Appended 2026-06-14 (B38 ORB-reentry r-multiple sensitivity):
     (B32: r=0.5, $/mo $246) and above (B38: r=1.0, stop rule; r=1.25, sust 0.77x). Do not propose
     ORB-reentry Phase B at r>=1.0 without a fundamentally different mechanism to reduce bust frequency
     at higher sizing (e.g., partial exits, session gating, DOW filtering — none of which has yet worked).
+
+Appended 2026-06-13 (B39 research-baseline Phase A config-parity test):
+
+79. **B31's r=2.0 advantage over B21 is entirely config-specific — higher risk at the research
+    baseline hurts Phase A.** B39 tested ifvg_edge + named sessions + no MNQ overrides at r=2.0:
+    only 12/82 Phase A passes (vs B21's 34/162 at r=1.25) with reset cost $1,025/funded.
+    Pipeline result: $394/mo, sust=0.92x — WORSE than B21 ($497/mo, 2.62x) on both metrics,
+    stop rule triggered. The deployed config generates 25 more passes at the same r=2.0 risk level:
+    engine=combined + all-day killzones produce more monthly trades, shifting the monthly P&L
+    distribution toward $3k threshold passes rather than MLL busts. Rule: r=2.0 Phase A is only
+    beneficial in high-frequency configs (combined engine + all-day KZ). At research-baseline trade
+    frequency (~25/month named sessions), higher risk amplifies bust frequency without proportionally
+    increasing passes. Do not recommend r=2.0 as a universal Phase A upgrade.
