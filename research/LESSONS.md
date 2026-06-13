@@ -361,3 +361,16 @@ Appended 2026-06-13 (B24 iFVG entry_mode sensitivity):
     future iFVG benchmarks must use `ifvg_entry_mode="close"` as the new baseline. Benchmarks
     B1-B23 using "ifvg_edge" remain valid for within-series comparisons but are NOT representative
     of deployed bot performance.
+
+Appended 2026-06-13 (B25 partial_profit_r sensitivity):
+
+56. **Partial-profit exits (partial_r=1.5, stop to BE) have near-neutral effect on ORB-reentry
+    funded sustainability at conservative sizing.** For ORB-reentry r0.75: sust 0.750x vs 0.764x
+    (−1.8%, within 80% threshold). The mechanism: partial exits at 1.5R flatten the equity curve
+    dramatically (combine busts −26.5%, XFA busts −5.5%) but also reduce winner payouts −10%
+    (winning trades earn 2.0R instead of 2.5R). For ORB-reentry at r0.75, these effects nearly
+    cancel. The combine-bust reduction is the surprising magnitude: equity dampening reduces
+    account resets by >25% even though the same strategy runs both phases. Rule: partial exits
+    are never a free lunch — they trade payout capacity for drawdown protection. For the deployed
+    partial_r=1.5 with ORB-reentry r0.75, this tradeoff is acceptable but not beneficial.
+    Deployed config can remain unchanged.

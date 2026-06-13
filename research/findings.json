@@ -1132,5 +1132,56 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T20:00:00Z",
+    "session": "wk1-b25",
+    "item": "B25",
+    "variant": "partial_profit_r=1.5 vs 0 on ORB-reentry r0.75 funded (flat 5y, london+ny_am+ny_pm)",
+    "objective": "funded",
+    "metrics": {
+      "pr0_trades": 1847,
+      "pr0_pf": 1.1526,
+      "pr0_net_5y": 72021,
+      "pr0_combine_attempts": 126,
+      "pr0_combine_passes": 42,
+      "pr0_combine_busts": 83,
+      "pr0_combine_median_days": 8.5,
+      "pr0_xfa_accounts": 56,
+      "pr0_xfa_busts": 55,
+      "pr0_gross_payouts": 108390,
+      "pr0_net_payouts": 97551,
+      "pr0_sust": 0.764,
+      "pr0_net_mo": 1626,
+      "pr15_trades": 2345,
+      "pr15_pf": 1.1617,
+      "pr15_net_5y": 69277,
+      "pr15_combine_attempts": 100,
+      "pr15_combine_passes": 39,
+      "pr15_combine_busts": 61,
+      "pr15_combine_median_days": 11,
+      "pr15_xfa_accounts": 52,
+      "pr15_xfa_busts": 52,
+      "pr15_gross_payouts": 97494,
+      "pr15_net_payouts": 87745,
+      "pr15_sust": 0.750,
+      "pr15_net_mo": 1462,
+      "sust_ratio_pct": 98.2,
+      "net_payouts_ratio_pct": 89.9,
+      "xfa_busts_delta_pct": -5.5,
+      "combine_busts_delta_pct": -26.5,
+      "haircut": 200,
+      "note": "flat 5y equity (not per-year pipeline); ORB-reentry r0.75, orb_r_mult=2.5, swing_stop_lookback=0, killzones=london+ny_am+ny_pm, MNQ overrides stop=3.0 body=5.0"
+    },
+    "verdict": "acceptable",
+    "learned": "partial_profit_r=1.5 has near-neutral effect on ORB-reentry funded sustainability: sust decreases only 1.8% (0.764x to 0.750x), well within the 80% acceptable threshold. The two effects nearly cancel: partial exits reduce combine busts 26.5% (83 to 61, equity curve is less volatile) and XFA busts 5.5% (55 to 52), but also reduce combine passes 7% (42 to 39, harder to accumulate $3k/month when profits are booked early) and net payouts 10% ($97k to $88k per 5y). PF improves slightly (1.1526 to 1.1617) because partial exits convert some full-stop accounts into partial-win accounts. The deployed partial_r=1.5 config is acceptable for ORB-reentry r0.75.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b25_orb_reentry_r0p75_pr0.csv",
+        "research/equity_b25_orb_reentry_r0p75_pr1p5.csv"
+      ],
+      "src": null
+    }
   }
 ]

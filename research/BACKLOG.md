@@ -650,7 +650,7 @@ roughly equal. ~20% "close" is better (fill-rate gain dominates).
 Source: app/execution/engine.py:293-349 (entry mode dispatch), deployed bot_config.json audit.
 This is the highest-priority parity-gap item for the Monday deployment decision.
 
-## B25 — partial_profit_r=1.5 effect on ORB-reentry funded (B21 Phase B)  [pending]
+## B25 — partial_profit_r=1.5 effect on ORB-reentry funded (B21 Phase B)  [done — acceptable: sust 0.750x vs 0.764x baseline (ratio 98.2%, within 80% threshold); deployed partial_r=1.5 is acceptable; partial exits reduce both combine passes (-7%) and XFA busts (-5.5%) nearly equally; PF slightly improves (1.1617 vs 1.1526); no config change recommended]
 Hypothesis: B21's recommended Phase B (ORB-reentry r0.75) was benchmarked at partial_r=0
 (research baseline). The deployed bot uses partial_r=1.5 (book half at 1.5R, stop to BE).
 For ORB r_multiple=2.5, partial exit at 1.5R changes winner economics:

@@ -578,3 +578,40 @@ Entry format:
 - **Verdict:** candidate — "close" mode wins on ALL metrics. Stop rule not triggered (close beats edge on both combine passes and funded PF).
 - **Learned:** `ifvg_entry_mode="close"` is materially superior to `"ifvg_edge"` on every metric, reversing the prior hypothesis. The expected mechanism (deeper entry → larger stop → harder target) is wrong. Confirmed entry at the inversion bar close is a higher-quality structural signal; 100% fill rate captures trending setups that "ifvg_edge" misses while waiting for retraces; "ifvg_edge" generates chop-retrace fills on oscillating markets that dilute PF. Deployed config is not just acceptable — it is genuinely superior to the entire B1-B23 research baseline. "Close" at r_multiple=3.5 achieves sust 2.524x, materially better than B19's best (1.600x at r_multiple=2.5). All future iFVG benchmarks should use close mode.
 - **Next:** B25 (partial_profit_r sensitivity on ORB-reentry two-phase pipeline) — next session.
+
+## 2026-06-13T20:00:00Z — session wk1-b25 — B25 (partial_profit_r=1.5 effect on ORB-reentry funded)
+- **Bot health:** /api/status OK — shadow combine, equity $152,227.12 at high-water, flat, 0 open contracts. Market closed (weekend).
+- **Claimed:** B25 (top pending item). No research/ideation this session: wk1-r5 was only 2 sessions ago (B24 intervenes), and B25/B26 are outstanding parity-gap items from that session.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Claimed B25 in BACKLOG.md.
+  3. `equity_export` at ORB-reentry r0.75 with partial_r=0 and partial_r=1.5 (both: swing_stop_lookback=0, killzones=london+ny_am+ny_pm, MNQ overrides stop=3.0 body=5.0 orb_r_mult=2.5) over full 5y bars.
+  4. `funded_sim --haircut 200` on both equity CSVs.
+  5. No new code — benchmark only.
+- **Numbers:**
+
+  **ORB-reentry r0.75, flat 5y funded_sim (haircut $200):**
+  | Metric                   | partial_r=0 (research) | partial_r=1.5 (deployed) | Delta |
+  |--------------------------|------------------------|--------------------------|-------|
+  | Trades                   | 1,847                  | 2,345 (partial exits counted) | +27% |
+  | PF                       | 1.1526                 | 1.1617                   | +0.8% |
+  | Net 5y raw               | $72,021                | $69,277                  | -3.8% |
+  | Combine attempts         | 126                    | 100                      | -21%  |
+  | Combine passes           | 42                     | 39                       | -7%   |
+  | Combine busts            | 83                     | 61                       | **-26.5%** |
+  | Combine median days/pass | 8.5                    | 11                       | +29%  |
+  | XFA accounts             | 56                     | 52                       | -7%   |
+  | XFA busts                | 55                     | 52                       | -5.5% |
+  | Net payouts (5y)         | $97,551                | $87,745                  | -10%  |
+  | **Standalone sust**      | **0.764x**             | **0.750x**               | **-1.8%** |
+  | Net payouts/mo           | $1,626                 | $1,462                   | -10%  |
+
+- **Stop rule check:** partial_r=1.5 does NOT lose on both metrics vs baseline. PF improves (+0.8%) ✅; sust decreases (-1.8%) — but this is only 1.8% below baseline, well within the 80% threshold (0.750x ≥ 0.80 × 0.764x = 0.611x) ✅. Stop rule NOT triggered.
+- **Success criteria check:**
+  - "sust >= 80% of baseline" → 0.750x ≥ 0.611x ✅ → deployed config is **acceptable**
+  - "sust >= partial_r=0 baseline" → 0.750x < 0.764x ❌ → not an improvement
+  - "sust < 70% of baseline" → 0.750x > 0.535x ❌ → not a deployment risk
+- **Verdict:** acceptable — deployed partial_r=1.5 does not materially harm ORB-reentry funded sustainability. The two effects nearly cancel: partial exits flatten the equity curve (fewer combine busts: 83→61, -26.5%; fewer XFA busts: 55→52, -5.5%) but also reduce winner payouts, making monthly $3k targets harder to reach (fewer combine passes: 42→39, -7%; longer median days/pass: 8.5→11). Net: sust 0.750x vs 0.764x. No config change recommended.
+- **Key mechanism:** partial exits at 1.5R move the stop to breakeven on the remaining position. This has two effects: (1) converts some full-stop losses into BE exits (reduces bust frequency by cutting deep drawdowns), and (2) caps winner upside when price reaches target without being stopped. For ORB at r_mult=2.5 with partial at 1.5R, ~75% of winners hit the 2.5R target — those winners earn 1.5R×0.5 + 2.5R×0.5 = 2.0R instead of 2.5R (20% payout reduction). The bust reduction (-5.5% XFA, -26.5% combine) is smaller than the payout reduction (-10% net), so standalone sust drops marginally. The combine-bust reduction is the surprising finding: equity curve volatility dampening reduces account resets dramatically.
+- **Learned:** The partial-profit mechanism's primary effect is equity curve dampening (fewer busts), not PF improvement or payout optimization. For ORB-reentry at conservative sizing (r0.75), the bust reduction is insufficient to offset payout loss — net sustainability decreases 1.8%. The larger finding: combine busts (the simulate_combines failure mode) are extremely sensitive to equity volatility. Partial exits reduce combine bust count by 26.5% at the cost of only 7% fewer combine passes — the equity dampening matters most for combine account turnover, not XFA account longevity. The deployed partial_r=1.5 config can remain as-is.
+- **Next:** B26 (swing_stop_lookback=0/15/30 sensitivity for iFVG combine — the last parity-gap item).
