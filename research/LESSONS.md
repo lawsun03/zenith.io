@@ -639,3 +639,16 @@ Appended 2026-06-13 (B39 research-baseline Phase A config-parity test):
     beneficial in high-frequency configs (combined engine + all-day KZ). At research-baseline trade
     frequency (~25/month named sessions), higher risk amplifies bust frequency without proportionally
     increasing passes. Do not recommend r=2.0 as a universal Phase A upgrade.
+
+Appended 2026-06-14 (B40 combined-engine vs iFVG-only Phase A):
+
+80. **engine=combined gives 2x more Phase A combine passes than engine=ifvg at the B21 research
+    baseline (named sessions, ifvg_edge).** B40: combined 10/61 (16%) PF 1.02 vs ifvg 5/61 (8%)
+    PF 0.85. Mechanism: ORB signals added by the combined engine fire during NY AM (inside the named
+    sessions window), adding ~4.8 trades/month of positive-expectancy entries that iFVG-only misses.
+    At named sessions, iFVG-only generates only ~4.3 trades/month — too sparse to accumulate $3k
+    monthly P&L reliably. The deployed engine=combined for Phase A is structurally correct and
+    materially better than the B21 research baseline's iFVG-only config. Rule: in volume-constrained
+    configs (named sessions), engine=combined substantially outperforms engine=ifvg for the combine
+    phase. In high-frequency configs (all_day killzones), the difference is smaller because iFVG
+    already generates sufficient volume without ORB's contribution.

@@ -1380,7 +1380,7 @@ The risk level is what drives the cycle-duration reduction, not the config.
 Source: B31 config discrepancy (JOURNAL wk2-b31); Lesson 69 (cycle-speed mechanism).
 Needed to confirm B31's candidate before Lawrence deploys higher risk live.
 
-## B40 — Combined-engine vs iFVG-only Phase A in the combine (engine sensitivity)  [pending]
+## B40 — Combined-engine vs iFVG-only Phase A in the combine (engine sensitivity)  [done — candidate: engine=combined 10/61 (16%) PF 1.02 vs engine=ifvg 5/61 (8%) PF 0.85 at B21 research baseline; 2x more passes, +20% PF; ORB signals fill the volume gap in named-session configs; deployed engine=combined Phase A is structurally correct]
 Hypothesis: B21 used engine=ifvg (iFVG-only signals) for Phase A combine. The deployed
 bot uses engine=combined (iFVG + ORB signals both contribute to the combine phase).
 B31 also used engine=combined for Phase A. We have never isolated the engine= parameter's

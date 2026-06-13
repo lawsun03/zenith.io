@@ -1765,5 +1765,29 @@
       "runs": ["scripts/run_b39_pipeline.py"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T06:00:00Z",
+    "session": "wk2-b40",
+    "item": "B40",
+    "variant": "engine=combined vs engine=ifvg Phase A combine (B21 research baseline: named sessions, ifvg_edge, lookback=0, partial_r=0, target_clarity=reject, body=1.0, stop=0.30, r=1.25%)",
+    "objective": "combine",
+    "metrics": {
+      "ifvg_passes_61mo": 5,
+      "ifvg_pf": 0.85,
+      "ifvg_trades_per_mo": 4.3,
+      "combined_passes_61mo": 10,
+      "combined_pf": 1.02,
+      "combined_trades_per_mo": 9.1,
+      "pass_rate_ratio": 2.0,
+      "pf_improvement": 0.20
+    },
+    "verdict": "candidate",
+    "learned": "engine=combined gives exactly 2x more Phase A combine passes than engine=ifvg at the B21 research baseline (10/61 vs 5/61; PF 1.02 vs 0.85). The ORB signals added by the combined engine fill the volume gap that makes named-session iFVG-only too sparse for the $3k monthly target. Both longs (PF 1.13 vs 0.96) and shorts (PF 0.91 vs 0.75) improve under combined engine, suggesting ORB adds positive-expectancy entries in months where iFVG alone is insufficient.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

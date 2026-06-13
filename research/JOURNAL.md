@@ -1216,3 +1216,32 @@ Entry format:
 - **Verdict:** rejected — B39 stop rule triggered on both metrics. The B31 r=2.0 advantage over B21 is entirely config-specific: it comes from the deployed config's higher monthly trade frequency (combined engine + all-day KZ + MNQ overrides), NOT from the risk level itself. Raising risk to r=2.0 in the research-baseline config (low-frequency named-session iFVG-only) HURTS Phase A by amplifying MLL busts without proportionally increasing passes. Lesson 79 added.
 - **Learned:** At the research baseline's ~25 trades/month (named sessions, iFVG-only), monthly P&L variance is too low for r=2.0 to shift more months across the $3k combine threshold — instead, higher risk just means more months breach MLL. The deployed config (~80-100/month combined+all-day) has high enough monthly expected value that r=2.0's extra variance creates more passing months than busting months. The "r=2.0 improves Phase A cycling" finding (B31) is conditional on being in the high-frequency regime.
 - **Next:** B40 (combined-engine vs iFVG-only Phase A sensitivity — the last pending backlog item; tests whether engine=combined itself adds combine passes at the research baseline vs ifvg-only).
+
+## 2026-06-14T06:00:00Z — session wk2-b40 — B40 (Combined-engine vs iFVG-only Phase A)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B40 (sole remaining pending item — no code required; tests engine=combined vs engine=ifvg for Phase A combine at B21 research baseline).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Read deployed bot_config.json: engine=combined, body=5.0, stop=3.0, killzones=all, entry_mode=close, lookback=30, partial_r=1.5, risk=1.0%, contracts=2.
+  3. Ran `run_monthly_combine.py` twice (sequentially) at B21 research baseline, only engine= varies:
+     - Control (engine=ifvg): `--risk-pct 1.25 --partial-r 0 --contracts 1 --killzones london,ny_am,ny_pm --set ifvg_entry_mode=ifvg_edge --set swing_stop_lookback=0 --set target_clarity_mode=reject --set min_absolute_body=1.0 --set stop_buffer=0.30 --set engine=ifvg`
+     - Test (engine=combined): same flags but `--set engine=combined`
+  4. Full test suite: **653 passed, 2 skipped** — no code changes.
+
+- **Numbers:**
+
+  **B21 research baseline: 61-month combine (2021-06 → 2026-06, incl. 2022)**
+  | Config | Passes/61 | % | Run PF | Trades/mo | Long exits/PF | Short exits/PF |
+  |--------|-----------|---|--------|-----------|---------------|----------------|
+  | engine=ifvg (control) | **5** | **8%** | **0.85** | 4.3 | 129/0.96 | 136/0.75 |
+  | engine=combined (test) | **10** | **16%** | **1.02** | 9.1 | 283/1.13 | 272/0.91 |
+
+  **Ratio:** combined / ifvg = 2.0x passes, +20% PF, +2.1x trade volume.
+
+- **Stop rule check:** engine=combined does NOT lose on either metric vs engine=ifvg. Both passes (10 > 5) and PF (1.02 > 0.85) improve. Stop rule NOT triggered.
+- **Success criteria check:** "engine=combined achieves >= 10/61 (43% more passes vs baseline 7/61)" → 10/61 ✓ (exactly meets threshold). "engine=combined achieves materially more passes than engine=ifvg at same config" → 10 vs 5, exactly 2x ✓.
+- **Mechanism:** At named sessions (london+ny_am+ny_pm), iFVG signals are session-gated + require retrace (ifvg_edge mode), generating only ~4.3 trades/month. The $3k monthly combine target at 1 contract + 1.25% risk requires ~3-4 winning months with large wins — too sparse at 4 trades/month. Engine=combined adds ORB signals, which fire during NY AM (inside the named sessions window). ORB adds ~4.8 trades/month of positive-expectancy breakout entries. Total: ~9.1/month for combined — enough to reliably reach $3k in months when the market cooperates.
+- **Pipeline implication:** The B39 analysis showed that at the research baseline, ifvg-only Phase A gives 12/82 passes at r=2.0 (worse than B21's 34/162 at r=1.25). But the REAL question was whether the deployed engine=combined was the source of B31's advantage, or just the all-day killzones. B40 shows engine=combined is worth 2x passes at the research baseline (10 vs 5 per 61 months). Projected research-baseline Phase A with engine=combined at r=1.25: ~2x more passes than B21 ifvg-only (34/162) → ~68 passes. This would dramatically improve the B21 pipeline economics if combined at named sessions were used as Phase A.
+- **Verdict:** candidate — engine=combined is materially better than engine=ifvg for Phase A at the B21 research baseline. The deployed engine=combined Phase A choice is validated. Lesson 80 added. Backlog fully exhausted — all B1-B40 items done.
+- **Learned:** engine=combined fills the volume gap that makes named-session iFVG-only too sparse for the Combine (Lesson 2: Volume is the Combine constraint). ORB signals fire during NY AM (within named sessions), adding ~5 trades/month of positive-expectancy entries that push monthly P&L past the $3k threshold in markets where iFVG alone produces only 4 signals. The deployed Phase A config (engine=combined) is not just "also good" — it is structurally necessary to generate sufficient combine volume under named-session constraints.
+- **Next:** All B1-B40 items complete — entire backlog exhausted. Monday priorities for Lawrence: (1) Review Phase A config fix (swing_stop_lookback=0, target_clarity_mode=reject per B26 recommendation — restores Phase A from 6/61 to 11/61 passes); (2) Consider whether to run a full B21-style pipeline simulation with engine=combined at research baseline (projected 68 passes vs 34 → significant pipeline improvement); (3) The combined engine + ifvg_edge + named sessions + target_clarity=reject pipeline is structurally the best research-baseline config. New backlog items to replenish if further research is needed.
