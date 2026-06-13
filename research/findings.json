@@ -1439,5 +1439,65 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T23:30:00Z",
+    "session": "wk2-b31",
+    "item": "B31",
+    "variant": "Phase A higher-risk sensitivity: iFVG r=1.5 and r=2.0 at deployed settings (engine=combined, MNQ body=5.0, stop=3.0, all-day killzones), Phase B fixed = ORB-reentry r0.75",
+    "objective": "combine+funded",
+    "metrics": {
+      "config_note": "B31 used deployed bot_config.json settings (engine=combined, MNQ overrides body=5.0/stop=3.0, killzones=all) + research overrides (ifvg_entry_mode=ifvg_edge, target_clarity_mode=reject, swing_stop_lookback=0, partial_r=0). Differs from B21 research baseline (engine=ifvg, body=1.0, stop=0.30, named sessions). Comparison to B21 $497/mo is valid as absolute benchmark but not apples-to-apples config comparison.",
+      "phase_a_r1p25_b31base_passes": "27/99",
+      "phase_a_r1p25_b31base_pass_pct": 27,
+      "phase_a_r1p25_b31base_days_funded": 38.1,
+      "phase_a_r1p25_b31base_net_per_mo": 486,
+      "phase_a_r1p25_b31base_sust": 2.08,
+      "phase_a_r1p5_passes": "29/119",
+      "phase_a_r1p5_pass_pct": 24,
+      "phase_a_r1p5_days_funded": 35.5,
+      "phase_a_r1p5_net_per_mo": 485,
+      "phase_a_r1p5_sust": 2.23,
+      "phase_a_r2p0_passes": "37/168",
+      "phase_a_r2p0_pass_pct": 22,
+      "phase_a_r2p0_days_funded": 27.8,
+      "phase_a_r2p0_net_per_mo": 508,
+      "phase_a_r2p0_sust": 2.85,
+      "phase_a_b21ref_passes": "34/162",
+      "phase_a_b21ref_net_per_mo": 497,
+      "phase_a_b21ref_sust": 2.62,
+      "phase_b_xfa_busts": 13,
+      "phase_b_xfa_net_5y": 43834,
+      "phase_b_xfa_net_per_acct": 3131,
+      "phase_b_avg_days_per_acct": 73.5,
+      "per_year_net_deployed": {
+        "2021_r1p25": 13229, "2021_r1p5": 15073, "2021_r2p0": 20349,
+        "2023_r1p25": 781, "2023_r1p5": 410, "2023_r2p0": 144,
+        "2024_r1p25": 12260, "2024_r1p5": 15561, "2024_r2p0": 21624,
+        "2025_r1p25": 6929, "2025_r1p5": 5215, "2025_r2p0": 7454,
+        "2026_r1p25": 552, "2026_r1p5": -373, "2026_r2p0": -1493
+      },
+      "deployed_trades_per_year_avg": 220,
+      "b21_research_baseline_trades_per_year_2021": 473,
+      "b21_deployed_trade_deficit_pct": 63,
+      "notable_2023_pf_near_breakeven": "PF 1.001-1.008 at all risk levels -- deployed config has near-zero edge in 2023",
+      "notable_2026_loss_making_at_r2p0": "PF 0.983, net -$1493 YTD (Jan-Jun 2 2026) at r=2.0; r=1.25 barely positive ($552)",
+      "haircut": 200,
+      "reset_fee_per_attempt": 150,
+      "years": ["2021", "2023", "2024", "2025", "2026"],
+      "tests_added": 0,
+      "total_tests": 644
+    },
+    "verdict": "candidate",
+    "learned": "iFVG Phase A at r=2.0% risk beats B21 benchmark ($508/mo, sust 2.85x vs $497/mo, 2.62x) by reducing combine phase duration from 38.1d to 27.8d per funded account. Mechanism: higher risk makes monthly P&L more volatile, causing more months to cross the $3k combine threshold -- the combine cycle completes faster even though per-cycle net decreases (more reset fees). r=1.5 shows NO improvement over r=1.25 at deployed settings ($485 vs $486/mo), confirming the optimum is nonlinear -- only r=2.0 achieves meaningful cycle-duration reduction. Important config discrepancy: B31 used deployed settings (engine=combined, body=5.0, stop=3.0, all-day killzones) with 63% fewer trades/year than B21 research baseline. The comparison to B21 is numerically valid (both produce $497-508/mo) but the underlying Phase A configs differ. 2023 is near-breakeven at all risk levels (PF 1.001-1.008) and 2026 YTD is loss-making at r=2.0 (-$1,493 vs +$552 at r=1.25) -- evidence that the deployed config has a current-market-regime weakness that higher risk amplifies.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b31/ifvg_r1p25_*.csv",
+        "research/equity_b31/ifvg_r1p5_*.csv",
+        "research/equity_b31/ifvg_r2p0_*.csv"
+      ],
+      "src": "scripts/run_b31_pipeline.py"
+    }
   }
 ]

@@ -503,3 +503,17 @@ Appended 2026-06-13 (B30 DOW filter):
     as the frequency lesson from B29: higher cycle speed amplifies both gains and bust frequency. Rule: DOW
     filters that remove bad days should be evaluated on sust (not just $/mo), as faster cycling always amplifies
     bust frequency in the two-phase pipeline model.
+
+Appended 2026-06-13 (B31 Phase A risk sensitivity):
+
+69. **Higher Phase A risk reduces combine cycle duration and improves pipeline $/month, but only at r=2.0 —
+    the r=1.5 intermediate shows no benefit over r=1.25.** B31 tested iFVG Phase A at r=1.25%, r=1.5%, and r=2.0%
+    (deployed settings). Results: r=1.25 → 27/99 passes, 38.1d/funded, $486/mo, sust 2.08x; r=1.5 → 29/119
+    passes, 35.5d/funded, $485/mo, sust 2.23x; r=2.0 → 37/168 passes, 27.8d/funded, $508/mo, sust 2.85x.
+    Mechanism: higher risk makes monthly P&L more volatile → more months cross the $3k combine threshold → combine
+    cycle completes faster. But per-cycle net decreases (more reset fees per funded account). r=2.0 wins because
+    cycle-duration reduction outpaces the per-cycle net decrease — daily throughput improves ($24.2/d vs $23.1/d).
+    r=1.5 fails because it reduces cycle days only modestly (35.5d vs 38.1d) while also reducing per-cycle net —
+    the two effects nearly cancel. Rule: in the two-phase combine model, risk is a cycle-speed lever, not a
+    per-cycle-net lever. Only large risk increases that materially shift the combine duration distribution will
+    improve $/month. Intermediate steps may show no benefit or even marginal regression.

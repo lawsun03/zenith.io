@@ -876,3 +876,44 @@ Entry format:
 - **Verdict:** rejected — iFVG DOW filter catastrophically hurts the close-mode long-only config (PF 0.996, sust 0.27x); ORB DOW filter fails the primary busts criterion (16 > 13). The `skip_trading_days` feature ships default-off; neither application passes its success criteria. Lessons 67-68 added.
 - **Learned:** DOW PF from the full all-sides all-day population does not transfer to already-filtered config subsets — the filter removes loss-making shorts and bad sessions, leaving only high-quality signals on every day of the week including Tuesday. Applying a DOW filter on top of side/session filters is redundant at best and harmful when the bad-day signal class is already excluded. The ORB DOW filter lesson mirrors B29: removing bad days from the equity curve speeds cycling (good for $/mo) but doesn't reduce total bust frequency proportionally (bad for sust), failing the strict pipeline criterion.
 - **Next:** B31 (Phase A higher-risk r=2.0 sensitivity — no code, quick benchmark) or B32 (ORB-reentry r=0.5 risk floor).
+
+## 2026-06-13T23:30:00Z — session wk2-b31 — B31 (Phase A higher-risk sensitivity r=2.0)
+- **Bot health:** /api/status OK — XFA, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B31 (top pending item — Phase A risk sensitivity, no code required).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Generated per-year Phase A equity CSVs in equity_b31/ at r=1.5 and r=2.0 (10 files).
+     Config: deployed bot_config.json + `--set ifvg_entry_mode=ifvg_edge --set swing_stop_lookback=0 --set target_clarity_mode=reject --partial-r 0`
+     **Config discrepancy noted:** equity_export loaded deployed settings (engine=combined, MNQ overrides body=5.0/stop=3.0, killzones=all) rather than B21 research baseline (engine=ifvg, body=1.0, stop=0.30, named sessions). Result: ~220 trades/year vs 473/year in B21 baseline 2021. Within-B31 comparison remains valid; comparison to B21 $497/mo is numerically valid as absolute benchmark but configs differ.
+  3. Generated r=1.25 within-B31 baseline (5 files) at same deployed settings.
+  4. Wrote and ran `scripts/run_b31_pipeline.py`. Phase B fixed = ORB-reentry r0.75 (equity_b21/).
+  5. Test suite: **644 passed, 2 skipped**. No code changes.
+- **Numbers:**
+
+  **Per-year net (deployed settings):**
+  | Year | r=1.25 | r=1.5 | r=2.0 |
+  |------|--------|-------|-------|
+  | 2021 | $13,229 (PF 1.263) | $15,073 (PF 1.247) | $20,349 (PF 1.251) |
+  | 2023 | $781 (PF 1.008) | $410 (PF 1.003) | $144 (PF 1.001) |
+  | 2024 | $12,260 (PF 1.121) | $15,561 (PF 1.123) | $21,624 (PF 1.124) |
+  | 2025 | $6,929 (PF 1.070) | $5,215 (PF 1.042) | $7,454 (PF 1.043) |
+  | 2026 | $552 (PF 1.010) | -$373 (PF 0.994) | -$1,493 (PF 0.983) |
+
+  **Two-phase pipeline results (Phase A deployed settings → Phase B ORB-reentry r0.75):**
+  | Config | Passes/Attempts | d/funded | Reset$/acct | Net/mo | Sust | vs B21 |
+  |--------|-----------------|----------|-------------|--------|------|--------|
+  | iFVG r2.0 (B31) | 37/168 | 27.8d | $681 | **$508** | **2.85x** | **BEATS B21** |
+  | iFVG r1.25 (B21-ref) | 34/162 | 28.6d | $715 | $497 | 2.62x | benchmark |
+  | iFVG r1.25 (B31-base) | 27/99 | 38.1d | $550 | $486 | 2.08x | beats B3 only |
+  | iFVG r1.5 (B31) | 29/119 | 35.5d | $616 | $485 | 2.23x | beats B3 only |
+
+- **Stop rule check:** r=2.0 beats B21 on BOTH criteria ($508 > $497 AND sust 2.85x > 2.62x). Stop rule NOT triggered. r=1.5 fails primary ($485 < $497). r=1.25 (deployed) fails primary ($486 < $497).
+- **Key findings:**
+  - r=2.0 beats B21 ($508/mo, 2.85x) by reducing combine cycle duration: 27.8d/funded vs 38.1d for r=1.25. Mechanism: higher volatility means more months cross the $3k threshold faster.
+  - r=1.5 shows NO $/mo improvement over r=1.25 (both ~$485-486). The optimum is non-monotonic: r=1.5 cuts cycle days only modestly while also increasing reset fees — the two effects cancel. Only r=2.0 achieves net daily throughput improvement ($24.2/d vs $23.1/d).
+  - 2023 is near-breakeven at all risk levels (PF 1.001-1.008). Deployed config has near-zero edge in 2023 — no risk level produces meaningful Phase A passes in that year.
+  - 2026 YTD is loss-making at r=2.0 (PF 0.983, -$1,493) but barely positive at r=1.25 (PF 1.010, +$552). Higher risk amplifies the current regime weakness.
+- **Verdict:** candidate — iFVG r=2.0 at deployed settings beats B21 on both primary criteria. Caveat: config discrepancy (deployed vs research baseline) means this is a deployed-settings result, not a direct B21 replication. The improvement is mechanically sound (faster combine cycling) but the 2026 loss at r=2.0 deserves monitoring before deploying higher risk live.
+- **Learned:** Higher Phase A risk is a combine-cycle-speed lever: at r=2.0, the combine duration drops from 38.1d to 27.8d/funded, enabling more pipeline cycles per year and lifting $/month from $486 to $508. The mechanism is equity volatility making the $3k monthly threshold easier to cross. r=1.5 shows no benefit (cycle duration reduction insufficient to offset higher reset fees). Rule: in the two-phase model, risk level must shift the combine duration distribution materially to improve $/month — small intermediate steps are ineffective. Lesson 69 added.
+- **Side finding:** Deployed Phase A config produces 63% fewer trades/year than B21 research baseline (174-313/year vs 473/year in 2021). Despite this, pipeline $/month is comparable ($486-508 deployed vs $497 research) because the deployed config's strict filters (body=5.0, stop=3.0) produce higher-quality signals with better per-trade dollar outcomes. The trade-frequency deficit does not automatically translate to pipeline underperformance.
+- **Next:** B32 (ORB-reentry Phase B at r=0.5 — maps the lower end of the risk sensitivity curve; confirms or rebuts r=0.75 as funded-phase optimum).

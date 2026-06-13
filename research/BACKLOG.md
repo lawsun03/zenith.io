@@ -956,7 +956,7 @@ Source: scripts/research_dow_analysis.py (this session) — 5y MFE/MAE per-day P
 Mechanisms: iFVG Tuesday = post-Monday consolidation chop; ORB Monday = gap reversal false breakouts;
 ORB Wednesday = FOMC announcement days; all corroborated by institutional calendar literature.
 
-## B31 — Phase A higher-risk sensitivity (r=2.0) to increase annual combine passes  [pending]
+## B31 — Phase A higher-risk sensitivity (r=2.0) to increase annual combine passes  [done — candidate: r=2.0 deployed settings → $508/mo, sust 2.85x — beats B21 on both criteria via faster combine cycling (27.8d vs 38.1d); r=1.5 shows no improvement vs r=1.25; config discrepancy documented]
 Hypothesis: B21 Phase A runs iFVG r=1.25%. The $3k combine target is FIXED. At r=2.0%, each
 winning trade earns 1.6× more — fewer winning trades needed to reach the $3k threshold. Expected
 monthly gain rises from ~$3.5k (r=1.25) to ~$5.6k (r=2.0), making the $3k target easier to reach
