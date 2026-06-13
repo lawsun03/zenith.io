@@ -1789,5 +1789,30 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T22:00:00Z",
+    "session": "wk2-r3",
+    "item": "RESEARCH",
+    "variant": "wk2-r3: ORB timing data mining + B40 pipeline projection + web search",
+    "objective": "infra",
+    "metrics": {
+      "items_proposed": 3,
+      "orb_9_45_10_30_pf": 1.21,
+      "orb_10_30_11_pf": 0.963,
+      "orb_11_11_30_pf": 0.622,
+      "ifvg_mae_lt_0p25R_wr": 0.933,
+      "ifvg_mae_lt_0p25R_pf": 335.2,
+      "b40_combined_passes_61mo": 10,
+      "b40_ifvg_passes_61mo": 5,
+      "b41_projected_5y_passes": "49-68"
+    },
+    "verdict": "dataset",
+    "learned": "ORB signals after 10:30 ET are loss-making over 5 years (PF 0.963-0.622); early session (9:45-10:30 ET) carries virtually all edge (PF ~1.21 blended). B40 engine=combined finding projects ~68 Phase A passes over 5y (2x B21 ifvg-only baseline), which would push pipeline to sust ~5x and ~$560-600/month if confirmed by B41. Deployed config full simulation (B42) is the Monday-critical item to answer what Lawrence's actual bot is expected to earn.",
+    "links": {
+      "doc": null,
+      "runs": ["_research_mining.py"],
+      "src": "arxiv:2505.17388,2508.06788"
+    }
   }
 ]

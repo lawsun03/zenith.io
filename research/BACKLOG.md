@@ -1417,3 +1417,183 @@ Source: B31 Phase A config discrepancy analysis; Lesson 50 (config parity gap).
 Note: this is a combine-only test. The two-phase pipeline implication is indirect --
 if combined Phase A gives more passes, the pipeline supply improves, which B39 can
 quantify once the pass count is known.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk2-r3  [done — 3 items appended: B41 combined-engine Phase A pipeline, B42 deployed config full pipeline, B43 ORB late-session signal cutoff]
+
+Backlog fully exhausted (B1-B40 all done) — mandatory research session. Sources: 5y MFE/MAE
+data mining (scripts/_research_mining.py) + WebSearch + B40 projection analysis.
+
+**Key data findings:**
+- **ORB timing analysis (n=1030, excl 2022):** Signals split cleanly at 10:30 ET:
+  9:45-10:30 ET (n=926): PF ~1.21 blended (all profitable, peak PF 1.528 at 10:15-30 ET).
+  10:30-11:00 ET (n=57): PF=0.963 (loss-making). 11:00-11:30 ET (n=27): PF=0.622 (clearly negative).
+  11:30+ ET (n=19): PF=3.213 (too small to trust). The 10:30-11:30 window costs ~$2,900 over 5y.
+  Note: 10:05-30 ET window (delayed breakouts) is HIGHER quality than 9:45-55 ET (PF 1.43-1.53 vs 1.17).
+- **iFVG MAE distribution (n=2477, excl 2022):** Trades with MAE <0.25R: WR=93.3%, PF=335 (n=267).
+  MAE 0.25-0.5R: WR=83.1%, PF=40. MAE 0.5-0.75R: WR=72.3%, PF=17. MAE 0.75-1R: WR=43.9%, PF=2.6.
+  MAE 1R+: WR=0.7%, PF=0.026 (n=1438 — these are virtually all stop-outs). This validates the existing
+  swept-extreme stop: trades that go favorably have low MAE; losers go all the way to stop.
+- **B40 projection:** Combined-engine Phase A at research baseline projects ~68 passes over 5y vs 34
+  for ifvg-only. With B21 Phase B (13 busts): sust ~5.2x, $/month ~$560-600. Never tested as full pipeline.
+- **Deployed config pipeline:** The deployed bot (combined+close+partial_r=1.5+lookback=30+all-day+
+  r=1.0%+MNQ overrides) has never been simulated end-to-end through the funded pipeline model.
+  B31 used deployed Phase A but at r=2.0%/partial_r=0; B25 tested partial_r=1.5 for Phase B but not
+  Phase A; B26 showed lookback=30 hurts Phase A (-4 passes). The net effect of the full deployed
+  config is unknown.
+- **Web search:** Order flow imbalance (OFI) papers found (arxiv 2505.17388, 2508.06788). OFI is a
+  novel mechanism (not in our rejection list) but requires tick-level order book data not available
+  in our OHLCV bars. Not testable without expensive new data. No other new mechanism families found.
+
+## B41 — Combined-engine research-baseline Phase A two-phase pipeline  [pending]
+Hypothesis: B40 showed engine=combined at B21 research baseline (named sessions, ifvg_edge, no MNQ
+overrides) gives 2x more Phase A combine passes than ifvg-only (10/61 vs 5/61, PF 1.02 vs 0.85).
+The B21 pipeline ($497/mo, sust 2.62x) used ifvg-only Phase A (5/61 per period, ~34 passes/5y).
+If combined Phase A gives ~10/61 per period, that's ~68 passes over 5y — doubling sust and
+improving $/month substantially.
+
+Mechanism: no new code. Generate per-year equity CSVs at combined engine + research baseline:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 1.25 --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject
+   --set ifvg_entry_mode=ifvg_edge --set engine=combined
+   --set min_absolute_body=1.0 --set stop_buffer=0.30
+   --killzones london,ny_am,ny_pm
+   --out research/equity_b41/combined_r1p25_{year}.csv`
+Write scripts/run_b41_pipeline.py (clone of run_b21_pipeline.py) using:
+  Phase A: equity_b41/combined_r1p25_{year}.csv
+  Phase B: equity_b21/orb_reentry_r0p75_{year}.csv (unchanged from B21)
+Compare to B21 (ifvg_only r1.25 Phase A: $497/mo, sust 2.62x) and B31 (deployed r2.0 Phase A: $508/mo, sust 2.85x).
+
+Fixed defaults: engine=combined, ifvg_entry_mode=ifvg_edge, partial_r=0, swing_stop_lookback=0,
+target_clarity_mode=reject, min_absolute_body=1.0, stop_buffer=0.30, killzones=named (same B21 baseline,
+only engine= changed).
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B31 winner: $508/mo, sust 2.85x):
+- Primary: $/month >= $508 AND sust >= 2.85x (beats B31 on BOTH metrics)
+- Secondary: if $/month >= $497 AND sust >= 2.62x (beats B21), counts as improvement
+- If combined Phase A per-year passes < 34 (same or fewer than ifvg-only B21): reject
+  and flag the B40 combine-harness result (10/61) as not representative of per-year dynamics
+
+Pipeline projection (from B40 combine result extrapolated to per-year):
+  Phase A per-period passes: ~10/61 months → ~2.0 passes per 12-month window
+  5y total projected passes: ~10 × (60/61) × (5/1) ≈ 49 (conservative) to 68 (linear)
+  With B21 Phase B (13 busts, $3,131/acct, 73.5d): sust = 49-68 / 13 = 3.8x-5.2x
+  Cycle days: (5y×252d / 49-68) + 73.5d ≈ 92-99d; $/month = ~$540-600
+
+Important: B40 used a 61-month run_monthly_combine (2021-2026 incl 2022); per-year uses 2021,2023-2026
+(excl 2022). The actual per-year pass count may differ from the monthly-combine projection.
+
+Prior: ~75% that combined Phase A beats B21 on both metrics; ~50% it beats B31. The 2x pass rate
+from B40 is empirical, not just a projection. The B40 combine test used the same 61-month window
+as B21's baseline, providing a direct apples-to-apples comparison (ifvg 5/61 vs combined 10/61).
+
+Source: B40 combine result + B21 pipeline model + wk2-r3 research projection.
+
+## B42 — Deployed config full end-to-end pipeline simulation  [pending]
+Hypothesis: The deployed bot config (as of 2026-06-14) uses: engine=combined, ifvg_entry_mode=close,
+partial_profit_r=1.5, swing_stop_lookback=30, killzones=["all"], risk_pct=1.0%, min_absolute_body=5.0,
+stop_buffer=3.0, r_multiple=2.5 (MNQ overrides). This combination has NEVER been run through the
+funded pipeline model. B31 approximated it (deployed Phase A) but used r=2.0% and partial_r=0.
+B25 tested partial_r=1.5 only on Phase B (not Phase A combine). B26 showed lookback=30 hurts
+Phase A (-4 passes) but that was at ifvg_edge mode; close mode may interact differently (B27
+showed close mode worse under named sessions but better under all-day). The net deployed pipeline
+economics are genuinely unknown.
+
+Mechanism: no new code. Generate per-year equity CSVs with the exact deployed config:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 1.0 --partial-r 1.5 --set swing_stop_lookback=30 --set engine=combined
+   --set ifvg_entry_mode=close --set min_absolute_body=5.0 --set stop_buffer=3.0
+   --killzones all
+   --out research/equity_b42/deployed_r1p0_{year}.csv`
+Also at r=2.0% (to match B31 Phase A risk level for comparison):
+   `--risk-pct 2.0 --out research/equity_b42/deployed_r2p0_{year}.csv`
+Run funded_sim on stitched per-year CSVs (not B21-style two-phase — the deployed config is used
+for BOTH phases simultaneously; this tells Lawrence the "single-strategy deployed" funded pipeline).
+Also run as Phase A in a two-phase model paired with equity_b21/orb_reentry_r0p75 (Phase B).
+
+Note on methodology: "deployed config full simulation" means the funded phase ALSO uses the deployed
+config for intraday position management (partial exits at 1.5R, wider swing stops). The Phase A
+(combine phase) is fully replicated. This is genuinely new — all prior Phase A equity runs used
+research-baseline parameters for parity within the research series.
+
+Fixed defaults: exact deployed bot_config.json settings (no research-baseline overrides).
+Defining-behavior tests: none needed.
+
+Success criteria (vs B31 winner: $508/mo, sust 2.85x — the best comparable benchmark):
+- If deployed config achieves sust >= 2.85x AND $/month >= $508: the deployed config is better
+  than ANY prior benchmark and is already deployed correctly.
+- If deployed config is worse on either metric: identify which parameter (partial_r, lookback, risk)
+  is the primary driver and flag for Lawrence's Monday config review.
+- The comparison is valid against B31 only if we also run the deployed config at r=2.0% to isolate
+  the risk-level contribution.
+
+Caution: B26 found lookback=30 costs -4 Phase A passes (in ifvg_edge mode). Close mode may interact
+differently (B27: close mode loses under named sessions, but deployed uses all-day + combined engine
+which B24 showed benefits from close mode). Net effect of (close+all-day+combined) vs (ifvg_edge+
+named+combined) is an open question — B24's close mode advantage was measured with combined+all-day.
+
+Source: deployed bot_config.json audit (from B40 session); B25/B26 partial sensitivity tests;
+B31 Phase A methodology.
+
+## B43 — ORB late-session signal cutoff (orb_signal_window_mins parameter)  [pending]
+Hypothesis: ORB signals after 10:30 ET (60 minutes post-open) are loss-making over 5 years
+(10:30-11:00 ET: PF=0.963, n=57; 11:00-11:30 ET: PF=0.622, n=27). The early-session window
+(9:45-10:30 ET, n=926) carries virtually all the ORB edge. After 10:30 ET, breakout momentum
+exhausts into the "lunch doldrums" period. Suppressing new ORB signals after 60-90 minutes removes
+10% of trades while eliminating a clearly negative segment.
+
+Counterargument: the 11:30+ ET bucket (n=19, PF=3.213) suggests late-session breakouts may have
+high quality, but n=19 over 5 years is too sparse to trust. The 10:30-11:30 ET loss ($2,896 over
+5y) is real but small in magnitude. Volume impact: removing 84/1030 trades (8%) barely affects
+combine volume (already ~23/month ORB; removing 8% → ~21/month).
+
+Mechanism (requires code):
+- Add `orb_signal_window_mins: int = 0` to StrategyParams (default 0 = no cutoff).
+- In ORBDetector.on_bar: if `config.orb_signal_window_mins > 0`:
+    compute `mins_since_open = (bar.ts.astimezone(ET).hour - 9)*60 + bar.ts.astimezone(ET).minute - 30`
+    if `mins_since_open >= config.orb_signal_window_mins`: return None (suppress signal emission)
+    Existing open positions (from earlier signals) are unaffected — only new signal generation stops.
+- The OR range continues building regardless of the window cutoff (the range accumulation is useful
+  for detecting new breakouts early in the window).
+- ET conversion: `bar.ts.astimezone(ZoneInfo("America/New_York"))`.
+
+Fixed defaults: `orb_signal_window_mins=0` (no cutoff, existing behavior preserved).
+Test at: 60 (10:30 ET cutoff) and 90 (11:00 ET cutoff).
+
+Defining-behavior tests (tests/test_orb_signal_window.py):
+1. orb_signal_window_mins=0 (default): signals fire any time (existing behavior unchanged)
+2. orb_signal_window_mins=60: a breakout bar at exactly 60min post-open → no signal;
+   a bar at 59min → signal fires normally
+3. orb_signal_window_mins=60: signal fired at 55min; position open at 65min → position
+   remains open (cutoff affects NEW signals only, not existing positions)
+4. Window check uses ET timezone (23:30 UTC = 19:30 ET, no signal even if late evening)
+
+Benchmark (BOTH objectives; parity flags --partial-r 0 --set swing_stop_lookback=0):
+1. Combine: run_monthly_combine.py --set engine=orb --set orb_r_multiple=2.5
+   --set orb_signal_window_mins=60 (and =90). Compare to ORB baseline (10/61, PF 1.06).
+   Success: passes improve AND PF improves (stop rule if both degrade).
+2. Funded: equity_export --set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+   --set orb_signal_window_mins=60 --risk-pct 0.75 + funded_sim.
+   Compare to B31 Phase B baseline (13 busts, $3,131/acct). Success: bust rate decreases or PF improves.
+3. Also run: standard two-phase pipeline with orb_signal_window_mins=60 Phase B (per-year equity).
+
+Success criteria:
+- Primary: combine passes improve AND funded PF improves (at least one, without degrading the other)
+- Stop rule: if BOTH metrics degrade at BOTH tested window values (60 and 90 min), reject
+- Volume check: remove no more than 20% of ORB trades (currently removing 8% — safe)
+
+Prior: ~35% that 60-min cutoff meaningfully improves the combine or funded objectives. The data shows
+a real edge degradation after 10:30 ET, but n=57 (loss-making) and n=27 (clearly negative) are small
+samples. The combine pass rate is primarily volume-limited (Lesson 2); removing 8% of trades may
+slightly hurt combine months on the margin. The funded PF improvement is more likely to materialize.
+
+Source: scripts/_research_mining.py (wk2-r3) — 5y ORB MFE/MAE timing analysis.
+ORB 10:30+ ET structural weakness: less momentum continuation in the lunch doldrums vs early-session
+urgency. The 10:05-10:30 ET window (PF 1.43-1.53) is STRONGER than the 9:45-55 ET window (PF 1.17),
+suggesting delayed breakouts (after first-bar noise settles) are higher quality — the cutoff preserves
+this higher-quality delayed window while removing only the post-10:30 deterioration.

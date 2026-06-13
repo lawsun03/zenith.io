@@ -652,3 +652,25 @@ Appended 2026-06-14 (B40 combined-engine vs iFVG-only Phase A):
     configs (named sessions), engine=combined substantially outperforms engine=ifvg for the combine
     phase. In high-frequency configs (all_day killzones), the difference is smaller because iFVG
     already generates sufficient volume without ORB's contribution.
+
+Appended 2026-06-14 (wk2-r3 research session):
+
+81. **ORB signals after 10:30 ET (60 min post-open) are loss-making on NQ 5min over 5 years.**
+    From 5y MFE/MAE data (n=1030 ORB trades, excl 2022): 9:45-10:30 ET (n=926) blended PF ~1.21;
+    10:30-11:00 ET (n=57) PF=0.963; 11:00-11:30 ET (n=27) PF=0.622; 11:30+ ET (n=19) PF=3.213
+    (unreliable sample). The 10:30-11:30 window costs ~$2,900 over 5y. Notably, the 10:05-10:30 ET
+    window (delayed breakouts: PF 1.43-1.53) is HIGHER quality than the 9:45-55 ET initial window
+    (PF 1.17) — delayed breakouts after first-bar noise settles are higher conviction. Rule: ORB
+    signal quality degrades past 10:30 ET into the lunch-doldrums period. Proposed B43 tests an
+    orb_signal_window_mins=60 cutoff. Don't apply this finding to iFVG signals (different timing
+    structure — iFVG fires across all sessions, and B18/B19 already tested session filtering).
+
+82. **iFVG initial MAE distribution shows near-perfect separation between winners and losers.**
+    From 5y data (n=2477, excl 2022): trades with MAE<0.25R: WR=93.3%, PF=335 (n=267); MAE 0.25-
+    0.5R: WR=83.1%, PF=40; MAE 0.5-0.75R: WR=72.3%, PF=17; MAE 0.75-1R: WR=43.9%, PF=2.6; MAE
+    1R+ (stop-outs): WR=0.7%, PF=0.026 (n=1438). This validates the existing swept-extreme stop
+    placement: losers overwhelmingly go all the way to the stop. An intrabar early-MAE trailing
+    mechanism (e.g., tighten stop after first bar confirms clean run) MIGHT improve outcomes but
+    requires per-trade time-series MAE instrumentation (current infrastructure tracks only final MAE
+    per trade, not time-of-day MAE evolution). Don't propose MAE-gating without this new
+    instrumentation. The clean-run WR/PF is not actionable with existing backtest infrastructure.
