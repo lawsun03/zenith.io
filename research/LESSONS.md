@@ -306,3 +306,14 @@ Appended 2026-06-13 (wk1-r4 research session):
     equity_export benchmarks must pass `--partial-r 0 --set swing_stop_lookback=0` (and other
     explicit overrides) to maintain within-series consistency with prior results — OR explicitly
     document that a new research baseline is being established.
+
+Appended 2026-06-13 (B22 ORB range_minutes sensitivity):
+
+51. **The ORB 15-min opening range window is near-optimal for NQ 5min.** B22 tested 10-min and
+    30-min alternatives: 10-min achieves marginally better run PF (+3pp, 1.09 vs 1.06) and funded
+    $/month (+9%) with identical combine passes (10/61); 30-min is significantly worse (6/61 passes,
+    PF 0.96, -42% funded $/mo). Neither meets the 13/61 combine success criterion. The range_minutes
+    parameter joins the parameter plateau — it is not a productivity lever. Additional structural note:
+    the 10-min window reverses the long/short PF split (10-min longs PF 1.15 > shorts 1.03; 15-min
+    shorts PF 1.13 > longs 0.99). The first 10 minutes of regular trading appear to capture cleaner
+    directional breakout structure on NQ; the 11-15 minute extension adds weaker long-side entries.

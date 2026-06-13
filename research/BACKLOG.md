@@ -502,7 +502,7 @@ Key data findings driving proposals:
 - **Web search**: SSRN 6709401 (Apr 2026) tests 14 OHLCV signal families on MNQ 5min 2021-2025 —
   no family survives institutional standards. Lesson 6 confirmed 4-for-4. No new mechanisms found.
 
-## B22 — ORB opening range window sensitivity (10 vs 15 vs 30 min)  [pending]
+## B22 — ORB opening range window sensitivity (10 vs 15 vs 30 min)  [done — rejected: 30min strictly worse (6/61 PF 0.96 vs baseline 10/61 PF 1.06 — stop rule); 10min marginal improvement (+3pp PF, same 10/61 passes, +9% funded $/mo) but does not meet 13/61 success criterion; 15min default is near-optimal; long/short PF reversal at 10min is the notable finding (longs 1.15 vs 1.03 at 15min)]
 Hypothesis: the 15-minute opening range window is arbitrary. A shorter window (10 min) locks
 the OR faster and generates more breakout opportunities; a longer window (30 min) filters out
 the first-bar noise and produces higher-quality breakouts at lower frequency. Either direction

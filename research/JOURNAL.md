@@ -472,3 +472,34 @@ Entry format:
 - **Next:** B22 (ORB range_minutes sensitivity — no code, clean benchmark) or B23 (iFVG daily cap —
   small code, funded only). Monday priority: address config parity gap + decision on deploying B21
   two-phase config (iFVG r1.25 Combine + ORB-reentry r0.75 Funded).
+
+## 2026-06-13T11:28Z — session wk1-b22 — B22 (ORB opening range window sensitivity)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no lockout. Market closed (weekend).
+- **Session type:** B22 reclaim (orphan — in-progress with no journal entry; reclaimed per protocol).
+- **Ran:** Three combine runs (orb_range_minutes=10/15/30) + three equity exports + three funded_sim runs. All at `--partial-r 0 --set swing_stop_lookback=0` for B1-B21 research baseline parity. No code changes; 636 tests green.
+- **Numbers:**
+
+  **Combine (risk-pct 1.25, partial-r 0, swing_stop_lookback=0):**
+
+  | Config | Passes/61mo | Pass% | Run PF | Long PF | Short PF |
+  |--------|------------|-------|--------|---------|---------|
+  | ORB 10min | 10/61 | 16% | 1.09 | 1.15 | 1.03 |
+  | ORB 15min (baseline) | 10/61 | 16% | 1.06 | 0.99 | 1.13 |
+  | ORB 30min | 6/61 | 10% | 0.96 | 0.97 | 0.94 |
+
+  **Funded (flat 5y, r1.0, partial-r 0, haircut 200):**
+
+  | Config | Trades | PF | Net 5y | Sust | $/mo |
+  |--------|--------|----|--------|------|------|
+  | ORB 10min | 1,289 | 1.175 | $127,793 | 51/55=0.927x | $2,130 |
+  | ORB 15min (baseline) | 1,287 | 1.176 | $117,439 | 47/58=0.810x | $1,957 |
+  | ORB 30min | 1,272 | 1.156 | $67,646 | 26/52=0.500x | $1,127 |
+
+- **Stop rule check:**
+  - ORB 30min: loses on BOTH metrics vs baseline (passes 6 < 10 AND PF 0.96 < 1.06) → **stopped / rejected**.
+  - ORB 10min: PF wins (1.09 > 1.06), same passes (10/61) → not stopped. But 10/61 < 13/61 success criterion → fails success criteria.
+- **Success criteria check:** "Combine: any value achieves >= 13/61 AND PF >= 1.10." Neither 10min nor 30min meets this. 10min reaches PF 1.09 (just below 1.10) with 10 passes (below 13). Close but no pass.
+- **Verdict:** rejected — parameter plateau confirmed for ORB range window. 30min strictly worse (stop rule). 10min is a marginal improvement on PF but doesn't break through the 13/61 threshold or meet the 1.10 PF requirement exactly.
+- **Notable finding:** The 10-min window reverses the long/short PF split vs 15-min. At 15min: longs PF 0.99 (loss-making), shorts PF 1.13. At 10min: longs PF 1.15, shorts PF 1.03. The first 10 minutes capture cleaner directional breakout structure (NQ typically shows clean directional bias in the first 10 minutes of regular trading) while the 11-15 minute window adds weaker long entries after the initial move has partially played out. This is an interesting structural observation but insufficient to change the recommendation.
+- **Learned:** The ORB 15-min window is near-optimal for NQ 5min on both the combine and funded objectives. Shortening to 10min produces a marginally better run PF (+3pp) and funded $/mo (+9%) but identical combine passes. Widening to 30min degrades significantly (both objectives). The parameter plateau documented in prior sessions extends to the range_minutes dimension.
+- **Next:** B23 (iFVG daily signal cap — small code item; cap=1 funded funded objective). The only remaining pending backlog item.
