@@ -220,8 +220,11 @@ def main() -> int:
     for ov in args.set:
         k, v = ov.split("=", 1)
         cur = getattr(strategy, k)  # raises if unknown — fail loud
-        typ = type(cur)
-        strategy = strategy.model_copy(update={k: typ(v)})
+        if isinstance(cur, list):
+            new_val = [x.strip() for x in v.split(",") if x.strip()] if v.strip() else []
+        else:
+            new_val = type(cur)(v)
+        strategy = strategy.model_copy(update={k: new_val})
     if args.contracts is None:
         args.contracts = bot_cfg.contracts
     if args.risk_pct is None:

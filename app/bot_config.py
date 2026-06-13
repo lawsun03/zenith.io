@@ -167,6 +167,12 @@ class StrategyParams(BaseModel):
     # Rank-1 signals (first of day, PF=1.129) carry the edge; rank-2+ signals drag (PF=0.970).
     ifvg_daily_signal_cap: int = 0
 
+    # B30: day-of-week filter. Empty list = no suppression. Signal emission is suppressed
+    # on these ET weekday names; detector state (sweeps, ranges) still accumulates.
+    # Names match Python strftime("%A"): "Monday", "Tuesday", ..., "Sunday".
+    # iFVG Tuesday PF=0.917 (loss-making); ORB Monday/Wednesday PF=0.898/0.942 (loss-making).
+    skip_trading_days: list[str] = Field(default_factory=list)
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

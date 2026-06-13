@@ -42,6 +42,8 @@ class ORBConfig:
     pdr_lookback: int = 60          # trading days; waits until window full
     reentry_after_stop: bool = False  # re-arm once per day after a confirmed stop
     long_only: bool = False           # suppress bearish breakout signals (funded PF improvement)
+    # B30: day-of-week filter. Range still builds; only signal emission is suppressed.
+    skip_trading_days: list[str] = field(default_factory=list)
 
 
 class ORBDetector:
@@ -105,6 +107,11 @@ class ORBDetector:
             log.info("ORB range established: %s OR=[%s-%s]",
                      self.config.instrument, self._or_low, self._or_high)
             self._or_range_logged = True
+
+        # B30: day-of-week filter — range built above, no signal emitted on filtered days.
+        if self.config.skip_trading_days and et.strftime("%A") in self.config.skip_trading_days:
+            return None
+
         if self._fired >= self.config.max_trades_per_day:
             return None
 

@@ -482,3 +482,24 @@ Appended 2026-06-13 (wk2-r1 research session):
     these days improves funded-phase PF and sustainability. Importantly: these are DIFFERENT from
     session-hour filters (B18 rejected) — DOW patterns reflect institutional calendar cycles, not
     intraday microstructure.
+
+Appended 2026-06-13 (B30 DOW filter):
+
+67. **DOW PF from the full population does not transfer to a config subset that already filters the loss drivers.**
+    Tuesday iFVG PF=0.917 (all-sides all-day) was caused by loss-making shorts (PF<1) and afternoon/overnight
+    sessions (PF<1). The close-mode long-only london+ny_am config had already removed both loss drivers.
+    Applying skip_trading_days=Tuesday to this already-filtered config removed profitable Tuesday LONGS in
+    the London/NY AM windows, collapsing PF from 1.167 (B24 baseline) to 0.996 (loss-making) and sust from
+    2.524x to 0.27x. Rule: before proposing a DOW filter on a config subset, compute DOW PF WITHIN that
+    exact subset — not in the population-level data. Population-level DOW PF is only valid as a hypothesis
+    for unfiltered configs.
+
+68. **DOW filters that remove bad days can improve pipeline $/month by accelerating equity cycling, but this
+    comes at the cost of sustainability.** ORB skip Mon+Wed removed loss-making Monday (PF=0.898) and Wednesday
+    (PF=0.942) ORB signals. This made the ORB equity curve rise faster on Tue/Thu/Fri → combine phases completed
+    in 16.1 days/attempt vs 26.4 days (−39%), enabling more pipeline cycles per year → $/month +42% ($708 vs
+    $497). But faster cycling means more total funded account slots opened over 5y: 16 XFA busts (vs 13), sust
+    2.12x (vs 2.62x). The DOW filter failed the primary criterion (busts <13 required). Mechanism is the same
+    as the frequency lesson from B29: higher cycle speed amplifies both gains and bust frequency. Rule: DOW
+    filters that remove bad days should be evaluated on sust (not just $/mo), as faster cycling always amplifies
+    bust frequency in the two-phase pipeline model.

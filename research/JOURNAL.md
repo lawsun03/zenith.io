@@ -841,3 +841,38 @@ Entry format:
 - **Verdict:** dataset — 3 new backlog items appended; no items to evaluate this session.
 - **Learned:** Day-of-week structural patterns in our own 5y data reveal two genuine anomalies: iFVG Tuesday loss-making (PF=0.917, -$15.8k net) and ORB Monday/Wednesday both negative. These are different from session-hour filters (B18 rejected) because they reflect institutional calendar patterns, not time-of-day microstructure. ORB Friday's PF=1.775 is the strongest single-segment finding since iFVG London (PF~1.3-1.4 from hour-of-day analysis).
 - **Next:** B30 (DOW filter, code required) — highest-quality new finding; prior ~55%. B31 and B32 are no-code quick benchmarks that can follow.
+
+## 2026-06-13T19:30:00Z — session wk2-b30 — B30 (DOW filter: skip_trading_days parameter)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B30 (reclaim — previous session wk2-b30 crashed after generating equity_b30 CSVs but before running benchmarks; code was complete, tests passed, equity CSVs existed). No research session: last research was wk2-r1 only 1 session ago.
+- **Ran:**
+  1. Verified all B30 code from crashed session: `skip_trading_days` in StrategyParams (bot_config.py:174), DOW filter in SweepDisplacementComposer.on_displacement (composer.py:267-270) and ORBDetector.on_bar (orb.py:111-113), wiring in runner.py and main.py. 4 defining-behavior tests all pass.
+  2. Ran B30 pipeline analysis (ORB-reentry skip Mon+Wed two-phase) using equity_b30/ CSVs.
+  3. Ran equity_export (flat 5y) for iFVG close-mode LongOnly london+ny_am skip Tuesday → r1.25.
+  4. Ran funded_sim on iFVG skip Tuesday equity at haircut 200. Test suite: **644 passed, 2 skipped**.
+
+- **Numbers:**
+
+  **ORB-reentry skip Mon+Wed r0.75 — two-phase pipeline (Phase A = iFVG r1.25 equity_b1/control):**
+  | Config | Combine passes | XFA busts | XFA net 5y | Net/cycle | Cycle days | $/mo | Sust |
+  |--------|---------------|-----------|------------|-----------|------------|------|------|
+  | ORB-reentry skip Mon+Wed r0.75 (B30) | 21/39 standalone | 16 | $49,688 | $2,208 | 65.5d | **$708** | **2.12x** |
+  | ORB-reentry r0.75 (B21 ref) | 19/39 standalone | 13 | $43,834 | $2,416 | 102.1d | $497 | 2.62x |
+
+  **iFVG close-mode LongOnly london+ny_am skip Tuesday r1.25 — standalone funded (flat 5y, haircut 200):**
+  | Config | Trades | Net 5y | PF | Combine passes | XFA busts | Sust |
+  |--------|--------|--------|----|----|------|------|
+  | skip Tuesday (B30) | 2,856 | **-$3,843** | **0.996** | 24 | 89 | **0.27x** |
+  | B24 baseline (no skip) | ~3,600 est. | +$180,534 | 1.167 | 53 | 21 | 2.524x |
+  | B19 baseline (ifvg_edge) | ~2,645 | +$184k | 1.173 | - | - | 1.600x |
+
+- **Stop rule check:**
+  - ORB DOW filter: fails primary criterion (16 busts > 13 needed). Improves $/mo (+42%) but hurts sust (-19%). Stop rule NOT triggered ($/mo improves), but explicit success criterion (busts < 13 AND $/mo >= $497) fails on busts.
+  - iFVG DOW filter: loses on BOTH metrics vs B24 baseline (PF 0.996 vs 1.167; sust 0.27x vs 2.524x). Stop rule TRIGGERED — catastrophic regression.
+
+- **Root cause (iFVG):** Tuesday PF=0.917 in the wk2-r1 research data was computed from ALL-SIDES ALL-DAY MFE/MAE data. The close-mode long-only london+ny_am config had already removed the loss drivers: (a) iFVG short side (PF=0.960) and (b) afternoon/overnight sessions (low PF). The remaining Tuesday LONGS in the London/NY AM windows (02:00-11:00 ET) are profitable in close mode. Removing Tuesday removed these profitable signals, collapsing PF from 1.167 to 0.996 (net negative over 5y).
+- **Root cause (ORB):** Skip Mon+Wed speeds up ORB equity cycling — combines complete faster (16.1d vs 26.4d/attempt) because Mon/Wed loss-making drag is removed. This means more pipeline cycles per year (+42% $/mo), but also more total funded account slots opened → 16 busts vs 13 (23% more). Same mechanism as B29 (10-min ORB): faster cycling amplifies both gains and busts.
+- **Notable (ORB):** The Mon/Wed ORB equity CSVs show ~$2,300 of equity changes on Mon/Wed (3 events, 4.6% of total net). These are bracket fills from prior-day positions held overnight — the live flatten-at-4:10PM prevents this, causing a slight backtest overstatement. Not material to the conclusion.
+- **Verdict:** rejected — iFVG DOW filter catastrophically hurts the close-mode long-only config (PF 0.996, sust 0.27x); ORB DOW filter fails the primary busts criterion (16 > 13). The `skip_trading_days` feature ships default-off; neither application passes its success criteria. Lessons 67-68 added.
+- **Learned:** DOW PF from the full all-sides all-day population does not transfer to already-filtered config subsets — the filter removes loss-making shorts and bad sessions, leaving only high-quality signals on every day of the week including Tuesday. Applying a DOW filter on top of side/session filters is redundant at best and harmful when the bad-day signal class is already excluded. The ORB DOW filter lesson mirrors B29: removing bad days from the equity curve speeds cycling (good for $/mo) but doesn't reduce total bust frequency proportionally (bad for sust), failing the strict pipeline criterion.
+- **Next:** B31 (Phase A higher-risk r=2.0 sensitivity — no code, quick benchmark) or B32 (ORB-reentry r=0.5 risk floor).

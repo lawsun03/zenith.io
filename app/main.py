@@ -204,6 +204,7 @@ def _build_runner(
             pdr_enabled=s.orb_pdr_enabled,
             reentry_after_stop=s.orb_reentry_after_stop,
             long_only=s.orb_long_only,
+            skip_trading_days=s.skip_trading_days,
         ))
         return ORBRunner(
             instrument=instrument,
@@ -250,6 +251,7 @@ def _build_runner(
                 max_stop_atr=s.max_stop_atr,
                 inversion_min_body_r=s.inversion_min_body_r,
                 daily_signal_cap=s.ifvg_daily_signal_cap,
+                skip_trading_days=s.skip_trading_days,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,
@@ -290,6 +292,8 @@ def _build_runner(
             confirmation=s.confirmation,
             max_stop_atr=s.max_stop_atr,
             inversion_min_body_r=s.inversion_min_body_r,
+            daily_signal_cap=s.ifvg_daily_signal_cap,
+            skip_trading_days=s.skip_trading_days,
         )),
         grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,

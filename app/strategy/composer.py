@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
@@ -157,6 +157,11 @@ class ComposerConfig:
     # PF=1.129; rank-2+ drags to 0.970 — cap=1 isolates the highest-quality signal).
     daily_signal_cap: int = 0
 
+    # B30: day-of-week filter. Empty list = no suppression. Suppress signal emission
+    # on these ET weekday names; sweep/displacement state still accumulates.
+    # Names match strftime("%A"): "Monday", ..., "Sunday".
+    skip_trading_days: list[str] = field(default_factory=list)
+
 
 @dataclass
 class _Awaiting:
@@ -258,6 +263,12 @@ class SweepDisplacementComposer:
         Returns at most one Signal per call. If multiple awaitings could
         match, we take the most recent — that's the freshest setup.
         """
+        # B30: day-of-week filter — suppress signal emission only, not sweep state.
+        if self.config.skip_trading_days:
+            et_weekday = bar.ts.astimezone(_ET).strftime("%A")
+            if et_weekday in self.config.skip_trading_days:
+                return None
+
         if event.fvg is None:
             if self.config.confirmation == "displacement_only":
                 pass  # T5 semantics: no zone needed

@@ -55,7 +55,11 @@ def main() -> int:
     for ov in args.set:
         k, v = ov.split("=", 1)
         cur = getattr(strategy, k)  # raises if unknown — fail loud
-        strategy = strategy.model_copy(update={k: type(cur)(v)})
+        if isinstance(cur, list):
+            new_val = [x.strip() for x in v.split(",") if x.strip()] if v.strip() else []
+        else:
+            new_val = type(cur)(v)
+        strategy = strategy.model_copy(update={k: new_val})
 
     contracts = args.contracts if args.contracts is not None else bot_cfg.contracts
     risk_pct = Decimal(args.risk_pct) if args.risk_pct is not None else bot_cfg.risk_per_trade_pct

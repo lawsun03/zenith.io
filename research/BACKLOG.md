@@ -904,7 +904,7 @@ testable hypotheses. Primary source: 5y MFE/MAE day-of-week mining + web researc
 - **Web search:** No new mechanism families (Lesson 6 confirmed 5-for-5; SSRN/arxiv finds no robust
   signals on index futures). Topstep published 16.8% combine success rate vs our 21% baseline.
 
-## B30 — Day-of-week (DOW) filter: skip_trading_days parameter  [pending]
+## B30 — Day-of-week (DOW) filter: skip_trading_days parameter  [done — rejected: iFVG skip Tuesday catastrophically worse (PF 0.996, sust 0.27x vs B24 1.167/2.524x — Tuesday longs in close-mode long-only london+ny_am ARE profitable; removing them destroys edge); ORB skip Mon+Wed mixed ($/mo +42% to $708/mo, sust -19% to 2.12x, 16 busts > 13 criterion — fails primary); skip_trading_days feature ships default-off; Lessons 67-68]
 Hypothesis: iFVG Tuesday (PF=0.917) and ORB Monday+Wednesday (PF=0.898/0.942) are structurally
 loss-making over 5 years. Suppressing signals on these days should improve funded-phase PF and
 reduce bust frequency without touching the entry/exit mechanics.
