@@ -517,5 +517,26 @@
     "verdict": "rejected",
     "learned": "LongOnly-iFVG funded creates 2x more XFA account cycles than ORB funded (53 vs 28 over 5y, at r1.0) because account durations are ~half as long (~24d vs ~45d). The iFVG combine produces 34 passes — enough to sustain 34 busts (ORB r1.0 needs only 27) but not 52 (LongOnly r1.0 busts). B20's standalone sust metric (B15: 1.12x) was misleading because it assumed the same strategy for combine and funded; the two-phase model exposes that LongOnly-iFVG funded requires MORE combine passes than iFVG can supply. B3 remains the recommended two-phase pair: iFVG Combine + ORB r1.0 Funded ($393/mo, sust 1.26x).",
     "links": {"doc": "trade_analysis/2026-06-13_B20_ifvg_combine_longonly_funded.md", "runs": ["research/equity_b20/"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T11:00:00Z",
+    "session": "wk1-b21",
+    "item": "B21",
+    "variant": "iFVG r1.25 Combine -> ORB-reentry (orb_reentry_after_stop=True) Funded at r0.75/r1.0/r1.25",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_ifvg_passes": 34, "phase_a_ifvg_attempts": 162, "phase_a_days_per_funded": 28.6,
+      "b_r075_net_mo": 497, "b_r075_sust": 2.62, "b_r075_xfa_busts": 13, "b_r075_xfa_net_5y": 43834, "b_r075_net_per_acct": 3131, "b_r075_avg_funded_days": 73.5,
+      "b_r100_net_mo": 412, "b_r100_sust": 0.83, "b_r100_xfa_busts": 41, "b_r100_xfa_net_5y": 73686, "b_r100_net_per_acct": 1754,
+      "b_r125_net_mo": 523, "b_r125_sust": 0.71, "b_r125_xfa_busts": 48, "b_r125_xfa_net_5y": 95481, "b_r125_net_per_acct": 1949,
+      "b3_ref_net_mo": 393, "b3_ref_sust": 1.26, "b3_ref_orb_r10_busts": 27,
+      "b3_conservative_ref_net_mo": 377, "b3_conservative_ref_sust": 2.43,
+      "orb_no_reentry_r075_xfa_net_5y": 35653, "orb_no_reentry_r075_net_per_acct": 2547,
+      "haircut": 200,
+      "note": "per-year equity CSVs (equity_b21/) with same B3 methodology; success criteria: $/mo >= $393 AND sust >= 1.26x"
+    },
+    "verdict": "candidate",
+    "learned": "ORB-reentry (orb_reentry_after_stop=True) at r0.75 combined with iFVG Combine achieves $497/mo and sust 2.62x — beating B3's best pair ($393/mo, 1.26x) by +26% $/mo and +108% sustainability. The mechanism: at r0.75, reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded busts low (13 vs 14). The iFVG combine's 34 passes sustain only 13 reentry busts → 2.62x sust. r1.0 and r1.25 reentry configs are both pipeline-negative (sust 0.83x and 0.71x) — the volume amplification at higher risk creates more busts than the iFVG combine can replace. B21 r0.75 is the new recommended two-phase pipeline config.",
+    "links": {"doc": null, "runs": ["research/equity_b21/"], "src": null}
   }
 ]

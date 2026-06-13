@@ -442,7 +442,7 @@ this passes criteria) — the long-only removal of loss-making shorts is a stron
 
 Source: B1/B3 pipeline model + B15 equity data + per-year methodology correction analysis.
 
-## B21 — iFVG Combine → ORB-reentry Funded (two-phase pipeline)  [pending]
+## B21 — iFVG Combine → ORB-reentry Funded (two-phase pipeline)  [done — candidate: iFVG r1.25 Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x (vs B3 $393/mo, 1.26x — beats B3 on both criteria); r1.0/r1.25 reentry pipeline-negative; new recommended two-phase pair]
 Hypothesis: B14 ORB-reentry standalone sust 0.99x at r1.0 (borderline pipeline-negative).
 B3 showed that iFVG combine speed lifts ORB r1.0 standalone sust 0.85x → 1.26x two-phase.
 The same mechanism may lift ORB-reentry from 0.99x → ~1.46x two-phase. Additionally,

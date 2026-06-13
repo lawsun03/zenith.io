@@ -265,6 +265,14 @@ Appended 2026-06-13 (B20 iFVG Combine → LongOnly-iFVG Funded two-phase pipelin
     When evaluating a funded strategy for the two-phase model, prefer slower-cycling strategies (fewer total accounts, longer
     durations) unless the combine phase can supply passes at a matching rate.
 
+Appended 2026-06-13 (B21 iFVG Combine → ORB-reentry Funded two-phase pipeline):
+
+47. **ORB-reentry at low risk (r0.75) is the funded-phase optimum in the two-phase pipeline.**
+    iFVG r1.25 Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x — beats B3's best pair (ORB r1.0, $393/mo, 1.26x) by +26% $/mo and +108% sustainability. At r0.75, reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded busts nearly identical (13 vs 14). The iFVG combine's 34 passes sustain only 13 busts comfortably. At r1.0/r1.25, reentry creates 41/48 busts — far more than the 34 iFVG passes can cover, making those configs pipeline-negative. Rule: in a constrained-pipeline model, match funded bust frequency to Phase A pass frequency before optimizing $/month.
+
+48. **ORB-reentry adds 23% per-account earnings at r0.75 without proportionally increasing bust frequency.**
+    The reentry mechanism (second signal after a confirmed stop) produces a second, lower-quality breakout entry that increases total account earnings while consuming account losses more slowly at conservative sizing. At r0.75, the per-account loss when the account busts is smaller, so the reentry-induced losers don't accelerate bust timing as much as at r1.0+. This sizing asymmetry means the optimal funded configuration differs from the optimal standalone configuration: standalone optimum is r1.0 (B14), two-phase optimum is r0.75.
+
 Appended 2026-06-13 (B19 long-only iFVG + London+NY AM funded benchmark):
 
 44. **NY PM signals (13:xx-16:30 ET) are loss-making in LONG-ONLY iFVG and safely removable.**

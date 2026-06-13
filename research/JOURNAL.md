@@ -405,3 +405,25 @@ Entry format:
 - **Key insight:** B18 found that removing named sessions from ALL-SIDES iFVG hurts the funded pipeline. B19 shows the opposite for LONG-ONLY iFVG when removing specifically NY PM. The distinction: B18 removed overnight/pre-market sessions with positive PF contributions from shorts; B19 removes only NY PM (PF 0.906 all-sides, and evidently even weaker for longs). The ~1,283 fewer NY PM trades per 5y contribute nearly zero net P&L but increase bust variance.
 - **Learned:** NY PM window (13:xx-16:30 ET) signals are loss-making in long-only iFVG. Removing them from B15's config improves funded PF by 3-5% and pipeline sustainability by 5-42% (risk-level dependent, with r1.25 showing the strongest effect). The B18 counterintuitive finding does not extend to this case because the positive-PF overnight sessions B18 was losing are absent from the long-only view.
 - **Next:** B20 (iFVG Combine → LongOnly-iFVG Funded two-phase pipeline — should use B19 r1.25 config for Phase B per-year equity generation); B21 (ORB-reentry two-phase).
+
+## 2026-06-13T11:00Z — session wk1-b21 — B21 (iFVG Combine → ORB-reentry Funded two-phase pipeline)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift. Market closed (weekend).
+- **Ran:** Generated per-year ORB-reentry equity CSVs in equity_b21/ (15 files: 5 years × 3 risk levels 0.75/1.0/1.25) with `--set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True`. Wrote `scripts/run_b21_pipeline.py` (clone of run_b20_pipeline.py adapted for B21 equity_b21 configs). Ran pipeline analysis using equity_b1/control_r1p25 (iFVG Combine, Phase A) and equity_b21/ (ORB-reentry Funded, Phase B) at haircut=200. No code changes; 636 tests remain green.
+- **Numbers (iFVG r1.25 Combine → ORB-reentry Funded, h200, per-year methodology):**
+
+  | Phase B Config | Reset$/acct | XFA$/acct | Net/cycle | Cycle days | Net/mo | Sust | vs B3 |
+  |---|---|---|---|---|---|---|---|
+  | ORB-reentry r0.75 | $715 | $3,131 | $2,416 | 102.1d | **$497** | **2.62x** | **BEATS B3** |
+  | ORB-reentry r1.0 | $715 | $1,754 | $1,040 | 53.1d | $412 | 0.83x | below |
+  | ORB-reentry r1.25 | $715 | $1,949 | $1,234 | 49.6d | $523 | 0.71x | below |
+  | ORB r1.0 (B3 ref) | $715 | $1,936 | $1,221 | 65.3d | $393 | 1.26x | baseline |
+  | ORB r0.75 (B3 cons) | $715 | $2,547 | $1,832 | 102.1d | $377 | 2.43x | ref |
+
+  Phase A standalone: iFVG r1.25 — 34/162 combine passes, avg 6.0d/attempt, 28.6d/funded. XFA standalone: busts=73/74, sust=0.47x (expected, iFVG funded alone is pipeline-negative).
+
+- **Stop rule check:** r1.0 and r1.25 reentry lose on sustainability (0.83x and 0.71x < 1.26x) → stopped. R0.75 reentry wins on BOTH criteria ($497 > $393 AND 2.62x > 1.26x) → candidate.
+- **Success criteria check (vs B3: $393/mo, sust 1.26x):** R0.75 PASSES — $497/mo (+26%) and sust 2.62x (+108%).
+- **Verdict:** candidate — iFVG r1.25 Combine + ORB-reentry r0.75 Funded is the new recommended two-phase pair. Beats B3's best pair on both primary metrics and beats B3's conservative pair on $/mo (while also having higher sustainability, 2.62x vs 2.43x).
+- **Mechanism:** At r0.75, ORB-reentry adds +23% per-account earnings ($3,131 vs $2,547 for plain ORB r0.75) while keeping funded bust count nearly identical (13 vs 14). The iFVG combine produces 34 passes against only 13 reentry busts → 2.62x sustainability. Higher risk levels (r1.0/r1.25) amplify volume but create too many funded busts for the iFVG combine to sustain.
+- **Learned:** ORB-reentry at low risk (r0.75) is the sweet spot for the two-phase pipeline: the reentry mechanism adds meaningful account earnings without creating the bust frequency that kills sustainability at r1.0+. This contrasts with B14's standalone finding (ORB-reentry sust 0.99x at r1.0) where the full earning power required r1.0+. In the two-phase model, the iFVG combine's fixed 34 passes constrains how many funded busts are sustainable; r0.75 reentry keeps busts at 13 (vs 27 for plain ORB r1.0) making the pipeline much more robust.
+- **Next:** B21 exhausts the backlog. Recommend a new research/ideation session to replenish. Monday recommendation: deploy iFVG r1.25 Combine + ORB-reentry r0.75 Funded as the two-phase config. Compare to deployed live config to assess phase-switch mechanics needed.
