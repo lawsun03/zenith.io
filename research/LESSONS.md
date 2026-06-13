@@ -317,3 +317,13 @@ Appended 2026-06-13 (B22 ORB range_minutes sensitivity):
     the 10-min window reverses the long/short PF split (10-min longs PF 1.15 > shorts 1.03; 15-min
     shorts PF 1.13 > longs 0.99). The first 10 minutes of regular trading appear to capture cleaner
     directional breakout structure on NQ; the 11-15 minute extension adds weaker long-side entries.
+
+Appended 2026-06-13 (B23 iFVG daily signal cap):
+
+52. **Temporal rank filtering (cap=1 per day) is strictly dominated by structural side+session
+    filtering (B19 long-only+london+ny_am) on the funded objective.** Cap=1 isolates rank-1 signals
+    (PF=1.129) but still takes loss-making shorts when they happen to arrive first — the rank-1 short
+    PF is positive (~1.12 blended) but below long-only aggregate (~1.173). B19 removes ALL shorts (PF=0.960)
+    and ALL NY PM (PF=0.906), producing better quality at similar volume. At r1.25: cap=1 PF=1.137,
+    sust=1.170x vs B19 PF=1.173, sust=1.600x. Rule: temporal rank filters are not a substitute for
+    structural side/session filters when the negative-quality signals arrive in unpredictable rank order.

@@ -503,3 +503,26 @@ Entry format:
 - **Notable finding:** The 10-min window reverses the long/short PF split vs 15-min. At 15min: longs PF 0.99 (loss-making), shorts PF 1.13. At 10min: longs PF 1.15, shorts PF 1.03. The first 10 minutes capture cleaner directional breakout structure (NQ typically shows clean directional bias in the first 10 minutes of regular trading) while the 11-15 minute window adds weaker long entries after the initial move has partially played out. This is an interesting structural observation but insufficient to change the recommendation.
 - **Learned:** The ORB 15-min window is near-optimal for NQ 5min on both the combine and funded objectives. Shortening to 10min produces a marginally better run PF (+3pp) and funded $/mo (+9%) but identical combine passes. Widening to 30min degrades significantly (both objectives). The parameter plateau documented in prior sessions extends to the range_minutes dimension.
 - **Next:** B23 (iFVG daily signal cap — small code item; cap=1 funded funded objective). The only remaining pending backlog item.
+
+## 2026-06-13T12:00:00Z — session wk1-b23 — B23 (iFVG daily signal cap, funded objective)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Session type:** B23 (only remaining pending backlog item). Implemented `ifvg_daily_signal_cap` parameter + benchmark.
+- **Ran:**
+  1. Code: added `ifvg_daily_signal_cap: int = 0` to `StrategyParams` (bot_config.py); `daily_signal_cap: int = 0` to `ComposerConfig`; ET-day counter in `SweepDisplacementComposer.__init__`; cap check+increment in `on_displacement`. Wired to all `ComposerConfig(...)` instantiation sites in `backtest/runner.py` (2 blocks) and `main.py` (2 blocks). 4 defining-behavior tests (`tests/test_ifvg_signal_cap.py`). Full suite: **640 passed, 2 skipped**.
+  2. Benchmark: `equity_export --partial-r 0 --set swing_stop_lookback=0 --set ifvg_daily_signal_cap=1` at r0.75/r1.0/r1.25 → `funded_sim --haircut 200`. Compared to B19 r1.25 baseline (PF=1.173, sust=1.600x).
+- **Numbers (h200, flat 5y bars 2021-2026 incl 2022):**
+
+  | Config | Trades | PF | Combine P | XFA Busts | Sust | $/mo |
+  |--------|--------|----|-----------|-----------|------|------|
+  | B23 cap=1 r0.75 | 2,548 | 1.101 | 39 | 68 | 0.574x | $1,883 |
+  | B23 cap=1 r1.0  | 2,546 | 1.117 | 48 | 59 | 0.814x | $2,452 |
+  | B23 cap=1 r1.25 | 2,542 | 1.137 | 55 | 47 | **1.170x** | $2,683 |
+  | B19 r1.0 (baseline) | 2,643 | 1.168 | 58 | 49 | 1.184x | ~$2,754 |
+  | B19 r1.25 (baseline) | 2,645 | 1.173 | 64 | 40 | **1.600x** | ~$3,068 |
+
+- **Stop rule check:** All three risk levels lose on BOTH metrics vs their respective B19 baselines. At r1.25: PF 1.137 < 1.173 ❌, sust 1.170x < 1.600x ❌ → stopped/rejected.
+- **Success criteria check:** "sust >= 1.60x AND PF >= 1.17 (vs B19 r1.25)". No variant passes.
+- **Verdict:** rejected — B15/B19 chain (long-only + london+ny_am session filter) remains the best funded standalone configuration. The daily cap approach is dominated by the structural side+session filter at all risk levels.
+- **Key mechanism:** Cap=1 takes the day's first signal regardless of side — a rank-1 short (average PF ~1.12, below the long-only PF 1.173) is still taken. B19 removes ALL shorts (5y PF 0.960) and ALL NY PM signals (PF 0.906). Both have similar trade volumes (~42-44/month), but B19's structural removal of loss-making signal types achieves 5-9% better PF and 47-97% better sust. Temporal rank filtering cannot substitute for structural quality filtering when the negative-quality signals arrive in unpredictable rank order.
+- **Learned:** Capping iFVG signals by intraday rank (first signal of the day only) does not improve on B19's structural long-only + session filter. The first signal of the day is still subject to side bias and session quality — a rank-1 NY PM short carries the same negative quality regardless of rank. Structural filters that remove loss-making signal classes outperform temporal rank filters at similar volume.
+- **Next:** Backlog exhausted. B23 was the last pending item. Session concludes; Lawrence to replenish backlog Monday with new hypotheses or review the recommended two-phase config deployment (B21: iFVG r1.25 Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x).

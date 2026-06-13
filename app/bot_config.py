@@ -162,6 +162,11 @@ class StrategyParams(BaseModel):
     # 0.15 = only inversion bars with body >= 15% of stop distance fire.
     inversion_min_body_r: Decimal = Decimal("0")
 
+    # B23: daily signal cap for iFVG engine. 0 = disabled (unlimited signals per day).
+    # >0 = suppress signals once this many iFVG signals have been emitted on the ET calendar day.
+    # Rank-1 signals (first of day, PF=1.129) carry the edge; rank-2+ signals drag (PF=0.970).
+    ifvg_daily_signal_cap: int = 0
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -536,7 +536,7 @@ could add meaningful volume if NQ's early-session volatility resolves faster).
 Source: ORB timing mechanics + common practitioner variations (range_minutes is the one
 unexplored ORB parameter after B5/B14/B17).
 
-## B23 — iFVG daily signal cap (funded objective, cap=1)  [pending]
+## B23 — iFVG daily signal cap (funded objective, cap=1)  [done — rejected: cap=1 r1.25 PF=1.137 sust=1.170x vs B19 r1.25 PF=1.173 sust=1.600x; both metrics worse at all risk levels; B19 long-only+london+ny_am remains the best funded standalone filter; ifvg_daily_signal_cap ships default-off, 4 defining-behavior tests, 640 total green]
 Hypothesis: the first iFVG signal of the day (rank-1, both sides) has PF=1.129, which is +8.3%
 above the full all-ranks aggregate (1.043). Rank-2 signals are loss-making (PF=0.970) due to
 rank-2+ shorts (PF=0.841). Capping at 1 signal per day raises PF to 1.129 — better than B15's

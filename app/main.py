@@ -249,6 +249,7 @@ def _build_runner(
                 confirmation=s.confirmation,
                 max_stop_atr=s.max_stop_atr,
                 inversion_min_body_r=s.inversion_min_body_r,
+                daily_signal_cap=s.ifvg_daily_signal_cap,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,

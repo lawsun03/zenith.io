@@ -38,9 +38,10 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
+from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
     from app.strategy.grader import SetupGrade
@@ -54,6 +55,7 @@ from .killzone import Killzone, default_killzones, in_killzone
 from .liquidity import LiquidityTracker, SweepEvent, Swing
 
 log = logging.getLogger(__name__)
+_ET = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,11 @@ class ComposerConfig:
     # 0 = disabled (default). 0.15 = body >= 15% of stop (blocks doji inversions).
     inversion_min_body_r: Decimal = Decimal("0")
 
+    # B23: cap signals emitted per ET calendar day. 0 = disabled (unlimited).
+    # >0 = suppress signals once this many have been emitted today (rank-1 has
+    # PF=1.129; rank-2+ drags to 0.970 — cap=1 isolates the highest-quality signal).
+    daily_signal_cap: int = 0
+
 
 @dataclass
 class _Awaiting:
@@ -199,6 +206,9 @@ class SweepDisplacementComposer:
         # Telemetry: total sweeps armed this process (EOD summary heartbeat —
         # distinguishes "detector saw nothing" from "gates blocked everything").
         self.sweeps_armed_total: int = 0
+        # B23: daily signal cap state (reset at ET-day boundary).
+        self._daily_signal_count: int = 0
+        self._current_et_day: date | None = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -269,6 +279,19 @@ class SweepDisplacementComposer:
         if self._cooldown_remaining > 0:
             log.info("Cooldown active (%d bars remaining) — signal suppressed", self._cooldown_remaining)
             return None
+
+        # B23: daily signal cap — reset counter at ET-day boundary, then gate.
+        if self.config.daily_signal_cap > 0:
+            et_day = bar.ts.astimezone(_ET).date()
+            if et_day != self._current_et_day:
+                self._current_et_day = et_day
+                self._daily_signal_count = 0
+            if self._daily_signal_count >= self.config.daily_signal_cap:
+                log.info(
+                    "Daily signal cap (%d) reached — signal suppressed (day %s)",
+                    self.config.daily_signal_cap, et_day,
+                )
+                return None
 
         # Volatility regime filter: skip entries outside the configured ATR range.
         if self.config.min_atr_filter > 0 and event.atr_at_event < self.config.min_atr_filter:
@@ -342,6 +365,8 @@ class SweepDisplacementComposer:
 
             signal = self._build_signal(bar, awaiting, event)
             self._awaiting = []
+            if signal is not None and self.config.daily_signal_cap > 0:
+                self._daily_signal_count += 1
             return signal
 
         return None
