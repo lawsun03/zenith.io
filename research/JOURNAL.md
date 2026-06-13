@@ -1010,5 +1010,48 @@ Entry format:
 - **Additional finding:** 26% of probe triggers reach 1.0R target WITHOUT an iFVG confirming. This suggests sweep+reclaim ALONE has a weak edge but insufficient to overcome the 56% stop rate in net expectancy.
 - **Verdict:** rejected — Phase 1 NO-GO. expected_R = -0.099R, clear negative. Phase 2 engine NOT built. Lesson 72 added.
 - **Learned:** The swept-extreme stop is NOT a durable anchor at the pre-inversion stage — it is the level price must continue through to form the iFVG setup. Lesson 1 ("the iFVG INVERSION is the quality filter") extends to mean: anything entered before the inversion is unfiltered noise. The 15.6x sweep:signal ratio quantifies how often the structural prerequisite (sweep) fires without producing the structural confirmation (displacement+inversion).
-- **Next:** B32 (ORB-reentry Phase B at r=0.5) or B34 (breaker-block+OTE — but Phase 1 falsification also required; do NOT build until Phase 1 data mining confirms positive expectancy). B35 is the most promising new pipeline item (ORB-reentry r=1.0/r=1.25 sensitivity).
-- **Next:** B32 (ORB-reentry Phase B at r=0.5 — closes the lower end of the reentry risk curve). B35 (ORB-reentry r=1.0/r=1.25 — most promising new item; tests if reentry avoids plain ORB's sust collapse at higher r).
+- **Next:** B32 (ORB-reentry Phase B at r=0.5) or B34 (breaker-block+OTE -- but Phase 1 falsification also required; do NOT build until Phase 1 data mining confirms positive expectancy). B35 is the most promising new pipeline item (ORB-reentry r=1.0/r=1.25 sensitivity).
+- **Next:** B32 (ORB-reentry Phase B at r=0.5 -- closes the lower end of the reentry risk curve). B35 (ORB-reentry r=1.0/r=1.25 -- most promising new item; tests if reentry avoids plain ORB's sust collapse at higher r).
+
+## 2026-06-14T09:00:00Z -- session wk2-b34 -- B34 (Breaker-block + OTE retracement zone -- Phase 1 falsification)
+- **Bot health:** /api/status OK -- XFA, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B34 (Lawrence-requested, priority rank above B32 after B33 per BACKLOG).
+- **Session type:** Phase 1 data-mining ONLY. B34 spec requires go/no-go gate before any engine code.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Explored sweep_bos.py and B33's analyze_b33_probe.py for architectural patterns.
+  3. Wrote scripts/analyze_b34_ote.py -- replays 5y bars through SweepBOSDetector, captures all BOS
+     signals, measures retrace depth (as fib ratio of impulse leg = sweep_extreme to BOS close) in
+     next 20 bars, tracks outcome (target hit / stop hit) in next 60 bars, buckets by retrace fib.
+  4. Ran analysis on all 5 years (283,176 bars, deployed MNQ config: stop_buffer=3.0, r_mult=3.5).
+  5. Test suite: **644 passed, 2 skipped** -- no production code changes.
+- **Numbers:**
+
+  Per-fib-bucket performance (entry at BOS bar close, stop at sweep extreme, target 3.5R):
+  | Bucket | N | Traded | WR | PF | MFE |
+  |--------|---|--------|----|----|-----|
+  | no_retrace | 139 | 96 | 84.4% | 18.90 | 3.43R |
+  | shallow (<0.38) | 2835 | 1540 | 62.3% | 5.79 | 2.59R |
+  | mid (0.38-0.50) | 858 | 444 | 46.2% | 3.00 | 2.25R |
+  | golden (0.50-0.62) | 895 | 520 | 43.8% | 2.73 | 2.21R |
+  | OTE (0.62-0.79) HYPOTHESIS | 1262 | 812 | 37.1% | 2.06 | 2.08R |
+  | deep (0.79-1.00) | 1285 | 918 | 31.7% | 1.62 | 2.26R |
+  | stopped_out (retrace window) | 9248 | 9073 | 2.8% | 0.10 | 0.21R |
+
+  Total BOS signals: 16,522 | Stopped during retrace: 9,248 (56.0%)
+  OTE bucket: n=1,262, WR=37.1%, PF=2.06 (fails WR >= 40% criterion; not materially better than non-OTE avg PF=5.57)
+
+- **Stop rule check:** OTE fails WR criterion (37.1% < 40%); OTE PF far below non-OTE buckets (2.06 vs avg 5.57). Phase 1 = NO-GO.
+- **Root cause:** Retrace depth is INVERSELY correlated with BOS forward performance. Shallow/no retraces
+  indicate strong momentum continuation (WR 62-84%); deep OTE retraces indicate weakening reversal (WR 37%).
+  The ICT "wait for OTE before entering" instruction selects for WEAKER reversals, not stronger ones.
+  Contrast with MGC prior: on NQ, non-stopped buckets are all positive (PF 1.62-18.90). The fib filter
+  doesn't fail because the setup is worthless -- it fails because EARLY entry dominates OTE entry.
+- **56% stop-out rate:** Same mechanism as B33. The sweep extreme is not a durable stop anchor after a BOS
+  because 56% of BOS events see price return through that level within 20 bars. BOS requires 2
+  confirmations (sweep + structure break) vs iFVG's 3 (sweep + displacement + inversion). Fewer
+  confirmations = higher stop failure rate = the rule generalizes.
+- **Verdict:** rejected -- Phase 1 NO-GO. OTE retrace is inversely predictive of BOS quality.
+  Phase 2 engine NOT built. Lessons 73-74 added.
+- **Learned:** NQ 5min BOS signals show maximum edge when price does NOT retrace (WR 84.4%, PF 18.90). Each additional fib of retrace correlates with weaker forward performance. The OTE zone (0.62-0.79) produces the second-worst performance among non-stopped buckets. Waiting for "optimal" structural entry via deeper retrace is actually waiting for a weaker setup. The confirmation-step rule (Lesson 74) is the structural explanation: iFVG's 3-step confirmation produces far lower stop-out rates than BOS's 2-step.
+- **Next:** B32 (ORB-reentry r=0.5 risk floor) or B35 (ORB-reentry r=1.0/r=1.25 -- most promising pipeline item; tests whether reentry maintains sust at higher r where plain ORB collapses).

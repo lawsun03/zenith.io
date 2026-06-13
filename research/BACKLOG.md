@@ -1149,7 +1149,7 @@ small risk, scale up risk/reward when the FVG/iFVG actually appears. Connects
 existing sweep detection (awaiting_sweeps / sweep_bos) to iFVG confirmation as a
 two-stage pyramid entry.
 
-## B34 — Breaker-block entry + OTE retracement zone  [pending — PRIORITY: Lawrence-requested 2026-06-13; claim after B33, ahead of B32]
+## B34 — Breaker-block entry + OTE retracement zone  [done — rejected at Phase 1; OTE retrace depth is INVERSELY correlated with BOS forward performance (no-retrace WR 84.4%/PF 18.90 vs OTE WR 37.1%/PF 2.06); 56% of BOS events stopped during retrace window; Phase 2 engine NOT built; see Lessons 73-74]
 Lawrence-requested (ICT "FVG and OTE entry" reference video, Gold chart). Rank
 ABOVE B32, AFTER B33.
 

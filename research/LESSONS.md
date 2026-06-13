@@ -547,10 +547,31 @@ Appended 2026-06-14 (B33 anticipatory probe entry — Phase 1 rejection):
     probe stop before displacement+inversion fires.** 5y replay (44,365 armed sweep events vs 2,842 iFVG signals
     = 15.6x ratio): 56.4% stop-hit, 26.0% probe-target-hit (1.0R unconfirmed), 8.3% confirmed by iFVG within
     8 bars. Blended-entry gain on confirmed cases = only +0.025R (probe 0.33 frac × modest entry improvement).
-    Net expected_R = −0.098R — definitively negative. Root cause: the iFVG chain REQUIRES price to push past
+    Net expected_R = -0.098R -- definitively negative. Root cause: the iFVG chain REQUIRES price to push past
     the sweep extreme (creating the displacement and FVG imbalance) before the inversion confirmation fires.
-    The swept extreme is NOT a durable stop anchor at the pre-inversion stage — it IS the level price must
+    The swept extreme is NOT a durable stop anchor at the pre-inversion stage -- it IS the level price must
     continue through to form the setup. Rule: Lesson 1 ("the iFVG INVERSION is the quality filter") extends
     to mean "anything entered before inversion is unfiltered." The swept-extreme stop is meaningful only AFTER
     the displacement leg confirms the reversal; entering at the sweep bar alone is a pre-structural-confirmation
     entry with a stop at exactly the wrong level.
+
+Appended 2026-06-14 (B34 breaker-block + OTE Phase 1 falsification):
+
+73. **OTE retrace depth is INVERSELY correlated with BOS forward performance on NQ 5min.**
+    B34 Phase 1 (n=16,522 BOS signals, 5y excl 2022): no-retrace bucket WR=84.4%, PF=18.90;
+    shallow (<0.38 fib) WR=62.3%, PF=5.79; OTE (0.62-0.79) WR=37.1%, PF=2.06; deep (0.79-1.0)
+    WR=31.7%, PF=1.62. The hypothesis that "deeper retrace = better structural entry" is wrong for
+    NQ 5min BOS signals -- shallow retraces indicate momentum continuation (strong reversal) while
+    deep retraces indicate a weakening reversal (price struggling to maintain its BOS direction).
+    Rule: on NQ 5min, the best BOS entries are those that DON'T retrace before continuing. Do not
+    wait for OTE retracement on BOS signals. Phase 2 engine NOT built.
+
+74. **56% of BOS signals are stopped during the retrace window -- same root cause as B33 probe failure.**
+    After a sweep+BOS signal fires, 56% of cases see price return through the sweep extreme (the stop
+    anchor) within 20 bars. This is the same mechanism as B33: the sweep extreme is structurally the
+    level price was PUSHED THROUGH to create the setup -- it is not a durable support/resistance until
+    the full chain (displacement + FVG + inversion for iFVG; or strong BOS continuation for sweep_bos)
+    is confirmed. The BOS bar close is a weaker entry point than the iFVG inversion close because BOS
+    requires one fewer structural confirmation step. Rule: the stop failure rate scales inversely with
+    the number of confirmation steps -- more confirmations = fewer false stops = higher edge.
+    This generalization applies to any new entry proposal: count the confirmation steps.
