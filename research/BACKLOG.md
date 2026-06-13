@@ -337,7 +337,7 @@ with Lesson 8: short-session NQ edges are time-of-day dependent), not random noi
 ---
 (Research sessions append new items below this line.)
 
-## RESEARCH — Session wk1-b18  [pending]
+## RESEARCH — Session wk1-b18  [done — 3 items appended: B19 long-only+london_ny_am benchmark, B20 iFVG→LongOnly-iFVG two-phase pipeline, B21 iFVG→ORB-reentry two-phase pipeline]
 
 B18 exhausts all existing pending backlog items. The next session must replenish with new
 testable strategy hypotheses. Priority themes based on open threads:
@@ -362,3 +362,117 @@ testable strategy hypotheses. Priority themes based on open threads:
 Run this as a research/ideation session (WebSearch + data mining on excursion CSVs + prior
 lessons), following the RESEARCH session protocol. Output 1-3 new backlog items in mini-spec
 format. Session count at B18+1 session = wk1-b18+1; check 3-session rule for ideation.
+
+Key data findings driving the 3 proposals (2026-06-13):
+- B3 pipeline model uses PER-YEAR equity_b1 CSVs (stitched); flat 5y CSVs give ~2x more
+  busts than per-year. B20/B21 must generate per-year equity CSVs to be comparable to B3.
+- ORB MFE/MAE (partial_r=0, 5y, n=1030): winner p25=1.11R, p50=1.64R, p75=2.50R (= target),
+  p90=2.66R; ~75% of winners hit the target exactly. Loser MFE p75=0.78R, p90=1.30R.
+  MFE >= 2.0R: winners 37%, losers only 2% → excellent separation. be_trail_r candidate
+  would need to engage AFTER 2.0R to avoid killing two-thrust winners (same failure mode as
+  be_trail_r=1.0 in B2). Not proposed — distribution evidence is insufficient to quantify
+  path-through-peak behavior without additional instrumentation.
+- iFVG short removal (B15) is mechanism-different from session filtering (B18): B18 showed
+  removing named sessions HURTS full iFVG funded; but B15 uses london+ny_am+ny_pm already.
+  B19 tests whether removing NY PM specifically from LONG-ONLY iFVG further improves sust.
+  Lower prior than B20/B21 due to B18's counter-finding, but no-code so cheap to test.
+- Web search: no new mechanism families. ORB variants and liquidity sweep are the only
+  tested-positive mechanisms (4-for-4 failure of external claims, Lesson 6 confirmed).
+  One SSRN paper on Ladder exits (5095349) noted as weak prior; not incorporated.
+
+## B19 — Long-only iFVG + London+NY AM only (funded benchmark, no new code)  [pending]
+Hypothesis: B15 (long-only iFVG) uses london+ny_am+ny_pm. NY PM signals (13:xx-15:xx ET)
+have PF 0.906 in the full all-sides config (B18 data). For LONG-ONLY iFVG, NY PM long signals
+may drag down PF (the B18 session removal was hurt by removing positive overnight long signals;
+NY PM longs are a different population). Restricting further to london+ny_am only removes the
+NY PM window and may lift PF above B15 baseline (1.127).
+
+Mechanism: no new code. Use existing `allowed_sides=long` + `enabled_killzones=["london","ny_am"]`.
+
+Benchmark (funded objective only — combine volume will be ~35-45/month, too sparse):
+1. equity_export at r0.75/r1.0/r1.25: `--set allowed_sides=long --set enabled_killzones=london,ny_am`
+2. funded_sim --haircut 0/200/400
+3. Compare to B15 baseline (long-only, london+ny_am+ny_pm): PF 1.127, sust 1.12x at r1.0
+
+Fixed defaults: `allowed_sides=long`, `enabled_killzones=["london","ny_am"]` (test only; prod unchanged)
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B15 r1.0 baseline: PF 1.127, sust 1.12x):
+- Primary: PF improves >= +2% (lower threshold than B18's +5% since B15 already has higher PF)
+  AND sust >= 1.12x (doesn't regress pipeline sustainability)
+- The test is cheap; rejection is informative (confirms B18's finding extends to long-only iFVG)
+
+Warning: B18 showed session filtering can HURT funded metrics at partial_r=1.5. Low prior
+(~35% that this passes success criteria). Run after B20/B21 if time permits.
+
+Source: B15 (long-only) + B18 (session filter) data mining. NY PM PF 0.906 from B18 data.
+
+## B20 — iFVG Combine → Long-only iFVG Funded (two-phase pipeline)  [pending]
+Hypothesis: B3's best two-phase is iFVG Combine + ORB r1.0 Funded = $393/mo, sust 1.26x.
+Long-only iFVG funded has higher PF (1.127 vs ORB ~1.21) and standalone sust 1.12x vs ORB 0.85x.
+With iFVG combine feeding the accounts (faster than ORB combine: 28.6d vs 68.6d), the
+iFVG → LongOnly-iFVG pipeline may beat B3's best pair.
+
+Key methodology note: B3 uses PER-YEAR equity CSVs (equity_b1/) stitched across 2021/2023/2024/
+2025/2026. B20 must use SAME methodology to be directly comparable. Per-year CSVs give ~50%
+fewer simulated busts than flat 5y CSVs (ORB r1.0: 27 busts per-year vs 59 busts flat).
+
+Steps:
+1. Generate per-year long-only iFVG equity CSVs in equity_b20/:
+   For each year in bars/yearly/:
+   `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --risk-pct 1.25
+    --set allowed_sides=long --out research/equity_b20/longonly_r1p25_{year}.csv`
+   Also at r0.75 and r1.0.
+2. Extend scripts/run_b3_pipeline.py (or write scripts/run_b20_pipeline.py) to include
+   "LongOnly-iFVG r0.75/r1.0/r1.25" as Phase B options using equity_b20/.
+3. Run all two-phase combinations: iFVG Combine (Phase A) → LongOnly-iFVG (Phase B)
+4. Report $/mo, sust, cycle_days vs B3 benchmark ($393/mo, 1.26x).
+
+Fixed defaults: all B3 script defaults; only change is funded-phase equity source.
+Defining-behavior tests: none needed (no new code; this is a benchmark).
+
+Success criteria (vs B3 iFVG Combine + ORB r1.0: $393/mo, sust 1.26x):
+- Primary: $/mo >= $393 AND sust >= 1.26x (beat B3 best on BOTH metrics)
+- Secondary: any risk level that beats B3 on BOTH metrics is a candidate
+
+Estimated outcome: iFVG combine passes=34, long-only iFVG funded busts (per-year methodology,
+estimated) ≈ 23 (applying 0.46x flat-to-per-year correction). sust ≈ 34/23 = 1.48x.
+Estimated $/mo depends on net_per_account from per-year equity. Medium-high prior (~55%
+this passes criteria) — the long-only removal of loss-making shorts is a strong mechanism.
+
+Source: B1/B3 pipeline model + B15 equity data + per-year methodology correction analysis.
+
+## B21 — iFVG Combine → ORB-reentry Funded (two-phase pipeline)  [pending]
+Hypothesis: B14 ORB-reentry standalone sust 0.99x at r1.0 (borderline pipeline-negative).
+B3 showed that iFVG combine speed lifts ORB r1.0 standalone sust 0.85x → 1.26x two-phase.
+The same mechanism may lift ORB-reentry from 0.99x → ~1.46x two-phase. Additionally,
+ORB-reentry adds +44% volume (+35% funded $/mo standalone), which should compound into
+higher $/mo in the two-phase model.
+
+Key methodology note: same as B20 — must use per-year equity CSVs for comparison with B3.
+
+Steps:
+1. Generate per-year ORB-reentry equity CSVs in equity_b21/:
+   For each year in bars/yearly/:
+   `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --risk-pct 1.0
+    --set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+    --out research/equity_b21/orb_reentry_r1p0_{year}.csv`
+   Also at r0.75 and r1.25.
+2. Extend scripts/run_b3_pipeline.py (or write scripts/run_b21_pipeline.py) to include
+   "ORB-reentry r0.75/r1.0/r1.25" as Phase B options using equity_b21/.
+3. Run two-phase: iFVG Combine (Phase A) → ORB-reentry (Phase B) for each risk level.
+4. Report $/mo, sust vs B3 benchmark ($393/mo, sust 1.26x).
+
+Fixed defaults: `orb_reentry_after_stop=True`, all other params at B3 ORB defaults.
+Defining-behavior tests: none needed (no new code; this is a benchmark).
+
+Success criteria (vs B3 iFVG Combine + ORB r1.0: $393/mo, sust 1.26x):
+- Primary: $/mo >= $393 AND sust >= 1.26x (beat B3 best on BOTH metrics)
+- Any risk level that passes both criteria is a candidate
+
+Estimated outcome: iFVG combine passes=34, ORB-reentry funded busts (per-year methodology,
+estimated) ≈ 33 (applying 0.46x correction to flat 72 busts). sust ≈ 34/33 = 1.03x.
+Estimated sust is marginal — below the 1.26x threshold. Lower prior (~35% passes criteria)
+but still worth testing since $/mo may be substantially higher.
+
+Source: B3 pipeline model + B14 ORB-reentry equity data + per-year methodology analysis.

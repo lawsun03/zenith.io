@@ -442,6 +442,27 @@
     "links": {"doc": null, "runs": ["b17_orb_longonly_r0p75", "b17_orb_longonly_r1p0", "b17_orb_longonly_r1p25"], "src": null}
   },
   {
+    "ts": "2026-06-13T10:00:00Z",
+    "session": "wk1-r3",
+    "item": "RESEARCH",
+    "variant": "Session wk1-r3 (wk1-b18): ideation — ORB MFE/MAE mining + pipeline methodology analysis + WebSearch",
+    "objective": "infra",
+    "metrics": {
+      "orb_winner_mfe_p25": 1.11, "orb_winner_mfe_p50": 1.64, "orb_winner_mfe_p75": 2.50, "orb_winner_mfe_p90": 2.66,
+      "orb_loser_mfe_p75": 0.78, "orb_loser_mfe_p90": 1.30,
+      "orb_winner_mae_p90": 0.82,
+      "orb_mfe_2r_winners_pct": 37, "orb_mfe_2r_losers_pct": 2,
+      "orb_winners_hit_target_pct": 75,
+      "b3_methodology_note": "per-year equity_b1 CSVs give ~50% fewer busts than flat 5y CSV; B20/B21 must use per-year methodology",
+      "ifvg_combine_passes_5y": 34, "orb_r10_funded_busts_5y_peryear": 27, "orb_r10_funded_busts_5y_flat": 59,
+      "web_ideas_none_new": "ORB/liquidity-sweep remain the only positive-prior mechanisms; SSRN 5095349 (Ladder exits) noted as weak prior",
+      "new_items_added": 3
+    },
+    "verdict": "dataset",
+    "learned": "ORB winner MFE p75=2.50R (= target): ~75% of winners hit the 2.5R target exactly, ~25% are profitable day-end flattens. At MFE >= 2.0R, winners 37% vs losers 2% — excellent separation, but path-through-peak data unavailable (not proposed for excursion ladder). B3's pipeline model uses per-year equity CSVs: ORB r1.0 has 27 funded busts (per-year) vs 59 (flat 5y). B20 (LongOnly-iFVG as funded phase) needs per-year equity CSVs; estimated sust ~1.48x vs B3's 1.26x if per-year busts scale similarly. Web search yielded no new mechanism families (4-for-4 external claim failures, Lesson 6 confirmed again).",
+    "links": {"doc": null, "runs": ["research/mfe_mae_orb_clean.csv", "scripts/run_b19_quick_stats.py", "scripts/run_b3_pipeline.py"], "src": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5095349"}
+  },
+  {
     "ts": "2026-06-13T09:22:00Z",
     "session": "wk1-b18",
     "item": "B18",

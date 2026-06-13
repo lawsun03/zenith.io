@@ -233,3 +233,20 @@ Appended 2026-06-13 (B17 ORB long-only funded benchmark):
     throughput unless the PF improvement is large enough to reduce bust frequency faster than it reduces pass frequency.
     At PF 1.109 → 1.320 (+19%), the improvement is insufficient. Rule of thumb: only block a signal class if it is
     individually loss-making (PF < 1.0) over a multi-year window.
+
+Appended 2026-06-13 (wk1-r3 research session):
+
+42. **The B3 pipeline model uses per-year equity CSVs (equity_b1/), NOT flat 5-year CSVs.**
+    Per-year stitching restarts equity from $50k at each year boundary, producing ~50% fewer
+    funded busts than flat 5y CSVs (ORB r1.0: 27 busts per-year vs 59 busts flat 5y). This
+    means flat-CSV standalone sust (e.g., B15 LongOnly iFVG sust 1.12x) is NOT directly
+    comparable to B3 two-phase sust (1.26x). Any new B3-style pipeline benchmark (B20, B21)
+    must generate per-year equity CSVs in the equity_b1/ format to be comparable.
+
+43. **~75% of ORB winners hit the 2.5R target exactly; ~25% are profitable day-end flattens.**
+    ORB winner MFE p75=2.50R (= target). This distribution structure means an excursion-
+    ladder partial at 2.0R would only affect trades that reach 2.0R then pull back before
+    hitting the target — a minority of the 37% that ever reach 2.0R. The path-through-peak
+    behavior is not captured by our current MFE/MAE infrastructure (which records entry-based
+    MFE, not peak-relative retracement). Any ORB excursion-ladder proposal needs per-trade
+    path-through-MFE-peak data before it can be accurately evaluated.
