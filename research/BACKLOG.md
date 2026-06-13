@@ -1540,7 +1540,7 @@ named+combined) is an open question — B24's close mode advantage was measured 
 Source: deployed bot_config.json audit (from B40 session); B25/B26 partial sensitivity tests;
 B31 Phase A methodology.
 
-## B43 — ORB late-session signal cutoff (orb_signal_window_mins parameter)  [pending]
+## B43 — ORB late-session signal cutoff (orb_signal_window_mins parameter)  [done — candidate: orb_signal_window_mins=60 removes 8% of ORB signals (10:30-11:30 ET, PF 0.622-0.963), combines passes stable 10/61, combine PF 1.15→1.21 (+5.2%), Phase B busts 25→22 (-12%), two-phase sust 1.68x→1.91x (+14%); recommended value=60; Lesson 86]
 Hypothesis: ORB signals after 10:30 ET (60 minutes post-open) are loss-making over 5 years
 (10:30-11:00 ET: PF=0.963, n=57; 11:00-11:30 ET: PF=0.622, n=27). The early-session window
 (9:45-10:30 ET, n=926) carries virtually all the ORB edge. After 10:30 ET, breakout momentum

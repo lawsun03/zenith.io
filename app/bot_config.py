@@ -188,6 +188,13 @@ class StrategyParams(BaseModel):
     # Ignored (falls back to "swing") when no FVG zone is present (displacement_only).
     stop_mode: str = "swing"
 
+    # B43: ORB late-session signal cutoff. 0 = disabled (no cutoff, existing behavior).
+    # >0 = suppress new ORB signals at or after this many minutes post-open (open_et).
+    # 60 = 10:30 ET cutoff; 90 = 11:00 ET cutoff. Existing open positions are unaffected
+    # (cutoff only blocks new signal emission from on_bar). Range building continues.
+    # Data: 10:30-11:30 ET ORB signals cost ~$2,900 over 5y (PF 0.622-0.963, n=84).
+    orb_signal_window_mins: int = 0
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

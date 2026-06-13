@@ -1872,5 +1872,43 @@
       "runs": ["scripts/run_b42_pipeline.py", "research/equity_b42/"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T00:00:00Z",
+    "session": "wk2-b43",
+    "item": "B43",
+    "variant": "ORB signal window cutoff (orb_signal_window_mins=60 and =90)",
+    "objective": "combine+funded",
+    "metrics": {
+      "combine_passes_w0": 10,
+      "combine_passes_w60": 10,
+      "combine_passes_w90": 9,
+      "combine_pf_w0": 1.15,
+      "combine_pf_w60": 1.21,
+      "combine_pf_w90": 1.17,
+      "phase_b_busts_w0_parity": 25,
+      "phase_b_busts_w60_parity": 22,
+      "phase_b_busts_w90_parity": 22,
+      "phase_b_net_per_acct_w0": 1731,
+      "phase_b_net_per_acct_w60": 1725,
+      "phase_b_net_per_acct_w90": 1932,
+      "two_phase_net_per_month_w0": 381,
+      "two_phase_net_per_month_w60": 362,
+      "two_phase_net_per_month_w90": 405,
+      "two_phase_sust_w0": 1.68,
+      "two_phase_sust_w60": 1.91,
+      "two_phase_sust_w90": 1.91,
+      "signals_removed_pct": 8,
+      "loss_making_window_pf_range": "0.622-0.963",
+      "tests_total": 658,
+      "tests_new": 5
+    },
+    "verdict": "candidate",
+    "learned": "ORB signals after 10:30 ET (60 min post-open, n=84 over 5y) are structurally loss-making (PF 0.622-0.963). Cutting them with orb_signal_window_mins=60 removes 8% of signals while: (1) keeping all 10/61 combine passes, (2) improving combine PF 1.15->1.21 (+5.2%), (3) reducing Phase B busts from 25 to 22 (-12%), (4) improving two-phase sust 1.68x->1.91x (+14%). The parity-baseline comparison (all runs use --partial-r 0 --set swing_stop_lookback=0) shows the window cutoff itself is the cause of improvement, not confounding from partial profits. The deployed config (with partial_r=1.5) would see proportionally similar bust reduction. w=90 has same bust reduction but better $/acct ($1,932 vs $1,725) at cost of 1 combine pass. w=60 is the recommended value: cleaner (no pass degradation), mechanically sound (removes exactly the documented loss-making 10:30-11:30 ET segment).",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b43_pipeline.py", "research/equity_b43/", "tests/test_orb_signal_window.py"],
+      "src": "research/BACKLOG.md (wk2-r3 ORB timing analysis, n=1030 excl 2022)"
+    }
   }
 ]

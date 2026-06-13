@@ -44,6 +44,8 @@ class ORBConfig:
     long_only: bool = False           # suppress bearish breakout signals (funded PF improvement)
     # B30: day-of-week filter. Range still builds; only signal emission is suppressed.
     skip_trading_days: list[str] = field(default_factory=list)
+    # B43: suppress new ORB signals at or after this many minutes since open_et. 0 = disabled.
+    signal_window_mins: int = 0
 
 
 class ORBDetector:
@@ -111,6 +113,13 @@ class ORBDetector:
         # B30: day-of-week filter — range built above, no signal emitted on filtered days.
         if self.config.skip_trading_days and et.strftime("%A") in self.config.skip_trading_days:
             return None
+
+        # B43: late-session signal cutoff — suppress new signals past orb_signal_window_mins.
+        if self.config.signal_window_mins > 0:
+            market_open = datetime.combine(et.date(), self._open_t, tzinfo=ET)
+            mins_since_open = (et - market_open).total_seconds() / 60
+            if mins_since_open >= self.config.signal_window_mins:
+                return None
 
         if self._fired >= self.config.max_trades_per_day:
             return None

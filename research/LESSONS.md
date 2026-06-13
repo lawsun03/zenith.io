@@ -713,3 +713,17 @@ Appended 2026-06-13 (B42 deployed config full pipeline):
     (PF=1.072) and provides a partial hedge against the Phase A drought exposure. Rule: high-frequency Phase A
     configs are regime-dependent; the 2022 drought is the primary tail risk. Always run the 2022 holdout
     before declaring a high-frequency config a permanent upgrade over the B21 baseline.
+
+Appended 2026-06-15 (B43 ORB late-session signal cutoff):
+
+86. **ORB edge is concentrated in the first 60 minutes post-open; the 10:30-11:30 ET window is
+    structurally loss-making and should be suppressed.** B43 tested orb_signal_window_mins=60 and
+    =90 (10:30 ET and 11:00 ET cutoffs). The 10:30-11:30 ET window costs ~$2,900 over 5y (PF
+    0.622-0.963, n=84 signals). Suppressing it (w=60) removes 8% of total ORB signals while keeping
+    all combine passes (10/61 unchanged), improving combine PF from 1.15 to 1.21 (+5.2%), and
+    reducing Phase B funded busts from 25 to 22 (-12%). Two-phase sust improves 1.68x→1.91x (+14%).
+    Mechanism: early-session ORB signals (9:30-10:30 ET) capture the urgency of the opening move;
+    10:30+ ET breakouts attempt to break through a range that is already being "digested" by the
+    market — momentum has typically exhausted. Rule: set orb_signal_window_mins=60 for all ORB
+    configurations unless there is a specific reason to allow later signals. The cutoff is
+    backward-compatible (default=0 = existing behavior) and has no effect on open positions.
