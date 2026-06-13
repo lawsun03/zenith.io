@@ -688,3 +688,28 @@ Appended 2026-06-13 (B41 combined-engine Phase A pipeline):
     pipeline throughput with funded_sim's continuous attempt simulation. A strategy that improves
     monthly quality by taking smaller/more-frequent bets may SLOW the pipeline by smoothing the
     equity curve's path to resolution.
+
+Appended 2026-06-13 (B42 deployed config full pipeline):
+
+84. **The deployed Phase A config (combined+close+all-day+r=1.0%) is the strongest 5y Phase A driver
+    tested: 42 passes over 5y — more than any prior config.** B42 ran the ACTUAL deployed bot config
+    (engine=combined, ifvg_entry_mode=close, partial_profit_r=1.5, swing_stop_lookback=30, killzones=all,
+    risk=1.0%, r_multiple=3.5 MNQ) through the funded pipeline for the first time. Result: 42/159 Phase A
+    passes, $568 reset cost/funded, cycle 98.1d. Two-phase pipeline: $549/mo sust=3.23x — beats B31 winner
+    ($508/mo, 2.85x) on BOTH primary criteria. The mechanism: all-day killzones + combined engine + close mode
+    generates ~80-100 trades/month → high monthly P&L variance → more months cross the $3k threshold even at
+    conservative r=1.0% sizing. r=1.0% beats r=2.0% on $/mo because higher risk grows reset costs faster than
+    it grows passes ($719 vs $568 per funded at r=2.0 vs r=1.0). Rule: in high-frequency configs (combined +
+    all-day + close mode), r=1.0% is the Phase A risk optimum; r=2.0% inflates reset costs without proportional
+    pass gains.
+
+85. **The deployed Phase A's high signal frequency is a double-edged sword: strongest in trending years,
+    loss-making in iFVG drought years (2022 structural risk).** B42 2022 holdout: Phase A PF=0.934,
+    net=-$11,824 — the deployed config generates 1097 trades in 2022 (vs <200 for pure iFVG at named sessions).
+    The all-day + combined + close mode amplifies iFVG drought losses proportionally to trade frequency. The
+    same mechanism that creates 42 Phase A passes in 2023-2026 (trending structure, abundant iFVG setups)
+    creates 1097 loss-making trades in 2022 (structural poverty year). 6y pipeline (incl 2022): $424/mo
+    sust=2.19x — below B21 baseline. Phase B (ORB-reentry r=0.75) moderates this: ORB held up in 2022
+    (PF=1.072) and provides a partial hedge against the Phase A drought exposure. Rule: high-frequency Phase A
+    configs are regime-dependent; the 2022 drought is the primary tail risk. Always run the 2022 holdout
+    before declaring a high-frequency config a permanent upgrade over the B21 baseline.

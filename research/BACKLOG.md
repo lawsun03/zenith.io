@@ -1493,7 +1493,7 @@ as B21's baseline, providing a direct apples-to-apples comparison (ifvg 5/61 vs 
 
 Source: B40 combine result + B21 pipeline model + wk2-r3 research projection.
 
-## B42 — Deployed config full end-to-end pipeline simulation  [pending]
+## B42 — Deployed config full end-to-end pipeline simulation  [done — candidate: $549/mo 5y sust=3.23x (beats B31); 6y holdout incl 2022 degrades to $424/mo 2.19x — Phase A loss-making in 2022 (PF=0.934); doc: trade_analysis/2026-06-13_B42_deployed_pipeline.md; lessons 84-85 added]
 Hypothesis: The deployed bot config (as of 2026-06-14) uses: engine=combined, ifvg_entry_mode=close,
 partial_profit_r=1.5, swing_stop_lookback=30, killzones=["all"], risk_pct=1.0%, min_absolute_body=5.0,
 stop_buffer=3.0, r_multiple=2.5 (MNQ overrides). This combination has NEVER been run through the

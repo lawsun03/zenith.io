@@ -1843,5 +1843,34 @@
       "runs": ["scripts/run_b41_pipeline.py", "research/equity_b41/"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T21:10:00Z",
+    "session": "wk2-b42",
+    "item": "B42",
+    "variant": "deployed config full pipeline (engine=combined, ifvg_entry_mode=close, partial_r=1.5, lookback=30, killzones=all, r_multiple=3.5 MNQ, orb_r_multiple=2.5, risk=1.0%)",
+    "objective": "funded",
+    "metrics": {
+      "5y_pass_test": "42/159",
+      "5y_net_per_month": 549,
+      "5y_sust": 3.23,
+      "5y_xfa_busts": 13,
+      "5y_phase_a_passes": 42,
+      "6y_holdout_net_per_month": 424,
+      "6y_holdout_sust": 2.19,
+      "6y_holdout_xfa_busts": 21,
+      "6y_holdout_phase_a_passes": 46,
+      "standalone_net_per_month": 844,
+      "standalone_sust": 0.79,
+      "phase_a_2022_pf": 0.9337,
+      "phase_b_2022_pf": 1.0724
+    },
+    "verdict": "candidate",
+    "learned": "The deployed Phase A config (combined+close+all-day+r_multiple=3.5) generates 42 passes over 5y (vs B31's 37, B21's 34), achieving $549/mo sust=3.23x — the best 5y two-phase pipeline result. However, the 2022 holdout reveals a material weakness: the deployed Phase A loses in 2022 (PF=0.934, net=-$11.8k) because the high signal frequency (1097 trades vs <200 for pure iFVG) amplifies drought losses. The 6y pipeline including 2022 drops to $424/mo sust=2.19x — below B21 baseline. Standalone deployed config (same strategy both phases) is pipeline-negative at r=1.0% (sust=0.79x) — the Phase B switch to ORB-reentry r=0.75 is essential. Key actionable: deployed config at r=1.0% is the best 5y Phase A driver but 2022-regime risk is real and should be monitored live.",
+    "links": {
+      "doc": "trade_analysis/2026-06-13_B42_deployed_pipeline.md",
+      "runs": ["scripts/run_b42_pipeline.py", "research/equity_b42/"],
+      "src": null
+    }
   }
 ]

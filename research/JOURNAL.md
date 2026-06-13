@@ -1307,3 +1307,62 @@ Entry format:
 - **Learned:** Combine-harness monthly pass rate and funded-pipeline account throughput are structurally decoupled metrics. Higher trade frequency slows the pipeline by dampening per-attempt equity variance — the account takes longer to reach either the $3k pass threshold or the MLL bust floor. The B40 "2x better" finding was real for quality (more months where the strategy would succeed) but translates to 4x fewer total pipeline cycles, not 2x more. Rule: when evaluating pipeline throughput, model it with continuous funded_sim, not with the combine-harness monthly pass rate.
 
 - **Next:** B42 (deployed config full end-to-end pipeline simulation — tests what the actual deployed bot earns in the funded pipeline; no new code) or B43 (ORB late-session signal cutoff — requires 1 new StrategyParams field and 4 defining-behavior tests).
+
+## 2026-06-13T21:10:00Z — session wk2-b42 — B42 (Deployed config full end-to-end pipeline simulation)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B42 (top pending item — tests deployed bot config through the full two-phase pipeline model; no new code required).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow XFA running, no issues.
+  2. Read deployed bot_config.json: engine=combined, ifvg_entry_mode=close, partial_profit_r=1.5, swing_stop_lookback=30, killzones=["all"], risk_pct=1.0%, contracts=2. MNQ overrides: stop_buffer=3.0, min_absolute_body=5.0, r_multiple=3.5, orb_r_multiple=2.5.
+  3. Generated equity_b42/ (10 CSVs: deployed_r1p0_{year}.csv + deployed_r2p0_{year}.csv for years 2021/2023/2024/2025/2026). Ran via `scripts/run_b42_pipeline.py` subprocess calls to equity_export.py with `--risk-pct 1.0` and `--partial-r 1.5` as the only explicit overrides (bot_config.json defaults supply all deployed settings including engine, entry_mode, lookback, killzones, MNQ overrides).
+  4. Wrote and ran `scripts/run_b42_pipeline.py` — Phase A: equity_b42/; Phase B: equity_b21/orb_reentry_r0p75 (unchanged from B21). Also computed standalone deployed config (same strategy both phases).
+  5. Per protocol: ran 2022 holdout. Generated `equity_b42/deployed_r1p0_2022.csv` and `equity_b21/orb_reentry_r0p75_2022.csv`. Wrote and ran `scripts/_b42_holdout.py` for 6y pipeline (incl 2022).
+  6. Test suite: **653 passed, 2 skipped** — no code changes.
+
+- **Numbers:**
+
+  **Phase A standalone (5y excl 2022, per-year, h200):**
+  | Config | Passes/Attempts | d/attempt | d/funded | Reset$/funded |
+  |--------|-----------------|-----------|----------|---------------|
+  | B42 deployed r=1.0% | **42/159** | 6.5d | **24.6d** | **$568** |
+  | B42 deployed r=2.0% | 49/235 | 4.4d | 21.1d | $719 |
+  | B31 deployed-edge r=2.0% (ref) | 37/168 | 6.1d | 27.8d | $681 |
+  | B21 iFVG-edge r=1.25% (ref) | 34/162 | 6.0d | 28.6d | $715 |
+
+  Deployed r=1.0% generates **42 Phase A passes over 5y — most of any config tested**. Close mode + all-day killzones + combined engine + r_multiple=3.5 → ~80-100 trades/month → high monthly P&L variance → more months crossing $3k threshold.
+
+  **Two-phase pipeline matrix (5y, Phase B = ORB-reentry r0.75):**
+  | Phase A | Reset$ | XFA$ | Net/cyc | Cycle d | Net/mo | Sust |
+  |---------|--------|------|---------|---------|--------|------|
+  | **B42 deployed r=1.0%** | **$568** | **$3,131** | **$2,563** | **98.1d** | **$549** | **3.23x** |
+  | B42 deployed r=2.0% | $719 | $3,131 | $2,412 | 94.6d | $535 | 3.77x |
+  | B31 deployed-edge r=2.0% (ref) | $681 | $3,131 | $2,450 | 101.3d | $508 | 2.85x |
+  | B21 iFVG-edge r=1.25% (ref) | $715 | $3,131 | $2,416 | 102.1d | $497 | 2.62x |
+
+  **B42 r=1.0% beats B31 on BOTH criteria**: $549/mo (> $508) and sust 3.23x (> 2.85x). New best result.
+  **B42 r=2.0% beats B31**: $535/mo, sust 3.77x (higher sust due to more passes, lower $/mo due to higher reset cost).
+  **Why r=1.0% beats r=2.0% on $/mo**: higher risk → more MLL busts → 235 total attempts (vs 159 at r=1.0%) for only 49 passes; reset cost grows from $568 to $719 per funded account.
+
+  **Standalone deployed (same strategy both phases):**
+  | Config | Net/mo | Sust |
+  |--------|--------|------|
+  | Deployed r=1.0% standalone | $844/mo | 0.79x |
+  | Deployed r=2.0% standalone | $1,211/mo | 1.09x |
+  Phase B switch to ORB-reentry is ESSENTIAL: standalone is pipeline-negative (sust 0.79x at r=1.0%).
+
+  **2022 holdout (per protocol — B42 r=1.0% beats B31 = candidate → holdout required):**
+  | | Phase A net | Phase A PF | Phase B net | Phase B PF |
+  |-|------------|------------|------------|------------|
+  | 2022 | -$11,824 | **0.934** | +$4,096 | 1.072 |
+
+  Phase A **loss-making** in 2022. Root cause: deployed config generates 1097 trades in 2022 (vs <200 for pure iFVG at named sessions) — all-day killzones + combined engine amplify iFVG drought losses.
+
+  **6y pipeline (incl 2022):** 46 Phase A passes, 21 Phase B busts → **$424/mo, sust 2.19x** — below B21 baseline.
+
+- **Stop rule check:** 5y result ($549/mo, 3.23x) beats B31 on both primary metrics → NOT triggered → candidate. 6y holdout ($424/mo, 2.19x) degrades below B21 — 2022 is a structural risk.
+
+- **Verdict:** candidate — deployed Phase A is the strongest 5y pipeline driver (42 passes, $549/mo, 3.23x) but 2022 reveals structural drought vulnerability. The 5y result is valid for 2021-2026-excluding-2022 regime; the 6y result is the honest worst-case including 2022 regime. Lessons 84-85 added.
+
+- **Learned:** The deployed config's high signal frequency (all-day + combined + close mode) is the same mechanism that makes it strong in trending years and loss-making in drought years. The 2022 structural poverty year amplifies losses proportionally to trade frequency — the opposite of how it helps in 2023-2026. The Phase B switch to ORB-reentry (which holds up in 2022, PF=1.072) is essential to moderate this risk; the two-phase structure specifically hedges the Phase A 2022 exposure.
+
+- **Next:** B43 (ORB late-session signal cutoff — only remaining pending item; requires code + 4 defining-behavior tests). Session ends here per protocol (one item per session).
