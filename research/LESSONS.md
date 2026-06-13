@@ -251,6 +251,20 @@ Appended 2026-06-13 (wk1-r3 research session):
     MFE, not peak-relative retracement). Any ORB excursion-ladder proposal needs per-trade
     path-through-MFE-peak data before it can be accurately evaluated.
 
+Appended 2026-06-13 (B20 iFVG Combine → LongOnly-iFVG Funded two-phase pipeline):
+
+45. **Standalone sust of a funded config is not a reliable predictor of two-phase sustainability.**
+    LongOnly-iFVG funded shows standalone sust 1.12x (B15 flat-5y) but two-phase sust 0.65x (B20 per-year)
+    when iFVG combine is Phase A. The discrepancy: standalone sust uses the same strategy as combiner (56 passes/50 busts),
+    while two-phase uses iFVG combine (34 passes) vs LongOnly funded busts (52). Rule: always model the pipeline explicitly
+    with Phase A passes vs Phase B busts — standalone sust is only valid if the SAME strategy runs combine and funded phases.
+
+46. **High-volume funded strategies cycle XFA accounts faster, requiring more combine passes to sustain.**
+    LongOnly-iFVG funded creates ~53 XFA accounts over 5y (avg 24d each) vs ORB funded's ~28 accounts (avg 45d each).
+    The iFVG combine produces 34 passes — enough for ORB's 27 busts (1.26x) but not LongOnly's 52 busts (0.65x).
+    When evaluating a funded strategy for the two-phase model, prefer slower-cycling strategies (fewer total accounts, longer
+    durations) unless the combine phase can supply passes at a matching rate.
+
 Appended 2026-06-13 (B19 long-only iFVG + London+NY AM funded benchmark):
 
 44. **NY PM signals (13:xx-16:30 ET) are loss-making in LONG-ONLY iFVG and safely removable.**

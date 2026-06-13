@@ -363,6 +363,19 @@ Entry format:
 - **Learned:** The B3 pipeline model's $/mo figure is not directly comparable to flat-equity standalone funded metrics — per-year stitching produces ~2x fewer funded busts, so sust figures diverge significantly. Before concluding that B15's standalone 1.12x sust is "worse" than B3's two-phase 1.26x, B20 must be run with per-year methodology. The ORB excursion distribution confirms that ~75% of winners hit the 2.5R target exactly, meaning the target itself is a strong exit anchor; additional partial exits before 2.5R affect mostly the 25% day-end-flatten population.
 - **Next:** B19 (simplest: no-code funded benchmark), B20 (highest-priority: two-phase pipeline with LongOnly-iFVG funded, needs per-year equity generation), B21 (iFVG → ORB-reentry two-phase).
 
+## 2026-06-13T10:37Z — session wk1-b20 — B20 (iFVG Combine → LongOnly-iFVG Funded two-phase pipeline)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 contracts, no drift. Market closed (weekend).
+- **Ran:** Generated per-year equity CSVs in equity_b20/ for LongOnly-iFVG (allowed_sides=long, london+ny_am killzones) at r0.75/r1.0/r1.25 — 15 equity_export runs across 5 years (2021/2023/2024/2025/2026), all in parallel. Wrote `scripts/run_b20_pipeline.py` extending B3's pipeline analysis with LongOnly-iFVG Phase B configs. Ran the pipeline analysis using equity_b1/control_r1p25 for Phase A (iFVG combine) and equity_b20/ for Phase B (LongOnly funded).
+- **Numbers (iFVG r1.25 Combine → LongOnly-iFVG Funded, h200, per-year methodology):**
+  - LongOnly r0.75: $397/mo, sust 1.06x (barely above 1.0, but below 1.26x target)
+  - LongOnly r1.0: $463/mo, sust 0.65x (pipeline negative)
+  - LongOnly r1.25: $676/mo, sust 0.69x (pipeline negative)
+  - B3 reference: iFVG → ORB r1.0 = $393/mo, sust 1.26x (unchanged benchmark)
+  - Root cause: LongOnly-iFVG funded creates 53 XFA accounts over 5y (avg 24d each) vs ORB's 28 (avg 45d each). iFVG combine produces 34 passes — enough for ORB's 27 busts (1.26x) but not LongOnly's 52 busts (0.65x).
+- **Verdict:** rejected — no B20 config beats B3 on BOTH criteria. B3 (iFVG Combine + ORB r1.0 Funded) remains the recommended two-phase pair.
+- **Learned:** Standalone sust (B15: 1.12x) is not a reliable predictor of two-phase sustainability because it assumes the same strategy runs both combine and funded phases. LongOnly-iFVG funded's higher signal frequency (~500 trades/yr vs ~330 for ORB) causes accounts to cycle 2x faster, requiring 52 combine passes to sustain vs ORB's 27 — the iFVG combine (34 passes) can only bridge the smaller deficit. Per-year methodology (vs flat-5y) is essential for this comparison and is what B3 used.
+- **Next:** B21 (iFVG Combine → ORB-reentry Funded two-phase pipeline). B21 is the last pending item; prior estimate is sust ~1.03x (marginal) but $/mo may be substantially higher due to ORB-reentry's +35% funded $/mo improvement from B14.
+
 ## 2026-06-13T10:15Z — session wk1-b19 — B19 (Long-only iFVG + London+NY AM only funded benchmark)
 - **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
 - **Session type:** B19 reclaim (orphan from crashed prior session). B19 was in-progress with no journal entry — reclaimed per protocol.

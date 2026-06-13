@@ -407,7 +407,7 @@ Warning: B18 showed session filtering can HURT funded metrics at partial_r=1.5. 
 
 Source: B15 (long-only) + B18 (session filter) data mining. NY PM PF 0.906 from B18 data.
 
-## B20 — iFVG Combine → Long-only iFVG Funded (two-phase pipeline)  [pending]
+## B20 — iFVG Combine → Long-only iFVG Funded (two-phase pipeline)  [done — rejected: no config meets $/mo >= $393 AND sust >= 1.26x (best: LongOnly r0.75 = $397/mo, sust 1.06x; LongOnly r1.0 = $463/mo, sust 0.65x; LongOnly r1.25 = $676/mo, sust 0.69x); root cause: LongOnly-iFVG funded cycles 2x more XFA accounts (53 vs 28) than ORB funded, iFVG combine (34 passes) cannot sustain 52 busts; doc trade_analysis/2026-06-13_B20_ifvg_combine_longonly_funded.md]
 Hypothesis: B3's best two-phase is iFVG Combine + ORB r1.0 Funded = $393/mo, sust 1.26x.
 Long-only iFVG funded has higher PF (1.127 vs ORB ~1.21) and standalone sust 1.12x vs ORB 0.85x.
 With iFVG combine feeding the accounts (faster than ORB combine: 28.6d vs 68.6d), the

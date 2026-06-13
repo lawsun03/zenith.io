@@ -497,5 +497,25 @@
     "verdict": "candidate",
     "learned": "Removing NY PM (13:xx-16:30 ET) from the already long-only, named-session iFVG config further improves funded PF (+3.6-4.6% vs B15) and dramatically improves pipeline sustainability at r1.25 (1.600x vs B15's 1.13x). The B18 counterintuitive finding (removing named sessions hurts all-sides funded) does not apply here because B18 removed overnight sessions with positive PF contributions; B19 removes only NY PM which has negative all-sides PF (0.906). Importantly, the 33% fewer trades produce nearly identical net payouts at r1.25 ($184k vs $186k B15), confirming that NY PM signals contribute disproportionately few profits relative to their bust-triggering risk. B20 (two-phase pipeline) should use B19 r1.25 as the Phase B config.",
     "links": {"doc": "trade_analysis/2026-06-13_B19_longonly_london_ny_am_funded.md", "runs": ["research/equity_b19_longonly_r1p0.csv", "research/equity_b19_longonly_r1p25.csv"], "src": null}
+  },
+  {
+    "ts": "2026-06-13T10:37:00Z",
+    "session": "wk1-b20",
+    "item": "B20",
+    "variant": "iFVG r1.25 Combine -> LongOnly-iFVG (london+ny_am) Funded at r0.75/r1.0/r1.25",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_ifvg_passes": 34, "phase_a_ifvg_attempts": 162, "phase_a_days_per_funded": 28.6,
+      "b_r075_net_mo": 397, "b_r075_sust": 1.06, "b_r075_xfa_busts": 32,
+      "b_r100_net_mo": 463, "b_r100_sust": 0.65, "b_r100_xfa_busts": 52,
+      "b_r125_net_mo": 676, "b_r125_sust": 0.69, "b_r125_xfa_busts": 49,
+      "b3_ref_net_mo": 393, "b3_ref_sust": 1.26, "b3_ref_orb_busts": 27,
+      "longonly_r100_xfa_accounts": 53, "orb_r100_xfa_accounts": 28,
+      "longonly_r100_avg_funded_days": 23.6, "orb_r100_avg_funded_days": 44.6,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "LongOnly-iFVG funded creates 2x more XFA account cycles than ORB funded (53 vs 28 over 5y, at r1.0) because account durations are ~half as long (~24d vs ~45d). The iFVG combine produces 34 passes — enough to sustain 34 busts (ORB r1.0 needs only 27) but not 52 (LongOnly r1.0 busts). B20's standalone sust metric (B15: 1.12x) was misleading because it assumed the same strategy for combine and funded; the two-phase model exposes that LongOnly-iFVG funded requires MORE combine passes than iFVG can supply. B3 remains the recommended two-phase pair: iFVG Combine + ORB r1.0 Funded ($393/mo, sust 1.26x).",
+    "links": {"doc": "trade_analysis/2026-06-13_B20_ifvg_combine_longonly_funded.md", "runs": ["research/equity_b20/"], "src": null}
   }
 ]
