@@ -706,3 +706,39 @@ Entry format:
   undercount). B28 and B29 can follow once B27 Phase A equity exists. Monday priority: Lawrence
   should also fix deployed Phase A config (swing_stop_lookback=0 + target_clarity_mode=reject
   per B26 recommendation) before the next trading week.
+
+## 2026-06-13T22:00:00Z — session wk1-b27 — B27 (iFVG-close Phase A two-phase pipeline)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B27 (top pending item — close-mode Phase A pipeline, resolves Phase A undercount from wk1-r6 projection).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Generated per-year iFVG-close Phase A equity CSVs (equity_b27/): `equity_export --set engine=ifvg --set ifvg_entry_mode=close --set target_clarity_mode=off --set swing_stop_lookback=0 --partial-r 0` at r1.25 and r1.0, for years 2021/2023/2024/2025/2026 (2022 = frozen holdout). 10 CSVs total.
+  3. Ran `scripts/run_b27_pipeline.py` — stitches Phase A (equity_b27/) + Phase B (equity_b21/orb_reentry_r0p75) per-year curves through funded_sim.
+  4. **Debug run** to diagnose Phase A trade count: `equity_export` with ifvg_edge + no killzones → 3,250 trades/year 2024; with close + named sessions → 149 trades/year 2024. Confirmed mechanism (see Learned).
+  5. Test suite: 640 passed, 2 skipped. No code changes.
+- **Numbers:**
+
+  **Phase A compare (per-year, 5y, ifvg engine):**
+  | Config | Passes | Attempts | Avg d/attempt | Days/funded |
+  |--------|--------|----------|---------------|-------------|
+  | iFVG-close r1.25 (B27) | **10** | 59 | 7.2 | 42.4 |
+  | iFVG-edge r1.25 (B21 ref) | 34 | 162 | 6.0 | 28.6 |
+
+  Close mode generates only **29% as many Phase A passes** as ifvg_edge under identical engine + session config.
+
+  **Best B27 two-phase pairs (Phase A close-mode → Phase B ORB-reentry r0.75):**
+  | Phase A | Net/mo | Sust | vs B21 |
+  |---------|--------|------|--------|
+  | iFVG-close r1.0 | $409/mo | 0.69x | below B3 threshold |
+  | iFVG-close r1.25 | ~$360-380/mo | 0.77x | below B3 threshold |
+  | B21 reference (ifvg-edge r1.25) | $497/mo | 2.62x | (benchmark) |
+
+  All 6 Phase A/B combinations (close r1.0/r1.25 × ORB-reentry r0.75/r1.0/r1.25): below B3 threshold ($393/mo, sust 1.26x) on at least one criterion.
+
+- **Stop rule check:** Best pair ($409/mo, sust 0.69x) beats B3 on $/mo but fails on sust (0.69x < 1.26x). All pairs fail the sustainability criterion.
+- **Verdict:** rejected — iFVG-close Phase A (ifvg engine + named sessions) is WORSE than ifvg_edge Phase A, not better as projected.
+- **Root cause of projection error:** wk1-r6 applied B24's combined+all-day scale factor (11/7 = 1.571x) to B21's ifvg+named-sessions base. These are different configs: B24 used `engine=combined` + `killzones=all`; B21 used `engine=ifvg` + named sessions. The scale factor does not transfer across configs.
+- **Mechanism:** `ifvg_entry_mode=close` signals fire exactly at inversion bar close — the bar must close inside the active killzone window. `ifvg_entry_mode=ifvg_edge` arms a tracker that persists across session boundaries: a tracker armed during London can fill during NY AM, or even NY PM. Under named sessions, this cross-session fill accumulation drives most of ifvg_edge's monthly passes. Close mode loses all cross-session fills.
+- **Implications for B28 and B29:** Both B28 and B29 use equity_b27/ Phase A equity (10 passes). Their success criteria assumed ~53 Phase A passes. With 10 passes, neither B28 nor B29 can achieve sust ≥ 1.26x unless Phase B busts are extremely low (≤ 8). Revise B28/B29 expectations before running.
+- **Learned:** The killzone persistence advantage of ifvg_edge (armed trackers survive across session gaps) is the dominant factor under named-session configs, not the entry price quality difference. Close mode's 100% fill rate advantage only holds when killzones=all (every bar can trigger the signal). Under named sessions, close mode's signals are session-bound while ifvg_edge's fills are not — making ifvg_edge materially superior for the Phase A combine objective in the ifvg-only engine. The B21 recommendation (ifvg_edge + named sessions) is structurally sound and remains the best two-phase pipeline ($497/mo, sust 2.62x).
+- **Next:** B28 (LongOnly-close iFVG as Phase B) or B29 (ORB-reentry 10-min as Phase B) — but both use the 10-pass Phase A, so success criteria need revision. Alternatively, Lawrence may wish to reprioritize after reviewing these B27 findings on Monday.

@@ -1211,6 +1211,49 @@
     }
   },
   {
+    "ts": "2026-06-13T22:00:00Z",
+    "session": "wk1-b27",
+    "item": "B27",
+    "variant": "iFVG-close Phase A -> ORB-reentry Phase B two-phase pipeline (per-year equity, ifvg engine + named sessions)",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_close_r125_passes": 10,
+      "phase_a_close_r125_attempts": 59,
+      "phase_a_close_r125_days_per_attempt": 7.2,
+      "phase_a_close_r125_days_per_funded": 42.4,
+      "phase_a_edge_r125_passes_b21_ref": 34,
+      "phase_a_edge_r125_attempts_b21_ref": 162,
+      "phase_a_edge_r125_days_per_attempt_b21": 6.0,
+      "phase_a_edge_r125_days_per_funded_b21": 28.6,
+      "best_pair": "iFVG-close r1.0 -> ORB-reentry r0.75",
+      "best_net_per_month": 409,
+      "best_sust": 0.69,
+      "all_pairs_above_b3_dollar": false,
+      "all_pairs_above_b3_sust": false,
+      "b21_benchmark_net_per_month": 497,
+      "b21_benchmark_sust": 2.62,
+      "b3_threshold_net_per_month": 393,
+      "b3_threshold_sust": 1.26,
+      "close_vs_edge_phase_a_pass_ratio": "10/34 = 29%",
+      "wk1r6_projected_passes": 53,
+      "projection_error": "B24 combined+all-day scale factor (1.571x) applied to B21 ifvg+named-sessions base — incompatible methodologies",
+      "debug_close_2024_trades": 149,
+      "debug_edge_allday_2024_trades": 3250,
+      "mechanism": "close mode fires at inversion bar close (session-bound); ifvg_edge armed trackers persist across session boundaries and fill anytime",
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "iFVG-close Phase A (ifvg engine + named sessions) generates only 10 passes over 5y vs 34 for ifvg_edge — the opposite of the wk1-r6 projection (~53, +57%). Mechanism: close mode signals fire exactly at inversion bar close; if that bar is outside the named session window, the signal is lost. ifvg_edge armed trackers accumulate during sessions and persist across session boundaries, filling whenever price returns to the FVG proximal edge — capturing cross-session fills that close mode misses entirely. The wk1-r6 projection error was applying B24's combined+all-day scale factor (11/7 = 1.571x) to B21's ifvg+named-sessions base — different engine and killzone configs, incompatible methodologies. B21 ($497/mo, sust 2.62x) remains the best two-phase recommendation.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b27/",
+        "scripts/run_b27_pipeline.py"
+      ],
+      "src": null
+    }
+  },
+  {
     "ts": "2026-06-13T14:30:00Z",
     "session": "wk1-r6",
     "item": "RESEARCH",

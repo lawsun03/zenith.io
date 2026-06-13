@@ -754,7 +754,7 @@ Key data findings driving the 3 proposals:
   Whether this advantage holds for ORB-reentry at r0.75 in the two-phase model is untested.
 - B27 must run before B28 and B29 (all three share the close-mode Phase A equity from equity_b27/).
 
-## B27 — Close-mode Phase A: re-run B21 two-phase pipeline with ifvg_entry_mode=close  [pending]
+## B27 — Close-mode Phase A: re-run B21 two-phase pipeline with ifvg_entry_mode=close  [done — rejected: close-mode (ifvg engine + named sessions) = 10 Phase A passes vs 34 for ifvg_edge; all pairs below B3 threshold on sust; B21 ($497/mo, sust 2.62x) remains best pipeline; see Lessons 62-63]
 Hypothesis: The B21 pipeline ($497/mo, sust 2.62x) used equity_b1/control_r1p25 as Phase A,
 generated with BotConfig default ifvg_entry_mode="ifvg_edge". B24 confirmed close mode gives
 +57% more combine passes (11/61 vs 7/61). Regenerating Phase A equity with close mode should
@@ -793,11 +793,18 @@ but the direction is clear and the magnitude is large.
 Source: scripts/research_phase_a_analysis.py (this session); B24 combine results.
 
 ## B28 — Close-mode LongOnly-iFVG as funded Phase B (two-phase, vs B27 ORB-reentry)  [pending]
+**REVISED PREREQUISITES (post-B27):** B27 showed close-mode Phase A (ifvg engine + named sessions)
+gives only 10 passes (vs projected 53). The original success criteria assumed ~53 Phase A passes;
+with 10 passes, B28 needs LongOnly-close Phase B to generate ≤ 8 funded busts (per-year) for
+sust ≥ 1.26x. This is uncertain but plausible if per-year correction yields <7 busts from the
+flat 5y 21-bust baseline. Run B28 to discover the actual per-year bust count.
+
 Hypothesis: B20 tested LongOnly-iFVG (ifvg_edge) as Phase B and found sust 0.65x (rejected:
 52 funded busts vs 34 Phase A passes). B24 showed close mode dramatically changes the funded picture:
-LongOnly-close flat 5y has 21 XFA busts (vs 52 for ifvg_edge B20). With close-mode Phase A (~53
-passes, from B27), the two-phase sust projects to ~53/10.5 = ~5x (per-year). Per-account net
-($8,206) is 2.6x higher than ORB-reentry r0.75 ($3,131), projecting dramatically higher $/mo.
+LongOnly-close flat 5y has 21 XFA busts (vs 52 for ifvg_edge B20). With close-mode Phase A (10
+passes from B27, not 53 as projected), the two-phase sust = ~10/(10-11 per-year busts) ≈ ~1x —
+borderline. Per-account net ($8,206) is 2.6x higher than ORB-reentry r0.75 ($3,131), which may
+push $/mo above B3 even if sust is marginal.
 
 Mechanism: no new code. Generate per-year close-mode LongOnly-iFVG equity CSVs:
   For each year in [2021, 2023, 2024, 2025, 2026]:
@@ -832,6 +839,13 @@ Source: B24 flat 5y funded_sim output (53 passes, 21 busts, 22 accounts, $180,53
 per-year methodology analysis (Lesson 42); scripts/research_phase_a_analysis.py projection.
 
 ## B29 — ORB-reentry with 10-minute opening range as Phase B in B27 two-phase pipeline  [pending]
+**REVISED PREREQUISITES (post-B27):** B27 showed close-mode Phase A gives only 10 passes (vs
+projected 53). Phase A for B29 is the same equity_b27/ (10 passes). For B29 to beat B21 ($497/mo,
+sust 2.62x), the 10-min ORB-reentry Phase B would need to generate fewer funded busts than
+15-min r0.75 (which has 13 busts and gives sust=10/13=0.77x). Unless 10-min generates ≤ 4 busts
+(very unlikely given B22's similar bust profile), B29 cannot beat B21 on sust. B29 may still be
+useful as a $/mo comparison (if 10-min per-account net is higher). Lower priority given Phase A limitation.
+
 Hypothesis: B22 showed ORB 10-min (no reentry) has +9% funded $/mo vs 15-min at r1.0 flat 5y,
 with identical combine passes (10/61 each). B21 uses ORB-reentry at 15-min as Phase B. Switching
 Phase B to 10-min ORB-reentry at r0.75 may improve $/mo in the two-phase model. The 10-min window

@@ -420,3 +420,27 @@ Appended 2026-06-13 (wk1-r6 research session):
     economics than ORB-reentry depends on per-year funded bust frequency (flat 5y: 21 busts,
     per-year projected: ~10–11). B28 tests this directly. Rule: high per-account net does not
     automatically mean better pipeline — account cycling speed and bust frequency both matter.
+
+Appended 2026-06-13 (B27 iFVG-close Phase A pipeline test):
+
+62. **`ifvg_entry_mode="close"` and `"ifvg_edge"` interact differently with named session killzones,
+    reversing the B24 ranking under ifvg-only engine.** B24 (combined engine, all-day killzones)
+    showed close mode gives 11/61 combine passes vs 7/61 for ifvg_edge (+57%). B27 (ifvg engine,
+    named sessions) shows close mode gives 10 passes vs 34 for ifvg_edge (29% — WORSE). Mechanism:
+    `close` mode fires exactly at inversion bar close; if that bar falls outside the active killzone
+    window, the signal is lost. `ifvg_edge` arms a tracker that persists across session boundaries —
+    a tracker armed in London fills in NY AM or NY PM, accumulating cross-session fills that close
+    mode cannot capture. The "100% fill rate" advantage of close mode only holds when killzones=all
+    (every bar can trigger the signal). Under named sessions, ifvg_edge's cross-session persistence
+    is the dominant performance driver, making it materially superior for the Phase A combine
+    objective. Rule: when evaluating entry modes in restricted killzone configs, test both modes
+    under the exact killzone configuration — the B24 all-day result does NOT transfer.
+
+63. **Never apply a scale factor derived from one engine/killzone config to a different config's base.**
+    The wk1-r6 B27 projection (~53 passes) used B24's close/edge ratio (11/7 = 1.571×, derived with
+    combined engine + all-day killzones) applied to B21's ifvg_edge base (34 passes, derived with
+    ifvg engine + named sessions). These two configs behave fundamentally differently under entry mode
+    changes. The actual B27 result: close mode (ifvg engine + named sessions) = 10 passes, not 53.
+    Scale factors from benchmark A are only valid when applied within the same config space as benchmark A.
+    Cross-config extrapolation is invalid even when the parameter being varied (entry mode) appears
+    independent of the other config axes (engine, killzones).
