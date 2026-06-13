@@ -1597,3 +1597,237 @@ ORB 10:30+ ET structural weakness: less momentum continuation in the lunch doldr
 urgency. The 10:05-10:30 ET window (PF 1.43-1.53) is STRONGER than the 9:45-55 ET window (PF 1.17),
 suggesting delayed breakouts (after first-bar noise settles) are higher quality — the cutoff preserves
 this higher-quality delayed window while removing only the post-10:30 deterioration.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk2-r4  [done — 3 items appended: B44 iFVG mid-session block, B45 ORB range-width filter (Phase 1), B46 B42+B43 deployed-config pipeline benchmark]
+
+B1-B43 exhausted. Mandatory research/ideation session to replenish (session count % 3 and last 2 items B42/B43 both build items). Sources: scripts/_research_wk2r4_mining.py (5y MFE/MAE per-hour/hold-time analysis) + WebSearch.
+
+**Key data findings from wk2-r4 mining (5y excl 2022):**
+- **iFVG per-hour (all-sides):** 11:xx PF=0.932 (n=83), 12:xx PF=0.752 (n=64), 13:xx PF=0.744 (n=85) — all
+  three hours consistently loss-making, net=-$12,268 over 5y. Per-year: PF<1 in 4 of 5 years (2021:0.951,
+  2023:0.511, 2024:0.631, 2025:0.941, 2026:1.623-sparse). 14:xx recovers to PF=1.108 (positive). The dead
+  zone is specifically 11:00-14:00 ET. Lunch LONG-only signals are also negative (PF=0.971, net=-$555).
+- **This block is NOT the same as B18's session filter.** B18 tested named sessions (removed overnight/
+  pre-market sessions that have NET-POSITIVE PF at partial_r=1.5). B44 blocks ONLY 11:00-14:00 ET while
+  keeping all overnight/pre-market sessions intact — the mechanism that hurt B18 (removing positive overnight
+  sessions) does not apply here.
+- **ORB hold-time structure (5y excl 2022):** All ORB value is in the 4h+ cohort:
+  0-30m: PF=0.144 (n=110), 30-60m: PF=0.378 (n=99), 1-2h: PF=0.399 (n=104), 2-4h: PF=0.868 (n=131),
+  4h+ (EOD): PF=4.129 (n=573, WR=68.6%). Net: early buckets total -$100k, 4h+ bucket +$153k.
+  ORB is ENTIRELY an EOD-flatten strategy at the structural level. This confirms wk2-r2's 33.6% profitable-
+  EOD-flatten finding and extends it: even the 11.4% target hits are mostly held all day (targets require
+  large moves, typically 4h+ at 5min timeframe).
+- **ORB long side 4h+ structure:** long PF=5.458 (n=317 of 542), short PF=2.998 (n=256 of 488).
+  Long-side EOD flattens are nearly 2x better PF than short-side EOD flattens — consistent with Lesson 8.
+- **B43+B42 deployed gap:** B43 tested orb_signal_window_mins=60 at partial_r=0 (parity), not deployed
+  partial_r=1.5. B42 is the deployed Phase A (42 passes). Their combination (B42 Phase A + B43 w=60 Phase B
+  at partial_r=1.5) has never been simulated as a full pipeline. B46 closes this gap.
+- **WebSearch:** No new mechanism families found. Lesson 6 confirmed 7-for-7 (arxiv 2605.04004 explicitly
+  tests 14 OHLCV signal families on MNQ 5min 2021-2025 — all fail institutional standards; our iFVG+ORB
+  success is not explained by standard OHLCV signal families, suggesting the iFVG chain's structural
+  confirmation requirement is what provides the edge). No new proposals from external sources.
+
+## B44 — iFVG mid-session signal block (11:00-14:00 ET)  [pending]
+Hypothesis: iFVG signals emitted in the 11:00-14:00 ET window are consistently loss-making across
+all years (5y excl 2022: PF=0.859, n=232, net=-$12,268). The mechanism is the "lunch doldrums":
+low liquidity, mean-reverting price action, FVG inversions that trigger but fail to follow through
+because institutional order flow is absent. This is structurally different from B18 (named-sessions
+filter that removed overnight/pre-market positive-PF hours) — this block ONLY removes the 11-13 ET
+hours while preserving all other windows including overnight/pre-market.
+
+Per-hour data (5y excl 2022, all-sides, all-day killzones, research baseline config):
+- 11:xx: n=83, PF=0.932, net=-$1,671  (borderline but 4 of 5 years < 1)
+- 12:xx: n=64, PF=0.752, net=-$4,115  (clearly negative; 4/5 years < 1)
+- 13:xx: n=85, PF=0.744, net=-$6,482  (clearly negative; 4/5 years < 1)
+- 14:xx: n=78, PF=1.108, net=+$2,052  (POSITIVE — keep these signals)
+Volume impact: n=232/2477 = 9.4% reduction (3% per blocked hour average).
+Note: lunch LONG-only signals also negative (PF=0.971, n=76, net=-$555).
+
+Per-year consistency for 11:xx-13:xx block:
+- 2021: lunch (n=30) PF=0.951  vs non-lunch PF=1.191
+- 2023: lunch (n=26) PF=0.511  vs non-lunch PF=0.883
+- 2024: lunch (n=33) PF=0.631  vs non-lunch PF=1.033
+- 2025: lunch (n=42) PF=0.941  vs non-lunch PF=1.089
+- 2026: lunch (n=16) PF=1.623  (sparse, 6-month year — treat as noise)
+4 of 5 years (with sufficient data) show PF<1 in the lunch window.
+
+Mechanism (code required, ~25 lines):
+- Add `ifvg_block_hours: list[int] = Field(default_factory=list)` to StrategyParams.
+  Example: `[11, 12, 13]` blocks 11:00:00-13:59:59 ET (11:xx, 12:xx, 13:xx).
+- In SweepDisplacementComposer.on_displacement(), after DOW filter and before FVG check:
+  `if config.block_hours: hour = bar.ts.astimezone(ET).hour; if hour in block_hours: return None`
+- The block applies to SIGNAL EMISSION only; sweep state continues accumulating.
+- ET conversion: `bar.ts.astimezone(ZoneInfo("America/New_York")).hour`.
+
+Fixed defaults: `ifvg_block_hours=[]` (no blocking — existing behavior preserved).
+Primary test: `[11, 12, 13]` (block 11:00-14:00 ET).
+Secondary test: `[11, 12, 13, 15]` (also block 15:xx, which shows PF=0.821, n=53, net=-$2,305).
+
+Defining-behavior tests (tests/test_ifvg_block_hours.py):
+1. block_hours=[] (default): signals fire at any hour (existing behavior unchanged)
+2. block_hours=[12]: a displacement bar at 12:15 ET → on_displacement returns None
+3. block_hours=[12]: a displacement bar at 11:59 ET → signal fires (11:xx not blocked)
+4. block_hours=[12]: sweep state updated even during blocked hour (state not lost)
+5. block_hours=[12]: bar at 13:00 ET → signal fires (14:xx not blocked)
+
+Benchmark (funded objective — combine secondary):
+1. `equity_export --partial-r 0 --set swing_stop_lookback=0 --set ifvg_block_hours=11,12,13`
+   Compare to research baseline (no block). Primary comparison: PF, funded net payouts, sust.
+2. `equity_export` with deployed settings (partial_r=1.5, close mode, all-day) + block_hours=[11,12,13]
+   Compare to B42 Phase A (to check whether blocking helps the deploy-config Phase A combine).
+3. funded_sim --haircut 200; report sust vs B19/B24 baselines.
+
+Success criteria (vs B24 baseline: LongOnly close-mode funded, PF=1.167, sust=2.524x):
+- Primary: funded PF improves >= +2% AND sust >= 2.524x (doesn't regress vs B24 best)
+- Also report combine pass rate change (expect negligible at deployed ~80/month frequency)
+- Stop rule: both PF AND sust degrade vs ANY reasonable baseline → reject
+
+Prior: ~40% (data is structurally consistent across years; the targeted-hour approach avoids
+B18's failure mode; but the all-day deployed config's overhead volume may absorb the signal
+quality gap). Lower prior for secondary 15:xx block (only 53 trades over 5y; sample too small
+to be confident).
+
+Source: scripts/_research_wk2r4_mining.py (wk2-r4 session). Per-hour PF analysis, all-sides
+and long-only. The 11:00-14:00 ET dead zone is consistent with the "CME electronic hours"
+institutional lunch break (major liquidity providers step back 11:00-13:00 ET daily). The same
+pattern was observed in B18's per-hour data but was not isolated as a testable mechanism
+because B18 tested whole-session block/keep decisions.
+
+## B45 — ORB opening-range width quality filter (Phase 1 data mining + Phase 2 code if GO)  [pending]
+Hypothesis: a narrow opening range (first 15 minutes of trading) indicates low pre-market
+conviction and produces false breakout ORB signals. A wide range indicates a decisive overnight
+move being digested, producing stronger breakout signals when price finally resolves direction.
+Proposed filter: require OR width >= X × (14-bar ATR at 9:45 ET) for ORB signals to fire.
+
+This is NOT the same as B5 (prior-day range qualifier), which was REJECTED. B5 used the
+PRIOR DAY'S range as a predictor — it measured nothing about the current session's opening.
+B45 uses the CURRENT DAY'S own OR width, which is a direct measure of how much the overnight
+session compressed or expanded the range before the regular session open.
+
+Mechanism for the structural separation (hypothesis):
+- Narrow OR (< 0.5× ATR): price chopped in a tight range pre-open → breakout bar likely
+  wicks through the range and reverses (false momentum) → quick stop-out → short-hold loser
+- Wide OR (> 1.5× ATR): price had a strong pre-open move and consolidated → when the range
+  breaks, the directional conviction is high → sustained move → long-hold winner or target hit
+- This matches the ORB hold-time data: early stops (0-2h, all losing) vs late holds (4h+, PF=4.1)
+
+PHASE 1 — cheap data-mining falsification FIRST (no engine code; go/no-go gate):
+Write `scripts/analyze_b45_orb_range.py`:
+1. For each trading day in the 5y bars (2021/2023/2024/2025/2026, excl 2022):
+   a. Find the 9:30-9:45 ET bars (up to 3 bars of 5min = OR formation bars)
+   b. OR high = max(high of 9:30, 9:35, 9:40 bars); OR low = min(low of same bars)
+   c. OR width = OR high - OR low (in points)
+   d. ATR(14) computed from bars ending at 9:30 ET (prior to opening)
+   e. OR/ATR ratio = OR width / ATR(14)
+2. Match each ORB trade in mfe_mae_orb_clean.csv to its day's OR/ATR ratio.
+3. Bucket trades by OR/ATR ratio quintile; compute WR and PF per bucket.
+GO/NO-GO: proceed to Phase 2 ONLY if wide-range bucket (top 40%) PF >= 1.4× narrow-range
+bucket (bottom 40%) AND each bucket has n >= 40.
+
+PHASE 2 — engine (only if Phase 1 = GO):
+- Add `orb_min_range_atr_factor: float = 0` to StrategyParams (default 0 = no filter).
+  When > 0: after OR locks at 9:45 ET, compute ATR(14) from prior bars and check
+  `(or_high - or_low) >= orb_min_range_atr_factor * atr`; suppress signals if too narrow.
+- ORBDetector already tracks or_high/or_low; add `_or_atr: float = 0` field, computed once
+  when the range locks.
+- ATR(14) requires a 14-bar rolling computation — add an `_atr_buffer: deque[float]` of
+  14 TR values, updated each on_bar call before range formation.
+- Fixed default: `orb_min_range_atr_factor=0` (off; enable for benchmark only).
+
+Defining-behavior tests (tests/test_orb_range_width.py), ONLY if Phase 1 = GO:
+1. factor=0 (default): signals fire regardless of OR width (existing behavior unchanged)
+2. factor=0.7, OR width < 0.7×ATR → breakout bar returns None (range too narrow)
+3. factor=0.7, OR width >= 0.7×ATR → signal fires normally
+4. ATR tracked correctly (14 TR values, handles gap-open days where true range is large)
+
+Benchmark (ONLY if Phase 1 = GO, funded + combine objectives; parity flags):
+1. `run_monthly_combine.py --set engine=orb --set orb_r_multiple=2.5
+   --set orb_min_range_atr_factor=0.7` (fixed default from Phase 1 data)
+2. `equity_export --set engine=orb --set orb_reentry_after_stop=True
+   --set orb_min_range_atr_factor=0.7 --risk-pct 0.75 --partial-r 0`
+   + funded_sim vs B43 baseline (w=60 Phase B, 22 busts, $1,725/acct)
+
+Success criteria (only used if Phase 1 = GO):
+- Combine: passes improve AND PF improves vs w=60 baseline (10/61, PF 1.21)
+- Funded: sust ratio improves vs ORB-reentry r=0.75 baseline from B21
+
+Stop rule (Phase 1 NO-GO): if wide OR/ATR does NOT materially outperform narrow OR/ATR
+(PF ratio < 1.4x), do NOT implement the filter. B5's lesson was that day-level range
+predictors fail; document that OR width joins that rejection set and close the item.
+
+Prior for Phase 2: ~30% (B5 precedent is adverse; but current-day OR is fundamentally
+different from prior-day range — it's a direct coil measurement, not a volatility proxy
+for the day ahead). Phase 1 is the appropriate gate before committing code resources.
+
+Source: wk2-r4 hold-time analysis showing ORB value is entirely in 4h+ cohort (EOD
+flattens, WR=68.6%, PF=4.129). Early stop-outs (0-2h, PF=0.14-0.40) dominate the loss
+side. If narrow OR ranges predict early stop-outs, the filter directly removes the dominant
+loss mechanism. Related: B34 Lesson 73 showed no-retrace BOS signals (immediate momentum)
+have the best performance — this structural principle generalizes: tight coils → false
+breakouts → early reversals → stops.
+
+## B46 — B42+B43 deployed-config full pipeline benchmark (orb_signal_window_mins=60 at partial_r=1.5)  [pending]
+Hypothesis: B43 showed orb_signal_window_mins=60 reduces ORB-reentry Phase B busts from
+25 to 22 (-12%) and improves two-phase sust from 1.68x to 1.91x (+14%). BUT B43 was
+benchmarked at partial_r=0 (research parity baseline), while the deployed bot uses
+partial_r=1.5. B42 was the deployed-config Phase A (42 passes, $568 reset, $549/mo
+5y-sust 3.23x) benchmarked with B21 Phase B (partial_r=1.5, ORB-reentry r=0.75). The
+B42+B43 combination — deployed Phase A paired with deployed Phase B INCLUDING the
+orb_signal_window_mins=60 improvement — has never been explicitly computed.
+
+This benchmark answers the deployment question: does enabling orb_signal_window_mins=60
+on the live bot improve the pipeline economics, and by how much?
+
+Also: B43 Phase B used parity (no MNQ overrides, no partial_r). The deployed Phase B
+uses partial_r=1.5 + MNQ overrides (stop_buffer=3.0, min_absolute_body=5.0). B25 showed
+partial_r=1.5 reduces sust by 1.8% for ORB-reentry at r=0.75 (from 0.764 to 0.750).
+Whether this holds when combined with w=60 needs verification.
+
+Mechanism: no new code. B43 already shipped orb_signal_window_mins=60 (658 tests green).
+Generate per-year Phase B equity CSVs with deployed settings + w=60:
+  For each year in [2021, 2023, 2024, 2025, 2026]:
+  `equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+   --risk-pct 0.75 --partial-r 1.5 --set swing_stop_lookback=0 --set engine=orb
+   --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+   --set orb_signal_window_mins=60 --set stop_buffer=3.0 --set min_absolute_body=5.0
+   --out research/equity_b46/orb_reentry_w60_r0p75_{year}.csv`
+Write scripts/run_b46_pipeline.py. Phase A: equity_b42/deployed_r1p0_{year}.csv (already exists).
+Phase B: equity_b46/ (new). Also include reference: equity_b21/orb_reentry_r0p75 (B21 Phase B
+at partial_r=1.5 — need to verify if the existing CSVs used partial_r=1.5 or 0).
+
+Note: the equity_b21 CSVs were generated with research baseline settings (partial_r=0).
+The deployed Phase B is ORB-reentry r=0.75 WITH partial_r=1.5 (deployed). This means
+we should ALSO generate the "deployed Phase B without w=60" baseline (same as B46 but
+--set orb_signal_window_mins=0) to isolate the w=60 effect cleanly.
+
+Benchmark plan:
+1. Generate equity_b46/orb_reentry_w60_r0p75_{year}.csv (deployed + w=60)
+2. Generate equity_b46/orb_reentry_w0_r0p75_{year}.csv (deployed + w=0, baseline)
+3. Run two-phase pipeline: B42 Phase A × equity_b46/ Phase B
+4. Report $/mo, sust for both w=0 and w=60 configurations
+5. Compare to B42's published result ($549/mo, 3.23x) which used B21 Phase B (partial_r=0 CSVs)
+
+Fixed defaults: partial_r=1.5, stop_buffer=3.0, min_absolute_body=5.0, orb_r_multiple=2.5,
+orb_reentry_after_stop=True. Only w=60 vs w=0 varies.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria:
+- Primary: w=60 Phase B sust > w=0 Phase B sust (window cutoff improves pipeline sustainability)
+- Secondary: the B42+B43-deployed pipeline beats B42+B21 ($549/mo, 3.23x) → deploy both changes
+- If w=60 shows no benefit at partial_r=1.5: note that partial_r moderates the bust-reduction
+  effect and the recommendation is to NOT enable w=60 in the funded phase (deploy in combine only)
+- In any case: document the correct deployed Phase A + Phase B combination for Monday config review
+
+Prior: ~70% that w=60 improves deployed Phase B sust. B43 showed -12% busts at partial_r=0.
+B25 showed partial_r=1.5 moderates sust by only 1.8%. Net expected effect: ~10% bust reduction
+at partial_r=1.5, which translates to higher sust and likely slightly lower $/acct (partial exits
+reduce per-trade payout). The B42 Phase A (42 passes) gives good pipeline supply, so even a
+modest sust improvement is valuable.
+
+Source: B43 (orb_signal_window_mins=60 candidate, partial_r=0 benchmark); B42 (deployed Phase A
+baseline, partial_r=1.5); B25 (partial_r=1.5 effect on ORB-reentry Phase B). This is the
+"deployed-config integration test" that closes the gap between research-baseline benchmarks
+and the actual live configuration.

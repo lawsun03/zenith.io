@@ -1428,3 +1428,68 @@ Entry format:
 - **Learned:** ORB timing matters at the sub-session level. The 9:30-10:30 ET window (first 60 minutes) carries nearly all ORB edge (PF ~1.21); the 10:30-11:30 ET window is structurally loss-making (PF 0.622-0.963, costing ~$2,900 over 5y). Cutting at 60 minutes (10:30 ET cutoff) is the mechanically clean choice: removes the loss-making segment, preserves the edge, and has zero side-effects on existing open positions or range-building. The parity-baseline comparison isolates the window cutoff effect cleanly from partial-profit interactions.
 
 - **Next:** All B1-B43 items complete. Protocol mandates research/ideation session to replenish backlog (B44+).
+
+## 2026-06-15T01:30:00Z — session wk2-r4 — RESEARCH (backlog replenishment, B44/B45/B46)
+- **Bot health:** /api/status not re-checked (session continuous from wk2-b43 context; bot unchanged, XFA shadow running, 0 open contracts).
+- **Claimed:** RESEARCH/IDEATION — all B1-B43 done; last 2 completed were both build/benchmark items (B42, B43); mandatory research session to replenish backlog per protocol.
+- **Session count:** wk2-r4. Databento spend: $0.00 / $20.00 cap. No fetches needed (existing MFE/MAE CSVs sufficient).
+- **Ran:**
+  1. WebSearch: arxiv/SSRN for NQ intraday signal research 2025-2026. Found arxiv 2605.04004 (Mesfin, 2026): explicitly tests 14 OHLCV signal families on MNQ 5min 2021-2025 — all fail institutional PF thresholds. No new mechanism families found. **Lesson 6 confirmed 7-for-7 (external web research yields nothing new).**
+  2. Wrote `scripts/_research_wk2r4_mining.py` — comprehensive 5y data mining on both MFE/MAE CSVs. Analyzed: hold-time distributions (ORB), per-hour PF (iFVG), lunch-doldrums block (iFVG 11:00-14:00 ET), ORB side breakdown (long vs short), MFE percentiles, H1/H2 seasonality, EOD-exit analysis, per-year consistency.
+  3. Ran mining script on `research/mfe_mae_orb_clean.csv` (n=1030, 5y excl 2022) and `research/mfe_mae_ifvg_clean.csv` (n=2477, 5y excl 2022).
+  4. Synthesized findings → 3 new backlog items (B44, B45, B46). LESSONS.md L87-L88 added.
+- **Key findings (data mining output):**
+
+  **iFVG per-hour breakdown (5y excl 2022, all-sides):**
+  | Hour (ET) | n | PF | Net |
+  |-----------|---|-----|-----|
+  | 09:xx | 310 | 1.177 | +$18,250 |
+  | 10:xx | 159 | 0.976 | -$1,060 |
+  | **11:xx** | **83** | **0.932** | **-$1,671** |
+  | **12:xx** | **64** | **0.752** | **-$4,115** |
+  | **13:xx** | **85** | **0.744** | **-$6,482** |
+  | 14:xx | 78 | 1.108 | +$2,052 |
+  | 15:xx | 53 | 0.821 | -$2,305 |
+  Lunch block (11:xx-13:xx): n=232, PF<1 in 4 of 5 years; net=-$12,268 over 5y.
+
+  **ORB hold-time distribution (5y excl 2022):**
+  | Cohort | n | WR | PF | Net |
+  |--------|---|-----|-----|-----|
+  | 0-30m | 110 | 4.5% | 0.144 | -$43,125 |
+  | 30-60m | 99 | 13.1% | 0.378 | -$26,318 |
+  | 1-2h | 104 | 13.5% | 0.399 | -$25,333 |
+  | 2-4h | 131 | 26.7% | 0.868 | -$5,893 |
+  | **4h+ (EOD)** | **573** | **68.6%** | **4.129** | **+$152,611** |
+  All ORB value is in EOD-flatten trades. Early cohorts total -$100k over 5y.
+  ORB winner hold times: p50=365m, p75=380m, p90=380m — essentially all held to EOD.
+  Long-side 4h+ PF=5.458 (n=317), short-side 4h+ PF=2.998 (n=256).
+
+  **WebSearch confirmation:** arxiv 2605.04004 tested 14 OHLCV signal families on MNQ 5min; all failed.
+  Our iFVG+ORB edge is not explained by standard OHLCV families — the iFVG chain's structural
+  confirmation requirement (3-step: sweep→displacement→inversion) is what creates selectivity.
+
+- **B44 — iFVG mid-session block (11:00-14:00 ET):**
+  - Block 11:xx/12:xx/13:xx ET (11:00-14:00 ET). Mechanism: `ifvg_block_hours: list[int]` in
+    StrategyParams; ET-hour check in SweepDisplacementComposer.on_displacement().
+  - Data: PF<1 in 4/5 years, n=232 trades removed (9.4% of iFVG volume), net=-$12,268.
+  - NOT the same as B18 (overnight/pre-market sessions with POSITIVE PF removed by named-session
+    block). B44 blocks only documented loss-making hours, keeps all overnight.
+  - Prior: ~40%. Success: funded PF improves ≥+2% AND sust ≥ 2.524x (B24 baseline).
+
+- **B45 — ORB opening-range width quality filter (Phase 1 data mining first):**
+  - Hypothesis: narrow OR width (tight coil) = false breakout → early stop → 0-2h cohort loss;
+    wide OR width (decisive overnight move) = sustained breakout → EOD cohort win.
+  - Phase 1 ONLY: analyze_b45_orb_range.py buckets OR/ATR ratio per day vs ORB trade outcomes.
+  - GO/NO-GO: Phase 2 code ONLY if wide-range bucket PF ≥ 1.4× narrow-range AND n≥40 each.
+  - Prior for Phase 2: ~30% (B5 precedent adverse; current-day OR is different but B5 shadow).
+
+- **B46 — B42+B43 deployed-config full pipeline benchmark:**
+  - B43 tested orb_signal_window_mins=60 at partial_r=0 (parity); deployed uses partial_r=1.5.
+  - B42 Phase A (42 passes, $568 reset, $549/mo, 3.23x) paired with deployed Phase B + w=60 vs
+    deployed Phase B + w=0. Isolates the real deployment benefit of enabling orb_signal_window_mins=60.
+  - No new code. Prior: ~70% that w=60 improves deployed pipeline sust.
+
+- **Numbers:** iFVG lunch 11-13 ET: n=232, PF<1 (4/5 years), net=-$12k. ORB 4h+ cohort WR=68.6%, PF=4.1, +$153k. Early ORB (0-2h) -$95k. These are structural patterns from own data.
+- **Verdict:** dataset — 3 new backlog items appended (B44, B45, B46). Lessons 87-88 added. No code changes. No Databento spend.
+- **Learned:** The iFVG lunch-doldrums pattern (11:00-14:00 ET, PF<1 in 4/5 years) is the most consistent intraday filter hypothesis yet identified in iFVG data — stronger than the DOW patterns (B30, which were confounded by the already-filtered config subset) because it's about intraday hours within the deployed all-day killzone setting. The ORB hold-time concentration (4h+) confirms that ORB is structurally an EOD-flatten strategy — the implied follow-on is that OR opening-range width could predict which days reach EOD vs stop-out early (B45). B46 closes the deployed-config gap between research-baseline benchmarks and the live configuration.
+- **Next:** B44 (iFVG mid-session block — highest-value; code required; prior ~40%). B46 (deployed pipeline benchmark — no code; prior ~70%, should be done before B44 to confirm the deployed baseline). B45 (Phase 1 data mining, then go/no-go for code).

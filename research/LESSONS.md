@@ -727,3 +727,33 @@ Appended 2026-06-15 (B43 ORB late-session signal cutoff):
     market — momentum has typically exhausted. Rule: set orb_signal_window_mins=60 for all ORB
     configurations unless there is a specific reason to allow later signals. The cutoff is
     backward-compatible (default=0 = existing behavior) and has no effect on open positions.
+
+Appended 2026-06-15 (wk2-r4 research session):
+
+87. **iFVG signals in the 11:00-14:00 ET window (lunch doldrums) are structurally loss-making over
+    5 years: PF<1 in 4 of 5 years, n=232 trades, net=-$12,268.** Per-hour: 11:xx PF=0.932 (n=83),
+    12:xx PF=0.752 (n=64), 13:xx PF=0.744 (n=85). The 14:xx hour recovers to PF=1.108 (positive) —
+    the dead zone ends at 14:00 ET. Per-year: 2021 PF=0.951, 2023 PF=0.511, 2024 PF=0.631,
+    2025 PF=0.941, 2026 PF=1.623 (n=16, sparse). This is NOT the same mechanism as B18 (named-session
+    filter that removed overnight/pre-market hours with POSITIVE PF at close mode) — the lunch block
+    ONLY removes 11:00-14:00 ET while keeping all overnight/pre-market sessions. B44 tests
+    `ifvg_block_hours=[11,12,13]` as a new StrategyParams gate. Mechanism: CME institutional lunch
+    break (11:00-13:00 ET) creates low-liquidity mean-reverting price action; iFVG inversions trigger
+    but fail to follow through without institutional order flow. Rule: before proposing a block,
+    verify PF WITHIN the exact deployed config subset — B18 failed because the session-level block
+    removed positive-PF overnight hours; B44 is specific to the documented loss-making hours only.
+
+88. **ORB value is entirely concentrated in the 4h+ (EOD-flatten) cohort; all short-hold buckets
+    are deeply loss-making over 5 years.** From 5y MFE/MAE data (n=1030 ORB trades, excl 2022):
+    0-30m: WR=4.5%, PF=0.144, net=-$43,125 (n=110); 30-60m: WR=13.1%, PF=0.378, net=-$26,318 (n=99);
+    1-2h: WR=13.5%, PF=0.399, net=-$25,333 (n=104); 2-4h: WR=26.7%, PF=0.868, net=-$5,893 (n=131);
+    4h+ (EOD flatten): WR=68.6%, PF=4.129, net=+$152,611 (n=573). The 0-2h cohort (n=313) contributes
+    net=-$94,776 while the 4h+ cohort generates +$152,611. All early stop-outs are structural losers;
+    the entire ORB edge is in day-long holds that flatten at EOD. Long-side EOD flattens are nearly
+    2x better PF than short-side (PF=5.46 vs PF=2.99 in 4h+ bucket), consistent with Lesson 8.
+    ORB winner holds cluster tightly at p50=365 min, p75=380 min, p90=380 min — virtually all held
+    to EOD. Rule: any mechanism that increases early stop-out frequency (tighter stops, lower R) must
+    be evaluated for its effect on 4h+ cohort survival, not just average WR. The 0-2h losses are
+    the dominant drag — if a filter selectively removes them, it could unlock materially better
+    funded-phase economics. B45 tests whether OR width (a coil-compression proxy) predicts which
+    days produce early reversals vs durable EOD-flatten trades.
