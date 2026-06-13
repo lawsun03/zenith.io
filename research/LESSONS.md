@@ -456,3 +456,15 @@ Appended 2026-06-13 (B28 close-mode LongOnly-iFVG Phase B):
     in the flat-5y count. Rule: always verify the per-year vs flat-5y direction before applying Lesson 42's
     correction to a new strategy. For iFVG-based funded configs, flat-5y bust counts understate per-year
     bust frequency (flat includes the quiet 2022 drought buffer).
+
+Appended 2026-06-13 (B29 ORB-reentry 10min Phase B):
+
+65. **Flat-5y standalone improvements do not transfer to per-year two-phase pipeline dynamics when account cycling speed differs.**
+    B22 showed 10-min ORB (flat-5y, no reentry, r1.0) had +9% funded $/mo vs 15-min. B29 tested 10-min
+    ORB-reentry (per-year, r0.75) as Phase B and found +130% more XFA busts (30 vs 13) and -50% per-account
+    net ($1,554 vs $3,131) vs 15-min. Mechanism: 10-min ORB fires on more trading days; combined with reentry
+    (a second signal after each stop), accounts experience more frequent P&L events — accelerating both gains
+    and bust-causing drawdowns. The flat-5y metric averages away this cycling effect; per-year methodology
+    exposes it. Rule: when a flat-5y benefit comes from higher trade frequency, verify per-year dynamics
+    before committing to a pipeline recommendation — higher frequency always means faster account cycling,
+    which amplifies bust rate in the two-phase model.

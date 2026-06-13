@@ -1319,5 +1319,50 @@
       "runs": ["wk1-r6-phase-a-analysis"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T16:00:00Z",
+    "session": "wk1-b29",
+    "item": "B29",
+    "variant": "iFVG-close Phase A (B27, 10 passes) -> ORB-reentry 10-min r0.75 Funded Phase B (per-year equity)",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_source": "equity_b27/ (iFVG-close r1.25, 10 passes / 59 attempts over 5y)",
+      "phase_b_10min_accounts": 30,
+      "phase_b_10min_busts": 30,
+      "phase_b_10min_net_5y": 46606,
+      "phase_b_10min_per_account_net": 1554,
+      "phase_b_10min_sust_standalone": 0.63,
+      "phase_b_15min_ref_accounts": 14,
+      "phase_b_15min_ref_busts": 13,
+      "phase_b_15min_ref_net_5y": 43834,
+      "phase_b_15min_ref_per_account_net": 3131,
+      "phase_b_15min_ref_sust_standalone": 1.46,
+      "best_pair_close_r125_10min": "iFVG-close r1.25 -> ORB-reentry 10-min r0.75",
+      "best_net_per_month": 183,
+      "best_sust": 0.33,
+      "b27_r125_10min_net_per_month": 183,
+      "b27_r125_10min_sust": 0.33,
+      "b27_r100_10min_net_per_month": 199,
+      "b27_r100_10min_sust": 0.30,
+      "b21_benchmark_net_per_month": 497,
+      "b21_benchmark_sust": 2.62,
+      "b3_threshold_net_per_month": 393,
+      "b3_threshold_sust": 1.26,
+      "bust_delta_10min_vs_15min": "+17 busts (30 vs 13, +130%)",
+      "per_account_net_delta_pct": -50.4,
+      "haircut": 200,
+      "note": "per-year equity stitch; Phase A = B27 close-mode iFVG; only r0.75 tested for Phase B"
+    },
+    "verdict": "rejected",
+    "learned": "ORB-reentry 10-min has 2.3x more XFA busts (30 vs 13) and 50% lower per-account net ($1,554 vs $3,131) than 15-min in the per-year pipeline model — the opposite direction of B22's flat-5y finding (+9% $/mo for 10-min). The two-phase economics are correspondingly worse: $183/mo sust 0.33x vs 15-min $488/mo sust 0.77x (B27 reference). The mechanism: 10-min ORB fires on more days and with reentry after stops, the account is under active P&L stress more frequently per month, accelerating both wins and bust-causing drawdowns. The flat-5y standalone metric masked this by averaging across different account cycling dynamics. B21 ($497/mo, sust 2.62x) remains the undefeated two-phase benchmark.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b29/",
+        "scripts/run_b29_pipeline.py"
+      ],
+      "src": null
+    }
   }
 ]

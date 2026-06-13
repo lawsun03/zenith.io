@@ -838,7 +838,7 @@ faster (higher volume), requiring more Phase A passes to sustain.
 Source: B24 flat 5y funded_sim output (53 passes, 21 busts, 22 accounts, $180,534 net); B20
 per-year methodology analysis (Lesson 42); scripts/research_phase_a_analysis.py projection.
 
-## B29 — ORB-reentry with 10-minute opening range as Phase B in B27 two-phase pipeline  [pending]
+## B29 — ORB-reentry with 10-minute opening range as Phase B in B27 two-phase pipeline  [done — rejected: 10-min generates 2.3x more XFA busts (30 vs 13) and -50% per-account net ($1,554 vs $3,131) vs 15-min; best pair $183/mo sust 0.33x — far below B3 threshold; flat-5y B22 finding (+9% $/mo) does not transfer to per-year reentry dynamics; B21 ($497/mo, sust 2.62x) remains best two-phase pipeline]
 **REVISED PREREQUISITES (post-B27):** B27 showed close-mode Phase A gives only 10 passes (vs
 projected 53). Phase A for B29 is the same equity_b27/ (10 passes). For B29 to beat B21 ($497/mo,
 sust 2.62x), the 10-min ORB-reentry Phase B would need to generate fewer funded busts than

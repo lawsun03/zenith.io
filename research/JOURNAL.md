@@ -774,3 +774,32 @@ Entry format:
 - **Verdict:** rejected — LongOnly-close iFVG Phase B has 39 per-year busts, far exceeding the 10 Phase A passes. Despite matching ORB-reentry's per-account net ($3,054 vs $3,131), the 3x higher bust frequency makes this pipeline unsustainable. B21 ($497/mo, sust 2.62x) remains the best two-phase recommendation.
 - **Learned:** Close-mode LongOnly-iFVG cycles XFA accounts 3x faster than ORB-reentry r0.75 at nearly identical per-account net — the fundamental driver is trade frequency (LongOnly-close ~25-30/month vs ORB-reentry ~12/month). Higher volume means faster account cycling and more busts. The B24 flat-5y optimism ($8,206/account net, 21 busts) was inflated by including 2022's drought-quiet year; per-year methodology reveals the true 39-bust frequency when the quiet 2022 year is excluded.
 - **Next:** B29 (ORB-reentry 10-min as Phase B) — same Phase A constraint (10 passes). B29 already predicted unlikely to beat B21 on sust (needs <=8 busts; 15-min version had 13). Worth running as a cheap final test before declaring all backlog items exhausted.
+
+## 2026-06-13T16:00:00Z — session wk1-b29 — B29 (ORB-reentry 10-min as Phase B in two-phase pipeline)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B29 (sole pending item). No research/ideation this session: last research session was wk1-r6 only 3 sessions ago; B29 is the only remaining item.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Generated per-year ORB-reentry 10-min equity CSVs in equity_b29/ (5 files: orb_reentry_10min_r0p75_2021/2023/2024/2025/2026.csv).
+     Config: `--set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True --set orb_range_minutes=10 --risk-pct 0.75 --partial-r 0 --set swing_stop_lookback=0`
+  3. Wrote `scripts/run_b29_pipeline.py` (clone of run_b28_pipeline.py with 10-min Phase B configs).
+  4. Ran pipeline analysis. Test suite: **640 passed, 2 skipped** — no code changes.
+- **Numbers (all h200, per-year equity, iFVG-close Phase A = 10 passes from B27):**
+
+  **Phase B standalone stats:**
+  | Config | Accounts | Busts | Net 5y | $/acct | Sust (standalone) | Avg days |
+  |--------|----------|-------|--------|--------|-------------------|----------|
+  | ORB-reentry 10min r0.75 (B29) | 30 | 30 | $46,606 | $1,554 | 0.63x | 54.3d |
+  | ORB-reentry 15min r0.75 (B21) | 14 | 13 | $43,834 | $3,131 | 1.46x | 54.2d |
+
+  **Two-phase pipeline (Phase A = iFVG-close r1.25, 10 passes):**
+  | Phase B | Reset$/acct | XFA$/acct | Net/cycle | Cycle days | Net/mo | Sust |
+  |---------|-------------|-----------|-----------|------------|--------|------|
+  | ORB-reentry 10min r0.75 (B29) | $885 | $1,554 | $669 | 76.8d | $183 | 0.33x |
+  | ORB-reentry 15min r0.75 (B21) | $715 | $3,131 | $2,416 | 102.1d | $497 | 2.62x |
+
+- **Stop rule check:** 10-min ORB-reentry loses on BOTH metrics vs 15-min Phase B: per-account net $1,554 < $3,131 and busts 30 > 13. Both worse. Rejected.
+- **Key finding:** 10-min has 2.3x more XFA busts (30 vs 13) and -50.4% per-account net ($1,554 vs $3,131) vs 15-min. This is the OPPOSITE of B22's flat-5y finding (+9% funded $/mo for 10-min non-reentry at r1.0). Mechanism: 10-min ORB-reentry fires on more trading days (~1,629 active days vs ~759 for 15-min), meaning accounts experience more P&L events per month — accelerating both gains and bust-causing drawdowns. Flat-5y standalone metric masked this cycling effect; per-year methodology exposes it.
+- **Verdict:** rejected — 10-min Phase B gives $183/mo sust 0.33x — far below B3 threshold ($393/mo, sust 1.26x). B21 ($497/mo, sust 2.62x) remains the best and undefeated two-phase pipeline recommendation.
+- **Learned:** Flat-5y standalone improvements from higher trade frequency don't transfer to per-year two-phase pipeline economics. 10-min ORB fires on more days; combined with reentry, accounts experience more frequent P&L events, accelerating both gains and busts. The 15-min window provides better funded Phase B economics because it concentrates ORB signals into higher-quality breakout setups, leading to fewer bust events per funded account even if absolute payout is similar. B29 closes the B27/B28/B29 thread: all three tested alternatives to B21 and all were rejected.
+- **Next:** Backlog fully exhausted — all B1-B29 items done, all 6 research ideation sessions complete. Monday priorities for Lawrence: (1) apply Phase A config fix (swing_stop_lookback=0, target_clarity_mode=reject per B26 recommendation); (2) confirm B21 as the recommended two-phase deployment config (iFVG Combine + ORB-reentry r0.75 Funded = $497/mo, sust 2.62x); (3) replenish backlog with new hypotheses or move to deployment tasks.
