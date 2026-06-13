@@ -129,3 +129,21 @@ Entry format:
 - **Verdict:** rejected — hypothesis wrong (drought is not threshold-driven); feature code shipped default-off.
 - **Learned:** Loosening the body floor by 24% at 2022 prices leaves 2022 monthly trade counts completely unchanged — the drought months have 2-8 iFVG setups because the sweep+inversion STRUCTURE is absent in 2022, not because the floor filters them out. The extra marginal displacements that now pass the looser threshold enter the composer and consume sweep states, causing net degradation in high-quality months. Lesson 3 ("fixed-point thresholds are the 2022-23 drought mechanism") was wrong; the drought is structure-poverty (Lesson 4 confirmed from a different angle).
 - **Next:** B7 (kz_levels benchmark — last untested engine) or B8 (wall-clock flatten fix — live-risk quality). B7 is the next pending research item by rank.
+
+## 2026-06-13T11:30Z — session wk1-b7 — B7 (kz_levels benchmark)
+- **Bot health:** Not checked (autonomous loop continuation — market closed, Saturday).
+- **Ran:** Ported `KillzoneLevelTracker` from master branch into `app/strategy/kz_levels.py`; built `KZLevelsRunner` (duck-type of StrategyRunner using session H/L sweeps instead of swing-based liquidity); wired `engine="kz_levels"` into `app/backtest/runner.py` and `app/main.py`; 5 defining-behavior tests in `tests/test_kz_levels_runner.py` (all pass; 596 total, 2 skipped). Three bugs found and fixed during implementation:
+  1. **Dead-zone consumption bug:** original code emitted AND consumed KZ levels when swept in the gap between sessions (e.g., London level swept at 05:15 ET, before NY AM opens at 08:30 ET). Fix: `KillzoneLevelTracker.on_bar()` only emits/consumes levels when `in_killzone(bar.ts, zones) is not None` — levels persist across the gap until swept during an actual trading window.
+  2. **`all_day()` zone bug:** `enabled_killzones=["all"]` (the combine harness default) mapped to a single all-day zone (00:00-23:59:59 ET) that never closes, preventing `_kz_ranges` from ever being populated. Fix: `_build_runner` uses `default_killzones()` (London, NY AM, NY PM) unconditionally for `engine="kz_levels"` — the engine requires named session zones.
+  3. **`SweepEvent` constructor**: master branch missing `sweep_bar=bar` kwarg added on this branch; patched in `_make_sweep()`.
+- **Config:** `target_clarity_mode=off` (no HTF data available; the grader's target-clarity gate is irrelevant for a session-sweep engine), all other params at defaults (risk 1.25%, 2 contracts, r2.0).
+- **Numbers (61 months, 2021-06–2026-06, MNQ 5min):**
+  - Trades: 452 total (avg 7.4/month); longs 155 / shorts 297
+  - Run PF: **1.18** (matches iFVG baseline)
+  - Combine passes: **0/61 (0%)** vs baseline 13/61 (21%)
+  - MLL failures: 0; worst-month maxDD: $1,896
+  - Best month: 2023-06 (+$2,862, 11 trades, 63.6% WR) — short of $3,000 target
+  - 2022: 0-6 trades/month; drought is identical to iFVG (structure-poverty, not filter)
+- **Verdict:** rejected — 0/61 combine passes vs baseline 21%; trade frequency (~7.4/mo) too sparse to reliably reach $3,000. KZ session ranges lock once per session (3 per day × 5 days = 15 potential sweeps/week after displacement filter), producing too few entries to compound into a pass.
+- **Learned:** KZ session-level sweeps have identical edge quality to iFVG swing-based sweeps (PF 1.18 matches) but ~10x lower signal frequency (~7/mo vs ~70/mo). The combine requires throughput, not just edge — even a correct PF can't win if the strategy fires 7 times per month. The dead-zone timing was the key structural finding: session ranges lock at close and are first tested in the gap before the next session opens (e.g., London high tested at 05:15 ET, not 09:00 ET); the sweep only becomes actionable once the next trading window opens.
+- **Next:** B8 (wall-clock flatten fix — live-risk quality) or B11 (excursion instrument filter — small, unblocks clean data). Both pending; B11 is smaller.

@@ -135,3 +135,14 @@ Appended 2026-06-13 (B6 ATR-normalized displacement thresholds):
     months (2021-11: 65->50 trades, PF 1.53->1.07). Features with pct>0 are
     available default-off but should not be enabled without a clear positive
     signal from the benchmark.
+
+Appended 2026-06-13 (B7 kz_levels benchmark):
+
+28. **Session-range sweep frequency is ~10x lower than swing-based sweeps — PF alone doesn't pass the Combine.**
+    kz_levels (London/NY AM/NY PM H/L, swept during next session) produced ~7.4 trades/month vs iFVG's ~70/month, despite matching PF (1.18 both). 0/61 combine passes vs 13/61 (21%) baseline. Volume is the Combine constraint (Lesson 2): even a correct edge can't compound to $3,000 in a month if it fires 7 times. Session ranges lock once per session (15 potential sweeps/week before the displacement+FVG filter), a structural ceiling unrelated to parameter choice.
+
+29. **KZ session levels are tested in the dead zone, not during the next session.**
+    London range (02:00–05:00 ET) locks at 05:00 ET. Price tests that level at 05:15 ET — outside NY AM (08:30–11:00 ET) — and the sweep is consumed before the next trading window opens. The fix (only emit/consume levels when inside a trading window) lets levels persist across the gap and become available for intra-session sweeps. When building session-level sweep detectors: levels must outlive the gap between sessions or they're silently discarded. Same problem would affect any "prior-session extreme" detector that deletes the level on first touch.
+
+30. **`enabled_killzones=["all"]` maps to `all_day()`, which never closes.**
+    The combine harness passes `enabled_killzones=["all"]` by default. `all_day()` (00:00–23:59:59 ET) never satisfies `in_killzone(ts, [zone]) is None`, so session ranges are accumulated but never finalized. Any engine that needs named sessions (London, NY AM, NY PM) must ignore `enabled_killzones` and use `default_killzones()` unconditionally — the harness's "all" flag is designed for the composer's entry gate, not for session-range bookkeeping.

@@ -77,12 +77,7 @@ levels — i.e., 5.0pts at 21k = 0.024% — so 2024+ behavior is unchanged by
 construction and only the low-price years change). Evaluate on 2021/2023.
 Success: 2021/2023 months wake up (trades/mo, PF >= 1) without changing 2024+.
 
-## B7 — kz_levels master-branch benchmark  [pending]
-Last untested engine candidate (memory: project-combined-strategy-bot). Cheap:
-check out the master branch strategy code read-only (git show master:<paths>),
-assess what it would take to run through the harness; if a port is < 1 session,
-do it; else write up the assessment and close the item. Same sweep DNA as iFVG
-— expect correlated droughts; the question is whether it adds ANY new months.
+## B7 — kz_levels master-branch benchmark  [done — rejected: 0/61 passes (0%) vs baseline 21%; PF 1.18 matches iFVG but trade frequency ~7/mo is too sparse to compound into a combine pass; session ranges lock once per session → 10x fewer signals than swing-based sweeps]
 
 ## B8 — Wall-clock flatten fix  [pending]  (code quality, live-risk)
 Bar-driven `_enforce_flatten` never fires on CME early-close days (~5-7/yr) —

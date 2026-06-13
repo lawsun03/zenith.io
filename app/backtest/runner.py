@@ -242,6 +242,44 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 )),
                 strategy_cfg=s,
             )
+        if s.engine == "kz_levels":
+            from app.strategy.kz_levels import KillzoneLevelTracker, KZLevelsRunner
+            # kz_levels requires named session zones (London, NY AM, NY PM).
+            # enabled_killzones="all" maps to all_day() which never closes and
+            # would prevent _kz_ranges from ever being populated.
+            kz_zones = default_killzones()
+            return KZLevelsRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                kz_tracker=KillzoneLevelTracker(),
+                displacement=DisplacementDetector(DisplacementConfig(
+                    atr_period=s.atr_period,
+                    body_atr_multiple=s.body_atr_multiple,
+                    min_body_to_range_ratio=s.min_body_to_range_ratio,
+                    min_absolute_body=s.min_absolute_body,
+                    atr_ref_lag_bars=s.atr_ref_lag_bars,
+                    min_absolute_body_pct=s.min_absolute_body_pct,
+                )),
+                composer=SweepDisplacementComposer(ComposerConfig(
+                    instrument=cfg.instrument,
+                    displacement_window_bars=s.displacement_window_bars,
+                    stop_buffer=s.stop_buffer,
+                    stop_buffer_pct=s.stop_buffer_pct,
+                    r_multiple=s.r_multiple,
+                    killzones=kz_zones,
+                    trend_ema_period=s.trend_ema_period,
+                    cooldown_bars_after_stop=s.cooldown_bars_after_stop,
+                    min_atr_filter=s.min_atr_filter,
+                    max_atr_filter=s.max_atr_filter,
+                    swing_stop_lookback=s.swing_stop_lookback,
+                    allowed_sides=s.allowed_sides,
+                    confirmation=s.confirmation,
+                    max_stop_atr=s.max_stop_atr,
+                )),
+                grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
+                strategy_cfg=s,
+                zones=kz_zones,
+            )
         return StrategyRunner(
             instrument=cfg.instrument,
             timeframe=cfg.timeframe,

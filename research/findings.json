@@ -195,5 +195,31 @@
     "verdict": "rejected",
     "learned": "Loosening min_absolute_body from 5.0 to 3.9 pts at 16k NQ (pct=0.000238) generates 45 more displacement events per month in 2023-12 but leaves 2022-23 trade counts unchanged (same 2-18 per month). The 2022-23 drought is NOT caused by fixed-point threshold strictness -- it is structure-poverty (no iFVG setups, not filtered setups). The extra marginal displacements (bodies in 3.9-5.0 pt range) consume sweep states in the composer, slightly degrading high-quality months like 2021-11 (65->50 trades, PF 1.53->1.07). Feature shipped default-off; the infrastructure is sound but the hypothesis is wrong.",
     "links": {"doc": null, "runs": [], "src": ["app/bot_config.py", "app/strategy/displacement.py", "app/strategy/composer.py", "app/backtest/runner.py", "app/main.py", "tests/test_b6_atr_normalized.py"]}
+  },
+  {
+    "ts": "2026-06-13T11:30:00Z",
+    "session": "wk1-b7",
+    "item": "B7",
+    "variant": "kz_levels engine — KillzoneLevelTracker (London/NY AM/NY PM H/L sweeps), target_clarity_mode=off, risk 1.25%, 2 contracts, r2.0",
+    "objective": "combine",
+    "metrics": {
+      "baseline_passes_61mo": 13,
+      "baseline_pass_pct": 21,
+      "baseline_pf": 1.18,
+      "kz_levels_passes_61mo": 0,
+      "kz_levels_pass_pct": 0,
+      "kz_levels_pf": 1.18,
+      "kz_levels_avg_trades_per_month": 7.4,
+      "kz_levels_total_trades_61mo": 452,
+      "kz_levels_long_trades": 155,
+      "kz_levels_short_trades": 297,
+      "kz_levels_mll_failures": 0,
+      "kz_levels_worst_month_maxdd": 1896,
+      "kz_levels_best_month_net": 2862,
+      "kz_levels_best_month": "2023-06"
+    },
+    "verdict": "rejected",
+    "learned": "KZ session-level sweeps have identical edge quality to iFVG swing sweeps (PF 1.18 matches baseline) but ~10x lower trade frequency (~7.4/mo vs ~70/mo). 0/61 combine passes vs 13/61 (21%) baseline. The Combine requires throughput: 7 trades/month can't compound to $3,000 even at 60% WR. Root cause: session ranges lock once per session (London, NY AM, NY PM) and are first tested in the gap between sessions (e.g., London high at 05:15 ET, 3+ hours before NY AM opens). The sweep fires outside any trading window and was previously consumed silently; the fix keeps levels alive across the gap but the structural ceiling remains ~15 potential sweeps/week before the displacement filter. Two implementation bugs found: (1) dead-zone level consumption (fix: gate emit+consume on in_killzone()), (2) all_day() zone never closes (fix: kz_levels always uses default_killzones()).",
+    "links": {"doc": null, "runs": [], "src": ["app/strategy/kz_levels.py", "app/backtest/runner.py", "app/main.py", "tests/test_kz_levels_runner.py"]}
   }
 ]
