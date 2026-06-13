@@ -1003,6 +1003,10 @@ Warning: do NOT use 2022 for any r=2.0 equity generation (frozen holdout per pro
 Source: Phase A pipeline analysis (wk2-r1); B1-B21 Phase A stats. This is the only Phase A risk
 level we haven't tested (B1 tested r=0.5/0.75/1.0/1.25 for Phase B ORB; Phase A was always r=1.25).
 
+## RESEARCH — Session wk2-r2  [in-progress — session 2026-06-13T17:35Z]
+
+Session 39 (39 % 3 == 0) + last 2 completed items B30/B31 are build items → protocol mandates research/ideation. B32 (pending) will be claimed in the next session.
+
 ## B32 — ORB-reentry Phase B at r=0.5 (below-optimum risk floor)  [pending]
 Hypothesis: B21's Phase B optimum is r=0.75 (sust 2.62x, $3,131/account, 13 busts). B1 showed
 plain ORB r=0.5 standalone had 6 XFA busts (flat 5y) vs 8 Combine passes — "genuinely positive."
@@ -1045,3 +1049,95 @@ lower end of the Phase B risk sensitivity ladder.
 
 Source: B1 Phase B risk ladder (r=0.5/0.75/1.0/1.25 plain ORB); B21 established r=0.75 reentry
 as the optimum. This item extends the ladder to r=0.5 for reentry ORB.
+
+## B33 — Anticipatory probe entry + scale-up on iFVG confirmation  [pending — PRIORITY: Lawrence-requested 2026-06-13; claim ahead of B32]
+Lawrence-requested directly. Rank this ABOVE B32 when claiming fresh.
+
+Hypothesis: enter a SMALL-risk "probe" on a closed-bar S/R reaction (liquidity
+sweep + reclaim, or break + hold) BEFORE the iFVG/FVG forms, then ADD size
+(increase risk/reward) when the existing iFVG signal confirms the SAME
+direction. The probe captures a better average entry on trades that go on to
+confirm; the scale-up concentrates the larger risk only on confirmed setups.
+Net thesis: better blended entry on winners + small bleed on unconfirmed
+probes > the cost of trading the probe leg without the inversion quality filter.
+
+Priors / lessons that bear on this (read FIRST):
+- Lesson 1 — the iFVG INVERSION is the quality filter. A probe fires BEFORE the
+  inversion, so it is a lower-quality entry by construction. The edge must come
+  from (a) blended-entry improvement on confirmed trades and (b) probe-only legs
+  being cheap. If unconfirmed probes bleed, this fails.
+- Forming-bar lesson (memory: project_forming_bar_gate) — NO mid-bar entries.
+  The probe MUST trigger on a CLOSED bar (sweep+reclaim close), never intrabar.
+- B2 lesson — scaling EXITS killed two-thrust winners. This scales ENTRIES
+  (a pyramid), which is different and untested; watch for the symmetric failure
+  (probe stop hit on the pullback before the iFVG confirms → realized loss, then
+  the confirmed trade wins without the probe / re-enters worse).
+- sweep_bos already encodes "sweep + reclaim" detection and the iFVG path
+  already tracks `awaiting_sweeps`; reuse them, do not reinvent the level logic.
+  Use ONE level source (the swing highs/lows the iFVG sweep detection uses).
+
+PHASE 1 — cheap data-mining falsification FIRST (no engine code; go/no-go gate):
+Using 5y bars + iFVG signal replay + the existing excursion tooling (B2/B11),
+over 2021/2023/2024/2025-26 (NOT 2022):
+1. For every historical iFVG signal, look back up to `probe_lookback_bars`=6
+   CLOSED bars: did a probe trigger (sweep of a tracked swing level with a
+   closed-bar reclaim, same eventual direction as the iFVG) occur?
+2. Measure:
+   a. Confirmation rate: of all probe triggers, % followed by a same-direction
+      iFVG within `probe_confirm_window_bars`=8 while the probe stop (swept
+      extreme ± stop_buffer) is unhit.
+   b. Probe-only economics: MFE/MAE (R-units, existing excursion infra) of probe
+      triggers that NEVER confirm — net-negative, and how negative?
+   c. Blended-entry gain: for confirmed cases, probe entry price vs iFVG entry
+      price, expressed in R of the eventual stop distance.
+3. GO/NO-GO: proceed to Phase 2 ONLY if the arithmetic plausibly nets positive:
+   expected_R = conf_rate x blended_gain − (1 − conf_rate) x probe_only_loss.
+   If clearly negative, REJECT here and document — build no engine.
+
+PHASE 2 — engine (only if Phase 1 = GO):
+Default-off MODE on the SweepDisplacement/iFVG composer (it needs the iFVG
+confirmation signal, so it couples to that path rather than being a standalone
+engine). StrategyParams (all default-off / 0):
+- `probe_entry_enabled: bool = False`
+- `probe_risk_frac: Decimal = Decimal("0.33")`  (probe size = frac x normal risk)
+- `probe_confirm_window_bars: int = 8`
+- `probe_lookback_bars: int = 6`
+Probe trigger (closed bar): a tracked swing level is swept (wick beyond) and the
+bar CLOSES back across the level (reclaim). Direction = reclaim direction. Entry
+at that bar close; stop = swept extreme ± stop_buffer; probe target = fixed 1.0R,
+else time-stop at confirm_window booking BE-or-better (deterministic).
+Scale-up: if the iFVG signal fires same-direction within confirm_window while the
+probe is open, ADD size so total = normal per-trade risk, set the bracket target
+to the full r_multiple, added leg stop = the iFVG signal stop. TOTAL position
+risk CAPPED at the normal per-trade risk (conservative; stays inside the tested
+risk envelope + MLL). Note "over-size on confirm" as a follow-up only if the
+conservative version shows promise. Closed-bar confirmation only; exits via
+`runner.exit_request`.
+
+Defining-behavior tests (tests/test_probe_entry.py):
+1. probe_entry_enabled=False (default): no probe ever; iFVG output byte-identical
+   to baseline.
+2. Sweep+reclaim closed bar, enabled → probe Signal at frac size, stop beyond the
+   swept extreme.
+3. Probe open + same-direction iFVG within window → add leg brings total to
+   normal size, target = full r_multiple.
+4. Probe open + NO iFVG within window → probe exits at modest target / BE, no
+   scale-up.
+5. Sweep that closes WITHOUT reclaim → no probe (closed-bar reclaim required).
+6. Total risk after scale-up <= normal per-trade risk (assert combined
+   stop-distance x size).
+
+Benchmark (BOTH objectives; parity flags `--partial-r 0 --set swing_stop_lookback=0`):
+- Combine: run_monthly_combine probe-on vs probe-off (control).
+- Funded: equity_export + funded_sim vs control AND vs B21/B31 best
+  ($497-508/mo, sust 2.6-2.85x).
+
+Success criteria: probe mode must improve PF AND the objective metric vs
+probe-off. Stop rule: loses on BOTH PF and the objective vs probe-off → reject
+(no tuning of frac/window beyond the one declared default — this is a mechanism
+test, not a sweep).
+
+Source: Lawrence direct request 2026-06-13 — anticipatory S/R-reaction entry at
+small risk, scale up risk/reward when the FVG/iFVG actually appears. Connects
+existing sweep detection (awaiting_sweeps / sweep_bos) to iFVG confirmation as a
+two-stage pyramid entry.
