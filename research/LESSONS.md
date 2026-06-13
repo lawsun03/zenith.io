@@ -444,3 +444,15 @@ Appended 2026-06-13 (B27 iFVG-close Phase A pipeline test):
     Scale factors from benchmark A are only valid when applied within the same config space as benchmark A.
     Cross-config extrapolation is invalid even when the parameter being varied (entry mode) appears
     independent of the other config axes (engine, killzones).
+
+Appended 2026-06-13 (B28 close-mode LongOnly-iFVG Phase B):
+
+64. **The per-year vs flat-5y bust correction direction is strategy-specific and depends on whether 2022 was active or quiet.**
+    Lesson 42 established that per-year equity stitching gives ~50% FEWER busts than flat-5y for ORB r1.0
+    (27 vs 59). B28 found the OPPOSITE for LongOnly-close iFVG: 39 per-year busts vs 21 flat-5y busts
+    (+86% more). Mechanism: flat-5y includes 2022 (iFVG drought year — nearly flat equity, very few account
+    resets); per-year methodology excludes 2022. For ORB (active in 2022), per-year removes bust-causing
+    variance. For iFVG (drought in 2022), per-year removes a "quiet" year that suppressed bust frequency
+    in the flat-5y count. Rule: always verify the per-year vs flat-5y direction before applying Lesson 42's
+    correction to a new strategy. For iFVG-based funded configs, flat-5y bust counts understate per-year
+    bust frequency (flat includes the quiet 2022 drought buffer).

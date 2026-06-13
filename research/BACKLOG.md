@@ -792,7 +792,7 @@ but the direction is clear and the magnitude is large.
 
 Source: scripts/research_phase_a_analysis.py (this session); B24 combine results.
 
-## B28 — Close-mode LongOnly-iFVG as funded Phase B (two-phase, vs B27 ORB-reentry)  [pending]
+## B28 — Close-mode LongOnly-iFVG as funded Phase B (two-phase, vs B27 ORB-reentry)  [done — rejected: best pair iFVG-close r1.25 -> LongOnly-close r1.25 = $668/mo sust 0.26x; LongOnly-close has 39 per-year XFA busts vs 10 Phase A passes (needs <=8 for sust>=1.26x); per-account net ($3,054) matches ORB-reentry but 3x higher bust frequency; B21 ($497/mo, sust 2.62x) remains best]
 **REVISED PREREQUISITES (post-B27):** B27 showed close-mode Phase A (ifvg engine + named sessions)
 gives only 10 passes (vs projected 53). The original success criteria assumed ~53 Phase A passes;
 with 10 passes, B28 needs LongOnly-close Phase B to generate ≤ 8 funded busts (per-year) for

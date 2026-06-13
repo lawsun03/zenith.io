@@ -1254,6 +1254,45 @@
     }
   },
   {
+    "ts": "2026-06-13T15:30:00Z",
+    "session": "wk1-b28",
+    "item": "B28",
+    "variant": "iFVG-close Phase A (B27, 10 passes) -> LongOnly-close iFVG Funded Phase B (per-year equity)",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_source": "equity_b27/ (iFVG-close r1.25, 10 passes / 59 attempts over 5y)",
+      "phase_b_longonly_close_r1p0_accounts": 46,
+      "phase_b_longonly_close_r1p0_busts": 45,
+      "phase_b_longonly_close_r1p0_net_5y": 98352,
+      "phase_b_longonly_close_r1p0_per_account_net": 2138,
+      "phase_b_longonly_close_r1p25_accounts": 40,
+      "phase_b_longonly_close_r1p25_busts": 39,
+      "phase_b_longonly_close_r1p25_net_5y": 122142,
+      "phase_b_longonly_close_r1p25_per_account_net": 3054,
+      "best_pair": "iFVG-close r1.25 (Phase A) -> LongOnly-close r1.25 (Phase B)",
+      "best_net_per_month": 668,
+      "best_sust": 0.26,
+      "b21_benchmark_net_per_month": 497,
+      "b21_benchmark_sust": 2.62,
+      "b3_threshold_net_per_month": 393,
+      "b3_threshold_sust": 1.26,
+      "sust_ceiling_given_10_phase_a_passes": "10/39 = 0.26x (needs <=8 busts for sust>=1.26x)",
+      "flat5y_vs_peryear_longonly_close_busts": "21 flat-5y (B24) vs 39 per-year (B28) — per-year gives MORE busts for iFVG",
+      "orb_reentry_r0p75_reference_busts": 13,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "LongOnly-close iFVG generates 39 per-year XFA busts — 5x more than the 8 needed for sust>=1.26x with only 10 Phase A passes. Despite matching ORB-reentry r0.75 per-account net ($3,054 vs $3,131), LongOnly-close cycles accounts 3x faster due to higher trade frequency. The per-year methodology gives MORE busts for LongOnly-close iFVG (39) than flat-5y (21), opposite to the ORB correction in Lesson 42 — because iFVG's flat-5y includes 2022 (a drought year with nearly flat equity and few busts), while per-year excludes it. B21 ($497/mo, sust 2.62x) remains the best two-phase pipeline.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b28/",
+        "scripts/run_b28_pipeline.py"
+      ],
+      "src": null
+    }
+  },
+  {
     "ts": "2026-06-13T14:30:00Z",
     "session": "wk1-r6",
     "item": "RESEARCH",

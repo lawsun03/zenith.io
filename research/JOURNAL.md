@@ -742,3 +742,35 @@ Entry format:
 - **Implications for B28 and B29:** Both B28 and B29 use equity_b27/ Phase A equity (10 passes). Their success criteria assumed ~53 Phase A passes. With 10 passes, neither B28 nor B29 can achieve sust ≥ 1.26x unless Phase B busts are extremely low (≤ 8). Revise B28/B29 expectations before running.
 - **Learned:** The killzone persistence advantage of ifvg_edge (armed trackers survive across session gaps) is the dominant factor under named-session configs, not the entry price quality difference. Close mode's 100% fill rate advantage only holds when killzones=all (every bar can trigger the signal). Under named sessions, close mode's signals are session-bound while ifvg_edge's fills are not — making ifvg_edge materially superior for the Phase A combine objective in the ifvg-only engine. The B21 recommendation (ifvg_edge + named sessions) is structurally sound and remains the best two-phase pipeline ($497/mo, sust 2.62x).
 - **Next:** B28 (LongOnly-close iFVG as Phase B) or B29 (ORB-reentry 10-min as Phase B) — but both use the 10-pass Phase A, so success criteria need revision. Alternatively, Lawrence may wish to reprioritize after reviewing these B27 findings on Monday.
+
+## 2026-06-13T15:30:00Z — session wk1-b28 — B28 (Close-mode LongOnly-iFVG as funded Phase B)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B28 (top pending item). B29 is secondary; B28 must run first (Phase A equity shared).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, shadow combine running, no issues.
+  2. Confirmed equity_b27/ Phase A files exist (10 CSVs: close_r1p0/r1p25 x 5 years). Phase A = 10 passes / 59 attempts (B27 result).
+  3. Generated per-year LongOnly-close equity CSVs in equity_b28/ (10 files: longonly_close_r1p0/r1p25 x 5 years).
+     Config: `--set ifvg_entry_mode=close --set allowed_sides=long --killzones london,ny_am --partial-r 0 --set swing_stop_lookback=0`
+  4. Wrote `scripts/run_b28_pipeline.py` (clone of run_b27_pipeline.py with B28 Phase B configs).
+  5. Ran pipeline analysis. Test suite: 640 passed, 2 skipped — no code changes.
+- **Numbers (all h200, per-year equity, iFVG-close Phase A = 10 passes):**
+
+  **Phase B standalone stats:**
+  | Config | Accounts | Busts | Net 5y | $/acct | Sust (standalone) |
+  |--------|----------|-------|--------|--------|-------------------|
+  | LongOnly-close r1.0 | 46 | 45 | $98,352 | $2,138 | 0.60x |
+  | LongOnly-close r1.25 | 40 | 39 | $122,142 | $3,054 | 0.92x |
+  | ORB-reentry r0.75 (B21 ref) | 14 | 13 | $43,834 | $3,131 | 1.46x |
+
+  **Two-phase pipeline (Phase A = iFVG-close r1.25, 10 passes):**
+  | Phase B | Reset$/acct | XFA$/acct | Net/cycle | Cycle days | Net/mo | Sust |
+  |---------|-------------|-----------|-----------|------------|--------|------|
+  | LongOnly-close r1.25 | $885 | $3,054 | $2,169 | 68.1d | $668 | 0.26x |
+  | LongOnly-close r1.0 | $885 | $2,138 | $1,253 | 64.8d | $406 | 0.22x |
+  | ORB-reentry r0.75 (B21 ref) | $715 | $3,131 | $2,416 | 102.1d | $497 | 2.62x |
+
+- **Stop rule check:** All pairs fail sustainability (0.22-0.26x vs 1.26x threshold). LongOnly-close r1.25 has 39 per-year busts; Phase A has 10 passes. Sust = 10/39 = 0.26x. Need <=8 funded busts for sust>=1.26x — actual is 39 busts (5x too many). Rejected.
+- **Notable finding:** Per-year LongOnly-close has MORE busts (39) than flat-5y (21 from B24). This reverses the Lesson 42 correction (which said per-year gives ~50% FEWER busts for ORB). Mechanism: flat-5y includes 2022 (iFVG drought — nearly flat equity, very few busts); per-year excludes 2022. For ORB (no drought in 2022), per-year gives fewer busts. For iFVG, per-year removes the "quiet" 2022 buffer and shows MORE busts. The per-year vs flat-5y direction is strategy-specific.
+- **Verdict:** rejected — LongOnly-close iFVG Phase B has 39 per-year busts, far exceeding the 10 Phase A passes. Despite matching ORB-reentry's per-account net ($3,054 vs $3,131), the 3x higher bust frequency makes this pipeline unsustainable. B21 ($497/mo, sust 2.62x) remains the best two-phase recommendation.
+- **Learned:** Close-mode LongOnly-iFVG cycles XFA accounts 3x faster than ORB-reentry r0.75 at nearly identical per-account net — the fundamental driver is trade frequency (LongOnly-close ~25-30/month vs ORB-reentry ~12/month). Higher volume means faster account cycling and more busts. The B24 flat-5y optimism ($8,206/account net, 21 busts) was inflated by including 2022's drought-quiet year; per-year methodology reveals the true 39-bust frequency when the quiet 2022 year is excluded.
+- **Next:** B29 (ORB-reentry 10-min as Phase B) — same Phase A constraint (10 passes). B29 already predicted unlikely to beat B21 on sust (needs <=8 busts; 15-min version had 13). Worth running as a cheap final test before declaring all backlog items exhausted.
