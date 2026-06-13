@@ -48,6 +48,9 @@ def main() -> int:
                     help="StrategyParams override, e.g. --set engine=orb")
     ap.add_argument("--trail-1r", action="store_true")
     ap.add_argument("--out", required=True, help="output equity CSV path")
+    ap.add_argument("--exclude-years", default="",
+                    help="Comma-separated calendar years to exclude from bars "
+                         "before running (e.g. '2022' for holdout protocol)")
     args = ap.parse_args()
 
     bot_cfg = load_bot_config(Path(args.config))
@@ -56,7 +59,10 @@ def main() -> int:
         k, v = ov.split("=", 1)
         cur = getattr(strategy, k)  # raises if unknown — fail loud
         if isinstance(cur, list):
-            new_val = [x.strip() for x in v.split(",") if x.strip()] if v.strip() else []
+            from typing import get_args as _get_args
+            _field_ann = type(strategy).model_fields[k].annotation
+            _elem_type = (_get_args(_field_ann) or (str,))[0]
+            new_val = [_elem_type(x.strip()) for x in v.split(",") if x.strip()] if v.strip() else []
         else:
             new_val = type(cur)(v)
         strategy = strategy.model_copy(update={k: new_val})
@@ -69,9 +75,14 @@ def main() -> int:
     killzones = (args.killzones.split(",") if args.killzones
                  else bot_cfg.enabled_killzones)
 
+    bars = load_bars_csv(args.bars, args.instrument.upper(), args.timeframe)
+    if args.exclude_years:
+        excl = {int(y.strip()) for y in args.exclude_years.split(",") if y.strip()}
+        bars = [b for b in bars if b.ts.year not in excl]
+
     cfg = BacktestConfig(
         instrument=args.instrument.upper(),
-        bars=load_bars_csv(args.bars, args.instrument.upper(), args.timeframe),
+        bars=bars,
         timeframe=args.timeframe,
         contracts=contracts,
         risk_per_trade_pct=risk_pct,

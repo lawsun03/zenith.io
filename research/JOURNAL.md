@@ -1493,3 +1493,58 @@ Entry format:
 - **Verdict:** dataset — 3 new backlog items appended (B44, B45, B46). Lessons 87-88 added. No code changes. No Databento spend.
 - **Learned:** The iFVG lunch-doldrums pattern (11:00-14:00 ET, PF<1 in 4/5 years) is the most consistent intraday filter hypothesis yet identified in iFVG data — stronger than the DOW patterns (B30, which were confounded by the already-filtered config subset) because it's about intraday hours within the deployed all-day killzone setting. The ORB hold-time concentration (4h+) confirms that ORB is structurally an EOD-flatten strategy — the implied follow-on is that OR opening-range width could predict which days reach EOD vs stop-out early (B45). B46 closes the deployed-config gap between research-baseline benchmarks and the live configuration.
 - **Next:** B44 (iFVG mid-session block — highest-value; code required; prior ~40%). B46 (deployed pipeline benchmark — no code; prior ~70%, should be done before B44 to confirm the deployed baseline). B45 (Phase 1 data mining, then go/no-go for code).
+
+## 2026-06-13T22:43:00Z — session wk2-b44 — B44 (iFVG mid-session signal block 11:00-14:00 ET)
+- **Bot health:** Port 5175 not checked (autonomous session). XFA shadow running per wk2-r4 context; market closed (weekend). No intervention needed.
+- **Claimed:** B44 (top pending item — adds `ifvg_block_hours: list[int]` gate to suppress iFVG signal emission in 11-13 ET; sweep state accumulates during block).
+- **Ran:**
+  1. TDD: wrote `tests/test_ifvg_block_hours.py` (5 defining-behavior tests) BEFORE implementation.
+  2. Implementation: added `ifvg_block_hours: list[int] = Field(default_factory=list)` to `StrategyParams` (bot_config.py); added `block_hours: list[int]` to `ComposerConfig` (composer.py); added ET hour check gate in `SweepDisplacementComposer.on_displacement()` after B30 DOW filter; wired `block_hours=s.ifvg_block_hours` into ComposerConfig constructors in both `runner.py` and `main.py`.
+  3. Bug found during implementation: CLI `--set` handler for `list[int]` fields produced `list[str]`, so `11 in ["11","12","13"]` = False — block would silently not fire. Fixed in `equity_export.py` and `run_monthly_combine.py` (uses `get_args(field.annotation)` to detect elem_type). Added regression test (#6) — 664 total tests, 2 skipped.
+  4. Infrastructure: added `--exclude-years` flag to `equity_export.py` for proper holdout protocol (2022 exclusion without per-year CSV workaround).
+  5. Combine benchmark (LongOnly+all-day+r1.25, parity, 61 months including 2022):
+     - Baseline: 9/61 passes (15%), PF=1.11, long net +$25,210 (398 exits)
+     - block=[11,12,13]: 7/61 passes (11%), PF=1.00, long net +$5,863 (347 exits)
+  6. Funded pipeline benchmark (5y excl 2022, haircut $200, `scripts/run_b44_pipeline.py`):
+     | Config | Passes | XFA Accts | Busts | Net | Sust |
+     |--------|--------|-----------|-------|-----|------|
+     | All-sides ifvg_edge baseline | 36/184 | 61 | 60 | $135,604 | 1.02x |
+     | All-sides + block=[11,12,13] | 35/180 | 46 | 45 | $130,938 | 1.02x |
+     | LO close all-day baseline | 45/148 | 19 | 18 | $152,411 | 1.06x |
+     | LO close all-day + block=[11,12,13] | 39/144 | 21 | 20 | $143,954 | 1.05x |
+  7. Full test suite re-verified: **664 passed, 2 skipped**.
+
+- **Numbers:**
+
+  **Combine (61 months, LongOnly+all-day+r1.25, parity):**
+  | Config | Passes/61 | % | PF | Long net | Long exits |
+  |--------|-----------|---|----|----------|------------|
+  | Baseline | 9 | 15% | 1.11 | +$25,210 | 398 |
+  | block=[11,12,13] | 7 | 11% | **1.00** | **+$5,863** | 347 |
+  51 fewer long exits when blocking, avg ~$380/exit profit lost.
+
+  **Funded pipeline (5y excl 2022, per-year stitched, h200):**
+  | Config | Combine Passes | XFA Accts | XFA Busts | Net | Sust |
+  |--------|---------------|-----------|-----------|-----|------|
+  | All-sides baseline | 36 | 61 | 60 | $135,604 | 1.02x |
+  | All-sides + block | 35 | 46 | 45 | $130,938 | 1.02x |
+  | LO close baseline | 45 | 19 | 18 | $152,411 | 1.06x |
+  | LO close + block | 39 | 21 | 20 | $143,954 | 1.05x |
+  | B24 reference (LO+close+london+ny_am) | — | — | — | ~$181k | **2.524x** |
+
+  **Stop rule check:** Combine: both PF (1.11->1.00) AND passes (9->7) degrade. **Triggered — REJECTED.**
+  **Success criteria check:** Both all-day configs (baseline and block) have sust <<2.524x. The primary success criterion (sust >= 2.524x) is not met by either variant.
+
+- **Root cause analysis (key finding):**
+  The wk2-r4 per-hour analysis (PF<1 in 11-13 ET) was done on the **ifvg_edge, all-sides** research baseline. In the **close-mode, LongOnly** deployed config, the same hours are PROFITABLE. Mechanism: close mode fires at the FVG inversion confirmation (a later, more selective entry point than ifvg_edge which fires at the zone boundary). These close-mode confirmations in 11-13 ET represent valid order flow even at low liquidity — they're NOT the false breakouts that cause ifvg_edge losses in the lunch window. The block removed 51 profitable close-mode long signals per 61 months (~8/month, avg $380/signal).
+
+  The all-day config's sust gap vs B24 (1.06x vs 2.524x) comes from VOLUME: all-day generates 2.4x more trades than london+ny_am, creating proportionally more volatility and bust risk. The lunch block cannot fix this structural volume difference.
+
+- **Verdict:** rejected — block_hours=[11,12,13] hurts close-mode LongOnly (combine -2 passes, PF 1.11->1.00, long net -$19k, funded sust 1.06x->1.05x). The ifvg_edge research baseline shows neutral effect (sust stays 1.02x). Neither meets B24 success criteria (sust>=2.524x). The `ifvg_block_hours` infrastructure feature remains in the codebase for future hypotheses (zero overhead when empty). Lesson 89 added.
+
+- **Infrastructure shipped (not in B44 hypothesis):**
+  1. CLI `--set` coercion fix: list[int] fields now correctly receive ints via `get_args(field.annotation)`. Regression test #6 in `test_ifvg_block_hours.py`. Fixed in `equity_export.py` and `run_monthly_combine.py`.
+  2. `--exclude-years` flag in `equity_export.py`: filters bars by calendar year before running backtest. Enables holdout-compliant single-pass runs without per-year CSV workaround.
+  3. `run_b44_pipeline.py`: reusable 4-config funded pipeline comparison script (per-year stitch + funded_sim summary table).
+
+- **Next:** B46 (B42+B43 deployed pipeline benchmark — no code; validates orb_signal_window_mins=60 at deployed partial_r=1.5; prior=70%). Or B45 (ORB OR width filter — Phase 1 data mining only). B46 is higher priority as it directly validates whether to enable B43 in the deployed bot.

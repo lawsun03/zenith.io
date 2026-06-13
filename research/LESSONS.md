@@ -757,3 +757,21 @@ Appended 2026-06-15 (wk2-r4 research session):
     the dominant drag — if a filter selectively removes them, it could unlock materially better
     funded-phase economics. B45 tests whether OR width (a coil-compression proxy) predicts which
     days produce early reversals vs durable EOD-flatten trades.
+
+Appended 2026-06-13 (B44 iFVG mid-session block):
+
+89. **Per-hour PF analysis must be validated within the EXACT deployed config (entry mode, allowed_sides,
+    engine) — it does not transfer across config variants.** B44 found that wk2-r4's per-hour analysis
+    (ifvg_edge, all-sides, all-day) showed 11-13 ET signals at PF=0.744-0.932, net=-$12,268 over 5y.
+    This motivated blocking those hours. But in the deployed config (close mode, long-only, combined engine),
+    the same hours are PROFITABLE: blocking 11-13 ET reduced combine passes 9→7/61 (15%→11%), combine PF
+    1.11→1.00, and long net +$25,210→+$5,863 over 61 months (51 fewer long exits, avg ~$380/trade profit
+    lost). Mechanism: close mode fires signals at the FVG inversion confirmation (a LATER and more selective
+    entry than ifvg_edge), which captures valid institutional order flow even during the CME lunch window;
+    ifvg_edge fires at the zone boundary where false entries dominate at low liquidity. Entry mode
+    fundamentally changes the hour-PF distribution. Rule: before proposing an intraday hour block or
+    filter, compute PF WITHIN the exact deployed config subset (same entry_mode, same allowed_sides, same
+    engine). Never extrapolate from a different config variant, even if the mechanism sounds structural.
+    The B18 precedent (named-session filter that removed overnight sessions with POSITIVE close-mode PF)
+    was not sufficient warning because B44's data was presented as "per-hour" rather than "per-session,"
+    making it appear more granular and reliable — the same trap in a different form.

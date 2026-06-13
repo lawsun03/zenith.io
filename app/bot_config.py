@@ -195,6 +195,12 @@ class StrategyParams(BaseModel):
     # Data: 10:30-11:30 ET ORB signals cost ~$2,900 over 5y (PF 0.622-0.963, n=84).
     orb_signal_window_mins: int = 0
 
+    # B44: iFVG mid-session signal block by ET hour. Empty list = no blocking (default).
+    # List of integer ET hours (0-23) to suppress iFVG signal emission. Sweep state
+    # continues accumulating; only signal emission is gated. Example: [11, 12, 13]
+    # blocks 11:00:00-13:59:59 ET. Data: 11-13 ET costs -$12,268 over 5y (PF<1 in 4/5 years).
+    ifvg_block_hours: list[int] = Field(default_factory=list)
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -170,6 +170,11 @@ class ComposerConfig:
     # "fvg_mid_abs" = FVG midpoint stop, original absolute target (higher R).
     stop_mode: str = "swing"
 
+    # B44: iFVG mid-session block by ET hour. Empty list = no blocking (default).
+    # Suppress iFVG signal emission when bar.ts ET hour is in this list. Sweep state
+    # accumulates regardless. Example: [11, 12, 13] blocks 11:00-14:00 ET.
+    block_hours: list[int] = field(default_factory=list)
+
 
 @dataclass
 class _Awaiting:
@@ -286,6 +291,12 @@ class SweepDisplacementComposer:
         if self.config.skip_trading_days:
             et_weekday = bar.ts.astimezone(_ET).strftime("%A")
             if et_weekday in self.config.skip_trading_days:
+                return None
+
+        # B44: mid-session hour block — suppress signal emission only, not sweep state.
+        if self.config.block_hours:
+            et_hour = bar.ts.astimezone(_ET).hour
+            if et_hour in self.config.block_hours:
                 return None
 
         # B35: daily directional bias gate — suppress signals against prior-day bias

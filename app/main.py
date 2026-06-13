@@ -255,6 +255,7 @@ def _build_runner(
                 skip_trading_days=s.skip_trading_days,
                 daily_bias_gate_enabled=s.daily_bias_gate_enabled,
                 stop_mode=s.stop_mode,
+                block_hours=s.ifvg_block_hours,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,

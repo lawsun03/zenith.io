@@ -221,7 +221,10 @@ def main() -> int:
         k, v = ov.split("=", 1)
         cur = getattr(strategy, k)  # raises if unknown — fail loud
         if isinstance(cur, list):
-            new_val = [x.strip() for x in v.split(",") if x.strip()] if v.strip() else []
+            from typing import get_args as _get_args
+            _field_ann = type(strategy).model_fields[k].annotation
+            _elem_type = (_get_args(_field_ann) or (str,))[0]
+            new_val = [_elem_type(x.strip()) for x in v.split(",") if x.strip()] if v.strip() else []
         else:
             new_val = type(cur)(v)
         strategy = strategy.model_copy(update={k: new_val})

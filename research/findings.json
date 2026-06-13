@@ -1967,5 +1967,46 @@
       "runs": ["scripts/_research_wk2r4_mining.py"],
       "src": "research/mfe_mae_orb_clean.csv, research/mfe_mae_ifvg_clean.csv"
     }
+  },
+  {
+    "ts": "2026-06-13T22:43:00Z",
+    "session": "wk2-b44",
+    "item": "B44",
+    "variant": "ifvg_block_hours=[11,12,13] — iFVG signal suppression 11:00-14:00 ET",
+    "objective": "funded",
+    "metrics": {
+      "combine_lo_close_baseline_passes": 45,
+      "combine_lo_close_baseline_pf": 1.11,
+      "combine_lo_close_block_passes": 39,
+      "combine_lo_close_block_pf": 1.00,
+      "combine_pass_delta": -6,
+      "combine_pf_delta": -0.11,
+      "funded_lo_close_baseline_accounts": 19,
+      "funded_lo_close_baseline_busts": 18,
+      "funded_lo_close_baseline_net": 152411,
+      "funded_lo_close_baseline_sust": 1.06,
+      "funded_lo_close_block_accounts": 21,
+      "funded_lo_close_block_busts": 20,
+      "funded_lo_close_block_net": 143954,
+      "funded_lo_close_block_sust": 1.05,
+      "funded_allsides_baseline_sust": 1.02,
+      "funded_allsides_block_sust": 1.02,
+      "b24_reference_sust": 2.524,
+      "b24_reference_pf": 1.167,
+      "trades_removed_lo_close": 128,
+      "trades_removed_pct_lo_close": 5.4,
+      "combine_long_net_baseline": 25210,
+      "combine_long_net_block": 5863,
+      "combine_long_net_delta": -19347,
+      "infra_bugs_fixed": 2,
+      "test_count_after": 664
+    },
+    "verdict": "rejected",
+    "learned": "Per-hour PF analysis must be validated within the EXACT deployed config subset. The wk2-r4 per-hour analysis (ifvg_edge, all-sides, all-day) showed 11-13 ET at PF<1. In close-mode LongOnly all-day, the same hours are PROFITABLE: blocking them reduced combine passes 45->39 (-13%), combine PF 1.11->1.00, long net $25k->$5.8k over 61 months (51 fewer exits, avg $380/trade profit lost). The funded pipeline (LO+close+all-day) shows sust 1.05x (block) vs 1.06x (baseline) -- both far below B24's 2.524x (which uses london+ny_am named sessions). The block cannot bridge the gap because the all-day config's lower sust comes from VOLUME (more trades = more volatility = more busts), not from the lunch hours specifically. Close mode fires at FVG inversion confirmation (later, more selective) -- these confirmations happen to cluster in the lunch window and ARE valid even at low liquidity. Two infrastructure improvements shipped: CLI --set coercion fix for list[int] fields (regression test added) and --exclude-years flag for equity_export.py (holdout protocol compliance).",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b44_pipeline.py"],
+      "src": "bars/yearly/bars_MNQ_dbv_{year}.csv (2021,2023,2024,2025,2026)"
+    }
   }
 ]

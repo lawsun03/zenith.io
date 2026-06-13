@@ -1630,7 +1630,7 @@ B1-B43 exhausted. Mandatory research/ideation session to replenish (session coun
   success is not explained by standard OHLCV signal families, suggesting the iFVG chain's structural
   confirmation requirement is what provides the edge). No new proposals from external sources.
 
-## B44 — iFVG mid-session signal block (11:00-14:00 ET)  [pending]
+## B44 — iFVG mid-session signal block (11:00-14:00 ET)  [done — rejected: block hurts close-mode LO (combine passes 45→39, long net $25k→$5.8k); per-hour data was ifvg_edge not close-mode; Lesson 89]
 Hypothesis: iFVG signals emitted in the 11:00-14:00 ET window are consistently loss-making across
 all years (5y excl 2022: PF=0.859, n=232, net=-$12,268). The mechanism is the "lunch doldrums":
 low liquidity, mean-reverting price action, FVG inversions that trigger but fail to follow through
