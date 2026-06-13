@@ -147,3 +147,17 @@ Entry format:
 - **Verdict:** rejected — 0/61 combine passes vs baseline 21%; trade frequency (~7.4/mo) too sparse to reliably reach $3,000. KZ session ranges lock once per session (3 per day × 5 days = 15 potential sweeps/week after displacement filter), producing too few entries to compound into a pass.
 - **Learned:** KZ session-level sweeps have identical edge quality to iFVG swing-based sweeps (PF 1.18 matches) but ~10x lower signal frequency (~7/mo vs ~70/mo). The combine requires throughput, not just edge — even a correct PF can't win if the strategy fires 7 times per month. The dead-zone timing was the key structural finding: session ranges lock at close and are first tested in the gap before the next session opens (e.g., London high tested at 05:15 ET, not 09:00 ET); the sweep only becomes actionable once the next trading window opens.
 - **Next:** B8 (wall-clock flatten fix — live-risk quality) or B11 (excursion instrument filter — small, unblocks clean data). Both pending; B11 is smaller.
+
+## 2026-06-13T12:30Z — session wk1-r1 — RESEARCH (ideation, session #9)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 trades, no drift, no lockout. Market closed (Sunday).
+- **Session type:** RESEARCH/IDEATION (last 2 items B6+B7 were build items; session #9, 9 % 3 == 0).
+- **Ran:** (1) WebSearch for new NQ futures intraday strategy ideas (prop-firm, academic, practitioner literature); (2) data mining on `research/mfe_mae_ifvg_clean.csv` and `research/mfe_mae_orb_clean.csv` — per-side PF, per-hour PF, per-year PF, monthly count distributions; (3) code review of `app/strategy/orb.py` and wiring in runner.py/main.py for max_trades_per_day mechanism.
+- **Key findings:**
+  - iFVG long side PF=1.136 vs short side PF=0.960 over 5y (1226 longs vs 1251 shorts). Short side is structurally loss-making. Long-only lifts PF +9% but drops to ~25/month (funded route only).
+  - ORB 10:xx ET signals (late breakouts) have PF=1.276 vs 9:xx PF=1.176 — late/retest signals are higher quality. ORB monthly ceiling is ~23 (1 signal/trading-day); reentry after stop would increase this by ~5-10/month.
+  - `orb_max_trades_per_day` is already wired end-to-end BUT the naive implementation fires the second signal at the SECOND bar above the range (before the first stop hits), wasting the slot on trending days. Correct mechanism: ORBComposer.on_stop_loss() re-arms the detector.
+  - Web research: Opening Rip = ORB (already tested); Liquidity Sweep = iFVG (already exists); VWAP = requires regime gating (Lessons 2+4 say no); gap fills ~12-15/mo (too sparse). No new mechanisms found.
+- **Numbers:** no benchmarks run (research session only). Data: ifvg_long PF=1.136, ifvg_short PF=0.960, orb_10xx PF=1.276.
+- **Verdict:** dataset — 3 new BACKLOG items appended.
+- **Learned:** The iFVG short side has been a structural drag across all 5 years (long-only PF=1.136 vs full PF=1.043), and the correct ORB second-entry mechanism requires the on_stop_loss callback (not just bumping max_trades_per_day). External web research yielded nothing beyond what we already have — consistent with Lesson 6.
+- **Next:** B8 (wall-clock flatten fix) is still the top non-research pending item; B11 (excursion instrument filter) is the smallest. B14 (ORB reentry) is the highest-priority new item from this session.

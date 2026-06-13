@@ -146,3 +146,19 @@ Appended 2026-06-13 (B7 kz_levels benchmark):
 
 30. **`enabled_killzones=["all"]` maps to `all_day()`, which never closes.**
     The combine harness passes `enabled_killzones=["all"]` by default. `all_day()` (00:00–23:59:59 ET) never satisfies `in_killzone(ts, [zone]) is None`, so session ranges are accumulated but never finalized. Any engine that needs named sessions (London, NY AM, NY PM) must ignore `enabled_killzones` and use `default_killzones()` unconditionally — the harness's "all" flag is designed for the composer's entry gate, not for session-range bookkeeping.
+
+Appended 2026-06-13 (wk1-r1 research session):
+
+31. **The iFVG short side is structurally loss-making on NQ 5min over 5 years.**
+    From 5y MFE/MAE data (partial_r=0): long trades PF=1.136 (n=1226), short trades PF=0.960
+    (n=1251). The short side drags overall PF from 1.136 to 1.043. This is not regime-dependent
+    (all years show longs > shorts). "Tops stall, bottoms sweep" (Lesson 8) is the mechanism.
+    Long-only iFVG lifts PF by +9% but cuts volume to ~25/month — too sparse for Combine, but
+    relevant for the funded objective where PF matters more than volume.
+
+32. **Naive `orb_max_trades_per_day=2` is wrong — use on_stop_loss re-arm instead.**
+    With max_trades=2, the detector fires the second signal at the SECOND BAR above the ORB
+    range (still during the first position's hold), wasting the slot and missing the genuine
+    retest after the stop. Correct implementation: ORBComposer.on_stop_loss() resets
+    `detector._fired=0`, allowing one more signal only after a confirmed stop-out.
+    ExecutionEngine already calls `runner.composer.on_stop_loss()` on stops — the wiring exists.

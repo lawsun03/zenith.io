@@ -221,5 +221,26 @@
     "verdict": "rejected",
     "learned": "KZ session-level sweeps have identical edge quality to iFVG swing sweeps (PF 1.18 matches baseline) but ~10x lower trade frequency (~7.4/mo vs ~70/mo). 0/61 combine passes vs 13/61 (21%) baseline. The Combine requires throughput: 7 trades/month can't compound to $3,000 even at 60% WR. Root cause: session ranges lock once per session (London, NY AM, NY PM) and are first tested in the gap between sessions (e.g., London high at 05:15 ET, 3+ hours before NY AM opens). The sweep fires outside any trading window and was previously consumed silently; the fix keeps levels alive across the gap but the structural ceiling remains ~15 potential sweeps/week before the displacement filter. Two implementation bugs found: (1) dead-zone level consumption (fix: gate emit+consume on in_killzone()), (2) all_day() zone never closes (fix: kz_levels always uses default_killzones()).",
     "links": {"doc": null, "runs": [], "src": ["app/strategy/kz_levels.py", "app/backtest/runner.py", "app/main.py", "tests/test_kz_levels_runner.py"]}
+  },
+  {
+    "ts": "2026-06-13T12:30Z",
+    "session": "wk1-r1",
+    "item": "RESEARCH",
+    "variant": "Session wk1-r1: ideation — MFE/MAE data mining + WebSearch",
+    "objective": "infra",
+    "metrics": {
+      "ifvg_long_pf_5y": 1.136,
+      "ifvg_short_pf_5y": 0.960,
+      "ifvg_long_only_monthly_median": 25,
+      "orb_10xx_pf": 1.276,
+      "orb_9xx_pf": 1.176,
+      "orb_monthly_median": 21,
+      "orb_monthly_max": 23,
+      "web_ideas_none_new": "all web findings map to existing tested engines",
+      "new_items_added": 3
+    },
+    "verdict": "dataset",
+    "learned": "The iFVG short side is structurally loss-making on NQ 5min (PF 0.960 over 5y, 1251 trades); blocking shorts lifts long-only PF to 1.136 but cuts volume to ~25/month (funded route). ORB late breakouts (10:xx ET) have better PF than early ones (1.276 vs 1.176), supporting a 'reentry after stop' hypothesis; the current max_trades_per_day=2 is the wrong mechanism (fires before stop hits). External web research yielded no new engines — all practitioner ideas reduce to iFVG/ORB/KZ already tested.",
+    "links": {"doc": null, "runs": [], "src": ["research/mfe_mae_ifvg_clean.csv", "research/mfe_mae_orb_clean.csv", "scripts/research_ideation_analysis.py", "scripts/research_ideation_analysis2.py"]}
   }
 ]
