@@ -318,5 +318,16 @@
     "verdict": "shipped",
     "learned": "funded_sim.py now accepts --save-id and writes a backtests/<id>.json with both funded_pipeline.combine and funded_pipeline.xfa blocks populated, identical shape to run_monthly_combine's registry output. The UI's FundedPipelineDetail component renders both blocks without any frontend changes.",
     "links": {"doc": null, "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T07:20:00Z",
+    "session": "wk1-b11",
+    "item": "B11",
+    "variant": "ExcursionTracker instrument filter",
+    "objective": "infra",
+    "metrics": {"tests_added": 4, "total_tests": 613, "failures": 0},
+    "verdict": "shipped",
+    "learned": "Added instrument field to ExcursionWindow and filter in on_bar: windows now only advance when the bar's root instrument matches the window's instrument (empty = no filter, legacy behavior). SDK contract symbols (CON.F.US.MNQ.M26) are normalised to root in on_bar and at all three open() call sites in journaling.py. Pre-06-12 multi-instrument excursion rows remain unusable; 06-12+ MNQ-only rows are clean.",
+    "links": {"doc": null, "runs": [], "src": null}
   }
 ]

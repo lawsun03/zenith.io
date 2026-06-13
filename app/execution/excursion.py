@@ -34,6 +34,7 @@ class ExcursionWindow:
     stop_hit_bar: int | None = None    # 1-based bar index stop first touched
     target_hit_bar: int | None = None  # 1-based bar index target first touched
     bars_elapsed: int = 0
+    instrument: str = ""            # root symbol, e.g. "MNQ"; "" = legacy (no filter)
 
     @property
     def mfe(self) -> Decimal:
@@ -76,18 +77,23 @@ class ExcursionTracker:
 
     def open(self, *, key: str, kind: str, side: str, ref: Decimal,
              target: Decimal | None, window_bars: int,
-             stop: Decimal | None = None) -> None:
+             stop: Decimal | None = None, instrument: str = "") -> None:
         if window_bars <= 0:
             return
         self._windows.append(ExcursionWindow(
             key=key, kind=kind, side=side, ref=ref, target=target,
             bars_left=window_bars, max_high=ref, min_low=ref, stop=stop,
+            instrument=instrument,
         ))
 
     def on_bar(self, bar: Bar) -> None:
         """Advance every open window with this bar; emit + drop completed ones."""
+        bar_root = bar.instrument.split(".")[-2] if "." in bar.instrument else bar.instrument
         still_open: list[ExcursionWindow] = []
         for w in self._windows:
+            if w.instrument and bar_root != w.instrument:
+                still_open.append(w)
+                continue
             w.bars_elapsed += 1
             if bar.high > w.max_high:
                 w.max_high = bar.high

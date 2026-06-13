@@ -35,6 +35,11 @@ _CT = ZoneInfo("America/Chicago")
 _MFE_WINDOW_BARS = 30
 
 
+def _root_instrument(instrument: str) -> str:
+    """Strip SDK contract suffix: 'CON.F.US.MNQ.M26' → 'MNQ', 'MNQ' → 'MNQ'."""
+    return instrument.split(".")[-2] if "." in instrument else instrument
+
+
 def _make_pre_place(config_path: Path | None = None):
     """
     Build the on_pre_place callback.
@@ -137,6 +142,7 @@ def _make_signal_journaler(
                     key=f"rej-{signal.instrument}-{outcome.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
                     kind="rejection", side=signal.side, ref=signal.entry,
                     target=signal.target, stop=signal.stop, window_bars=_MFE_WINDOW_BARS,
+                    instrument=signal.instrument,
                 )
         if discord is not None and discord.enabled:
             await discord.send_signal(signal, outcome)
@@ -345,6 +351,7 @@ def _make_reject_journaler(excursion_tracker=None):
                 key=f"rej-{instrument}-{info.reason}-{datetime.now(timezone.utc).timestamp():.0f}",
                 kind="rejection", side=info.side, ref=info.entry,
                 target=info.target, stop=info.stop, window_bars=_MFE_WINDOW_BARS,
+                instrument=instrument,
             )
 
     return on_reject
@@ -375,6 +382,7 @@ def _make_fill_journaler(
                 side=fill.side, ref=Decimal(str(fill.fill_price)),
                 target=Decimal(tgt) if tgt else None,
                 stop=Decimal(stp) if stp else None, window_bars=_MFE_WINDOW_BARS,
+                instrument=_root_instrument(fill.instrument),
             )
         _append_fill_csv(fill)
         await journal.record_fill(fill)

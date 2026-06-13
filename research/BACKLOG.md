@@ -100,7 +100,7 @@ JSON (shape like run_monthly_combine._save_ui_result, with the funded metrics
 in a `funded_pipeline` block) so payout-frontier results render in the
 dashboard alongside backtests.
 
-## B11 — Excursion tracker instrument filter  [pending]  (data integrity, small)
+## B11 — Excursion tracker instrument filter  [done — shipped: ExcursionWindow.instrument field + on_bar filter + _root_instrument normalisation; 4 defining-behavior tests; 613 total tests green; pre-06-12 multi-instrument rows stay unusable]  (data integrity, small)
 From B4 forensics: `ExcursionTracker.on_bar` (app/execution/excursion.py:87-95)
 updates every open window with every bar — no instrument filter, and
 `ExcursionWindow` has no instrument field. Multi-instrument days (06-07..06-11)

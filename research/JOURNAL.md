@@ -208,3 +208,16 @@ Entry format:
 - **Verdict:** dataset — 2 new BACKLOG items appended (B17, B18).
 - **Learned:** ORB exhibits the same long/short bias as iFVG but less severely — shorts are still profitable, making long-only ORB a funded PF improvement rather than a loss-removal. The all_day benchmark config includes well-documented negative-expectancy windows (noon, NY PM tail) that cost the funded phase ~$265/month; the fix requires no new code, just a config param change in equity_export runs.
 - **Next:** B10 (infra, funded_sim save-id) or B11 (excursion instrument filter, small) or B14 (ORB reentry — highest-priority strategy item).
+
+## 2026-06-13T07:20Z — session wk1-b11 — B11 (excursion tracker instrument filter)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift, no lockout. Market closed (Sunday).
+- **Ran:** TDD — 4 defining-behavior tests written first (all failing), then implemented:
+  1. Added `instrument: str = ""` field to `ExcursionWindow` dataclass (default="" = no filter, legacy behavior preserved).
+  2. Added `instrument: str = ""` parameter to `ExcursionTracker.open()`.
+  3. Added instrument filter in `ExcursionTracker.on_bar()`: computes `bar_root` (strips SDK contract suffix via `.split(".")[-2]`), skips any window where `w.instrument != ""` and `bar_root != w.instrument`.
+  4. Added `_root_instrument()` helper to `journaling.py` (same normalization: "CON.F.US.MNQ.M26" → "MNQ").
+  5. Passed `instrument=` at all three `excursion_tracker.open()` call sites in journaling.py: rejection in `journal_signal` (uses `signal.instrument`), rejection in `on_reject` (uses `instrument` param), trade entry in `on_fill` (uses `_root_instrument(fill.instrument)`).
+- **Numbers:** 4 tests added, 613 total, 0 failures, 2 skipped.
+- **Verdict:** shipped — instrument filter live; 06-12+ MNQ-only excursion rows are clean; pre-06-12 multi-instrument rows remain unusable (no backfill possible).
+- **Learned:** The fix required just two surgical changes (one field + one filter loop check) and a normalization helper — the test suite caught that SDK contract strings ("CON.F.US.MNQ.M26") must be normalised before comparison. Legacy windows (instrument="") continue to receive every bar, so existing production behavior for single-instrument configs is unchanged.
+- **Next:** B12 (tracked runtime-ledger policy — decision for Lawrence) or B13 (split slippage column) or B14 (ORB reentry after stop — highest-priority new strategy item). B14 is the top new research item; B13 is the smallest remaining infra item.
