@@ -1054,5 +1054,34 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-13T13:00:00Z",
+    "session": "wk1-r5",
+    "item": "RESEARCH",
+    "variant": "Session wk1-r5: ideation -- deployed-config parity audit (ifvg_entry_mode=close discovery) + 3 new backlog items",
+    "objective": "infra",
+    "metrics": {
+      "critical_discovery": "ifvg_entry_mode=close in deployed bot vs ifvg_edge in B1-B23 research baseline",
+      "entry_mode_mechanics": "close=fill at inversion bar close (100% fill rate, deeper in FVG zone); ifvg_edge=wait for retrace to FVG proximal edge (may miss, better price)",
+      "rule_f_finding": "ifvg_rule_f_enabled is structural no-op in close mode (Rule F is in armed-zone path, never triggered when mode=close)",
+      "parity_gap_parameters": [
+        "ifvg_entry_mode",
+        "partial_profit_r",
+        "swing_stop_lookback",
+        "target_clarity_mode"
+      ],
+      "b22_b23_contamination": "B22 tested ORB (unaffected); B23 used deployed entry_mode=close vs research ifvg_edge, but verdict was rejected regardless",
+      "web_search": "no new mechanism families; Lesson 6 confirmed 5-for-5 (all external claims fail to transfer)",
+      "new_items_added": 3,
+      "databento_spent": 0.0
+    },
+    "verdict": "dataset",
+    "learned": "The deployed bot uses ifvg_entry_mode='close' (enter at inversion bar close, 100% fill) vs the research baseline 'ifvg_edge' (enter at FVG proximal edge, limit-like). This is the most significant untested config difference: 'close' entry fills deeper in the FVG zone, increasing stop distance and making the target harder to reach (lower WR), while 'ifvg_edge' may miss some trades but enters at better structural price. All iFVG benchmarks B1-B23 used 'ifvg_edge'; the deployed funded metrics are unknown. Three proposals target the config parity gap: B24 (entry mode), B25 (partial_profit_r on ORB-reentry), B26 (swing_stop_lookback on iFVG combine).",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": "app/execution/engine.py:293-349"
+    }
   }
 ]

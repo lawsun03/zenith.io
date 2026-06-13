@@ -580,3 +580,149 @@ B15 long-only at same PF with more volume likely beats cap=1 on pipeline metrics
 Source: scripts/analyze_signal_rank.py data mining (this session). Rank-1 PF=1.129 vs rank-2
 PF=0.970; year-by-year analysis shows 2023 cap=1 PF is regime-dependent (not computed directly,
 but rank-1 2023 shorts likely dragged by the same mechanism as full iFVG 2023 weakness).
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk1-r5 (post-B23 backlog replenishment)  [done — 3 items appended: B24 entry-mode sensitivity, B25 partial-profit ORB-reentry, B26 swing-stop combine sensitivity]
+
+B23 exhausted the backlog. This session replenishes with new testable hypotheses.
+Primary source: deployed bot_config.json analysis vs BotConfig research defaults.
+
+Key finding driving ALL 3 proposals: `ifvg_entry_mode="close"` (deployed) vs `"ifvg_edge"`
+(research baseline used in B1-B23) is the largest untested config difference. Mechanics:
+- "ifvg_edge": waits for price to retrace to FVG proximal edge — limit-like, may miss trades
+  but enters at best structural price; armed_tracker + Rule F apply here
+- "close": returns signal immediately at inversion bar close — 100% fill rate, entry is deeper
+  inside the FVG zone than the proximal edge, giving larger stop distance → harder target
+- Rule F (ifvg_rule_f_enabled) only applies in the armed-zone path ("ifvg_edge"/"retrace_ce");
+  it is a structural no-op for "close" mode regardless of the flag value
+
+The deployed bot also differs on: partial_profit_r=1.5 (vs 0), swing_stop_lookback=30 (vs 0),
+target_clarity_mode="off" (vs "reject"). These 3 are tested by B24, B25, B26 respectively.
+
+Note: target_clarity_mode and ifvg_rule_f_enabled are not proposed as separate items because:
+- rule_f is irrelevant in "close" mode (structural no-op, confirmed engine.py:308-310)
+- target_clarity_mode="off" vs "reject" allows setups without a clear structural target;
+  this only affects the grader, not signal emission. Low prior (grader already mostly permissive
+  at deployed settings with grader_min_grade="F"); B24 will capture this incidentally.
+
+## B24 — iFVG entry mode sensitivity (close vs ifvg_edge) — funded + combine  [pending]
+Hypothesis: the deployed bot's `ifvg_entry_mode="close"` (enter at inversion bar close) differs
+mechanically from the research baseline's "ifvg_edge" (wait for retrace to FVG proximal edge).
+All iFVG benchmarks B1-B23 used "ifvg_edge" — the deployed bot's iFVG trade economics are
+fundamentally different and have never been benchmarked.
+
+Direction of expected effect:
+- "close" entry: inversion bar close is deeper inside FVG zone than the proximal edge →
+  larger stop distance (entry further from sweep extreme) → target further away → lower WR
+- "close" fill rate: 100% (no missed entries). "ifvg_edge" may miss trades that run
+  without retracing to the proximal edge
+- Net effect on PF/funded/combine: UNKNOWN — fill-rate gain vs WR degradation
+
+Mechanism: no new code. `ifvg_entry_mode` is already a StrategyParams field. Test both values
+with all other parameters held at research baseline (partial_r=0, swing_stop_lookback=0,
+target_clarity_mode="reject") to isolate entry mode effect.
+
+Benchmark configs to test:
+1. iFVG combine at "close" vs "ifvg_edge" (run_monthly_combine.py):
+   `--set ifvg_entry_mode=close` vs no flag (default "ifvg_edge")
+   Pass --partial-r 0 --set swing_stop_lookback=0 --set target_clarity_mode=reject for parity
+2. B19 funded (LongOnly, london+ny_am, r1.25) at "close" vs "ifvg_edge":
+   equity_export + funded_sim --haircut 200 at each mode
+   Compare PF, sust, $/mo
+
+Important: ORB benchmarks are unaffected (ORB always uses bar-close entry naturally).
+
+Success criteria:
+- "close" mode PF within 3% of "ifvg_edge" → deployed config is acceptable
+- "close" mode PF worse by >5% → deployment risk (recommend switching to "ifvg_edge")
+- If "close" actually IMPROVES PF (higher fill rate offsets WR drag): candidate for upgrade
+
+Stop rule: if "close" loses on BOTH combine passes AND funded PF vs "ifvg_edge", reject.
+
+Defining-behavior tests: none needed (no code changes).
+
+Prior: ~45% that "close" is materially worse (larger stop distance → harder target on NQ 5min
+5-bar candles which often close 5-20 pts beyond FVG edge on strong displacement bars). ~35%
+roughly equal. ~20% "close" is better (fill-rate gain dominates).
+
+Source: app/execution/engine.py:293-349 (entry mode dispatch), deployed bot_config.json audit.
+This is the highest-priority parity-gap item for the Monday deployment decision.
+
+## B25 — partial_profit_r=1.5 effect on ORB-reentry funded (B21 Phase B)  [pending]
+Hypothesis: B21's recommended Phase B (ORB-reentry r0.75) was benchmarked at partial_r=0
+(research baseline). The deployed bot uses partial_r=1.5 (book half at 1.5R, stop to BE).
+For ORB r_multiple=2.5, partial exit at 1.5R changes winner economics:
+- Full winner: earns 2.5R on full position (baseline)
+- Partial winner: earns 1.5R × 0.5 + 2.5R × 0.5 = 2.0R on the position (20% reduction)
+- Partial-then-BE: earns 1.5R × 0.5 + 0 = 0.75R (vs 0 or loss without partial)
+
+The key question: does partial_r=1.5 reduce funded busts enough to offset the 20% gross
+payout reduction per winning trade?
+
+Mechanism: no new code. partial_profit_r is already wired to equity_export via --partial-r.
+
+Benchmark (funded objective only — ORB combine benchmark already done in B22):
+1. equity_export --set engine=orb --set orb_r_multiple=2.5 --set orb_reentry_after_stop=True
+   --risk-pct 0.75 --partial-r 0 vs --partial-r 1.5 (both at swing_stop_lookback=0)
+2. funded_sim --haircut 200 on both
+3. Compare busts, sust, $/mo to B21 baseline (partial_r=0: $497/mo, sust 2.62x, 13 busts)
+
+Success criteria (vs B21 per-year baseline — note these are flat 5y funded_sim numbers, not
+the per-year pipeline model; success means the deployed partial_r doesn't hurt):
+- partial_r=1.5 achieves sust >= 80% of partial_r=0 baseline → deployed config is acceptable
+- partial_r=1.5 achieves sust >= partial_r=0 → unexpected positive result, upgrade deployed config
+- partial_r=1.5 sust < 70% of baseline → deployment risk (partial exits materially hurt ORB funded)
+
+Note: ORB-reentry adds a second signal per day (after a stop), which may interact with partial_r:
+if the first trade exits partial then runs to BE, the account avoids a full loss but also captures
+only 0.75R. A second reentry signal would then execute with the same dynamics. The partial_r
+effect compounds differently for reentry vs single-entry.
+
+Defining-behavior tests: none needed.
+
+Prior: ~45% that partial_r=1.5 hurts ORB-reentry funded (ORB's ~75% target-hitters get reduced
+payout; the ~25% day-end-flatten population benefits from partial locks). Net likely negative
+since the dominant outcome is target-hits, and those are penalized. ~30% neutral (effects cancel).
+~25% positive (bust reduction from partial locks dominates).
+
+Source: B21 methodology + deployed bot_config.json + ORB winner MFE analysis (B3/wk1-r3:
+~75% of winners hit 2.5R target; partial at 1.5R cuts gross payout for ~75% of winners).
+
+## B26 — swing_stop_lookback sensitivity for iFVG combine (0 vs 30)  [pending]
+Hypothesis: the deployed bot uses swing_stop_lookback=30 (stop anchored to the lowest point of
+last 30 bars, not the immediate sweep extreme). The research baseline used 0 (stop at sweep
+extreme). B1-B23 iFVG combine benchmarks all used lookback=0. The deployed iFVG combine
+(Phase A of the B21 recommendation) uses lookback=30 — its combine pass rate is unknown.
+
+Direction of expected effect:
+- lookback=30: wider stop (lower anchor than immediate sweep extreme) → same r_multiple target
+  but larger absolute target distance → harder to hit → lower WR per trade
+- BUT: wider stop → fewer false stop-outs on "normal" retracements → more winning months
+- Net effect on combine pass rate: UNKNOWN (same tradeoff as B24's fill-rate vs WR issue)
+
+Mechanism: no new code. swing_stop_lookback is already a StrategyParams field.
+
+Benchmark (combine objective only):
+1. run_monthly_combine.py at swing_stop_lookback=0/15/30 for iFVG:
+   Pass --partial-r 0 --set ifvg_entry_mode=ifvg_edge to match research baseline
+   (isolating just the swing_stop parameter)
+2. Report combine passes/61, PF, and monthly trade volume at each value
+3. Compare to iFVG research baseline (13/61, PF 1.31 from wk1-r1 Lesson 33 data)
+
+Also run at "close" entry mode (to check interaction with B24) if time permits.
+
+Success criteria:
+- Any lookback value achieves >= 15/61 combine passes vs 13/61 → uplift to Phase A supply
+- If lookback=30 gives fewer passes than 0 → deployed config is degrading Phase A throughput
+
+Defining-behavior tests: none needed.
+
+Prior: ~30% that lookback=30 helps combine pass rate. Most months that fail to pass $3k/month
+do so due to insufficient trade volume (Lesson 2), not poor stop placement. Wider stops reduce
+average trade R (same target, wider stop = harder), which may HURT monthly win rates more than
+false-stop-out protection helps.
+
+Source: Lesson 50 (config parity gap), deployed bot_config.json. The combine-pass-rate effect
+of swing_stop_lookback has not been measured in any prior session.

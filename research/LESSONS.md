@@ -327,3 +327,21 @@ Appended 2026-06-13 (B23 iFVG daily signal cap):
     and ALL NY PM (PF=0.906), producing better quality at similar volume. At r1.25: cap=1 PF=1.137,
     sust=1.170x vs B19 PF=1.173, sust=1.600x. Rule: temporal rank filters are not a substitute for
     structural side/session filters when the negative-quality signals arrive in unpredictable rank order.
+
+Appended 2026-06-13 (wk1-r5 research session):
+
+53. **`ifvg_entry_mode="close"` in the deployed bot has never been benchmarked against the research
+    baseline `"ifvg_edge"`.** All B1-B23 iFVG benchmarks used "ifvg_edge" (wait for retrace to FVG
+    proximal edge — limit-like). The deployed bot uses "close" (fill at inversion bar close — 100%
+    fill rate but entry is deeper inside the FVG zone, further from the proximal edge and structural
+    support). Trade economics differ: "close" gives larger stop distance (entry further from sweep
+    extreme) and a harder-to-reach target at same r_multiple. "ifvg_edge" may miss some trades
+    (price runs without retracing) but enters at better structural price with smaller stop. Neither
+    mode has been directly compared on combine or funded objectives. B24 resolves this.
+
+54. **Rule F (`ifvg_rule_f_enabled`) is a structural no-op when `ifvg_entry_mode="close"`.**
+    Rule F cancels an armed zone if TP1 is hit before entry fills — but in "close" mode, the signal
+    is returned immediately without arming a tracker (engine.py:308-310), so Rule F never fires.
+    The deployed bot's `ifvg_rule_f_enabled=False` setting is irrelevant to actual trade behavior
+    since the deployed `entry_mode="close"` bypasses the entire armed-zone path. Don't propose
+    rule_f sensitivity tests without first checking entry mode.
