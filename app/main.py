@@ -203,6 +203,7 @@ def _build_runner(
             max_trades_per_day=s.orb_max_trades_per_day,
             pdr_enabled=s.orb_pdr_enabled,
             reentry_after_stop=s.orb_reentry_after_stop,
+            long_only=s.orb_long_only,
         ))
         return ORBRunner(
             instrument=instrument,

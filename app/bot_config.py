@@ -119,6 +119,7 @@ class StrategyParams(BaseModel):
     orb_max_trades_per_day: int = 1
     orb_pdr_enabled: bool = False         # prior-day-range qualifier (default-off)
     orb_reentry_after_stop: bool = False  # re-arm detector once per day after a confirmed stop
+    orb_long_only: bool = False           # suppress ORB short signals (funded PF improvement, B17)
     vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")

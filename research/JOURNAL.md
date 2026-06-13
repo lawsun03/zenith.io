@@ -307,3 +307,23 @@ Entry format:
 - **Verdict:** rejected — no marginal benefit at declared threshold (0.15) with deployed MNQ config; success criteria not met (funded PF unchanged). Infrastructure ships default-off; 3 defining tests added (632 total, 0 failures).
 - **Learned:** Downstream signal quality filters are dominated by upstream body quality filters. A later-stage gate only adds value when its effective threshold (min_body_r × stop_dist) exceeds the earlier-stage floor (min_absolute_body). At deployed settings, the gap is 5.0 pts vs 0.45-3.0 pts. Future proposals for inversion quality gates should be calibrated against the actual upstream filter values.
 - **Next:** B17 (ORB long-only funded benchmark — symmetric to B15 but for ORB) or B18 (named-sessions killzone benchmark — no-code benchmark). Both are pending.
+
+## 2026-06-13T09:00Z — session wk1-b17 — B17 (ORB long-only funded benchmark)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no drift. Market closed (Sunday).
+- **Ran:** TDD — 4 defining-behavior tests written first (all passing immediately on correct implementation). Implemented `long_only: bool = False` in `ORBConfig`; added short-side gate in `ORBDetector.on_bar` (if `self.config.long_only` and `side=="short": return None`); added `orb_long_only: bool = False` to `StrategyParams`; wired `long_only=s.orb_long_only` into `ORBConfig(...)` in both `runner.py` and `main.py`. 636 total tests, 0 failures. Benchmarked via `equity_export` + `funded_sim --haircut 200` at r0.75/r1.0/r1.25 against fresh same-code baselines. Also saved 3 UI-registry JSON files (`b17_orb_longonly_r0p75/r1p0/r1p25.json`).
+- **Numbers (h200, full 5y bars incl. 2022, sust = combine_passes / xfa_busts):**
+
+  | Config | Combine passes | XFA busts | Net (5y) | $/mo | Sust |
+  |---|---|---|---|---|---|
+  | LongOnly r0.75 | 18 | 21 | $46,416 | $773 | 0.857x |
+  | LongOnly r1.0 | 28 | 38 | $70,883 | $1,181 | 0.737x |
+  | LongOnly r1.25 | 39 | 47 | $109,292 | $1,822 | 0.830x |
+  | Baseline r0.75 | 29 | 34 | $67,241 | $1,121 | 0.853x |
+  | Baseline r1.0 | 50 | 59 | $116,605 | $1,943 | 0.847x |
+  | Baseline r1.25 | 68 | 44 | $163,122 | $2,719 | 1.545x |
+
+  At r1.0 (primary criterion): long-only $/mo -39% ($1,181 vs $1,943); sust -11pp (0.737x vs 0.847x). Both metrics worse at all risk levels.
+- **Stop rule:** both primary metrics ($/mo and sust) are worse at r1.0 → rejected.
+- **Verdict:** rejected — success criteria not met. ORB short signals are profitable (PF 1.109); removing them cuts ~47% of combine volume and hurts pipeline throughput more than PF gain compensates. Feature ships default-off (`orb_long_only=False`).
+- **Learned:** The B15 success mechanism was removing LOSS-MAKING iFVG short signals (PF 0.960). B17 removes PROFITABLE ORB short signals (PF 1.109) — a very different hypothesis. The funded pipeline depends on combine THROUGHPUT (funded accounts created per month) as much as per-account performance. Cutting volume by 47% halves the account creation rate, so even a higher per-account PF cannot compensate. This confirms Lesson 33: long-only ORB is a PF-improvement hypothesis, not a loss-removal; PF improvement alone is not sufficient when volume is the pipeline bottleneck.
+- **Next:** B18 (named-sessions killzone config benchmark — no-code, iFVG funded) is the only remaining pending item.

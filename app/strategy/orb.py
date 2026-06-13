@@ -41,6 +41,7 @@ class ORBConfig:
     pdr_enabled: bool = False       # prior-day-range qualifier (default-off)
     pdr_lookback: int = 60          # trading days; waits until window full
     reentry_after_stop: bool = False  # re-arm once per day after a confirmed stop
+    long_only: bool = False           # suppress bearish breakout signals (funded PF improvement)
 
 
 class ORBDetector:
@@ -117,6 +118,8 @@ class ORBDetector:
         if bar.close > self._or_high:
             side, stop, broken = "long", self._or_low, self._or_high
         elif bar.close < self._or_low:
+            if self.config.long_only:
+                return None
             side, stop, broken = "short", self._or_high, self._or_low
         else:
             return None

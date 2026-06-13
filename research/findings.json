@@ -420,5 +420,25 @@
     "verdict": "rejected",
     "learned": "inversion_min_body_r=0.15 is a no-op at deployed MNQ settings (min_absolute_body=5.0 pts, stop_buffer=3.0). For the gate to activate, need 0.15 × stop_dist > 5.0 → stop_dist > 33 pts; typical stop_dist on MNQ 5min is 5-20 pts. All three metrics (trades, PF, funded) are identical to the full-iFVG baseline. The 0.15 threshold was designed for the default config (min_absolute_body=1.0); it provides zero marginal value at deployed settings. Infrastructure ships default-off; 3 defining tests added (632 total).",
     "links": {"doc": null, "runs": [], "src": null}
+  },
+  {
+    "ts": "2026-06-13T09:00:00Z",
+    "session": "wk1-b17",
+    "item": "B17",
+    "variant": "ORB long-only (orb_long_only=True, r_multiple=2.5) funded benchmark — r0.75/r1.0/r1.25",
+    "objective": "funded",
+    "metrics": {
+      "longonly_r075_combine_passes": 18, "longonly_r075_combine_busts": 21, "longonly_r075_xfa_acc": 21, "longonly_r075_xfa_busts": 21, "longonly_r075_net_5y": 46416, "longonly_r075_mo": 773, "longonly_r075_sust": 0.857,
+      "longonly_r100_combine_passes": 28, "longonly_r100_combine_busts": 50, "longonly_r100_xfa_acc": 38, "longonly_r100_xfa_busts": 38, "longonly_r100_net_5y": 70883, "longonly_r100_mo": 1181, "longonly_r100_sust": 0.737,
+      "longonly_r125_combine_passes": 39, "longonly_r125_combine_busts": 76, "longonly_r125_xfa_acc": 48, "longonly_r125_xfa_busts": 47, "longonly_r125_net_5y": 109292, "longonly_r125_mo": 1822, "longonly_r125_sust": 0.830,
+      "baseline_r075_combine_passes": 29, "baseline_r075_xfa_busts": 34, "baseline_r075_net_5y": 67241, "baseline_r075_mo": 1121, "baseline_r075_sust": 0.853,
+      "baseline_r100_combine_passes": 50, "baseline_r100_xfa_busts": 59, "baseline_r100_net_5y": 116605, "baseline_r100_mo": 1943, "baseline_r100_sust": 0.847,
+      "baseline_r125_combine_passes": 68, "baseline_r125_xfa_busts": 44, "baseline_r125_net_5y": 163122, "baseline_r125_mo": 2719, "baseline_r125_sust": 1.545,
+      "haircut": 200,
+      "note": "all runs use full 5y bars incl 2022; sust = combine_passes / xfa_busts"
+    },
+    "verdict": "rejected",
+    "learned": "ORB short signals are profitable (PF 1.109), unlike iFVG shorts (PF 0.960). Long-only ORB cuts ~47% of combine volume and hurts all metrics: at r1.0, $/month drops -39% ($1,181 vs $1,943) and sust drops -11pp (0.737 vs 0.847). The B15 success (iFVG long-only) came from removing LOSS-MAKING shorts; B17's mechanism (quality improvement on profitable shorts) fails because volume loss outweighs PF gain. The orb_long_only feature ships default-off (4 tests, 636 total green).",
+    "links": {"doc": null, "runs": ["b17_orb_longonly_r0p75", "b17_orb_longonly_r1p0", "b17_orb_longonly_r1p25"], "src": null}
   }
 ]

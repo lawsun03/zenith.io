@@ -268,7 +268,7 @@ Key data findings driving the 2 proposals:
   2024 net loss -26.75pts — regime fragility, consistent with Lessons 3-4.
 - No new mechanism families found beyond iFVG/ORB/KZ; web search returned same ideas as wk1-r1.
 
-## B17 — ORB long-only funded benchmark  [pending]  (strategy research, funded)
+## B17 — ORB long-only funded benchmark  [done — rejected: long-only $/mo -39% ($1,181 vs $1,943) and sust -11pp (0.737 vs 0.847) at r1.0; ORB shorts are profitable (PF 1.109), removing them hurts pipeline at all risk levels; feature orb_long_only ships default-off]  (strategy research, funded)
 Hypothesis: ORB short side (PF=1.109, n=488) is materially weaker than long side (PF=1.320,
 n=542) over 5 years. Blocking shorts should improve funded-phase PF and reduce bust rates.
 Unlike B15 (iFVG shorts PF=0.960, loss-making), ORB shorts are still profitable — so this

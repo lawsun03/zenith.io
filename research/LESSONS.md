@@ -203,3 +203,14 @@ Appended 2026-06-13 (B16 inversion bar quality gate):
 Appended 2026-06-13 (B14 ORB reentry after stop):
 
 35. **ORB reentry after a confirmed stop adds volume but lowers per-trade quality.** At risk 1.0%: +44% trades (1,652 → 2,382), +35% funded $/month ($1,911 → $2,578), +57% combine passes (7 → 11 of 61), but PF drops -5% (1.213 → 1.153). Reentry signals are stop-reversal entries — structurally weaker than first-breakout signals. Enable only in the funded phase where volume helps pipeline throughput; the PF cost is acceptable for absolute-payout maximization.
+
+Appended 2026-06-13 (B17 ORB long-only funded benchmark):
+
+39. **PF improvement from a profitable-but-weaker signal class doesn't justify the volume cost in the funded pipeline.**
+    Long-only ORB (blocking shorts PF=1.109) cuts ~47% of combine attempts and hurts all metrics at all risk levels:
+    r1.0: $/month -39% ($1,181 vs $1,943), sust -11pp (0.737x vs 0.847x). The contrast with B15 (iFVG long-only,
+    success) is diagnostic: B15 removed LOSS-MAKING shorts (PF 0.960, subtracting from the equity curve); B17 removes
+    PROFITABLE shorts (PF 1.109, contributing net positive P&L). Removing profitable trades always hurts pipeline
+    throughput unless the PF improvement is large enough to reduce bust frequency faster than it reduces pass frequency.
+    At PF 1.109 → 1.320 (+19%), the improvement is insufficient. Rule of thumb: only block a signal class if it is
+    individually loss-making (PF < 1.0) over a multi-year window.
