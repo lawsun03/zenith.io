@@ -3527,5 +3527,29 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T17:22Z",
+    "session": "wk6-r1",
+    "item": "RESEARCH",
+    "variant": "backlog replenishment -- 7 inline probes on B77 deployed-config dataset",
+    "objective": "dataset",
+    "metrics": {
+      "9et_mfe_mean": 0.787,
+      "9et_mae_mean": 1.111,
+      "ifvg_cond_prob_15r_25r": 0.668,
+      "orb_cond_prob_15r_25r": 0.458,
+      "ifvg_posttarget_median_mfe": 2.7,
+      "orb_posttarget_median_mfe": 2.59,
+      "crossengine_pearson": -0.028,
+      "orb_timing_ratio": 1.162
+    },
+    "verdict": "dataset",
+    "learned": "The 9ET iFVG failure is structural (lower MFE + higher MAE vs all other hours; entry geometry fails at pre-RTH open). iFVG/ORB daily P&L are statistically independent (Pearson -0.028). iFVG post-target tail is thin (median 2.70R among winners), confirming fixed-exit policy from excursion data. 3 new backlog items: B78 (Phase A risk sensitivity), B79 (freshness in deployed config), B80 (live MFE/MAE Rule 13).",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

@@ -3273,3 +3273,186 @@ combine harness win rate estimate). No stop rule (infrastructure item).
 immediate follow-on analysis: run the displacement-bar-body check (wk5-r3 analog) and
 inversion-bar CLV check on the deployed-config data to see if the non-monotonic pattern
 persists in the correct config. Tag: Sonnet.
+
+---
+
+## RESEARCH -- Session wk6-r1  [done -- 3 items appended: B78, B79, B80]
+
+2026-06-14T17:22Z. Backlog fully exhausted (B77 last item). Mandatory research/ideation
+session per protocol (every-3rd-session rule; B75/B76/B77 = 3 items since last research).
+
+**Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0
+open contracts), no drift, no lockout. Market closed (weekend).
+
+**Inline Phase 1 probes on mfe_mae_deployed_combined_clean.csv (B77 dataset, n=3238):**
+
+1. **9ET pre-RTH iFVG excursion anatomy** (probe 1):
+   - 9ET n=211: WR=19.4%, PF=0.487, r_mfe_mean=0.787, r_mae_mean=1.111, target%=10.9%
+   - Other hours n=2165: WR=35.5%, PF=1.042, r_mfe_mean=1.202, r_mae_mean=0.925, target%=22.4%
+   - 9ET has BOTH lower MFE AND higher MAE: structural failure (enters pre-RTH, stops on RTH open)
+   - Immediate stops (r_mfe<0.1): 18.5% for 9ET vs 11.5% other hours. NOT fixable via filter.
+
+2. **Conditional MFE probability ladder** (probe 2):
+   - iFVG: P(2.5R | 1.5R) = 66.8%, P(2.5R | 2.0R) = 85.4% -- strong momentum above 1.5R
+   - ORB: P(2.5R | 1.5R) = 45.8%, P(2.5R | 2.0R) = 71.3% -- weaker momentum (Lesson 88: ORB value is EOD flatten, not target)
+   - **Post-target MFE** (probe follow-up): iFVG target-hit trades median r_mfe=2.70R (p75=2.95R, p90=3.42R); ORB median=2.59R (p75=2.72R). 23.1% of iFVG target-hits run to 3.0R; 9.3% of ORB target-hits do. Very thin post-target tail. CONFIRMS fixed-exit policy (B61, Lesson 20): no tail to chase at 2.5R target.
+
+3. **ORB early vs late timing** (probe 3):
+   - Early 09:30-09:59: PF=1.572 (n=517), Late 10:00-10:29: PF=1.352 (n=307)
+   - Ratio=1.162, year consistency 3/5 (non-monotonic: 2021 and 2024 reversed) -- Phase 1 NO-GO
+
+4. **iFVG side breakdown** (probe 4):
+   - Long n=1172: PF=1.067. Short n=1204: PF=0.889 (loss-making)
+   - Confirms B15/B71: iFVG close-mode shorts are net-negative, but removing them (allowed_sides=long) HURTS pipeline sust (B71 Lesson 130). Keep both sides.
+
+5. **Killzone breakdown** (probe 5):
+   - London 03-07ET: n=661, PF=1.020, r_mfe_mean=1.304, r_mae_mean=0.993
+   - NY-AM 08-11ET: n=635, PF=0.781 (WORST — dragged by 09ET), r_mfe_mean=0.997
+   - NY-PM 12-16ET: n=282, PF=0.981, WR=40.8%, target%=8.9% (wins but rarely hits 2.5R)
+   - Overnight 18-22ET: n=344, PF=1.029, r_mfe_mean=1.222 (BEST), r_mae_mean=0.870 (LOWEST)
+   - Vol is too thin for standalone overnight engine (~5.7 signals/month; Lesson 109)
+
+6. **03ET year-by-year deterioration** (probe 6):
+   - 2021 PF=1.495 → 2023 PF=1.191 → 2024 PF=0.952 → 2025 PF=0.844 → 2026 PF=0.668
+   - 3/5 years negative, BUT overall PF=0.942 (fails <0.90 B74 GO criterion). Not actionable as block.
+
+7. **iFVG/ORB cross-engine daily P&L correlation** (probe 7):
+   - Pearson r=-0.028 (essentially zero). Daily outcomes are independent (confirmed by joint probability matching).
+   - Both positive: 18.7%, Both negative: 31.7% — matches independence assumption exactly.
+   - Combined engine provides NO intraday hedging but also NO systematic same-day co-crash.
+
+**Inline falsifications (Phase 1 NO-GO, not queued):**
+- ORB early vs late breakout: ratio 1.162, non-monotonic, 3/5 years -- NO-GO
+- 03ET block: overall PF=0.942, fails <0.90 criterion -- NO-GO
+- Post-target iFVG trail (>2.5R): median winner only 2.70R, p75=2.95R -- no tail to capture, confirms B61
+
+**Key durable findings (Lessons 142-144 added):**
+- Lesson 142: 9ET iFVG trades have structurally different excursion geometry (higher MAE, lower MFE) vs all other hours -- the failure is deeper than PF alone implies
+- Lesson 143: iFVG/ORB daily P&L correlation ≈ 0 in deployed combined config (independence verified empirically)
+- Lesson 144: iFVG target-hit trades (r_mfe >= 2.4) have thin post-target upside (median 2.70R, p75 2.95R) -- no "run after 2.5R" edge exists, validating fixed-exit policy from excursion data
+
+**New backlog items appended:** B78 (Phase A risk sensitivity), B79 (iFVG freshness deployed config), B80 (live MFE/MAE tracking)
+
+---
+
+## B78 — Phase A risk=0.75% pipeline sensitivity  [pending]
+
+**Context:** Phase A combine risk has been tested at 1.25% (B28, rejected — worse than 1.0%) and
+1.0% (B42 deployed, 42 passes/5y, $549/mo, sust=3.23x). Risk=0.75% is the one untested level
+between the Topstep-typical 0.5-1.0% range.
+
+**Mechanism:** At risk=1.0%, each trade risks $500 on a $50k combine (DLL=$1,000/day). Two
+consecutive losses ($1,000) triggers DLL and aborts the combine day. At risk=0.75%, each trade
+risks $375; need 2.7 consecutive losses to hit DLL (more buffer). But each WIN contributes
+$375×2.5 = $937 vs $1,250 at 1.0% — need 4 net wins instead of 3 to cover a loss. Net combine
+pass rate effect is uncertain (more DLL-resistant vs slower profit accumulation).
+
+**Method (no code):**
+1. Run equity_export at risk_pct=0.75, r=2.5 (all other params same as deployed: engine=combined,
+   ifvg_entry_mode=close, swing_stop_lookback=30, stop_buffer=3.0, min_absolute_body=5.0,
+   partial_r=1.5, killzones=all), years 2021/2023/2024/2025/2026 (excl 2022 holdout).
+   → `research/equity_b78/deployed_r75pct_{year}.csv`
+2. Run funded_sim: `funded_sim.py research/equity_b78/*.csv --haircut 200`
+3. Compare vs B57 ($566/mo, sust=3.54x) and B42 ($549/mo, sust=3.23x).
+
+**Benchmark also:** run_monthly_combine.py at risk=0.75%, r=2.5 -- report combine passes/61.
+
+**Success criteria vs B57 ($566/mo, sust=3.54x):** BOTH $/mo AND sust must improve.
+**Stop rule vs B42 ($549/mo, sust=3.23x):** if BOTH metrics worse → reject (risk=0.75% is
+strictly dominated by deployed; lower risk further than deployed = strictly worse).
+**2022 holdout:** required only if B78 beats B57 on both metrics.
+
+**Prior:** ~25%. Lesson 83 predicts that anything reducing signal intensity reduces funded
+pipeline throughput. However, DLL buffer improvement may increase completed attempts, partially
+offsetting. The B28 lesson (1.25% → worse than 1.0%) suggests the risk-pass relationship is
+monotonically improving with more risk up to some point — 0.75% may already be below that
+optimum. Tag: Sonnet (no code).
+
+Source: wk6-r1 probe 7 timed out (180s limit). The data is available in B77; only
+equity_export + funded_sim run needed.
+
+---
+
+## B79 — iFVG setup freshness in deployed config (B69 extension)  [pending]
+
+**Context:** B69 tested freshness (FVG age at inversion = bars from fvg.created_at to entry_ts)
+in the RESEARCH BASELINE (ifvg_edge, all-sides, partial_r=0) and found fresh/stale PF ratio
+= 1.285 — missed the 1.30 GO threshold by 0.015. The DEPLOYED close-mode config has different
+entry timing (inversion bar CLOSE vs proximal edge) and different stop geometry (swing lookback=30
+vs no-lookback). This changes the FVG age distribution: close-mode enters after the inversion bar
+closes, which is inherently one bar later than edge-mode, making all close-mode entries "older"
+by one bar. The deployed ratio may differ enough from 1.285 to either clear or miss the 1.30
+threshold conclusively.
+
+**Phase 1 (small code change + data analysis):**
+1. Add `displacement_ts` to `equity_export.py --trade-csv` output. B69 already adds
+   `displacement_ts` to `Signal` dataclass (from `fvg.created_at`); it is in `result.trades`
+   dicts under key `displacement_ts`. Expose it in the CSV layer alongside existing columns.
+   - Defining-behavior test: `--trade-csv` output includes `displacement_ts` column; value
+     is non-null for iFVG trades and null/empty for ORB trades.
+2. Run equity_export with `--trade-csv` to re-generate deployed-config per-trade dataset
+   (supercedes mfe_mae_deployed_combined_clean.csv with new column added).
+3. Compute gap_bars = (entry_ts - displacement_ts) / 5min per iFVG trade.
+4. Bucket: fresh (1-3 bars), mid (4-9 bars), stale (10+ bars). Compute per-bucket PF.
+
+**GO criterion:** fresh/stale PF ratio >= 1.30 in overall deployed config AND in 3+/5 years.
+**Phase 2 (only if GO):** add `ifvg_max_freshness_bars: int = 0` (0 = unlimited) to StrategyParams;
+gate in SweepDisplacementComposer. Run combine + funded pipeline vs B57.
+**Success criteria (Phase 2) vs B57:** $/mo >= $566 AND sust >= 3.54x.
+**Stop rule:** fails GO in Phase 1 → reject immediately.
+
+**Fixed defaults:** no behavior changes (freshness gate default-off until explicitly enabled).
+
+**Defining-behavior tests (Phase 1 infra only):**
+1. `--trade-csv out.csv`: displacement_ts column present.
+2. iFVG trade has non-null displacement_ts; ORB trade has empty displacement_ts.
+
+**Prior:** ~20%. B69 missed by 0.015 (1.285 vs 1.30). Close-mode's one-extra-bar delay may
+shift the distribution slightly. The mid-bucket (4-9 bars) outperforming fresh in research
+baseline suggests the non-monotonic pattern may persist, making a clean 1.30 ratio unlikely.
+Tag: Sonnet.
+
+Source: wk6-r1 probe analysis; B69 freshness finding; B77 deployed dataset.
+
+---
+
+## B80 — Live trade MFE/MAE tracking (Rule 13 observability)  [pending — model:opus]
+
+**Context:** The backtest runner computes r_mfe/r_mae per trade (B2, B77). Lawrence can see
+these metrics post-session via the deployed-config dataset. But during a LIVE trade, the dashboard
+shows no indication of how far a position has gone favorable or adverse. Rule 13 requires: every
+strategy state visible in the backtest should be observable in the live dashboard. Adding
+live MFE/MAE completes the observability loop.
+
+**Mechanism:**
+1. In `app/broker/topstepx.py`: during an open position (after fill event, before exit), on
+   each bar update, track:
+   - `_peak_favorable_pts`: max((current_bar.close - fill_price) × direction) over all bars since fill
+   - `_peak_adverse_pts`: max((fill_price - current_bar.close) × direction) over all bars since fill
+   - r_mfe = _peak_favorable_pts / initial_risk_pts (where initial_risk_pts = fill_price - stop_price)
+   - r_mae = _peak_adverse_pts / initial_risk_pts
+2. Add to the broker's live state dict (`_state()` or similar) for SSE emission.
+3. In `app/api/server.py`: include `pos_mfe_r`, `pos_mae_r`, `pos_mfe_pts`, `pos_mae_pts` in
+   the SSE `position` event (already emits on each bar with position state). Set to 0.0 when flat.
+4. In `frontend/src/components/`: extend the position panel (or wherever fill/position is shown)
+   to display `MFE: {pos_mfe_r.toFixed(2)}R` and `MAE: {pos_mae_r.toFixed(2)}R` in a small
+   status row.
+
+**Defining-behavior tests (tests/test_live_mfe_mae.py):**
+1. After fill (long, entry=10000, stop=9990, risk_pts=10): when bar.close=10010, mfe_r=1.0, mae_r=0.0.
+2. After bar.close=9995: mae_r=0.5, mfe_r still 1.0 (peak favorable preserved).
+3. When flat (no position): mfe_r=0.0, mae_r=0.0.
+4. SSE position event includes pos_mfe_r and pos_mae_r fields.
+
+**Rule 13 compliance:** Log at DEBUG when MFE/MAE crosses 1.0R and 2.0R milestones (one-shot
+per trade). Expose via SSE position event. Render in dashboard position panel. Done when Lawrence
+can see live MFE/MAE update on the dashboard during a paper run.
+
+**Fixed defaults:** always computed when a position is open (not a flag). Off (0.0) when flat.
+
+**Success criteria:** MFE/MAE update in real-time during a paper trade; values match post-trade
+excursion analysis within 1 tick tolerance.
+
+**Prior:** N/A (infra/observability). No stop rule. Source: Rule 13; B77 dataset availability;
+wk6-r1 probe confirming excursion-data value for understanding trade quality.
+Tag: model:opus (code build requiring careful broker-state threading and SSE wiring).

@@ -2973,3 +2973,61 @@ Target hit rate 18.7% vs 21.6% for research-baseline LO ifvg_edge longs (wk5-r3)
 **Lesson 141 added.** Databento: $3.87/$20.00 (no spend this session).
 
 **Next:** Backlog fully exhausted (B77 was the last item). Next session = research/ideation (every-3rd-session rule; this is a 4th item in wk5 so ideation is overdue). Key open threads: (1) deploy B57 fix (remove MNQ r_multiple=3.5 override, set base r=2.5) -- the standing Monday recommendation with the strongest two-phase pipeline support; (2) future Phase 1 analyses can now use mfe_mae_deployed_combined_clean.csv as the deployed-config reference instead of the research-baseline mfe_mae_ifvg_clean.csv.
+
+---
+
+## 2026-06-14T17:22Z -- session wk6-r1 -- RESEARCH (backlog replenishment)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Session note:** Backlog fully exhausted (B77 last item). Protocol mandates research/ideation. Ran 7 inline Phase 1 data-mining probes on mfe_mae_deployed_combined_clean.csv (B77 dataset, n=3238), mfe_mae_orb_clean.csv, and bars_MNQ_dbv_2021_2026.csv. No new Databento spend.
+
+**Probes and findings:**
+
+1. **9ET pre-RTH iFVG excursion anatomy** (inline, n=211 9ET vs n=2165 other):
+   - 9ET WR=19.4%, PF=0.487, r_mfe_mean=0.787, r_mae_mean=1.111, target%=10.9%
+   - Other WR=35.5%, PF=1.042, r_mfe_mean=1.202, r_mae_mean=0.925, target%=22.4%
+   - 9ET has BOTH lower MFE AND higher MAE -- structural failure (enters pre-RTH, stops on RTH-open dynamics). Immediate stops (r_mfe<0.1): 18.5% vs 11.5% other. Not fixable via a secondary filter; the mechanism fails at entry geometry level.
+
+2. **Conditional MFE probability ladder** (inline):
+   - iFVG: 43.4% reach 1.0R; 49.2% of those reach 2.5R. 31.9% reach 1.5R; 66.8% of those reach 2.5R. 25.0% reach 2.0R; 85.4% of those reach 2.5R. Strong momentum above 1.5R.
+   - ORB: 39.6% reach 1.0R; only 28.4% of those reach 2.5R. 24.6% reach 1.5R; 45.8% of those reach 2.5R. Weaker momentum (Lesson 88: ORB value is EOD flatten, not target hit).
+   - **Post-target distribution:** iFVG target-hit trades (n=507) median r_mfe=2.70R, p75=2.95R, p90=3.42R. 23.1% run to 3.0R, 8.9% to 3.5R, 1.6% to 5.0R. ORB target-hit trades (n=97): median=2.59R, p75=2.72R, ZERO reach 4.0R+. **No significant post-target tail exists in deployed config -- confirms fixed-exit policy (B61) from excursion data directly.**
+
+3. **ORB early vs late timing** (inline, 09:30-09:59 vs 10:00-10:29):
+   - Early: PF=1.572 (n=517), Late: PF=1.352 (n=307). Ratio=1.162, non-monotonic 3/5 years -- Phase 1 NO-GO (threshold 1.25x, year-consistency 2021/2024 reversed).
+
+4. **iFVG side breakdown** (inline):
+   - Long n=1172: PF=1.067. Short n=1204: PF=0.889 (loss-making). Confirms B15/B71.
+
+5. **Killzone breakdown** (inline):
+   - London 03-07ET: n=661, PF=1.020, r_mfe_mean=1.304, r_mae_mean=0.993
+   - NY-AM 08-11ET: n=635, PF=0.781 (WORST), r_mfe_mean=0.997, r_mae_mean=0.978 (all driven by 09ET drag)
+   - NY-PM 12-16ET: n=282, PF=0.981, WR=40.8% (high WR but target%=8.9% -- wins are small)
+   - Overnight 18-22ET: n=344, PF=1.029, r_mfe_mean=1.222 (BEST), r_mae_mean=0.870 (LOWEST adverse) but ~5.7 signals/month -- too sparse for standalone engine (Lesson 109).
+
+6. **03ET year-by-year deterioration** (inline):
+   - 2021 PF=1.495 → 2023 PF=1.191 → 2024 PF=0.952 → 2025 PF=0.844 → 2026 PF=0.668 (deteriorating trend). 3/5 years negative BUT overall PF=0.942 (fails <0.90 B74 GO criterion). Not actionable.
+
+7. **iFVG/ORB cross-engine daily P&L correlation** (inline, 766 cross-engine days):
+   - Pearson r=-0.028 (essentially zero). Both positive: 18.7%, Both negative: 31.7%. Independent distributions confirmed -- 31.7% both-negative matches the 0.588×0.541=31.8% independence prediction exactly. **iFVG and ORB daily P&L are statistically independent in deployed combined config.**
+
+**Numbers:**
+
+| Probe | Key metric | Result |
+|-------|-----------|--------|
+| 9ET excursion | r_mfe_mean 9ET vs others | 0.787 vs 1.202 (35% lower) |
+| 9ET excursion | r_mae_mean 9ET vs others | 1.111 vs 0.925 (20% higher) |
+| MFE ladder iFVG | P(2.5R \| 1.5R) | 66.8% |
+| MFE ladder ORB | P(2.5R \| 1.5R) | 45.8% |
+| Post-target iFVG | median r_mfe among winners | 2.70R (barely above 2.5R target) |
+| Post-target ORB | reaches 4.0R? | 0/97 (no post-target tail at all) |
+| ORB timing | early/late PF ratio | 1.162x (NO-GO) |
+| Cross-engine corr | Pearson daily P&L | -0.028 (independent) |
+
+- **Verdict:** research -- 3 new backlog items appended (B78, B79, B80). 7 inline Phase 1 probes run; all failed GO criteria (confirming explored frontier). 3 durable lessons added.
+
+- **Learned:** (1) The 9ET iFVG failure is deeper than PF alone reveals -- these trades have both lower favorable excursion AND higher adverse excursion than all other hours, confirming they fail at the entry geometry level (pre-RTH thin market). No secondary filter can rescue them. (2) iFVG and ORB daily P&L are statistically independent (Pearson r=-0.028), confirming the combined engine is a diversified but not hedged system. (3) iFVG target-hit trades have essentially no post-2.5R tail (median 2.70R, p75 2.95R), providing excursion-data confirmation of the fixed-exit policy from a different angle than B61's empirical test.
+
+- **Lessons 142-144 added.** No code changes. Test suite: 728 passed, 2 skipped, 0 failures (no new code). Databento: $3.87/$20 (no spend).
+
+- **Next:** B78 (Phase A risk=0.75% pipeline sensitivity -- no code, fast benchmark), then B79 (iFVG freshness in deployed config -- small code + analysis), then B80 (live MFE/MAE tracking -- Rule 13 build).
