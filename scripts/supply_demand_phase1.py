@@ -112,9 +112,10 @@ def simulate(b, zones, tp_r):
     return out
 
 
-def run(bars_path="bars/bars_MNQ_dbv_2021_2026.csv"):
+def run(bars_path="bars/bars_MNQ_dbv_2021_2026.csv", keep_2022=False, dump=None):
     b = load_tf(bars_path)
-    b = b[b.index.year != 2022]
+    if not keep_2022:
+        b = b[b.index.year != 2022]
     zones = detect_zones(b)
     nd = sum(1 for z in zones if z[1] == "demand"); ns = len(zones) - nd
     print(f"zones detected: {len(zones)} ({nd} demand / {ns} supply) over {b.index[0].date()}..{b.index[-1].date()}\n")
@@ -122,6 +123,9 @@ def run(bars_path="bars/bars_MNQ_dbv_2021_2026.csv"):
     yrs_span = b.index.year.nunique()
     for tp_r in (2.0, 3.0):
         res = simulate(b, zones, tp_r)
+        if dump and tp_r == 3.0:
+            pd.DataFrame(res, columns=["year", "side", "r"]).to_csv(dump, index=False)
+            print(f"  (per-trade dump @3R -> {dump})")
         for side in ("demand", "supply", "ALL"):
             rs = [r for r in res if side == "ALL" or r[1] == side]
             if not rs:
@@ -140,7 +144,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--bars", default="bars/bars_MNQ_dbv_2021_2026.csv")
     ap.add_argument("--tick", type=float, default=0.25)  # MNQ .25, MGC .10, MCL .01
+    ap.add_argument("--keep2022", action="store_true")
+    ap.add_argument("--dump", default=None)
     a = ap.parse_args()
     TICK = a.tick
-    print(f"instrument bars: {a.bars}  | tick={TICK}")
-    run(a.bars)
+    print(f"instrument bars: {a.bars}  | tick={TICK}  | keep2022={a.keep2022}")
+    run(a.bars, keep_2022=a.keep2022, dump=a.dump)

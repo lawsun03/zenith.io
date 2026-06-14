@@ -63,13 +63,32 @@ RANDOM gold longs (same 1×ATR stop, 3R, 3-day hold, n=300): random = 28% win / 
 +0.11R. Demand zones = 37% / 1.62 / +0.42R. The zone adds ~+0.31R ABOVE the random-long
 trend tailwind — i.e., the edge is the zone *timing*, not just "long gold went up."
 
-### Revised verdict
-- **On gold, supply/demand (demand/long) IS a genuine edge** — the instrument was the issue.
-- Oil: no. NQ: marginal. Short side: weak everywhere (consistent with the long-bias finding).
-- Caveats before sizing: only 2.5y, all gold-bull years (no bear/chop regime tested — need
-  pre-2024 gold to confirm robustness); limit-fill at proximal is mildly optimistic.
-- Next steps: (1) more gold history (Databento MGC pre-2024, budget-gated) incl. a bear/chop
-  stretch; (2) momentum/freshness refinement on gold (NQ inverted Law 1 — re-check on gold);
-  (3) combine/funded framing on MGC; (4) the bot doesn't trade gold today — this would be a
-  new instrument deployment, not a tweak to the live MNQ config.
+### Revised verdict (2024-26 only) — SUPERSEDED, see PRE-2024 below
+- On gold 2024-26, supply/demand (demand/long) LOOKED like a genuine edge (PF 1.62, 3/3 yrs,
+  beats the random-long control by +0.31R). But the sample was all gold-bull years.
+
+## PRE-2024 REGIME TEST (2026-06-14) — the edge does NOT survive. FINAL: REJECT
+Fetched GC.v.0 2021-2024 from Databento ($3.81; ledger total $7.68/$20) and re-ran the
+identical method on the full **2021-2026** gold (incl. 2022, the choppy year — the exact
+regime to stress it). Per-trade dump: `research/sd_gold_trades.csv`.
+
+Gold DEMAND (long), 3R, PF by year (via `scripts/edge_diagnostics.py`):
+| 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|
+| 0.85 | **0.34** | 1.17 | 1.65 | 1.42 | 2.61 |
+
+Full 6y: demand PF **1.09**, +0.07R, 4/6 yrs — diagnostic verdict: **"no robust sub-edge —
+genuine reject."** The 2024-26 PF 1.62 was REGIME LUCK: demand-zone longs ride an uptrend
+and get shredded in chop/down (2022 PF 0.34, 11% win). It is "long-bias works when gold
+trends up," not a durable structural zone edge.
+
+### FINAL verdict on supply/demand
+- **Rejected on all three instruments.** NQ marginal, oil negative, gold regime-dependent
+  (trend-only, fails in chop). No durable standalone edge; short side weak everywhere.
+- **Process win:** the pre-2024 fetch + the year-consistency diagnostic caught a result that
+  would have looked like a strong edge on the recent-only sample. This is the
+  `edge_diagnostics` guardrail and the "always test another regime" rule working as intended.
+- Not pursuing further. (If ever revisited: it would need an explicit trend/regime filter,
+  i.e. only take demand longs when the higher-timeframe trend is up — but that is just
+  trend-following with extra steps, and we already have ORB/iFVG for trend.)
 
