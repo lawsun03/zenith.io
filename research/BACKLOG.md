@@ -1834,7 +1834,7 @@ baseline, partial_r=1.5); B25 (partial_r=1.5 effect on ORB-reentry Phase B). Thi
 "deployed-config integration test" that closes the gap between research-baseline benchmarks
 and the actual live configuration.
 
-## B47 — iFVG×ORB directional confluence gate  [pending]
+## B47 — iFVG×ORB directional confluence gate  [done — rejected (stop rule: sust 0.50x vs baseline 0.79x; pass rate 3/17 vs 4/17; both worse; Lessons 94+95)]
 
 Phase 1 data mining COMPLETE (wk2-r5) — GO status confirmed. Proceed directly to Phase 2 engine.
 

@@ -1688,3 +1688,25 @@ Entry format:
 - **Verdict:** rejected — orb_signal_window_mins=60 does not improve the deployed pipeline. Do NOT enable w=60 on the live bot funded phase.
 - **Learned:** The B43 bust-reduction from w=60 (25->22 at partial_r=0) does not transfer to partial_r=1.5: busts are identical (13 vs 13) because partial exits convert potential stop-outs into breakeven outcomes, defanging the late-session loss risk that w=60 was designed to remove. Key confirmation: B46 w=0 (partial_r=1.5) = B21 ref (partial_r=0) exactly — the deployed partial_r=1.5 setting has zero impact on the ORB-reentry funded pipeline at r=0.75, confirming B25's 1.8% finding. The B42 pipeline result ($549/mo, 3.23x) is robust to partial_r choice.
 - **Next:** B47 (iFVG x ORB directional confluence gate — Phase 1 complete, GO status; highest-value strategy candidate remaining; requires DailySessionContext shared across iFVG+ORB runners).
+
+## 2026-06-15T04:20Z -- session wk2-r6-b47 -- B47 (iFVGxORB directional confluence gate)
+
+- **Bot health:** /api/status not reachable (weekend, market closed). Previous entry confirmed equity $152,227.12 at HWM, flat. Normal closure.
+- **Ran:** Full B47 implementation (TDD first: 9 defining-behavior tests for DailySessionContext; then code in combined.py, composer.py, orb.py, bot_config.py, backtest/runner.py, main.py). Generated 10 per-year equity CSVs (5y excl 2022, 2 variants: baseline vs gate) via scripts/run_b47_pipeline.py. Also ran monthly combine pass rate on test 2025-2026 and train 2024. Full test suite: 673 passed, 2 skipped.
+- **Numbers (deployed params: stop_buffer=3.0, min_abs_body=5.0, r=3.5, orb_r=2.5, risk=1.0%):**
+
+  | Variant              | Funded sust | Combine test | Combine train | 5y net  | Trades |
+  |----------------------|-------------|--------------|---------------|---------|--------|
+  | Combined baseline    | 0.79x       | 4/17 (23.5%) | 3/12 (25.0%) | $95,318 | 4,902  |
+  | Combined + gate G1+G2| 0.50x       | 3/17 (17.6%) | 2/12 (16.7%) | $70,969 | 4,210  |
+  | B42 Phase A+B ref    | 3.23x       | --           | --            | --      | --     |
+
+  Primary criterion (gate sust > baseline sust): 0.50x vs 0.79x -- FAIL
+  Secondary criterion (gate passes >= baseline passes [test]): 3/17 vs 4/17 -- FAIL
+  Stop rule (both worse): TRIGGERED
+
+- **Verdict:** rejected -- stop rule triggered on all dimensions (sust, pass rate test, pass rate train).
+- **Learned:** The confluence gate removes 692 trades (-14%) but degrades performance everywhere: 5y net falls $24k, funded sust drops from 0.79x to 0.50x, combine pass rate drops from 4/17 to 3/17 on the test set. The Lesson-91 finding that ORB opp-direction PF=0.957 was valid in isolation, but the gate is over-filtering: the "all prior same-day iFVG are opposite" condition is too conservative and blocks profitable ORB signals that happen to have a contrary iFVG on the same day for unrelated reasons. Secondary finding: the combined engine itself (sust=0.79x) underperforms the separate Phase A+B pipeline (3.23x) because running both on one account amplifies daily P&L variance and bust risk.
+- **Next:** B48 (rank hybrid -- first-iFVG-of-day selection) or B49 (ORB breakout extension Phase 1). B48 is next in priority.
+
+Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) confirms that mixing iFVG and ORB on a single account is WORSE than the separate Phase A (iFVG combine) + Phase B (ORB funded) pipeline. The two-account architecture is load-bearing for pipeline sustainability.

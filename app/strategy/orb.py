@@ -66,6 +66,8 @@ class ORBDetector:
         self._pdr_day_high: Decimal | None = None
         self._pdr_day_low: Decimal | None = None
         self._pdr_day_close: Decimal | None = None
+        # B47: injected by CombinedRunner when confluence_gate=True.
+        self.session_ctx = None
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         et = bar.ts.astimezone(ET)
@@ -140,6 +142,13 @@ class ORBDetector:
         else:
             return None
 
+        # B47: Gate 1 — suppress ORB when all prior same-day iFVG signals oppose ORB.
+        if self.session_ctx is not None and self.session_ctx.gate1_orb_suppressed(
+            et.date(), side
+        ):
+            log.info("ORB suppressed: B47 Gate 1 — all prior iFVG signals oppose %s ORB", side)
+            return None
+
         entry = bar.close
         r = abs(entry - stop)
         if r == 0:
@@ -150,6 +159,8 @@ class ORBDetector:
         log.info("ORB breakout: %s %s close=%s OR=[%s-%s] stop=%s target=%s pdr_enabled=%s",
                  self.config.instrument, side, entry,
                  self._or_low, self._or_high, stop, target, self.config.pdr_enabled)
+        if self.session_ctx is not None:
+            self.session_ctx.record_orb_direction(et.date(), side)
         return Signal(
             instrument=self.config.instrument,
             side=side,

@@ -2122,5 +2122,34 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T04:20:00Z",
+    "session": "wk2-r6-b47",
+    "item": "B47",
+    "variant": "iFVG x ORB directional confluence gate (G1+G2) on combined engine, deployed params",
+    "objective": "funded",
+    "metrics": {
+      "baseline_funded_sust": 0.79,
+      "gate_funded_sust": 0.50,
+      "baseline_combine_passes_test": "4/17",
+      "gate_combine_passes_test": "3/17",
+      "baseline_combine_passes_train": "3/12",
+      "gate_combine_passes_train": "2/12",
+      "baseline_5y_net": 95318,
+      "gate_5y_net": 70969,
+      "trade_reduction_pct": -14,
+      "baseline_trades_5y": 4902,
+      "gate_trades_5y": 4210,
+      "haircut": 200,
+      "risk_pct": 1.0
+    },
+    "verdict": "rejected",
+    "learned": "The iFVGxORB directional confluence gate (remove ORB when all prior same-day iFVG oppose it; remove post-ORB iFVG opposing ORB direction) hurts the combined engine: funded sust drops 0.79x to 0.50x (-37%) and combine pass rate drops 23.5% to 17.6% on the 2025-2026 test set. Despite removing 692 trades (-14%), 5y net P&L falls $24k ($95k to $71k). The Lesson-91 finding (ORB opp-direction PF=0.957) was valid in isolation but the gate over-filters: it also removes profitable ORB trades where the iFVG signal happened to oppose direction without predicting ORB failure. Secondary finding: the combined engine baseline itself has sust=0.79x vs the separate Phase A+B pipeline at 3.23x — running both engines on one account does NOT match the two-account pipeline performance.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

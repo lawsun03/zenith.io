@@ -201,6 +201,13 @@ class StrategyParams(BaseModel):
     # blocks 11:00:00-13:59:59 ET. Data: 11-13 ET costs -$12,268 over 5y (PF<1 in 4/5 years).
     ifvg_block_hours: list[int] = Field(default_factory=list)
 
+    # B47: iFVG×ORB directional confluence gate. When True (engine=combined only),
+    # Gate 1 suppresses ORB signals when all prior same-day iFVG signals oppose the
+    # ORB direction (ORB opp-only PF=0.957, loss-making); Gate 2 suppresses post-ORB
+    # iFVG signals that oppose the ORB direction (orb_opp PF=0.757, loss-making in 4/5 years).
+    # Data: ORB same-dir PF=1.689 vs opp-dir PF=0.957; iFVG same-dir PF=1.375 vs opp-dir PF=0.757.
+    ifvg_orb_confluence_gate: bool = False
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -238,6 +238,8 @@ class SweepDisplacementComposer:
         self._bias_prior_high: Decimal | None = None
         self._bias_prior_low: Decimal | None = None
         self._bias_prior_close: Decimal | None = None
+        # B47: injected by CombinedRunner when confluence_gate=True.
+        self.session_ctx = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -445,10 +447,25 @@ class SweepDisplacementComposer:
                     self._awaiting = []
                     return None
 
+            # B47: Gate 2 — suppress post-ORB iFVG that opposes ORB direction.
+            sig_side = "long" if event.side == "bullish" else "short"
+            if self.session_ctx is not None and self.session_ctx.gate2_ifvg_suppressed(
+                bar.ts.astimezone(_ET).date(), sig_side
+            ):
+                log.info(
+                    "Signal blocked: B47 Gate 2 — iFVG %s opposes ORB direction", sig_side
+                )
+                self._awaiting = []
+                return None
+
             signal = self._build_signal(bar, awaiting, event)
             self._awaiting = []
             if signal is not None and self.config.daily_signal_cap > 0:
                 self._daily_signal_count += 1
+            if signal is not None and self.session_ctx is not None:
+                self.session_ctx.record_ifvg_signal(
+                    bar.ts.astimezone(_ET).date(), sig_side
+                )
             return signal
 
         return None

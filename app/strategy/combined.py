@@ -8,10 +8,16 @@ attributes delegate to the primary, so ExecutionEngine, server.py and
 main.py need no changes — the engine sees a single runner per
 instrument. Signals are source-agnostic downstream: an ORB signal
 opposite an open iFVG position triggers the normal reversal flow.
+
+B47: DailySessionContext is a shared state object injected into both
+sub-runners when ifvg_orb_confluence_gate=True. It tracks today's iFVG
+signal sides and the ORB direction, enabling cross-engine directional
+gating without coupling the runner implementations to each other.
 """
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Optional
 
 from app.broker.events import Bar
@@ -20,10 +26,66 @@ from app.strategy.composer import Signal
 log = logging.getLogger(__name__)
 
 
+class DailySessionContext:
+    """
+    B47: shared cross-engine state for the iFVG×ORB confluence gate.
+
+    Records iFVG signal sides and the ORB direction for the current ET day.
+    Resets automatically when the ET date changes. Thread-safety not required
+    (single-threaded bar loop).
+
+    Gate 1 — ORBDetector: suppress when all prior same-day iFVG are OPPOSITE.
+    Gate 2 — SweepDisplacementComposer: suppress post-ORB iFVG that OPPOSES ORB.
+    """
+
+    def __init__(self) -> None:
+        self._et_date: date | None = None
+        self._ifvg_sides: list[str] = []
+        self._orb_direction: str | None = None
+
+    def _reset_if_new_day(self, et_date: date) -> None:
+        if et_date != self._et_date:
+            self._et_date = et_date
+            self._ifvg_sides = []
+            self._orb_direction = None
+
+    def record_ifvg_signal(self, et_date: date, side: str) -> None:
+        """Called by iFVG composer after a signal is emitted."""
+        self._reset_if_new_day(et_date)
+        self._ifvg_sides.append(side)
+
+    def record_orb_direction(self, et_date: date, side: str) -> None:
+        """Called by ORB detector after a signal is emitted."""
+        self._reset_if_new_day(et_date)
+        self._orb_direction = side
+
+    def gate1_orb_suppressed(self, et_date: date, orb_side: str) -> bool:
+        """Return True if ORB should be suppressed (all prior iFVG today oppose ORB)."""
+        self._reset_if_new_day(et_date)
+        if not self._ifvg_sides:
+            return False  # no prior iFVG today → allow
+        opp = "short" if orb_side == "long" else "long"
+        return all(s == opp for s in self._ifvg_sides)
+
+    def gate2_ifvg_suppressed(self, et_date: date, ifvg_side: str) -> bool:
+        """Return True if post-ORB iFVG should be suppressed (opposes ORB direction)."""
+        self._reset_if_new_day(et_date)
+        if self._orb_direction is None:
+            return False  # no ORB fired today → allow
+        return ifvg_side != self._orb_direction
+
+
 class CombinedRunner:
-    def __init__(self, primary, secondary) -> None:
+    def __init__(self, primary, secondary, confluence_gate: bool = False) -> None:
         self.primary = primary
         self.secondary = secondary
+        # B47: inject shared cross-engine session context when confluence gate is enabled.
+        if confluence_gate:
+            ctx = DailySessionContext()
+            if hasattr(primary, "composer"):
+                primary.composer.session_ctx = ctx
+            if hasattr(secondary, "detector"):
+                secondary.detector.session_ctx = ctx
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         sig_p = self.primary.on_bar(bar)
