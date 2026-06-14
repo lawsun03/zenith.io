@@ -305,6 +305,7 @@ class Journal:
         news_blackout: bool = False,
         phase: "dict | None" = None,
         orb_state: "dict | None" = None,
+        pos_excursion: "dict | None" = None,
     ) -> None:
         """Emit strategy_state WebSocket event each bar for the live dashboard."""
         payload: dict = {"instrument": instrument}
@@ -340,6 +341,11 @@ class Journal:
         payload["phase"] = phase  # None when practice; dict with tracker state otherwise
         if orb_state is not None:
             payload["orb_state"] = orb_state
+        if pos_excursion is not None:
+            payload["pos_mfe_r"]   = pos_excursion.get("mfe_r", 0.0)
+            payload["pos_mae_r"]   = pos_excursion.get("mae_r", 0.0)
+            payload["pos_mfe_pts"] = pos_excursion.get("mfe_pts", 0.0)
+            payload["pos_mae_pts"] = pos_excursion.get("mae_pts", 0.0)
 
         entry = JournalEntry(
             ts=datetime.now(timezone.utc),

@@ -142,6 +142,10 @@ class TopstepXBroker:
         # Break-even watches for 1-lot entries, keyed by instrument. The quote
         # handler moves the stop to BE once price crosses trigger_price.
         self._be_watches: dict[str, dict] = {}
+        # Live MFE/MAE tracker: instrument → {entry_price, entry_side,
+        # initial_risk_pts, mfe_pts, mae_pts, _mfe_1r, _mfe_2r, _mae_1r, _mae_2r}.
+        # Updated on each bar close; cleared on exit fill or cancel_all.
+        self._mfe_tracker: dict[str, dict] = {}
         # Market orders fill in microseconds — the ORDER_FILLED event can arrive via
         # WebSocket before the HTTP response returns and we store the order_id in
         # _pending_brackets. Buffer those early fills here and replay them once the
@@ -446,6 +450,7 @@ class TopstepXBroker:
                 "target": str(ctx.get("target_price", "")),
                 "partial": None,
                 "entry_time": ctx.get("entry_time"),
+                **self.live_excursion(ctx["instrument"]),
             })
         seen_groups: set[int] = set()
         for group in self._exit_groups.values():
@@ -464,8 +469,55 @@ class TopstepXBroker:
                 "target": str(group.get("target_price", "")),
                 "partial": str(pp) if pp else None,
                 "entry_time": group.get("entry_time"),
+                **self.live_excursion(group["instrument"]),
             })
         return result
+
+    def live_excursion(self, instrument: str) -> dict:
+        """Current trade's MFE/MAE in R-units and points. Returns zeros when flat."""
+        t = self._mfe_tracker.get(instrument)
+        if t is None or t["initial_risk_pts"] == Decimal("0"):
+            return {"mfe_r": 0.0, "mae_r": 0.0, "mfe_pts": 0.0, "mae_pts": 0.0}
+        r = t["initial_risk_pts"]
+        return {
+            "mfe_r":  float(t["mfe_pts"] / r),
+            "mae_r":  float(t["mae_pts"] / r),
+            "mfe_pts": float(t["mfe_pts"]),
+            "mae_pts": float(t["mae_pts"]),
+        }
+
+    def _update_mfe_mae(self, bar: "Bar") -> None:
+        """Update peak favorable/adverse excursion from bar close for any open position."""
+        t = self._mfe_tracker.get(bar.instrument)
+        if t is None:
+            return
+        price = bar.close
+        entry = t["entry_price"]
+        if t["entry_side"] == "long":
+            favorable = price - entry
+            adverse   = entry - price
+        else:
+            favorable = entry - price
+            adverse   = price - entry
+        r = t["initial_risk_pts"]
+        if favorable > t["mfe_pts"]:
+            t["mfe_pts"] = favorable
+            mfe_r = float(favorable / r) if r else 0.0
+            if mfe_r >= 2.0 and not t.get("_mfe_2r"):
+                log.debug("MFE/MAE %s: crossed 2R MFE (%.2f pts)", bar.instrument, float(favorable))
+                t["_mfe_2r"] = True
+            elif mfe_r >= 1.0 and not t.get("_mfe_1r"):
+                log.debug("MFE/MAE %s: crossed 1R MFE (%.2f pts)", bar.instrument, float(favorable))
+                t["_mfe_1r"] = True
+        if adverse > t["mae_pts"]:
+            t["mae_pts"] = adverse
+            mae_r = float(adverse / r) if r else 0.0
+            if mae_r >= 2.0 and not t.get("_mae_2r"):
+                log.debug("MFE/MAE %s: crossed 2R MAE (%.2f pts)", bar.instrument, float(adverse))
+                t["_mae_2r"] = True
+            elif mae_r >= 1.0 and not t.get("_mae_1r"):
+                log.debug("MFE/MAE %s: crossed 1R MAE (%.2f pts)", bar.instrument, float(adverse))
+                t["_mae_1r"] = True
 
     async def place_bracket(
         self,
@@ -861,6 +913,19 @@ class TopstepXBroker:
             log.info("OCO pair registered: stop=%s target=%s entry=%s side=%s",
                      stop_id, target_id, fill_price, entry_side)
 
+            _instr = bracket.get("instrument", "")
+            if _instr:
+                _risk = abs(fill_price - stop)
+                self._mfe_tracker[_instr] = {
+                    "entry_price": fill_price,
+                    "entry_side": entry_side,
+                    "initial_risk_pts": _risk if _risk > Decimal("0") else Decimal("1"),
+                    "mfe_pts": Decimal("0"),
+                    "mae_pts": Decimal("0"),
+                }
+                log.debug("MFE/MAE tracker init: %s entry=%s side=%s risk=%.2f",
+                          _instr, fill_price, entry_side, float(_risk))
+
             # Stop or target may have filled before this registration completed
             # (SDK fires ORDER_FILLED while we were awaiting asyncio.gather above).
             # Those fills were buffered in _early_fills as apparent ENTRY fills.
@@ -984,6 +1049,18 @@ class TopstepXBroker:
             "Partial group registered: stop=%s partial=%s target=%s entry=%s side=%s",
             stop_id, partial_id, target_id, fill_price, entry_side,
         )
+
+        if instrument:
+            _risk = abs(fill_price - stop)
+            self._mfe_tracker[instrument] = {
+                "entry_price": fill_price,
+                "entry_side": entry_side,
+                "initial_risk_pts": _risk if _risk > Decimal("0") else Decimal("1"),
+                "mfe_pts": Decimal("0"),
+                "mae_pts": Decimal("0"),
+            }
+            log.debug("MFE/MAE tracker init (partial): %s entry=%s side=%s risk=%.2f",
+                      instrument, fill_price, entry_side, float(_risk))
 
         # size==1: no partial leg — arm a BE-watch on the quote stream.
         # Only arm when be_after_tp1 is True (default); skip if caller opted out.
@@ -1123,6 +1200,7 @@ class TopstepXBroker:
             if oid is not None:
                 self._exit_groups.pop(oid, None)
         self._be_watches.pop(group["instrument"], None)
+        self._mfe_tracker.pop(group["instrument"], None)
 
     async def _modify_stop_to_be(self, group: dict) -> None:
         """Move the stop to break-even and resize to remaining. The invariant
@@ -1493,6 +1571,7 @@ class TopstepXBroker:
             self._exit_pairs.pop(oid, None)
             self._pending_brackets.pop(oid, None)
         self._be_watches.pop(instrument, None)
+        self._mfe_tracker.pop(instrument, None)
 
         log.info("cancel_all(%s): cancelled %d orders", instrument, len(order_ids))
         return len(order_ids)
@@ -1590,6 +1669,7 @@ class TopstepXBroker:
                 to_send.sort(key=lambda b: b.ts)
 
                 for bar in to_send:
+                    self._update_mfe_mae(bar)
                     await self._fanout(self._bar_handlers, bar)
                     _last_bar_ts = bar.ts
 
@@ -1743,6 +1823,7 @@ class TopstepXBroker:
                         order_id, paired_id,
                     )
                     asyncio.create_task(self._cancel_order(paired_id))
+                    self._mfe_tracker.pop(pair_info.get("instrument", fill.instrument), None)
 
                     # Compute realized P&L from price delta × contract multiplier.
                     entry_price = pair_info["entry_price"]

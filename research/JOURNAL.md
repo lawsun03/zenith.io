@@ -3123,3 +3123,30 @@ Phase B (B21 ORB-reentry r0.75): 13/14 busts, $3,131/acct, 73.5d/acct.
 - **Learned:** The freshness signal (fresh > stale by 0.159 PF) exists but is too weak relative to the volume-starvation cost to implement as a hard gate. B69 (research baseline) found ratio=1.285; close-mode gives ratio=1.191 — marginally weaker, consistent with the close-mode inversion-bar confirmation absorbing part of the freshness signal (the confirmation step already de-facto selects setups where the FVG is still relevant). The non-monotonic 2025 year (stale BEATS fresh, ratio=0.774) confirms the signal is not regime-stable.
 
 - **Next:** B80 (live MFE/MAE tracking — Rule 13 observability; broker-state threading + SSE wiring; model:opus).
+
+
+---
+
+## wk6-b80 — 2026-06-14
+
+**Item:** B80 — Live trade MFE/MAE tracking (Rule 13 observability)
+**Bot health:** Practice account running at :5175 (confirmed at session start).
+**Session type:** Build
+
+**What ran:** Implemented live MFE/MAE excursion tracking in TopstepXBroker and wired it through the full Rule 13 stack.
+
+**Changes:**
+- `app/broker/topstepx.py`: Added `_mfe_tracker` dict (per-instrument), `live_excursion(instrument)` public method, `_update_mfe_mae(bar)` private method. Tracker initialized in `_place_bracket_after_fill` and `_place_partial_bracket_after_fill`; updated in `_on_new_bar` loop (before fanout); cleared on OCO exit fill, group exit (`_clear_group`), and `cancel_all`. `open_brackets()` now includes `mfe_r`, `mae_r`, `mfe_pts`, `mae_pts` in each returned position dict. One-shot DEBUG logs at 1R and 2R MFE/MAE milestones.
+- `app/api/journal.py`: `publish_strategy_state` accepts `pos_excursion` kwarg; adds `pos_mfe_r`, `pos_mae_r`, `pos_mfe_pts`, `pos_mae_pts` to SSE payload when a position is active.
+- `app/main.py`: `_make_strategy_state_publisher` accepts `broker` param and reads `broker.live_excursion(runner.instrument)` each bar.
+- Frontend: `types.ts` extended Position with optional mfe_r/mae_r/mfe_pts/mae_pts; `StrategyStatePayload` extended with pos_mfe_r/pos_mae_r/pos_mfe_pts/pos_mae_pts. `OpenPositions.tsx` shows "MFE {n}R" and "MAE {n}R" when present. `StrategyDebug.tsx` shows Live Excursion section (MFE+MAE in R-units) from strategy_state SSE.
+- `tests/test_live_mfe_mae.py`: 5 defining-behavior tests (TDD-first, all passed).
+- `tests/test_partial_exit.py`: 2 stubs patched with `_mfe_tracker={}` (they bypass `__init__`).
+
+**Test suite:** 735 passed, 2 skipped, 0 failures.
+
+**Verdict:** SHIPPED. Rule 13 fully satisfied: (1) DEBUG log at 1R/2R MFE and MAE milestones per trade, (2) pos_mfe_r/pos_mae_r in strategy_state SSE event, (3) rendered in StrategyDebug panel and OpenPositions panel.
+
+**Learned:** The live broker tracks MFE/MAE via bar close (not intrabar H/L like the paper broker). This is correct for closed-bar confirmation but means the live excursion is slightly understated relative to intrabar extremes. For dashboard observability purposes (gauging trade quality vs the backtest r_mfe distribution) this is sufficient.
+
+**Next:** Research/ideation session or next pending backlog item (check every-3rd-session rule vs completed build count).

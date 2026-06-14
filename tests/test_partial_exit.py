@@ -145,6 +145,7 @@ def _make_broker_stub(entry_mode: str = "market"):
     broker._pending_brackets = {}
     broker._known_order_ids = set()
     broker._early_fills = {}
+    broker._mfe_tracker = {}
     broker.partial_profit_r = Decimal("0")
     broker.max_entry_slippage_frac = Decimal("0")
     broker.entry_mode = entry_mode
@@ -463,6 +464,7 @@ def _make_partial_broker_stub():
     broker._exit_groups = {}
     broker._be_watches = {}
     broker._early_fills = {}
+    broker._mfe_tracker = {}
     broker._extra_suites = {}
     broker._fill_handlers = []
     broker.partial_profit_r = Decimal("1.5")

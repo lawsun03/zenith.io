@@ -177,6 +177,10 @@ export interface Position {
   target: string
   partial: string | null
   entry_time: number | null
+  mfe_r?: number
+  mae_r?: number
+  mfe_pts?: number
+  mae_pts?: number
 }
 
 export interface BarEvent {
@@ -238,4 +242,8 @@ export interface StrategyStatePayload {
     or_established: boolean
     fired: number
   } | null
+  pos_mfe_r?: number
+  pos_mae_r?: number
+  pos_mfe_pts?: number
+  pos_mae_pts?: number
 }

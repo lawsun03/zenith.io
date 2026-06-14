@@ -3596,18 +3596,43 @@
     "metrics": {
       "total_ifvg_trades": 2372,
       "fresh_n": 1275,
-      "fresh_pf": 0.990,
+      "fresh_pf": 0.99,
       "mid_n": 707,
       "mid_pf": 0.957,
       "stale_n": 390,
       "stale_pf": 0.831,
       "fresh_stale_ratio": 1.191,
-      "go_threshold": 1.30,
+      "go_threshold": 1.3,
       "years_above_threshold": "3/5",
-      "year_ratios": {"2021": 2.611, "2023": 1.083, "2024": 1.755, "2025": 0.774, "2026": 1.456}
+      "year_ratios": {
+        "2021": 2.611,
+        "2023": 1.083,
+        "2024": 1.755,
+        "2025": 0.774,
+        "2026": 1.456
+      }
     },
     "verdict": "rejected",
     "learned": "Close-mode iFVG freshness (displacement-to-inversion gap) shows the right direction (fresh > stale, ratio=1.191) and 3/5 year consistency, but falls short of the 1.30 Phase 1 GO threshold. Neither fresh nor stale setups are individually profitable; the deployed config edge comes from volume, not freshness selection. Phase 2 gate would cut 16% of signals for insufficient quality gain per Lessons 94/105/109/134.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
+  },
+  {
+    "ts": "2026-06-14T21:30:00Z",
+    "session": "wk6-b80",
+    "item": "B80",
+    "variant": "live-mfe-mae-tracking",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 5,
+      "tests_passing": 735,
+      "files_changed": 6
+    },
+    "verdict": "shipped",
+    "learned": "Live broker now tracks peak favorable/adverse excursion in R-units per instrument, exposed via open_brackets() and strategy_state SSE. Frontend shows MFE/MAE on position panel and StrategyDebug. Rule 13 satisfied: 3 layers (debug log at 1R/2R milestones, SSE pos_mfe_r/pos_mae_r, frontend render).",
     "links": {
       "doc": null,
       "runs": [],

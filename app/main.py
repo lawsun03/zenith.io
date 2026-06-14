@@ -514,7 +514,7 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
-def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = ""):
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None):
     """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
 
     Reads pre-computed grader state — no heavy computation on the hot path.
@@ -571,6 +571,11 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
         if orb_runner is not None and hasattr(orb_runner, "detector"):
             orb_state = orb_runner.detector.state()
 
+        # Live MFE/MAE excursion for the primary instrument (Rule 13: strategy state observable)
+        pos_excursion: dict | None = None
+        if broker is not None and hasattr(broker, "live_excursion"):
+            pos_excursion = broker.live_excursion(runner.instrument)
+
         journal.publish_strategy_state(
             instrument=runner.instrument,
             grade=grade,
@@ -581,6 +586,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             news_blackout=news_block,
             phase=phase_data,
             orb_state=orb_state,
+            pos_excursion=pos_excursion,
         )
 
     return on_bar
@@ -1217,7 +1223,7 @@ async def _async_main() -> int:
     # override is needed when signal_instrument != execution_instrument (e.g. GC→MGC).
     exec_instr = cfg.instrument if len(instruments_list) == 1 else ""
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):

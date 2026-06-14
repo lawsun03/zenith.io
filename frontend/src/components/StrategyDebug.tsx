@@ -93,6 +93,19 @@ export function StrategyDebug({ state }: { state: StrategyStatePayload | null })
             </div>
           )}
 
+          {/* Live Excursion */}
+          {(state.pos_mfe_r != null || state.pos_mae_r != null) && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Live Excursion</div>
+              {state.pos_mfe_r != null && (
+                <LabeledValue label="MFE" value={`${state.pos_mfe_r.toFixed(2)}R`} />
+              )}
+              {state.pos_mae_r != null && (
+                <LabeledValue label="MAE" value={`${state.pos_mae_r.toFixed(2)}R`} />
+              )}
+            </div>
+          )}
+
           {/* Account Phase */}
           {hasPhase && <PhaseSection phase={state.phase!} />}
           {!hasPhase && (

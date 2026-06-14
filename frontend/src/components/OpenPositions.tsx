@@ -31,6 +31,12 @@ export function OpenPositions({ positions }: { positions: Position[] }) {
                   <span className="text-dim">P1 <span className="text-warn">{fmt(p.partial)}</span></span>
                 )}
                 <span className="text-dim">TP <span className="text-accent">{fmt(p.target)}</span></span>
+                {p.mfe_r != null && (
+                  <span className="text-dim">MFE <span className="text-accent">{p.mfe_r.toFixed(2)}R</span></span>
+                )}
+                {p.mae_r != null && (
+                  <span className="text-dim">MAE <span className="text-danger">{p.mae_r.toFixed(2)}R</span></span>
+                )}
               </div>
             </div>
           )

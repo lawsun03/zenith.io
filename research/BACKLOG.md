@@ -3416,7 +3416,7 @@ Source: wk6-r1 probe analysis; B69 freshness finding; B77 deployed dataset.
 
 ---
 
-## B80 — Live trade MFE/MAE tracking (Rule 13 observability)  [pending — model:opus]
+## B80 — Live trade MFE/MAE tracking (Rule 13 observability)  [done — shipped 2026-06-14]
 
 **Context:** The backtest runner computes r_mfe/r_mae per trade (B2, B77). Lawrence can see
 these metrics post-session via the deployed-config dataset. But during a LIVE trade, the dashboard
