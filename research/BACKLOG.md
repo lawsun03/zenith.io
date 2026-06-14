@@ -3717,3 +3717,49 @@ because Phase 1a is cheap and immediately useful regardless of B83.
 
 **Source:** Lawrence-requested 2026-06-14 (combine B83 with the existing strats
 via a news-day mode switch).
+
+---
+
+## B85 -- CPI straddle TICK/1s confirmation of the entry-bar path  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+
+**Why:** the user's exact straddle spec (15-min pre-news range, entry at
+range±60t, TIGHT stop at the broken range boundary = R=60t, TP 3-4R) tested
+POSITIVE and year-consistent on CPI on 1-min bars — opposite to B83 (which used a
+1:1 RR / wide opposite-leg stop). See `trade_analysis/2026-06-14_news_straddle_userspec.md`
+and `scripts/news_straddle_cpi_sweep.py` (offset 60 / range stop: 3R 63% win PF
+5.0 +1.51R; 4R 59% PF 5.57 +1.92R; every tight-stop config 5/5 years positive —
+strong anti-overfit signal). BUT the result hinges on an UNRESOLVED entry-bar
+intra-minute path: 1-min cannot see a "spike→tag stop→recover" within the entry
+minute, and the fair close-based estimate may overstate the edge. This item
+settles it with finer data.
+
+**Method (budget-gated):**
+- Identify the ~47 CPI release timestamps from `data/news_events.csv` (excl 2022).
+- Databento: `--estimate-only` FIRST; log to `research/databento_ledger.txt`;
+  ABORT if it would exceed the $20 cap. Fetch the FINEST cheap resolution that
+  resolves within-minute order — prefer **ohlcv-1s** (1-second bars), NOT full
+  tick, and ONLY the event windows (e.g., 08:00-10:00 ET on CPI days) to keep
+  cost tiny. NQ/MNQ.
+- Re-run the straddle on the 1s bars for the headline configs (offset 60, range
+  stop, tp_r 3 and 4; also 40 and 80 for robustness), resolving the entry bar at
+  1-second granularity: after the buy/sell stop triggers, walk seconds forward to
+  see whether the protective stop or the TP path is hit first. Apply the same
+  news slippage/spread cost model.
+- Report per-CPI-event outcome + aggregate win% / PF / R-per-trade / years-positive
+  vs the 1-min estimate. Quantify how much the entry-bar resolution changes it.
+
+**Success:** 1s-resolved CPI expectancy stays clearly positive (win% > 25% at 3R
+with PF > ~1.5) and year-consistent. **Stop rule / reject:** if 1s resolution
+shows the entry-minute reversal eats the edge (expectancy ~0 or win% < 25%), the
+1-min result was an artifact — document and stop. **If CONFIRMED:** follow-on
+item = build a default-off `news_straddle` engine for CPI only (the per-event
+calendar already exists), then evaluate the funded-overlay framing (B84 Phase 1a
+news-day analysis can run alongside).
+
+**Prior:** the broad-grid + 5/5-year robustness on 1-min raises confidence vs a
+typical news idea, but the entry-bar path is a real unknown — ~50/50 it survives
+1s resolution at full magnitude; more likely it survives directionally but with a
+reduced edge. Either way the answer is decisive.
+
+**Source:** Lawrence-requested 2026-06-14 (confirm the CPI straddle on tick/1s
+after the 1-min sweep showed a robust positive). Pairs with the offset/stop sweep.
