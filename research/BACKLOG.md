@@ -3668,7 +3668,7 @@ Lawrence wants them as the front-of-queue priority.**
 
 ---
 
-## B84 -- News-day mode switch (straddle ON / other engines OFF on event days)  [pending — PRIORITY: Lawrence-requested 2026-06-14; B83 straddle REJECTED so Phase-2 router is MOOT; remaining scope = Phase-1a news-day SUPPRESSION analysis ONLY (no straddle, no engine build) -> demote to Sonnet, untag opus; uses data/news_events.csv already built]
+## B84 -- News-day mode switch (straddle ON / other engines OFF on event days)  [done -- rejected Phase-1a NO-GO: iFVG news-day ratio 1.111 < 1.30 threshold, non-monotonic years; ORB ratio exactly 1.330 but news-day ORB PF=1.167 positive, FOMC is ORB strongest subset (PF=1.562) -- suppression would trigger volume starvation; B83/B84 research thread exhausted; script scripts/analyze_b84_news_day.py; Lesson 153; 2026-06-14]
 
 **Hypothesis (Lawrence):** if the B83 straddle is profitable on news days, then on
 those days take ONLY the straddle and turn the normal engines (iFVG/ORB) OFF;

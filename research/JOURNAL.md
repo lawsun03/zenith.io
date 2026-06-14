@@ -3327,3 +3327,42 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Next:** B84 -- but its Phase-2 router (engines OFF + straddle ON on event days) is now MOOT (no profitable straddle). Remaining worthwhile scope = **B84 Phase-1a only**: tag historical iFVG/ORB trades by news-day vs non-news-day (using data/news_events.csv, already built) and test whether a plain news-day SUPPRESSION of the existing engines is a standalone win. No engine build -> demoted to Sonnet (opus tag removed in BACKLOG).
 
 ---
+
+## 2026-06-14T21:50Z -- session wk6-b84 -- B84 (news-day suppression analysis -- REJECTED Phase-1a)
+
+- **Bot health:** :5175 healthy -- XFA shadow, $152,227 at HWM, 0 open contracts, no drift. Market closed (Sun pre-15:00 PT). No restart needed.
+
+- **Claimed:** B84 (top and only pending). Phase-2 router MOOT (B83 straddle rejected); scope = Phase-1a only: tag historical trades by news-day and check whether plain suppression is a candidate. No engine code. Uses data/news_events.csv (built in B83).
+
+- **Ran:** `scripts/analyze_b84_news_day.py` -- tagged 2376 iFVG + 862 ORB trades from `mfe_mae_deployed_combined_clean.csv` (deployed close-mode combined config, 5y excl 2022) against 153 unique ET news dates (156 events from news_events.csv). Computed PF/net/WR split by news-day vs non-news-day, per engine, per event type (CPI/PPI/FOMC), and per year.
+
+- **Numbers:**
+
+  | Engine | Non-news n | Non-news PF | News n | News PF | Ratio | GO? |
+  |--------|-----------|-------------|--------|---------|-------|-----|
+  | iFVG   | 2086      | 0.988       | 290    | 0.890   | 1.111 | NO (< 1.30) |
+  | ORB    | 753       | 1.552       | 109    | 1.167   | 1.330 | borderline |
+
+  iFVG year consistency: non-news > news in 3/5 years (INVERTED 2021: 0.980 vs 2.212; INVERTED 2023: 0.860 vs 1.158).
+
+  ORB year consistency: non-news > news in 4/5 years (INVERTED 2024 only: 1.645 vs 1.845).
+
+  ORB by event type: CPI PF=0.970 (n=46), PPI PF=1.145 (n=39), **FOMC PF=1.562 (n=25, ORB's STRONGEST subset)**.
+
+  iFVG by event type: CPI PF=0.738 (n=111, clearly bad), PPI PF=1.077 (positive), FOMC PF=0.879.
+
+- **GO/NO-GO:**
+  - iFVG: ratio 1.111 < 1.30 threshold; non-monotonic (2 inversions) --> **NO-GO**
+  - ORB: ratio exactly 1.330, 4/5 years consistent; but news-day ORB still PF=1.167 (positive); FOMC is ORB's strongest event -- suppressing FOMC would specifically hurt ORB. Based on B82/Lesson 151 pattern (removing positive signals triggers volume starvation), suppression is not warranted. **NO-GO**
+
+- **Stop rule:** both engines fail the GO criterion (iFVG explicit NO-GO; ORB borderline with FOMC inversion making suppression counterproductive). No suppression benchmark run.
+
+- **Verdict:** REJECTED (Phase-1a NO-GO). No code shipped; no bot_config.json changes. Lesson 153 added. findings.json #106. scripts/analyze_b84_news_day.py committed. B83/B84 news-event research thread exhausted.
+
+- **Learned:** News days are not uniformly bad for iFVG/ORB; FOMC is actually ORB's strongest event (PF=1.562 vs 1.552 non-news), which is the OPPOSITE of the straddle result (B83: FOMC was worst, 34% WR). The macro event creates a large intraday directional move that ORB captures via EOD-flatten, while the OCO straddle mean-reverts on the release bar itself. The structural insight is that the right granularity for news handling is the deployed intraday macro-blackout (suppressing entries in the 15-60 minutes AROUND the release), not a full-day suppression that removes profitable ORB signals.
+
+- **Tests:** 748 passed, 2 skipped, 0 failures (no app/ code changed).
+
+- **Next:** Backlog exhausted. Next session should be a RESEARCH/ideation session to replenish (B84 completes the B83/B84 thread; no pending items remain).
+
+---
