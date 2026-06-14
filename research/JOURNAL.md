@@ -2419,3 +2419,36 @@ SMT divergence rate: 28.4% (NQ swept its level but ES did not on ~28% of trades)
 
 - **Next:** B67 (ORB-reentry r_multiple sweep for Phase B, no code, analogous to B57), then B68 (Thursday deployed-config Phase 1), then B69 (setup freshness, needs instrumentation).
 
+## 2026-06-14T21:00Z -- session wk4-b67 -- B67 (ORB-reentry Phase B orb_r_multiple sweep -- REJECTED)
+
+- **Bot health:** Port 5175 not re-checked (weekend, market closed; last verified responsive in wk4-r3 session).
+- **Claimed:** B67 (top pending item -- ORB-reentry Phase B orb_r_multiple sensitivity sweep).
+- **Ran:** `scripts/run_b67_pipeline.py` -- generated 25 Phase B equity CSVs (5 r values x 5 years; engine=combined, risk=0.75%, partial_r=1.5, swing_stop_lookback=0, stop_buffer=3.0, min_absolute_body=5.0). Phase A fixed = equity_b42/deployed_r1p0 (existing CSVs, no regeneration). Two-phase pipeline economics computed at each r value via `pipeline_economics()` using `funded_sim.simulate_combines` + `simulate_xfa_chain` at haircut=$200. Databento spend: $0 (existing yearly bars reused).
+
+- **Numbers:**
+
+  **Phase A (B42 deployed, fixed):** 42/159 combine passes (avg 6.5d/attempt, 24.6d/funded, $568/funded)
+
+  **Phase B (engine=combined, risk=0.75%, partial_r=1.5):**
+
+  | r_mult | busts/accts | $/acct | $/mo | sust | verdict |
+  |--------|-------------|--------|------|------|---------|
+  | B42 baseline (ORB-only, r=2.5) | 13/14 | $3,131 | $549 | 3.23x | baseline |
+  | 1.5 | 70/71 | $965 | $213 | 0.60x | -npm/-sust |
+  | 2.0 | 66/67 | $1,021 | $238 | 0.64x | -npm/-sust |
+  | 2.5 | 67/68 | $1,047 | $253 | 0.63x | -npm/-sust |
+  | 3.0 | 71/72 | $974 | $219 | 0.59x | -npm/-sust |
+  | 3.5 | 69/70 | $1,003 | $232 | 0.61x | -npm/-sust |
+
+  Stop rule: ALL 5 r values worse on BOTH metrics. Triggered. REJECTED.
+
+- **Root cause:** The combined engine adds iFVG signals to the funded Phase B account alongside ORB-reentry. At r=0.75% risk, iFVG entries contribute an additional 0.75% loss risk per entry. On days where BOTH iFVG and ORB lose, the account absorbs -1.5%+ daily -- dramatically accelerating MLL approach. The B42 baseline Phase B (from equity_b21) uses ORB-only engine; this test confirmed the combined engine is catastrophically worse for Phase B sustainability. The r_multiple parameter (which affects only ~11% of ORB trades that reach the full target before EOD, per Lesson 88) cannot compensate for engine-level bust frequency amplification.
+
+  Additional confound: B67 also uses partial_r=1.5 vs B42 baseline partial_r=0. However, B46 (Lesson 93) established that partial_r=1.5 does not change bust counts for ORB-only. The 5x bust rate increase (13->66-71) must be primarily from the combined engine, not from partial_r.
+
+- **Verdict:** REJECTED -- stop rule triggered on all 5 r values. B42 remains the benchmark. The orb_r_multiple=2.5 at ORB-only engine (B21 baseline) remains the best-tested Phase B setting. No code changes, no new tests (no code path touched).
+
+- **Learned:** The combined engine is a Phase A tool (Lessons 80, 84), not a Phase B tool. B47 (Lesson 95) found combined sust=0.79x; B67 confirms and extends: even with partial_r=1.5 which should help, combined Phase B sust=0.59-0.64x -- worse than B47. The r_multiple sweep within the combined engine is a category error; the valid analog to B57 (iFVG r_multiple in Phase A) for Phase B would be an orb_r_multiple sweep within the ORB-only engine. Lesson 124 added.
+
+- **Next:** B68 (Thursday iFVG DOW block in deployed config -- must verify in close-mode per Lesson 89; this is the most likely next GO candidate given Thursday PF=0.962 in 4/5 years from wk4-r3 data).
+

@@ -3092,5 +3092,43 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T21:00Z",
+    "session": "wk4-b67",
+    "item": "B67",
+    "variant": "ORB-reentry Phase B orb_r_multiple sweep {1.5, 2.0, 2.5, 3.0, 3.5} -- engine=combined, risk=0.75%, partial_r=1.5",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_passes": 42,
+      "phase_a_attempts": 159,
+      "phase_a_reset_per_funded": 568,
+      "phase_b_engine": "combined",
+      "phase_b_risk_pct": 0.75,
+      "phase_b_partial_r": 1.5,
+      "r1p5": {"busts": 70, "accounts": 71, "net_per_acct": 965, "npm": 213, "sust": 0.60},
+      "r2p0": {"busts": 66, "accounts": 67, "net_per_acct": 1021, "npm": 238, "sust": 0.64},
+      "r2p5": {"busts": 67, "accounts": 68, "net_per_acct": 1047, "npm": 253, "sust": 0.63},
+      "r3p0": {"busts": 71, "accounts": 72, "net_per_acct": 974, "npm": 219, "sust": 0.59},
+      "r3p5": {"busts": 69, "accounts": 70, "net_per_acct": 1003, "npm": 232, "sust": 0.61},
+      "b42_baseline_engine": "orb-only",
+      "b42_baseline_npm": 549,
+      "b42_baseline_sust": 3.23,
+      "b42_baseline_busts": 13,
+      "b42_baseline_accounts": 14,
+      "best_npm": 253,
+      "best_sust": 0.64,
+      "stop_rule": "REJECT -- all 5 r values worse on BOTH metrics vs B42"
+    },
+    "verdict": "rejected",
+    "learned": "The Phase B orb_r_multiple setting (1.5-3.5) is irrelevant when the Phase B engine is combined (iFVG+ORB). The combined engine amplifies daily loss variance so severely that funded accounts bust at 97-99% rate (vs 93% for ORB-only Phase B), collapsing $/mo from $549 to $213-$253 and sust from 3.23x to 0.59-0.64x. Root cause: combined engine adds iFVG loss exposure every trading day; on days where both iFVG and ORB lose, the account absorbs -1.5%+ daily, triggering MLL far faster than ORB-only. The r_multiple parameter affects only ~11% of ORB trades (those reaching full target before EOD, Lesson 88) and cannot compensate for engine-level bust frequency amplification. Phase B funded accounts must use ORB-only engine.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b67/",
+        "scripts/run_b67_pipeline.py"
+      ],
+      "src": null
+    }
   }
 ]

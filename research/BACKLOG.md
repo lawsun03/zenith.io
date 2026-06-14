@@ -2688,7 +2688,7 @@ loses on both -> reject. Prior ~30% (daily-context gates have failed here, but t
 probabilistic stride-corrected matrix is a more principled test than B35).
 Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.
 
-## B67 — ORB-reentry r_multiple sensitivity sweep (Phase B funded objective)  [pending]
+## B67 — ORB-reentry r_multiple sensitivity sweep (Phase B funded objective)  [done — REJECTED: combined engine Phase B 5x worse than ORB-only baseline; r_multiple (1.5-3.5) irrelevant when engine=combined]
 
 Analogous to B57 (iFVG Phase A r_multiple sweep) but for the Phase B ORB-reentry
 funded engine. B21/B42 Phase B uses orb_r_multiple=2.5 (base StrategyParams
