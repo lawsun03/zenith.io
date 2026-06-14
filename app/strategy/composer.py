@@ -175,6 +175,11 @@ class ComposerConfig:
     # accumulates regardless. Example: [11, 12, 13] blocks 11:00-14:00 ET.
     block_hours: list[int] = field(default_factory=list)
 
+    # B48: hybrid rank-aware short filter. 0 = disabled (existing behavior).
+    # 1 = allow only rank-1 short per ET calendar day; suppress rank-2+ shorts
+    # (rank-2+ short PF=0.858, loss-making over 5y). Long signals unaffected.
+    max_short_rank: int = 0
+
 
 @dataclass
 class _Awaiting:
@@ -227,6 +232,9 @@ class SweepDisplacementComposer:
         # B23: daily signal cap state (reset at ET-day boundary).
         self._daily_signal_count: int = 0
         self._current_et_day: date | None = None
+        # B48: daily short rank state (reset at ET-day boundary).
+        self._daily_short_count: int = 0
+        self._current_short_rank_day: date | None = None
         # B35: daily bias gate — running current-day OHLC and committed prior-day OHLC.
         # Tracking happens in on_bar_close; gate applied in on_displacement.
         self._bias_current_day: date | None = None
@@ -364,6 +372,21 @@ class SweepDisplacementComposer:
             log.info("Cooldown active (%d bars remaining) — signal suppressed", self._cooldown_remaining)
             return None
 
+        # B48: hybrid rank-aware short filter — suppress rank-2+ shorts per ET day.
+        if self.config.max_short_rank > 0:
+            want_side_b48 = "long" if event.side == "bullish" else "short"
+            if want_side_b48 == "short":
+                et_day_b48 = bar.ts.astimezone(_ET).date()
+                if et_day_b48 != self._current_short_rank_day:
+                    self._current_short_rank_day = et_day_b48
+                    self._daily_short_count = 0
+                if self._daily_short_count >= self.config.max_short_rank:
+                    log.info(
+                        "Signal blocked: rank-%d+ short suppressed (max_short_rank=%d, day=%s)",
+                        self._daily_short_count + 1, self.config.max_short_rank, et_day_b48,
+                    )
+                    return None
+
         # B23: daily signal cap — reset counter at ET-day boundary, then gate.
         if self.config.daily_signal_cap > 0:
             et_day = bar.ts.astimezone(_ET).date()
@@ -462,6 +485,8 @@ class SweepDisplacementComposer:
             self._awaiting = []
             if signal is not None and self.config.daily_signal_cap > 0:
                 self._daily_signal_count += 1
+            if signal is not None and self.config.max_short_rank > 0 and event.side == "bearish":
+                self._daily_short_count += 1
             if signal is not None and self.session_ctx is not None:
                 self.session_ctx.record_ifvg_signal(
                     bar.ts.astimezone(_ET).date(), sig_side

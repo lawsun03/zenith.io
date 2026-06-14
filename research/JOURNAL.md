@@ -1710,3 +1710,27 @@ Entry format:
 - **Next:** B48 (rank hybrid -- first-iFVG-of-day selection) or B49 (ORB breakout extension Phase 1). B48 is next in priority.
 
 Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) confirms that mixing iFVG and ORB on a single account is WORSE than the separate Phase A (iFVG combine) + Phase B (ORB funded) pipeline. The two-account architecture is load-bearing for pipeline sustainability.
+
+## 2026-06-14T02:00Z — session wk2-b48 — B48 (iFVG hybrid rank-aware signal filter)
+
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B48 (top pending item). TDD: wrote 4 defining-behavior tests in tests/test_rank_filter.py; confirmed fail; implemented ifvg_max_short_rank in ComposerConfig + StrategyParams + backtest/runner.py + main.py; all 4 tests pass; full suite 677 passed, 2 skipped.
+- **Ran:** Monthly combine harness (run_monthly_combine.py) on bars_MNQ_dbv_2021_2026.csv (61 months), ifvg_entry_mode=close, enabled_killzones=all (deployed settings). Two runs:
+  1. LO baseline: allowed_sides=long (current deployed iFVG setting)
+  2. B48 hybrid: allowed_sides=both + ifvg_max_short_rank=1 (rank-1 both sides + all longs)
+
+- **Numbers:**
+  | Config | Passes/61 | % | PF | Long exits | Long PF | Short exits | Short PF |
+  |--------|-----------|---|----|------------|---------|-------------|----------|
+  | LO baseline | 12 | 20% | 1.21 | 1011 | 1.25 | 220 (ORB only) | 1.02 |
+  | B48 hybrid | 11 | 18% | 1.09 | 761 | 1.28 | 492 | 0.84 |
+
+  Stop rule check: hybrid passes (11) < baseline passes (12) AND hybrid PF (1.09) < baseline PF (1.21). **TRIGGERED — REJECTED.**
+
+- **Root cause:** Close-mode iFVG rank-1 shorts are loss-making in the deployed config (PF 0.84, 272 extra exits vs LO). The research baseline finding (rank-1 all-sides PF=1.127 in ifvg_edge mode) does not transfer to close-mode. Mechanism: close-mode enters at the inversion bar close, which for short setups is at zone_low (bottom of the FVG zone). This is structurally weaker than the ifvg_edge retrace entry which waits for price to pull back to the proximal edge. The B48 hybrid adds ~272 iFVG shorts with deeply negative expectancy, degrading both the volume quality and monthly pass rate. Note: the 220 ORB shorts (PF 1.02) are unchanged in both runs and come from the combined engine's ORB component.
+
+- **Verdict:** rejected — stop rule triggered (both combines passes and PF worse). Close-mode LO filter for iFVG remains correct. ifvg_max_short_rank ships default-off (4 defining-behavior tests, 677 total green). Lesson 96 added.
+
+- **Learned:** The rank-1 short quality measured in the ifvg_edge research baseline (PF=1.127) does not transfer to the close-mode deployed config where rank-1 iFVG shorts are loss-making (PF 0.84). Entry mode fundamentally changes the short signal quality distribution, consistent with Lesson 89. The long-only iFVG filter is the structurally correct choice for close-mode short suppression.
+
+- **Next:** B49 (ORB breakout extension quality filter — Phase 1 data mining, no code; prior 40%; completes the ORB quality predictor research thread).

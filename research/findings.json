@@ -2063,7 +2063,7 @@
     "ts": "2026-06-15T02:00:00Z",
     "session": "wk2-r5",
     "item": "RESEARCH",
-    "variant": "ideation: iFVG×ORB directional confluence, rank hybrid filter, breakout extension",
+    "variant": "ideation: iFVG\u00c3\u2014ORB directional confluence, rank hybrid filter, breakout extension",
     "objective": "dataset",
     "metrics": {
       "orb_ifvg_same_pf": 1.689,
@@ -2079,7 +2079,7 @@
       "ifvg_orb_opp_loss_making_years": 4,
       "ifvg_rank1_all_pf": 1.129,
       "ifvg_rank2plus_short_pf": 0.858,
-      "ifvg_rank2plus_long_pf": 1.090,
+      "ifvg_rank2plus_long_pf": 1.09,
       "ifvg_hybrid_pf": 1.133,
       "ifvg_hybrid_vol_per_mo": 29,
       "ifvg_lo_baseline_pf": 1.136,
@@ -2131,7 +2131,7 @@
     "objective": "funded",
     "metrics": {
       "baseline_funded_sust": 0.79,
-      "gate_funded_sust": 0.50,
+      "gate_funded_sust": 0.5,
       "baseline_combine_passes_test": "4/17",
       "gate_combine_passes_test": "3/17",
       "baseline_combine_passes_train": "3/12",
@@ -2145,7 +2145,33 @@
       "risk_pct": 1.0
     },
     "verdict": "rejected",
-    "learned": "The iFVGxORB directional confluence gate (remove ORB when all prior same-day iFVG oppose it; remove post-ORB iFVG opposing ORB direction) hurts the combined engine: funded sust drops 0.79x to 0.50x (-37%) and combine pass rate drops 23.5% to 17.6% on the 2025-2026 test set. Despite removing 692 trades (-14%), 5y net P&L falls $24k ($95k to $71k). The Lesson-91 finding (ORB opp-direction PF=0.957) was valid in isolation but the gate over-filters: it also removes profitable ORB trades where the iFVG signal happened to oppose direction without predicting ORB failure. Secondary finding: the combined engine baseline itself has sust=0.79x vs the separate Phase A+B pipeline at 3.23x — running both engines on one account does NOT match the two-account pipeline performance.",
+    "learned": "The iFVGxORB directional confluence gate (remove ORB when all prior same-day iFVG oppose it; remove post-ORB iFVG opposing ORB direction) hurts the combined engine: funded sust drops 0.79x to 0.50x (-37%) and combine pass rate drops 23.5% to 17.6% on the 2025-2026 test set. Despite removing 692 trades (-14%), 5y net P&L falls $24k ($95k to $71k). The Lesson-91 finding (ORB opp-direction PF=0.957) was valid in isolation but the gate over-filters: it also removes profitable ORB trades where the iFVG signal happened to oppose direction without predicting ORB failure. Secondary finding: the combined engine baseline itself has sust=0.79x vs the separate Phase A+B pipeline at 3.23x \u00e2\u20ac\u201d running both engines on one account does NOT match the two-account pipeline performance.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
+  },
+  {
+    "ts": "2026-06-14T02:00Z",
+    "session": "wk2-b48",
+    "item": "B48",
+    "variant": "ifvg_max_short_rank=1 (rank-1 both sides + all longs) vs LO baseline",
+    "objective": "combine",
+    "metrics": {
+      "lo_passes": "12/61",
+      "lo_pf": 1.21,
+      "hybrid_passes": "11/61",
+      "hybrid_pf": 1.09,
+      "hybrid_long_exits": 761,
+      "hybrid_long_pf": 1.28,
+      "hybrid_short_exits": 492,
+      "hybrid_short_pf": 0.84,
+      "lo_short_exits": 220,
+      "lo_short_pf": 1.02
+    },
+    "verdict": "rejected",
+    "learned": "Close-mode rank-1 iFVG shorts are loss-making (PF 0.84) in the deployed config despite being profitable in the research baseline (PF=1.127 with ifvg_edge). The entry mode fundamentally changes short signal quality: close-mode fires at the inversion bar close (zone_low for shorts), which is structurally weaker than the ifvg_edge retrace entry. The B48 hybrid adds 272 iFVG shorts at deeply negative expectancy, reducing both combine passes (11 vs 12) and PF (1.09 vs 1.21) vs the long-only baseline. The long-only filter is the correct deployed config for iFVG shorts in close-mode.",
     "links": {
       "doc": null,
       "runs": [],

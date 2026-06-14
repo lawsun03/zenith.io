@@ -1910,7 +1910,7 @@ implementation complexity is the remaining risk — shared context across two ru
 Source: wk2-r5 data mining on mfe_mae_orb_clean.csv + mfe_mae_ifvg_clean.csv. Year-by-year
 consistency check in JOURNAL wk2-r5. Lessons 91, 92.
 
-## B48 — iFVG hybrid rank-aware signal filter  [pending]
+## B48 — iFVG hybrid rank-aware signal filter  [done — rejected: hybrid 11/61 (18%) PF 1.09 vs LO baseline 12/61 (20%) PF 1.21 — stop rule triggered (both metrics worse); close-mode rank-1 iFVG shorts loss-making (492 exits PF 0.84 vs 220 ORB-only shorts PF 1.02); rank-1 short quality (PF=1.127 research baseline) does not transfer to close-mode deployed config; ifvg_max_short_rank ships default-off; 4 defining-behavior tests; 677 total green]
 
 Mechanism: iFVG sweep-displacement signals have a within-day rank per side (rank-1 = first
 signal of the day on a given side; rank-2+ = subsequent signals on the same side). From 5y

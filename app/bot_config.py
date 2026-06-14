@@ -201,6 +201,12 @@ class StrategyParams(BaseModel):
     # blocks 11:00:00-13:59:59 ET. Data: 11-13 ET costs -$12,268 over 5y (PF<1 in 4/5 years).
     ifvg_block_hours: list[int] = Field(default_factory=list)
 
+    # B48: hybrid rank-aware short filter. 0 = disabled (all shorts allowed per allowed_sides).
+    # 1 = allow only rank-1 short per ET calendar day (rank-1 PF positive; rank-2+ PF=0.858).
+    # Rank-1 = first short signal emitted on the ET day; rank-2+ = subsequent shorts.
+    # Long signals unaffected. Complementary to allowed_sides.
+    ifvg_max_short_rank: int = 0
+
     # B47: iFVG×ORB directional confluence gate. When True (engine=combined only),
     # Gate 1 suppresses ORB signals when all prior same-day iFVG signals oppose the
     # ORB direction (ORB opp-only PF=0.957, loss-making); Gate 2 suppresses post-ORB
