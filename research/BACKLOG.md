@@ -2577,7 +2577,7 @@ finding that NQ winners need to run, exits don't help). Defining tests: each exi
 mode triggers BE/partial at the specified R; off-by-default unchanged.
 Source: Lawrence 2026-06-14; extends B2.
 
-## B62 — Orderflow-proxy confirmation + veto for ORB (cum-delta + RVOL)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B62 — Orderflow-proxy confirmation + veto for ORB (cum-delta + RVOL)  [done — REJECTED 2026-06-14 (Phase 1 NO-GO): cd3_ratio top/bottom PF ratio 1.039, RVOL 1.037, combined gate 1.044 (all vs 1.40 GO threshold); CLV cum-delta proxy is collinear with the breakout condition (93% of breakouts already "confirm", the 7% that don't have higher PF 1.361); no engine built; doc trade_analysis/2026-06-14_B62_orderflow_proxy.md]
 Lawrence-specified. Extend the NQ 5min ORB engine with bar-derived orderflow-style
 filters (we have no tick/L2 data, so APPROXIMATE from OHLCV):
 - Cumulative delta proxy: per bar, approximate up-tick vs down-tick volume (e.g.,

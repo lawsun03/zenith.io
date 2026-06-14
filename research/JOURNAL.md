@@ -2235,3 +2235,29 @@ Two-phase MES pipeline sust (iFVG passes / ORB busts) = 9/83 = **0.11x** vs B42 
 - **Learned:** BE-trail at 1.5R extends Lesson 20 to the 1.5R boundary: ORB funded XFA busts jump 54% (13→20) and net/account drops 27%. Partial exits at 2.0R on ORB reduce net/account 21% with only marginal bust improvement. The ORB reentry structure (tight r=0.75 + 2-leg entry) already compresses the favorable excursion distribution — early exits clip the winners that fund the pipeline. Fixed-target exits remain the optimal policy for both iFVG and ORB on NQ. Do not revisit BE/partial exits unless a fundamentally different stop mechanism (e.g., trailing ATR stop after 2.5R) is proposed.
 
 - **Next:** B62 — Orderflow-proxy confirmation for ORB (cum-delta + RVOL proxy from OHLCV).
+
+## 2026-06-14T10:30Z — session wk4-b62 — B62 Orderflow-proxy confirmation/veto for ORB
+
+- **Bot health:** XFA shadow combine reachable on :5175, flat (0 open contracts), no reconcile drift, market closed (Saturday — stale bars normal). No changes to bot_config.json or .env.
+
+- **Item:** B62 — Lawrence-requested (model:opus). Approximate orderflow from OHLCV (no tick/L2 data) and test whether it sharpens the NQ 5min ORB engine via (a) a CONFIRM gate and (b) a divergence VETO/EXIT. Per spec, ran Phase 1 cheap falsification FIRST.
+
+- **Ran:** `scripts/analyze_b62_orderflow.py` (analysis only, no engine/bot code). Fixed formulas: CLV cum-delta `delta=vol·(2·(c−l)/(h−l)−1)`, 3-bar signed `cd3_ratio∈[−1,1]`; RVOL = breakout-bar vol / prior-20-session same-ET-TOD mean. Bars resampled 1-min→5min right-labelled at close minute (verified breakout-bar alignment vs recorded entry_ts + 1 tick slippage). n=1030 ORB trades, 5y excl 2022 (baseline WR 0.450, PF 1.214, net +$49,952; matches Lesson 88).
+
+- **Numbers (top-40% vs bottom-40% PF ratio, GO threshold 1.40x):**
+
+| Proxy | bottom-40 PF | top-40 PF | ratio | verdict |
+|-------|------|------|-------|---------|
+| cd3_ratio (directional cum-delta) | 1.106 | 1.149 | **1.039** | NO-GO |
+| RVOL (breakout vs prior-20 same-TOD) | 1.221 | 1.267 | **1.037** | NO-GO |
+| Combined confirm gate (cd3>0 & rvol≥med) | 1.195 | 1.248 | **1.044** | NO-GO |
+
+  Sign split: CONFIRMED (cd3_ratio>0) = 93% of trades PF 1.204; NOT-CONFIRMED = 7% PF **1.361** (the un-confirmed minority is *better*). No year consistency in either proxy.
+
+- **Verdict:** Phase 1 NO-GO → **REJECTED. No engine built.**
+
+- **Learned:** A breakout bar closes beyond the OR edge by construction, forcing its close into the top/bottom of its own range → positive directional CLV-delta almost tautologically (93.3% of breakouts have cd3_ratio>0; 5th pct −0.04). The CLV cum-delta proxy is collinear with the breakout condition itself and carries no independent edge; a confirm gate barely filters and removes a slightly better cohort. RVOL is independent but does not stratify ORB outcomes. This is the 4th consecutive ORB bar/day-level quality-predictor rejection (B5/B45/B49/B62); the ORB edge lives in the 4h+ EOD-flatten cohort and resists single-dimension bar filters. Variant (b) VETO/EXIT is gated off by Phase 1 and independently contraindicated by B61 (early exits clip ORB winners) — not built.
+
+- **Lesson 117 added.** Test suite unchanged (no code path touched); verified green below.
+
+- **Next:** B63 — Pipeline-aware funded-only sizing/routing variants (Lawrence-requested, pending; NOT opus-tagged → Sonnet).
