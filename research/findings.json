@@ -2973,5 +2973,28 @@
    "runs": [],
    "src": null
   }
+ },
+ {
+  "ts": "2026-06-14T10:30:00Z",
+  "session": "wk4-b63",
+  "item": "B63",
+  "variant": "funded-only sizing/routing: (b) iFVG-LO r1.25% as Phase B; (a) early_win_boost +0.5x",
+  "objective": "funded",
+  "metrics": {
+   "b_iFVG_LO_r1pct_npm": 702,
+   "b_iFVG_LO_r1pct_sust": 0.93,
+   "b_iFVG_LO_r125pct_npm": 1037,
+   "b_iFVG_LO_r125pct_sust": 1.08,
+   "a_phase1_ratio": 1.473,
+   "a_combined_no_boost_npm": 844,
+   "a_combined_no_boost_sust": 0.76,
+   "a_combined_boost_npm": 977,
+   "a_combined_boost_sust": 0.91,
+   "b21_ref_npm": 549,
+   "b21_ref_sust": 3.23
+  },
+  "verdict": "rejected",
+  "learned": "(b) iFVG long-only close-mode as funded Phase B cycles 40 accounts in 5y (vs 14 for ORB-reentry) with avg 25.7d lifetime (vs 73.5d), generating $1037/mo at r1.25% risk — but sust=1.08x is too fragile vs B21 3.23x; the $/mo gain reflects higher risk level (1.25% vs 0.75%), not genuine engine edge. (a) early_win_boost Phase 1 is the strongest intraday discriminator found (1.473x PF ratio), but at the funded account level the combined engine has sust 0.91x (no boost) and 0.76x (baseline) — both below 1.0; the MLL constraint means size increases after wins also amplify bust risk on subsequent losing trades.",
+  "links": {"doc": null, "runs": ["run_b63_pipeline"], "src": null}
  }
 ]

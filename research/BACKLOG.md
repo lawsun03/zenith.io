@@ -2599,7 +2599,7 @@ volume below 60-90/mo. Stop rule: both variants worse -> reject. Defining tests:
 proxy computed deterministically; confirm-gate suppresses unconfirmed breakouts;
 divergence-exit fires on the specified pattern. Source: Lawrence 2026-06-14.
 
-## B63 — Pipeline-aware funded-only sizing/routing variants  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+## B63 — Pipeline-aware funded-only sizing/routing variants  [done — rejected: (b) iFVG-LO r1.25% beats $/mo ($1037 vs $549) but sust 1.08x too fragile vs B21 3.23x; (a) early_win_boost combined engine sust 0.91x < 1.0; B21 stands]
 Lawrence-specified. Funded-only configs for ORB and long-only close-mode iFVG that
 target the funded objective, ASSUMING Phase A supplies Combine accounts separately.
 Start from the current best two-phase pair (iFVG Phase A + ORB-reentry r0.75 Phase

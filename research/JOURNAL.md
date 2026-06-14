@@ -2261,3 +2261,48 @@ Two-phase MES pipeline sust (iFVG passes / ORB busts) = 9/83 = **0.11x** vs B42 
 - **Lesson 117 added.** Test suite unchanged (no code path touched); verified green below.
 
 - **Next:** B63 — Pipeline-aware funded-only sizing/routing variants (Lawrence-requested, pending; NOT opus-tagged → Sonnet).
+
+## 2026-06-14T10:20Z — session wk4-b63 — B63 (Pipeline-aware funded-only sizing/routing variants — REJECTED)
+
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B63 (Lawrence-requested; top pending item; no model:opus tag → Sonnet).
+- **Ran:** `scripts/run_b63_pipeline.py` — two experiments.
+
+**Part (b) — iFVG long-only close-mode as funded Phase B (no code; uses existing equity_b28 CSVs):**
+
+Phase A fixed: B42 deployed (42 passes / 159 attempts, avg 6.5d, reset $568/funded).
+Phase B reference: B21 ORB-reentry r0.75% (14 accounts, 13 busts, $3,131/acct, avg 73.5d, sust=3.23x, npm=$549/mo).
+
+| Phase B variant | Accounts | Busts | $/acct | avg days | sust | npm |
+|----------------|---------|-------|--------|----------|------|-----|
+| B21 ORB r0.75% (ref) | 14 | 13 | $3,131 | 73.5d | 3.23x | $549/mo |
+| iFVG-LO r1.0% (B28) | 46 | 45 | $2,138 | 22.4d | 0.93x | $702/mo |
+| iFVG-LO r1.25% (B28) | 40 | 39 | $3,054 | 25.7d | 1.08x | $1,037/mo |
+
+Stop rule (b):
+- r1.0%: sust=0.93x < 1.0 — violates sustainability floor → REJECTED.
+- r1.25%: sust=1.08x >= 1.0 AND npm=$1037 > $549 → technically "partial" per spec, but sust 1.08x vs 3.23x is a 3x sustainability regression. The $/mo gain is driven by risk escalation (1.25% vs 0.75%), not genuine edge improvement. iFVG accounts average only 25.7d vs ORB's 73.5d, cycling 3x faster with similar per-account net — the pipeline barely self-sustains. REJECT as not representing genuine improvement.
+
+**Part (a) — conditional intraday size increase (early_win_boost):**
+
+Phase 1 check (no code): from mfe_mae_orb_clean.csv + mfe_mae_ifvg_clean.csv, n=962 two-trade days (5y excl 2022):
+- PF_after_win = 1.394
+- PF_after_loss = 0.946
+- Ratio = 1.473 → Phase 1 GO (threshold >= 1.20)
+
+TDD: 5 defining-behavior tests in `tests/test_b63_early_win_boost.py` — all pass. Implemented `apply_early_win_boost_day()` in `scripts/run_b63_pipeline.py`. RED → GREEN confirmed.
+
+Phase 2: post-processing on mfe_mae combined trade data; +0.5x boost to second trade when first wins; funded_sim on modified daily P&L.
+
+| Config | Accounts | Busts | $/acct | npm | sust |
+|--------|---------|-------|--------|-----|------|
+| combined no-boost | 56 | 55 | $2,313 | $844/mo | 0.76x |
+| combined +boost | 47 | 46 | $2,755 | $977/mo | 0.91x |
+
+Stop rule (a): Both combined variants have sust < 1.0 — pipeline drain. REJECTED.
+Boost does improve both metrics (+$133/mo, +0.15x sust) but neither clears the 1.0 floor, much less the B21 3.23x reference.
+
+- **Verdict:** REJECTED — stop rule triggered on both (a) and (b). B21 remains the best two-phase pipeline (iFVG Phase A + ORB-reentry r0.75 Phase B).
+- **Learned:** (b) iFVG long-only at funded Phase B busts 3x faster than ORB-reentry (25.7d vs 73.5d lifetime); the $/mo improvement at r1.25% reflects higher risk, not better edge, and sust=1.08x is fragile. (a) The early_win_boost Phase 1 ratio (1.473x) is the strongest intraday discriminator found in this research program, but at the funded account level the combined engine is too volatile — size escalation after wins also amplifies bust risk. Open thread: the 1.473x ratio may be usable as a day-filter (skip second signal when first lost) rather than size-modifier.
+- **Lessons 118–119 added.** Test suite: 718 passed, 2 skipped, 0 failures (+5 B63 tests).
+- **Next:** B64 (SMT divergence NQ vs ES reversal filter; depends on B60 ES data already on disk).
