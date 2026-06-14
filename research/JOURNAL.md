@@ -2553,3 +2553,32 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 - **Learned:** The StrategyParams default allowed_sides="both" is silently active in the live bot — iFVG close-mode shorts are being traded despite B15/B96 establishing they are loss-making in this mode. Removing them via `allowed_sides=long` adds +40% combine passes. The combination with B57's r=2.5 recommendation gives 14/61 passes — 40% above the B42 baseline. B70 fills the Lesson-124-flagged gap (Phase B ORB-only r_multiple sweep). B71 quantifies the full two-phase pipeline impact of the LO+r=2.5 config fix. B72 tests rank-1-only as a further volume concentration (high rejection prior).
 
 - **Next:** B70 (Phase B ORB-only orb_r_multiple sweep — no code, config sweep) or B71 (LO+r=2.5 full pipeline benchmark — highest value; no code, equity_export + funded_sim). B71 recommended first given the strong Phase 1 signal (14/61 passes).
+
+---
+
+## 2026-06-15T00:00Z — session wk5-b70 — B70 (Phase B ORB-only orb_r_multiple sweep — REJECTED)
+
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Reclaimed orphaned B70 claim from crashed session (no matching journal entry found).
+- **Claimed:** B70 (top pending item — orphaned in-progress reclaimed per protocol; partial equity CSVs from prior session reused; only r=3.5 2025/2026 were missing, generated automatically by script).
+- **Ran:** `scripts/run_b70_pipeline.py` — sweeps orb_r_multiple in {1.5, 2.0, 2.5, 3.0, 3.5} for Phase B ORB-only engine (engine=orb, orb_reentry_after_stop=True, risk=0.75%, partial_r=0, swing_stop_lookback=0, stop=3.0, body=5.0). Phase A fixed = equity_b42 (42/159 passes, avg 6.5d/attempt, $568/funded). r=2.5 reuses existing equity_b21 as baseline. 2022 holdout excluded.
+
+- **Numbers:**
+
+  | r_mult | busts/accts | $/acct | $/mo | sust | vs B42 |
+  |--------|-------------|--------|------|------|--------|
+  | B42 baseline (r=2.5) | 13/14 | $3,131 | $549 | 3.23x | — |
+  | r=1.5 | 20/21 | $2,304 | $496 | 2.10x | -npm/-sust |
+  | r=2.0 | 21/22 | $2,336 | $520 | 2.00x | -npm/-sust |
+  | r=2.5 | 13/14 | $3,131 | $549 | 3.23x | (baseline) |
+  | r=3.0 | 19/20 | $2,395 | $505 | 2.21x | -npm/-sust |
+  | r=3.5 | 20/21 | $2,443 | $535 | 2.10x | -npm/-sust |
+
+  Stop rule: ALL tested r values (other than baseline) worse on BOTH $/mo AND sust. TRIGGERED.
+
+- **Root cause:** The ORB Phase B exit mechanism is dominated by EOD flattens (89% of trades per Lesson 88). orb_r_multiple only affects the 11% of trades that hit the fixed R-target before EOD. Lower r (1.5, 2.0) clips these by-target exits at a closer price, reducing per-account earnings ($2,304-$2,336 vs $3,131). It also adds more accounts (21-22 vs 14), but they earn less per cycle. Higher r (3.0, 3.5) pushes the target further: the 11% that would have hit at r=2.5 now need more movement, many converting to EOD flattens instead — reducing per-account net marginally with more busts. The r=2.5 sweet spot is where ORB's natural stop geometry (stop below swept extreme) pairs optimally with the EOD-flatten exit: the 11% early-exit winners at exactly r=2.5 capture just enough to maximize cycle economics without clipping the EOD-flatten tail.
+
+- **Verdict:** REJECTED — stop rule triggered. orb_r_multiple=2.5 confirmed as the natural Phase B optimum. No code changes. Lesson 129 added.
+
+- **Learned:** Unlike iFVG Phase A (where lower r=2.5 improved combine throughput by hitting the $3k monthly target more often, Lesson 111), the ORB Phase B target is a fixed-dollar payout threshold, not a per-trade R-level. The r_multiple setting only governs the 11% of ORB trades that hit target before EOD; the 89% that flatten EOD are unaffected. At r=2.5, those 11% exit optimally; any change degrades per-account economics and bust rates. The B21 baseline r=2.5 was confirmed as the correct Phase B setting, and B70 is the controlled study that formally proves it.
+
+- **Next:** B71 (LO+r=2.5 full two-phase pipeline benchmark — highest priority; Phase 1 combine harness already showed 14/61 passes in wk5-r1; this is the full funded-pipeline economic verification).

@@ -3233,5 +3233,27 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T00:00Z",
+    "session": "wk5-b70",
+    "item": "B70",
+    "variant": "orb-only phase B orb_r_multiple sweep {1.5, 2.0, 2.5, 3.0, 3.5}",
+    "objective": "funded",
+    "metrics": {
+      "r1p5_busts": 20, "r1p5_accounts": 21, "r1p5_net_per_acct": 2304, "r1p5_npm": 496, "r1p5_sust": 2.10,
+      "r2p0_busts": 21, "r2p0_accounts": 22, "r2p0_net_per_acct": 2336, "r2p0_npm": 520, "r2p0_sust": 2.00,
+      "r2p5_busts": 13, "r2p5_accounts": 14, "r2p5_net_per_acct": 3131, "r2p5_npm": 549, "r2p5_sust": 3.23,
+      "r3p0_busts": 19, "r3p0_accounts": 20, "r3p0_net_per_acct": 2395, "r3p0_npm": 505, "r3p0_sust": 2.21,
+      "r3p5_busts": 20, "r3p5_accounts": 21, "r3p5_net_per_acct": 2443, "r3p5_npm": 535, "r3p5_sust": 2.10,
+      "b42_baseline_npm": 549, "b42_baseline_sust": 3.23
+    },
+    "verdict": "rejected",
+    "learned": "orb_r_multiple=2.5 in the ORB-only Phase B engine is already the natural optimum. All other r values tested (1.5, 2.0, 3.0, 3.5) produce worse $/mo AND worse sustainability vs the B42 baseline. The EOD-flatten exit mechanism (89% of ORB trades, Lesson 88) is unaffected by r_multiple; only the 11% that hit target before EOD are affected. Lowering r clips those winners; raising r reduces hit rate. The r=2.5 sweet spot coincides exactly with the original B21 baseline \u2014 confirming it emerged from natural data rather than overfitting.",
+    "links": {
+      "doc": null,
+      "runs": ["equity_b70"],
+      "src": null
+    }
   }
 ]

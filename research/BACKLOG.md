@@ -2823,7 +2823,7 @@ Source: wk4-r3 research session (2026-06-14); novel -- not found in prior sessio
 
 ---
 
-## B70 — Phase B ORB-only orb_r_multiple sweep (correct B57 analog)  [pending]
+## B70 — Phase B ORB-only orb_r_multiple sweep (correct B57 analog)  [done — rejected: r=2.5 baseline IS optimal (best bust rate 13/14, best $/acct $3131, best sust 3.23x); all other r values worse on BOTH $/mo AND sust; stop rule triggered; Lesson 129 added]
 
 Lesson 124 (B67) explicitly flags this as untested: B67 swept orb_r_multiple but used
 engine=combined (wrong) — the combined engine catastrophically busts funded accounts
