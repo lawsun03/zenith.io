@@ -3665,5 +3665,38 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T02:00:00Z",
+    "session": "wk6-b81",
+    "item": "B81",
+    "variant": "ifvg_suppress_same_direction_repeat_r2p5",
+    "objective": "pipeline_$/mo_and_sust",
+    "metrics": {
+      "phase_a_gate_passes": 43,
+      "phase_a_gate_attempts": 142,
+      "phase_a_baseline_passes": 46,
+      "phase_a_baseline_attempts": 167,
+      "phase_b_busts": 13,
+      "phase_b_accounts": 14,
+      "gate_net_per_month": 568,
+      "gate_sust": 3.31,
+      "baseline_net_per_month": 566,
+      "baseline_sust": 3.54,
+      "d_net_per_month": 2,
+      "d_sust": -0.23,
+      "volume_removed_pct": 26.6,
+      "single_phase_gate_pf": 1.095,
+      "single_phase_baseline_pf": 1.055,
+      "combine_harness_gate_passes": 11,
+      "combine_harness_gate_total": 61
+    },
+    "verdict": "mixed",
+    "learned": "B81 direction gate (suppress same-direction iFVG repeats within ET day, r=2.5) improves per-trade PF (1.095 vs 1.055, single-phase) and marginally improves $/mo (+$2 vs B57) but degrades sust -0.23x vs B57 (3.31 vs 3.54). Stop rule does not fire (both metrics above B42 floor: $568>$549, 3.31>3.23). Pattern matches B71/B73: 26.6% volume cut causes absolute-pass starvation (43 vs 46 passes), and sust scales directly with Phase A passes (sust=passes/Phase_B_busts). Phase 2b (shorts-only) skipped: max additional passes ~2, sust ~3.46x at best, still below B57 3.54x threshold. Code ships default-off (ifvg_suppress_same_direction_repeat=False). Lesson 149 added.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/run_b81_pipeline.py"],
+      "src": "scripts/run_b81_pipeline.py"
+    }
   }
 ]

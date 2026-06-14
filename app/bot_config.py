@@ -236,6 +236,14 @@ class StrategyParams(BaseModel):
     # Default-off (engine="sweep_reentry" must be explicitly selected).
     sweep_reentry_depth_atr: Decimal = Decimal("0.25")
 
+    # B81: suppress same-direction iFVG repeats within the same ET calendar day.
+    # When True: if the first iFVG signal of the day was LONG, subsequent LONG signals
+    # that day are suppressed (short→long conflicts are allowed). Short→short repeats
+    # are also suppressed. Only the MOST RECENT direction emitted is tracked.
+    # Phase 1 data: continuation PF=0.785 (5/5 years losing vs conflict PF=1.052).
+    # ORB signals are never gated by this flag.
+    ifvg_suppress_same_direction_repeat: bool = False
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -195,6 +195,11 @@ class ComposerConfig:
     # is gated. Data: 10:xx ET is the strongest NY-AM hour (PF=1.235 in research baseline).
     silver_bullet_only: bool = False
 
+    # B81: suppress same-direction iFVG repeats within the ET calendar day.
+    # When True: if last emitted iFVG was LONG, suppress next LONG; allow SHORT.
+    # Per-day reset: gate clears at ET midnight. ORB signals unaffected (different path).
+    suppress_same_direction_repeat: bool = False
+
 
 @dataclass
 class _Awaiting:
@@ -269,6 +274,10 @@ class SweepDisplacementComposer:
         # Rank-1 = first signal emitted today; rank-2+ = subsequent signals.
         self._daily_signal_rank: int = 0
         self._daily_rank_et_day: "date | None" = None
+        # B81: last emitted iFVG direction within the current ET day.
+        # None = no iFVG signal emitted today yet (or day just reset).
+        self._last_ifvg_dir: "str | None" = None
+        self._last_ifvg_dir_day: "date | None" = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -427,6 +436,20 @@ class SweepDisplacementComposer:
                 )
                 return None
 
+        # B81: same-direction repeat gate — suppress same-direction iFVG within ET day.
+        if self.config.suppress_same_direction_repeat:
+            et_day_b81 = bar.ts.astimezone(_ET).date()
+            if et_day_b81 != self._last_ifvg_dir_day:
+                self._last_ifvg_dir_day = et_day_b81
+                self._last_ifvg_dir = None
+            _b81_side = "long" if event.side == "bullish" else "short"
+            if self._last_ifvg_dir is not None and self._last_ifvg_dir == _b81_side:
+                log.info(
+                    "Signal blocked: B81 — same-direction iFVG repeat suppressed (%s → %s)",
+                    self._last_ifvg_dir, _b81_side,
+                )
+                return None
+
         # Volatility regime filter: skip entries outside the configured ATR range.
         if self.config.min_atr_filter > 0 and event.atr_at_event < self.config.min_atr_filter:
             log.info(
@@ -539,6 +562,9 @@ class SweepDisplacementComposer:
                 self.alignment_ctx.record_ifvg_signal(
                     bar.ts.astimezone(_ET).date(), sig_side
                 )
+            # B81: update last emitted direction (only on successful emission).
+            if signal is not None and self.config.suppress_same_direction_repeat:
+                self._last_ifvg_dir = sig_side
             return signal
 
         return None

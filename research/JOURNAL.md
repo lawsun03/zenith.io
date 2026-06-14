@@ -3204,3 +3204,48 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 **Learned:** Within-day iFVG signal repetition in the same direction is loss-making, driven overwhelmingly by short→short repeats (PF=0.666); the close-mode short quality problem (Lesson 96) compounds when shorts are repeated the same day. ORB pre-market range break is the strongest single-dimension ORB quality predictor found in this research program (2.097x overall), but its recent-year concentration (2024-2026) makes it potentially regime-dependent — Phase 2 must test on the full 5y window and note the 2021/2023 sensitivity.
 
 **Next:** B81 (iFVG direction-continuation gate, Phase 2 code + benchmark) or B82 (ORB PM-break gate, Phase 2 code + benchmark). Both are Sonnet-appropriate moderate code changes.
+
+---
+
+## 2026-06-15T02:00Z — session wk6-b81 — B81 (iFVG within-day direction-continuation gate — MIXED/NO-GO)
+
+- **Claimed:** B81 (top pending) — code + two-phase pipeline benchmark for iFVG same-direction repeat gate (Phase 1 data: continuation PF=0.785, conflict PF=1.052, ratio=1.340, 5/5 years consistent from wk6-r2).
+
+- **Ran:** Phase 1 data already in BACKLOG.md from wk6-r2 inline probes. Phase 2:
+  1. Implemented `ifvg_suppress_same_direction_repeat: bool = False` in `StrategyParams` and `suppress_same_direction_repeat: bool = False` in `ComposerConfig`.
+  2. Added gate logic to `SweepDisplacementComposer.on_displacement()`: checks before the signal emission path; resets at ET midnight; only updates `_last_ifvg_dir` on successful emission. ORB signals never pass through this path and are unaffected.
+  3. Wired to both iFVG paths in `app/backtest/runner.py` and `app/main.py`.
+  4. 7 defining-behavior tests in `tests/test_b81_direction_gate.py`: same-dir suppressed, conflict allowed, flag-off passes all, day-boundary reset, default=False.
+
+- **Combine harness (61 months, --set ifvg_suppress_same_direction_repeat=True, r=2.5):**
+  - Gate: 11/61 passes (18%), run PF 1.03 (longs 1.31, shorts 0.78)
+  - B57 baseline: 11/61 passes (18%), run PF 1.05
+  - No improvement in combine pass rate; marginal PF degradation.
+
+- **Two-phase pipeline benchmark (Phase A = gate/baseline, Phase B = B21 ORB-reentry r0.75, haircut $200, excl 2022):**
+
+  | Config | A passes/attempts | $/mo | sust |
+  |---|---|---|---|
+  | B57 baseline r2.5 | 46/167 | $566 | 3.54x |
+  | B81 gate r2.5 | 43/142 | $568 | 3.31x |
+
+  Gate vs baseline: d$/mo = +$2, dsust = -0.23x. Phase B fixed: 13/14 busts, $3,131/acct.
+
+- **Stop rule check:**
+  - B81 gate vs B42 floor ($549, 3.23x): $568 > $549 ✓, 3.31 > 3.23 ✓ → stop rule does NOT fire.
+  - B81 gate vs B57 ($566, 3.54x): $568 > $566 ✓ but 3.31 < 3.54 ✗ → does NOT beat B57 on both.
+  - Verdict: MIXED/NO-GO.
+
+- **Root cause (volume starvation, Lesson 130):** Gate removes 26.6% of iFVG signals (633/2376). Absolute Phase A passes drop 46→43 (−6.5%). Sustainability = Phase_A_passes / Phase_B_busts = 43/13 = 3.31x vs 46/13 = 3.54x baseline. Per-trade quality improves (single-phase PF 1.095 vs 1.055) but throughput loss more than offsets the quality gain. This is the same mechanism as B71 (LO gate, 28% cut, -0.46x sust) and B73 (ORB-iFVG alignment gate, ~8% ORB cut, -0.38x sust).
+
+- **Phase 2b (shorts-only) decision:** Skipped. Shorts-only (short→short only) would cut 14.6% of signals. Estimated Phase A passes ~44-45, sust ~3.38-3.46x — still below B57 3.54x. $/mo improvement minimal (+$0-1 vs current gate). Adding code for a result that cannot plausibly clear the B57 threshold is not warranted. The finding (short→short is the dominant loss driver, PF=0.666) is already documented from Phase 1; it doesn't need a Phase 2b to be actionable.
+
+- **Code ships:** `ifvg_suppress_same_direction_repeat=False` default. The gate flag is available if Lawrence wants to run experiments, but is not recommended for deployment.
+
+- **Verdict:** MIXED/NO-GO — does not advance past B57. B57 ($566/mo, sust=3.54x) remains the sole frontier recommendation.
+
+- **Lesson 149 added.** Tests: 742 passed, 0 failures (+7 B81 tests). Script: scripts/run_b81_pipeline.py.
+
+- **Learned:** Same-direction iFVG repeat gate confirms Phase 1 pattern (continuation PF=0.785 → filtered out) but falls victim to volume starvation at 26.6% signal volume cut. The gate improves per-trade quality but reduces the number of combine passes more than it improves the quality of each attempt. The starvation threshold appears to be ~15-20%: B73 (~8% ORB cut) degraded sust by -0.38x, B81 (26.6% iFVG cut) degrades by -0.23x (partially offset by faster combine cycling — 142 attempts vs 167 baseline, fewer resets, $495 vs $545). Volume starvation is now the documented ceiling for all signal-quality gates in this pipeline.
+
+- **Next:** B82 (ORB pre-market break gate, Phase 2 code + benchmark). Highest remaining priority. Phase 1 ratio 2.097 >> 1.30, 3/5 years. Acts on Phase B (ORB signals) not Phase A (iFVG), so starvation dynamics differ.

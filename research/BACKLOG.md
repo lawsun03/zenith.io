@@ -3461,7 +3461,7 @@ Tag: model:opus (code build requiring careful broker-state threading and SSE wir
 
 ---
 
-## B81 -- iFVG within-day direction-continuation gate (Phase 2 code + benchmark)  [pending]
+## B81 -- iFVG within-day direction-continuation gate (Phase 2 code + benchmark)  [done -- MIXED/NO-GO: gate improves single-phase PF (1.095 vs 1.055) and marginally $/mo (+$2 vs B57) but degrades sust 3.31x vs B57 3.54x; both above B42 floor ($568>$549, 3.31>3.23) so stop rule does not fire; pattern matches B71/B73 volume-starvation at 26.6% cut (43 vs 46 Phase A passes); Phase 2b skipped (shorts-only max sust ~3.46, still below 3.54); code ships default-off; Lesson 149]
 
 **Hypothesis:** After an iFVG signal fires in direction D, subsequent same-direction iFVG signals ("continuation") are loss-making (PF=0.785); opposite-direction signals ("conflict") are marginally profitable (PF=1.052). Suppressing continuation rank-2+ signals improves the deployed iFVG combine-phase PF.
 
