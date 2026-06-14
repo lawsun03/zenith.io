@@ -3763,3 +3763,112 @@ reduced edge. Either way the answer is decisive.
 
 **Source:** Lawrence-requested 2026-06-14 (confirm the CPI straddle on tick/1s
 after the 1-min sweep showed a robust positive). Pairs with the offset/stop sweep.
+
+---
+
+## RESEARCH -- Session wk7-r1  [done -- 3 items appended: B86 funded-sim combine-gap correction, B87 Phase-B funded_survival risk policy, B88 FVG zone-width quality gate]
+
+Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-priority pending). Mandatory research/ideation session per B84 journal note. Bot healthy: XFA shadow, $152,227 at HWM, 0 contracts, flat. No Databento spend.
+
+**Inline data mining performed (research/mfe_mae_deployed_combined_clean.csv, B77 dataset, n=3238):**
+
+- ORB post-target tail: avg r_mfe=2.66R for target hits (n=97); P(4R|2.5R)=0%. Confirms 2.5R target is optimal -- no trailing-stop opportunity exists.
+- 06ET block already tested (B74 Phase 2: block_6_9 $560/mo 3.15x vs B57 $566/mo 3.54x). REJECTED, do not re-propose.
+- ORB reentry direction: cannot split by first/second entry -- deployed combined dataset has max 1 ORB trade per day (reentry not separately tagged). Requires new labeled dataset.
+- funded_sim combine-gap analysis (KEY FINDING): `simulate_xfa_chain()` restarts immediately after each bust, ignoring the real combine-gap. From B77 equity CSV: median_days_to_pass=8d, d/funded=24.6d (B42 reference). With 13 Phase-B busts, idle time = 13 x 24.6d = 320d = 31% of 1033-day period. Estimated gap drag: ~$175/mo (31% of $566). The stated $566/mo is the gap-ignored optimistic bound; realistic overlap model suggests ~$390-480/mo.
+- funded_survival policy: implemented in app/backtest/risk_policy.py but not exposed via CLI. Drops risk 0.75% -> 0.4% when within $750 of MLL. Has never been benchmarked.
+- Web search: no new mechanism classes (same iFVG/ORB territory; external claims continue 7-for-7 failure rate).
+
+**Items proposed:** B86 (funded-sim combine-gap correction, highest value), B87 (funded_survival policy, clean existing-feature test), B88 (FVG zone width, geometry exploration).
+**Items NOT proposed (already tested):** 06ET block (B74 rejected), ORB no-target ($18k gain over 5y -- negligible), concurrent-accounts scaling (perfectly correlated P&L = just double sizing, no sust benefit), ORB reentry direction (dataset can't support it without new labeled export).
+
+---
+
+## B86 -- Funded-sim combine-gap correction: quantify idle-time drag and gap-corrected $/mo  [pending]
+
+**Hypothesis:** `simulate_xfa_chain()` restarts a funded account the day after each bust, but in reality the NEXT funded account cannot start until the NEXT COMBINE PASS -- which takes an average of 24.6 trading days (the "d/funded" metric from B42: 1033 total days / 42 passes). With 13 Phase-B busts in 5y, this accounts for 13 x 24.6d = 320 idle days (31% of the period) where NO XFA income is earned. The stated B57 $/mo ($566) is therefore an optimistic upper bound; the gap-corrected realistic number is ~$390/mo (no overlap) to ~$479/mo (full Phase-A/Phase-B overlap). This item quantifies the drag precisely and establishes the true pipeline baseline.
+
+**Mechanism:** Add `combine_gap_days: int = 0` parameter to `simulate_xfa_chain()`. After each bust, skip the next `combine_gap_days` days (they belong to the Phase-A combine attempt, not the XFA account). Expose via `--combine-gap-days N` flag in `scripts/funded_sim.py` CLI.
+
+**Exact implementation:**
+1. In `app/backtest/funded_sim.py`: add `combine_gap_days: int = 0` to `simulate_xfa_chain()`. After setting `tracker = None` on a bust, set `gap_remaining = combine_gap_days`. At the top of the daily loop, if `gap_remaining > 0: gap_remaining -= 1; continue`.
+2. In `scripts/funded_sim.py`: add `--combine-gap-days N` (default 0, existing behavior preserved).
+3. Run Phase-B equity simulation (B21 ORB-reentry r0.75 CSVs, stitched) with:
+   - gap=0 (current model, verify matches B57 $566/mo baseline)
+   - gap=8 (median_days_to_pass from Phase-A combine sim)
+   - gap=24 (d/funded -- full cycle including failed attempts)
+   - gap=12 (partial-overlap model -- combine always running, avg 12d to next pass)
+4. Report: $/mo and sust for each gap value. Also compute "overlap breakeven gap" = max gap at which the pipeline is still above $400/mo.
+
+**Fixed defaults:** `combine_gap_days=0` (preserves existing behavior in all existing callers). New `--combine-gap-days` is opt-in for calibration runs only.
+
+**Defining-behavior tests (tests/test_funded_sim_gap.py):**
+1. gap=0: results match existing simulate_xfa_chain output exactly (regression test).
+2. gap=5: a bust on day D means days D+1 to D+5 are skipped; new account starts day D+6.
+3. gap=5, bust on last day: gap days extend past end of series without error.
+4. gap=0 with --combine-gap-days flag in CLI: output identical to old behavior.
+
+**Success criterion:** gap=24 reduces $/mo by >15% vs gap=0 (confirms model inaccuracy is material). No pipeline run threshold -- this is a CALIBRATION item, not a strategy item. The output is a corrected baseline number, not a pass/fail decision.
+
+**Prior:** ~80%. The gap is structurally documented in the funded_sim code as a known simplification. The question is magnitude. Given d/funded=24.6d and 13 busts, the theoretical drag is 31% -- very likely to exceed the 15% materiality threshold.
+
+**Source:** Inline analysis this session (2026-06-14T21:55Z). derive from funded_sim.py code reading + B42 journal d/funded=24.6d reference.
+
+---
+
+## B87 -- Phase B funded_survival dynamic risk policy  [pending]
+
+**Hypothesis:** When a funded XFA account is within $750 of the MLL floor, the `funded_survival_multiplier` (already implemented in `app/backtest/risk_policy.py`) drops daily P&L risk from 0.75% to 0.4%. This should reduce late-stage busts (where a single bad day wipes a near-floor account) while barely reducing payouts (the survival mode is rare and brief). The parameter is already implemented but has never been exposed or benchmarked.
+
+**Mechanism:** the `funded_survival_multiplier` function exists: normal multiplier = `0.75/0.75 = 1.0` (no change); near-MLL (<= $750 cushion) multiplier = `0.4/0.75 = 0.533`. The daily P&L is scaled by this multiplier, reducing both gains AND losses when near MLL. The asymmetric benefit: on a day with a large loss near MLL, the scaled-down loss keeps the account alive; the cost is slightly slower recovery. Net effect: fewer busts at the expense of marginally lower payouts per account.
+
+**Exact rules:**
+1. In `scripts/funded_sim.py`: add `--risk-policy constant|funded_survival` (default `constant`, existing behavior).
+2. Wire through to `simulate_xfa_chain(daily, haircut=haircut, risk_policy=args.risk_policy)`.
+3. Run Phase-B equity simulation (B21 ORB-reentry r0.75 CSVs, stitched, or if available, the B57-candidate CSVs) with `constant` (baseline, verify B57 13 busts) and `funded_survival`.
+4. Report: accounts, busts, gross_payouts, net_payouts, median_days_to_first_payout for both policies.
+
+**Fixed defaults:** `--risk-policy constant` (preserves existing behavior). All existing callers unaffected.
+
+**Defining-behavior tests (tests/test_funded_survival_policy.py):**
+1. With balance > MLL + $750: multiplier = 1.0 (normal risk, no change vs constant).
+2. With balance = MLL + $500 (within cushion): multiplier = 0.4/0.75 = 0.533.
+3. An account that would bust at constant stays alive at funded_survival (because scaled loss is smaller).
+4. funded_survival does not affect Phase-A (simulate_combines) -- only Phase-B.
+
+**Success criterion (Phase 1 GO):** funded_survival busts <= 10 (vs 13 baseline) AND net_payouts >= 90% of constant net. **Stop rule:** funded_survival loses on BOTH busts AND net_payouts vs constant -> reject.
+
+**Prior:** ~40%. The survival mode rarely triggers (accounts must be within $750 of MLL, which requires a sustained losing period without prior payout). When it DOES trigger, the risk reduction is meaningful (0.4 vs 0.75 = 47% size reduction). If late-stage busts are a significant fraction of all busts, the policy helps. If most busts are from "fast drawdowns" where the account goes straight from healthy to MLL in one day, the policy doesn't help (the day's P&L might exceed $750 before the cushion check even matters).
+
+**Source:** Inline reading of app/backtest/risk_policy.py + funded_sim.py this session. Policy has been implemented since B50 but never benchmarked for Phase B.
+
+---
+
+## B88 -- FVG zone-width quality gate (Phase 0 + Phase 1 data mining)  [pending]
+
+**Hypothesis:** The width of the FVG gap (distal edge minus proximal edge, in points) normalized by the ATR at the time of displacement measures the "concentration" of the institutional imbalance. A NARROW FVG (small gap relative to ATR) indicates a precise, clean displacement where institutional flow is compressed into a tight price range. A WIDE FVG indicates a messier, more diffuse imbalance. Narrow FVGs should predict higher follow-through (better inversion quality) because the institutional order cluster is concentrated at a known price level. This is distinct from B16 (inversion bar body shape), wk5-r3 (displacement bar body/ATR), and B74 (hour blocking) -- it measures ZONE GEOMETRY, not bar geometry.
+
+**Mechanism:**
+- Phase 0 (infra): add `fvg_zone_pts: float = 0.0` to `Signal` dataclass. In `SweepDisplacementComposer._build_signal()`, populate from `abs(distal - proximal)`. Expose via `equity_export.py --trade-csv` output column `fvg_zone_pts`.
+- Phase 1 (data mining): re-generate deployed-config trade CSV with fvg_zone_pts. For each iFVG trade, compute `fvg_zone_pts / atr_at_displacement` (need ATR from bar data -- add `atr_at_displacement` column to --trade-csv if not already present, OR use the signal's stop_distance as ATR proxy since stop = sweep_extreme + buffer = proximal edge + stop_buffer). Bucket by fvg_zone_pts quintile. Compute PF per quintile.
+- Phase 2 (if Phase 1 GO): add `ifvg_max_zone_width_atr: float = 0.0` to StrategyParams (0 = no filter). Gate: if `fvg_zone_pts > ifvg_max_zone_width_atr * atr`, skip signal.
+
+**Exact rules:**
+1. Phase 0: in `app/strategy/displacement.py` (or `composer.py`), at signal creation: `fvg_zone_pts = abs(signal.distal - signal.proximal)` (in strategy units, not R). Add field to `Signal` with default 0.0. Add to equity_export --trade-csv output.
+2. Phase 1: generate new deployed-config trade CSV (`--set engine=combined --set ifvg_entry_mode=close --risk-pct 1.0` with the deployed settings). Bucket into 5 quintiles by fvg_zone_pts (raw or normalized by stop_distance). Compute PF and net PnL per quintile.
+3. GO threshold: bottom quintile (narrow FVG) PF >= 1.25x top quintile (wide FVG) AND directional for >= 3/5 years (excl 2022).
+
+**Fixed defaults:** `ifvg_max_zone_width_atr=0.0` (disabled by default, existing behavior unchanged). The Phase 0 Signal field addition has no behavior change.
+
+**Defining-behavior tests (tests/test_signal_fvg_zone_width.py):**
+1. Signal created with proximal=100.0, distal=101.5: fvg_zone_pts=1.5.
+2. Signal created with proximal=100.0, distal=100.5: fvg_zone_pts=0.5.
+3. ifvg_max_zone_width_atr=0.0 (default): signal fires regardless of FVG width.
+4. ifvg_max_zone_width_atr=0.5 with fvg_zone_pts=0.8 and atr=1.0: signal blocked (0.8 > 0.5*1.0).
+5. ifvg_max_zone_width_atr=0.5 with fvg_zone_pts=0.4 and atr=1.0: signal fires (0.4 <= 0.5*1.0).
+
+**Success criterion:** see Phase 1 GO above. **Stop rule:** if PF monotonicity is not observed (non-monotonic across quintiles) in >= 4/5 years, reject -- no Phase 2.
+
+**Prior:** ~20%. Geometry-based predictors have consistently failed: B16 (inversion bar body relative to stop: non-significant), wk5-r3 (displacement bar body/ATR: inverted + non-monotonic). FVG zone width is conceptually different (measures imbalance size, not confirmation bar quality) but the track record is against geometry. Worth a cheap Phase 0 + Phase 1 pass.
+
+**Source:** Inline ideation this session (2026-06-14T21:55Z). No prior art in this backlog for FVG zone width specifically.

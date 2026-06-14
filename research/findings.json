@@ -3804,5 +3804,31 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T21:55:00Z",
+    "session": "wk7-r1",
+    "item": "RESEARCH",
+    "variant": "ideation -- combine-gap model inaccuracy + 3 new items",
+    "objective": "infra",
+    "metrics": {
+      "combine_gap_days": 24.6,
+      "phase_b_busts": 13,
+      "idle_days": 320,
+      "idle_pct": 31.0,
+      "current_model_mo": 566,
+      "gap_corrected_no_overlap": 390,
+      "gap_corrected_half_overlap": 479,
+      "orb_target_hits_avg_mfe": 2.66,
+      "orb_p4r_given_2p5r": 0.0,
+      "items_proposed": 3
+    },
+    "verdict": "dataset",
+    "learned": "The funded_sim overstates $/mo by ~31% because simulate_xfa_chain restarts immediately after each bust, ignoring the avg 24.6-day combine-gap before the next funded account can open. Realistic $/mo is ~90 (no overlap) to 79 (always-on combine). ORB post-target tail is thin (avg r_mfe=2.66R for target hits; P(4R)=0%) -- 2.5R exit is confirmed optimal. Three new items appended: B86 (gap correction), B87 (funded_survival policy), B88 (FVG zone width).",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

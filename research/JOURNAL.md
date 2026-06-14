@@ -3366,3 +3366,54 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Next:** Backlog exhausted. Next session should be a RESEARCH/ideation session to replenish (B84 completes the B83/B84 thread; no pending items remain).
 
 ---
+
+## 2026-06-14T21:55:00Z -- session wk7-r1 -- RESEARCH/ideation (backlog replenishment)
+
+- **Bot health:** /api/status OK (checked start of session, continued from wk6-b84 context): XFA shadow, $152,227.12 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** RESEARCH/IDEATION -- backlog fully exhausted (B84 done, B85 Lawrence-priority pending but Opus-tagged). Mandatory research session per B84 journal note. This session runs on Sonnet (B85 will run on Opus next session).
+- **Session:** wk7-r1. Databento spend: $0.00 (no fetches required, all analysis from existing CSVs).
+
+- **Inline data mining (research/mfe_mae_deployed_combined_clean.csv, B77 dataset, n=3238 trades 5y excl 2022):**
+
+  1. **ORB post-target tail (n=97 target hits):**
+     | Threshold | P(reach | 2.5R hit) |
+     |-----------|-----------|
+     | 3.0R | 9.3% |
+     | 4.0R | 0.0% |
+     Avg r_mfe for target hits = 2.66R. Estimated no-target gain = +$18k over 5y (negligible). Confirms 2.5R target is optimal; no "let it run" opportunity exists. ORB is a hold-to-EOD strategy, not a trailing-profit strategy.
+
+  2. **ORB EOD flatten exit sub-analysis:**
+     | Exit time | n | PF | Total |
+     |-----------|---|-----|-------|
+     | exit < 15:00 | 47 | 3.070 | +$44k |
+     | exit 15:00-15:30 | 24 | 1.955 | +$9k |
+     | exit 15:30-16:00 | 25 | 1.954 | +$11k |
+     | **exit 16:00+** | **234** | **6.229** | **+$172k** |
+     The hard 16:00 ET market-close flatten (n=234, 71% of EOD cohort, PF=6.229) is the ENGINE of ORB value. Trades running all day and flattened at the bell are the dominant source.
+
+  3. **Funded-sim combine-gap analysis (KEY FINDING):**
+     Running `simulate_xfa_chain()` on the deployed B77 equity CSV: Phase A median_days_to_pass=8d; Phase A d/funded=24.6d (from B42 reference: 1033 days / 42 passes). The funded_sim restarts XFA accounts immediately after each bust, but in reality the next funded account cannot start until the NEXT COMBINE PASS. With 13 Phase-B busts in B57's 5y baseline:
+     - No-overlap gap: 13 x 24.6d = 320d idle (31% of 1033d period)
+     - Estimated drag: ~$175/mo (31% of $566)
+     - Gap-corrected $/mo (no overlap): ~$390/mo
+     - Gap-corrected $/mo (half-overlap, combine always running): ~$479/mo
+     The stated $566/mo is an optimistic upper bound (combine restarts instantly after bust). Lawrence should plan around ~$400-480/mo as the realistic range.
+
+  4. **funded_survival policy:** exists in app/backtest/risk_policy.py (reduces risk 0.75%->0.4% within $750 of MLL) but not exposed via CLI. Has never been benchmarked. Clean existing feature to test.
+
+  5. **Hour-blocking check:** B74 Phase 2 already tested block_9 ($564/mo 3.38x) and block_6_9 ($560/mo 3.15x) -- both fail vs B57 ($566/mo 3.54x). Not re-proposed.
+
+  6. **Web search:** no new mechanism classes. External claims continue 7-for-7 failure rate. Same iFVG/ORB territory.
+
+- **New backlog items appended (ranked after B85):**
+  - **B86 -- Funded-sim combine-gap correction** [pending]: Quantify the 31% idle-time drag. Add `--combine-gap-days N` to funded_sim CLI. Run B57 Phase B at gap=0/8/24/12. Expected: gap=24 reduces $/mo by >15%. Prior: ~80%.
+  - **B87 -- Phase B funded_survival risk policy** [pending]: Expose `--risk-policy funded_survival` in funded_sim CLI. Test vs baseline (13 busts). GO if busts<=10 AND net>=90% of constant. Prior: ~40%.
+  - **B88 -- FVG zone-width quality gate** [pending]: Phase 0 (add fvg_zone_pts to Signal) + Phase 1 (data mine PF vs zone width quintiles). GO if narrow-FVG PF >= 1.25x wide-FVG AND 3/5 years. Prior: ~20%.
+
+- **Verdict:** RESEARCH session complete. 3 items appended. Highest-value finding: the funded_sim overstates $/mo by an estimated 31% due to the combine-gap simplification (B86 will quantify precisely). Lesson 154 added.
+
+- **Tests:** 748 passed, 2 skipped, 0 failures (no app/ code changed this session).
+
+- **Next:** B85 (Lawrence-priority CPI straddle 1s confirmation, model:opus). Then B86, B87, B88.
+
+---
