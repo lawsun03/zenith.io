@@ -3722,8 +3722,22 @@ via a news-day mode switch).
 
 ## B85 -- CPI straddle TICK/1s confirmation of the entry-bar path  [done — CONFIRMED 2026-06-14: 1s replay PF 5.99/67% win/+1.68R 3R, 5.88/61%/+1.97R 4R, 5/5 yrs, 7% same-second whipsaw; slippage-immune (PF 5.43 at 10t); entry-bar concern resolved. Data $1.06 (ledger $8.74). FOLLOW-ON -> B86 engine build. doc: trade_analysis/2026-06-14_news_straddle_userspec.md]
 
-## B86 -- CPI breakout-straddle engine + funded/combine framing  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B89 -- CPI breakout-straddle: pipeline integration + resting-OCO live design  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+(Renumbered from a duplicate B86; the loop's B86/B87/B88 are separate items below.
+The stray B85 spec text further down is historical — the live spec is here + in
+trade_analysis/2026-06-14_news_straddle_userspec.md.)
 B85 CONFIRMED the CPI straddle on 1s data (PF ~6, 5/5 yrs, slippage-immune). Build it.
+- Validate FIRST in the research/backtest pipeline (simulatable engine reusing the
+  scripts/news_straddle_cpi_1s.py logic as the oracle), THEN deploy live.
+- LIVE design (Lawrence-approved): the buy-stop/sell-stop are RESTING ENTRY orders
+  handled by the EXCHANGE (place_stop_order x2, OCO) — NOT bot-side intrabar polling
+  and NOT any live 1s/Databento fetch (that was backtest-only). On a fill: cancel the
+  sibling (OCO) and reuse the existing `_pending_brackets`/`_place_bracket_after_fill`
+  to put stop (=range boundary, R=60t) + target (=3R) on; flatten EOD. A small
+  wall-clock scheduler arms ~2 min before each CPI from data/news_events.csv and
+  computes the 15-min pre-range from the bot's existing bars (1-min ample). Sketch in
+  the 2026-06-14 conversation; new pieces = scheduler + place_oco_stop_entries +
+  cancel-sibling-on-fill. Default-off; never auto-enable live.
 - Engine: default-off `news_straddle` (standalone detector + runner shim per the pattern),
   CPI-only via `data/news_events.csv`. Rules (validated): 15-min pre-release range; OCO
   buy_stop=range_high+60t / sell_stop=range_low-60t; first leg fills, OCO-cancel the other;
@@ -3889,3 +3903,37 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 **Prior:** ~20%. Geometry-based predictors have consistently failed: B16 (inversion bar body relative to stop: non-significant), wk5-r3 (displacement bar body/ATR: inverted + non-monotonic). FVG zone width is conceptually different (measures imbalance size, not confirmation bar quality) but the track record is against geometry. Worth a cheap Phase 0 + Phase 1 pass.
 
 **Source:** Inline ideation this session (2026-06-14T21:55Z). No prior art in this backlog for FVG zone width specifically.
+
+---
+
+## B90 -- CPI-day mode switch vs standalone CPI straddle (pipeline evaluation)  [pending — PRIORITY: Lawrence-requested 2026-06-14; DEPENDS ON B89; rank ahead of routine queue; model:opus]
+
+Once B89 makes the CPI straddle simulatable in the pipeline, evaluate the two
+deployment shapes Lawrence wants, on BOTH objectives, vs the base-only baseline:
+
+**(a) CPI-day MODE SWITCH (the preferred shape):** on CPI release days, turn the
+base engine (deployed combined iFVG+ORB) OFF and run ONLY the CPI straddle (exactly
+ONE trade that day). On all NON-CPI days, the base engine runs normally. So the
+calendar routes: CPI day -> straddle-only; else -> base engine.
+
+**(b) STANDALONE:** the CPI straddle alone (no base engine), for reference.
+
+**Baselines:** base-engine-always (B42 deployed pipeline: $549/mo, sust 3.23x) is the
+bar for (a); for (b), report combine + funded standalone (expected sparse, ~9/yr).
+
+**Metric:** Combine pass rate + funded $/mo + sustainability. For (a) the question
+is net: does replacing the base engine's CPI-day trades with the high-PF straddle
+trade raise $/mo or sust without hurting throughput? (CPI is only ~9 days/yr, so the
+base engine loses few days; the straddle adds a PF~6 trade on those days.)
+
+**Prior / context:** B84 found that suppressing the base engine on news days in
+GENERAL hurt (volume starvation, and ORB is actually strong on FOMC) — BUT B84 had
+no working straddle to switch TO and lumped all news together. B90 is CPI-only with
+a CONFIRMED straddle replacing the base on just ~9 days/yr, so the starvation risk is
+minimal. Re-test cleanly. Success: (a) beats B42 on $/mo or sust without the other
+regressing. Stop rule: if (a) is worse than base-only on both, the switch is not worth
+it — keep the base engine on CPI days (and consider the straddle as an additive
+overlay instead, i.e. run BOTH that day, as a fallback variant to report).
+
+**Source:** Lawrence-requested 2026-06-14 (CPI-day mode switch + standalone). Builds
+on B85 (confirmed straddle) + B89 (engine). Analogue of B84 but CPI-specific & grounded.
