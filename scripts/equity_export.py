@@ -113,12 +113,15 @@ def main() -> int:
         tpath.parent.mkdir(parents=True, exist_ok=True)
         with tpath.open("w", newline="", encoding="utf-8") as tf:
             tw = csv.writer(tf)
-            tw.writerow(["entry_ts", "exit_ts", "side", "pnl_usd", "engine_type"])
+            tw.writerow(["entry_ts", "exit_ts", "side", "pnl_usd", "engine_type",
+                         "r_mfe", "r_mae", "mfe_pts", "mae_pts"])
             for t in result.trades:
                 engine_type = "ifvg" if t.get("grade") else "orb"
                 tw.writerow([
                     t["entry_ts"], t["exit_ts"], t["side"],
                     t["realized_pnl"], engine_type,
+                    t.get("r_mfe", ""), t.get("r_mae", ""),
+                    t.get("mfe_pts", ""), t.get("mae_pts", ""),
                 ])
         print(f"wrote {len(result.trades)} trades -> {tpath}")
     return 0

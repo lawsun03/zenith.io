@@ -79,7 +79,7 @@ class TestTradeCsvOutput:
         assert trade_csv.exists(), "trade CSV should be written when --trade-csv is set"
         rows = list(csv.DictReader(trade_csv.open()))
         assert len(rows) == 2
-        assert set(rows[0].keys()) == {"entry_ts", "exit_ts", "side", "pnl_usd", "engine_type"}
+        assert {"entry_ts", "exit_ts", "side", "pnl_usd", "engine_type"}.issubset(set(rows[0].keys()))
         assert rows[0]["engine_type"] == "ifvg"
         assert rows[1]["engine_type"] == "orb"
 

@@ -3231,7 +3231,7 @@ is worthwhile. High expected rejection. Tag: Sonnet.
 
 ---
 
-## B77 -- Deployed-config MFE/MAE dataset (infrastructure)  [pending]
+## B77 -- Deployed-config MFE/MAE dataset (infrastructure)  [done -- shipped: r_mfe/r_mae/mfe_pts/mae_pts added to equity_export --trade-csv; 3238-trade deployed-config dataset generated at research/mfe_mae_deployed_combined_clean.csv (2376 iFVG + 862 ORB, PF=1.089, 18.7% target hits, 5y excl 2022); 3 defining-behavior tests, 728 total green]
 
 **Mechanism:** The existing research/mfe_mae_ifvg_clean.csv and mfe_mae_orb_clean.csv
 were generated with the RESEARCH BASELINE config (ifvg_edge entry mode, no swing-stop

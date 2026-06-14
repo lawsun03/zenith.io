@@ -2926,3 +2926,50 @@ Displacement bar body/ATR: Q2(1.303) and Q3(1.336) outperform Q1(1.006) and Q5(1
 - **Lesson 140 added.** Test suite: 725 passed, 2 skipped, 0 failures (no code changes). Script: scripts/run_b76_phase1.py.
 
 - **Next:** B77 -- Deployed-config MFE/MAE dataset infrastructure (add r_mfe/r_mae/mfe_pts/mae_pts to equity_export --trade-csv output, generate deployed-close-mode excursion dataset).
+
+---
+
+## 2026-06-14T17:01Z -- session wk5-b77 -- B77 (Deployed-config MFE/MAE dataset -- DATASET)
+
+- **Bot health:** /api/status OK -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Claimed:** B77 (sole pending item -- add r_mfe/r_mae/mfe_pts/mae_pts to equity_export --trade-csv, generate deployed-config excursion dataset).
+
+**Ran:**
+1. Read `app/backtest/runner.py`: confirmed r_mfe/r_mae/mfe_pts/mae_pts are already computed (lines 707-710) and stored in result.trades dicts -- only needed to expose them in equity_export.py.
+2. Added 4 new columns to `scripts/equity_export.py` --trade-csv output (r_mfe, r_mae, mfe_pts, mae_pts; empty string when absent, matching existing t.get() pattern).
+3. Created `tests/test_b77_trade_csv_excursion.py` -- 3 defining-behavior tests: (a) columns present with correct values when trade dict has them, (b) empty string cells when absent (no KeyError), (c) existing no-flag behavior unchanged.
+4. Fixed `tests/test_b74_trade_csv.py` -- column equality check `==` broke when new columns were added; changed to `.issubset()` (existing B74 intent: verify required columns present, not exact set).
+5. Generated `research/mfe_mae_deployed_combined_clean.csv`:
+   - Config: engine=combined, ifvg_entry_mode=close, killzones=all, swing_stop_lookback=30, stop_buffer=3.0, min_absolute_body=5.0, r_multiple=2.5, partial_r=0, risk_pct=1.0
+   - Command: `python scripts/equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --set engine=combined --set ifvg_entry_mode=close --set swing_stop_lookback=30 --set stop_buffer=3.0 --set min_absolute_body=5.0 --set r_multiple=2.5 --killzones all --partial-r 0 --exclude-years 2022 --out research/equity_b77/deployed_r1p0_excl2022.csv --trade-csv research/mfe_mae_deployed_combined_clean.csv`
+   - Note: `--killzones all` flag (not `--set enabled_killzones=all`); latter is not a StrategyParams field.
+6. Full test suite: **728 passed, 2 skipped, 0 failures** (+3 B77 tests).
+
+**Numbers:**
+
+| Metric | Value |
+|--------|-------|
+| Total trades | 3,238 |
+| iFVG trades (grade field present) | 2,376 |
+| ORB trades (no grade field) | 862 |
+| PF (partial_r=0, r=2.5) | 1.089 |
+| Target hits (r_mfe >= 2.4) | 18.7% |
+| r_mfe mean | 1.115 |
+| Trades with r_mfe present | 3,238 (100%) |
+
+Target hit rate 18.7% vs 21.6% for research-baseline LO ifvg_edge longs (wk5-r3) -- the 3pt gap is consistent with close-mode entering later in the inversion bar.
+
+**Infrastructure delivered:**
+- `scripts/equity_export.py`: r_mfe/r_mae/mfe_pts/mae_pts columns in --trade-csv
+- `tests/test_b77_trade_csv_excursion.py`: 3 defining-behavior tests
+- `tests/test_b74_trade_csv.py`: column check changed from exact `==` to `.issubset()` (backward-compatible fix)
+- `research/mfe_mae_deployed_combined_clean.csv`: 3238-trade deployed-config MFE/MAE dataset
+- `research/equity_b77/deployed_r1p0_excl2022.csv`: equity curve from the same run
+
+**Verdict:** DATASET -- infrastructure shipped, dataset generated. No trading hypothesis tested. No stop rule applicable.
+
+**Learned:** (1) `enabled_killzones` is not a StrategyParams field -- it is handled by the `--killzones` argument in equity_export.py, not `--set`. Using `--set enabled_killzones=all` raises AttributeError (caught immediately). (2) The MFE/MAE fields were already computed in runner.py at lines 707-710 and available in result.trades -- the gap was only in the CSV output layer. (3) The deployed close-mode config generates 18.7% target hits at r=2.5 vs 21.6% for research baseline; the difference reflects entry-mode geometry (close-mode enters later, capturing less of the favorable leg before the target is hit).
+
+**Lesson 141 added.** Databento: $3.87/$20.00 (no spend this session).
+
+**Next:** Backlog fully exhausted (B77 was the last item). Next session = research/ideation (every-3rd-session rule; this is a 4th item in wk5 so ideation is overdue). Key open threads: (1) deploy B57 fix (remove MNQ r_multiple=3.5 override, set base r=2.5) -- the standing Monday recommendation with the strongest two-phase pipeline support; (2) future Phase 1 analyses can now use mfe_mae_deployed_combined_clean.csv as the deployed-config reference instead of the research-baseline mfe_mae_ifvg_clean.csv.

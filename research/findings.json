@@ -3504,5 +3504,28 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T17:01Z",
+    "session": "wk5-b77",
+    "item": "B77",
+    "variant": "deployed-config MFE/MAE dataset",
+    "objective": "dataset",
+    "metrics": {
+      "trades": 3238,
+      "ifvg_trades": 2376,
+      "orb_trades": 862,
+      "pf": 1.089,
+      "target_hits_pct": 18.7,
+      "r_mfe_mean": 1.115,
+      "r_mfe_missing": 0
+    },
+    "verdict": "dataset",
+    "learned": "Deployed close-mode config (engine=combined, ifvg_entry_mode=close, all-day, r=2.5, partial_r=0) produces 3238 trades (2376 iFVG + 862 ORB) with PF=1.089 over 5y excl 2022; 18.7% target hits (r_mfe>=2.4), r_mfe mean=1.115 -- consistent with B57 combine harness estimates. Dataset is available for accurate Phase 1 quality-predictor analyses in the deployed config. The r_mfe/r_mae/mfe_pts/mae_pts columns are now exported via --trade-csv in equity_export.py.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
