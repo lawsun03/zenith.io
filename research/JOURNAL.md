@@ -2452,3 +2452,33 @@ SMT divergence rate: 28.4% (NQ swept its level but ES did not on ~28% of trades)
 
 - **Next:** B68 (Thursday iFVG DOW block in deployed config -- must verify in close-mode per Lesson 89; this is the most likely next GO candidate given Thursday PF=0.962 in 4/5 years from wk4-r3 data).
 
+
+## 2026-06-15T04:00Z -- session wk4-b68 -- B68 (Thursday iFVG DOW block -- REJECTED)
+
+- **Bot health:** Weekend market closure; bot status not re-checked (last verified in wk4-r3).
+- **Claimed:** B68 (top pending item -- Thursday iFVG block, Phase 1 deployed-config DOW PF verification).
+- **Config verified:** engine=combined, ifvg_entry_mode=close, allowed_sides=both, r_multiple=3.5, swing_stop_lookback=30, stop_buffer=3.0, min_absolute_body=5.0, risk=1.0%, partial_r=1.5. Note: memory entry had stale values (allowed_sides=long, r_multiple=2.5); actual bot_config.json has both-sides and r_multiple=3.5.
+- **Ran:** `scripts/analyze_b68_thursday_block.py` -- per-year backtests (2021/2023/2024/2025/2026, excl 2022 holdout) using exact deployed StrategyParams from bot_config.json. Per-trade DOW PF breakdown computed from result.trades.
+
+- **Numbers (deployed config, 5y excl 2022):**
+
+  | DOW | n | PF | net |
+  |-----|---|-----|-----|
+  | Monday | 658 | 0.613 | -$72,327 |
+  | Tuesday | 688 | 0.648 | -$66,736 |
+  | Wednesday | 681 | 0.612 | -$74,933 |
+  | Thursday | 668 | **0.645** | -$65,247 |
+  | Friday | 568 | 0.616 | -$60,099 |
+  | TOTAL | 3263 | -- | -$339,342 |
+
+  Per-year Thursday PF: 2021=0.772, 2023=0.635, 2024=0.564, 2025=0.613, 2026=0.837 (5/5 loss-making).
+
+- **Formal criterion:** Thursday PF < 1.0 in 5/5 years: YES. Overall Thursday PF < 0.90: YES (0.645). => formal Phase 1 GO.
+
+- **Actual verdict: REJECTED.** Thursday (PF=0.645) is the second-best performing day -- above the non-Thursday weighted average (PF~0.623). There is no DOW differentiation in the deployed config; all five days perform similarly (PF 0.61-0.65). Blocking Thursday removes above-average trades and would marginally worsen overall PF. The formal GO criterion was calibrated for a strategy where Thursday is uniquely weak; in the deployed config, no such weakness exists. Phase 2 not warranted.
+
+- **Script note:** Initial script had stale overrides from memory (allowed_sides=long, r_multiple=2.5). Corrected to use strategy_for() from bot_config.json directly. First-pass results with wrong config confirmed all-negative but same pattern; correct-config results showed same pattern (no DOW differentiation in either config variant).
+
+- **Learned:** (1) The DOW go criterion (PF < 1.0 in 3+/5 years AND overall < 0.90) fires even when ALL days are equally weak -- meeting the threshold does not imply the target DOW is specifically impaired. Must verify target DOW PF is WORSE than non-target DOW PF before proceeding to Phase 2. (2) Memory entries can carry stale parameter values -- always verify against live bot_config.json before scripting deployed-config analyses.
+
+- **Next:** B69 (setup freshness -- time-since-sweep gate, requires instrumentation).

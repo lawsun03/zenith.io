@@ -2729,7 +2729,7 @@ Source: B57 iFVG r_multiple finding (wk3-b57-rmult, 2026-06-14); wk4-r3 research
 
 ---
 
-## B68 — Thursday iFVG block (Phase 1 in deployed config, Phase 2 conditional)  [pending]
+## B68 — Thursday iFVG block (Phase 1 in deployed config, Phase 2 conditional)  [done — REJECTED Phase 1 NO-GO (efficacy): Thu PF=0.645 is second-best day in deployed config, non-Thu avg PF=0.623; blocking Thursday would worsen overall PF; no DOW differentiation exists]
 
 Research-baseline data (mfe_mae_ifvg_clean.csv, ifvg_edge mode, all sides) shows
 Thursday is loss-making in 4/5 years: PF=0.962, net=-$6,454 over 5y, negative in
