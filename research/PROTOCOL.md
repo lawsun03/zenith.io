@@ -154,3 +154,26 @@ untagged (Sonnet). The tag drives only model choice, never correctness; a
 mistag just means one item runs on the wrong-sized model.
 
 Otherwise the model is not your concern in-session — just do the work.
+
+## Edge-localization diagnostic (run before finalizing a near-miss REJECT)
+
+`scripts/edge_diagnostics.py` (importable `localize(df, dims, ...)` or CLI on a
+per-trade CSV) answers "WHY did it fail?" by slicing per-trade results across
+dimensions — side, instrument, reward target (RR), stop type, hour_et, dow,
+year, regime — and reporting where a ROBUST sub-edge hides. Three rejects flipped
+to wins on 2026-06-14 by exactly this (straddle RR 1:1→3-4R; news direction;
+S/D instrument NQ→gold), so:
+
+When a PROMISING mechanism comes back breakeven/negative in aggregate, do NOT
+mark it a final REJECT until you have run the diagnostic across at least
+{side, RR/target, stop definition, hour_et, year} (+ instrument if portable).
+Emit a per-trade CSV (`ts/date, side, r`, plus any dimension columns) and either
+call `localize()` or run the CLI; paste the verdict into the JOURNAL entry.
+Skip it for obvious junk (no need to autopsy every dead idea) — gate it to
+mechanisms that "just missed".
+
+Guardrails (this tool is the easiest way to overfit): a bucket is a HIT only if
+PF≥1.2, n≥30, positive in ≥60% of its years, and (when given) beats a control_pf
+(e.g. a random-entry baseline — see the gold demand-zone trend-confound control).
+A hit is a NEW HYPOTHESIS to confirm OUT-OF-SAMPLE, never a conclusion. Record it
+as a new backlog item, don't deploy off the slice.
