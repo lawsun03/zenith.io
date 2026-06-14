@@ -3663,4 +3663,57 @@ attack this directly. But event-driven vol expansion is real and the mechanism i
 genuinely different, so the cheap Phase-1 test is worth running to settle it.
 
 **Source:** Lawrence-requested 2026-06-14 (CPI straddle spec). Contrasts the
-deployed macro-blackout policy.
+deployed macro-blackout policy. **Run B83 then B84 (the news-day router) —
+Lawrence wants them as the front-of-queue priority.**
+
+---
+
+## B84 -- News-day mode switch (straddle ON / other engines OFF on event days)  [pending — PRIORITY: Lawrence-requested 2026-06-14; DEPENDS ON B83; rank immediately after B83; model:opus]
+
+**Hypothesis (Lawrence):** if the B83 straddle is profitable on news days, then on
+those days take ONLY the straddle and turn the normal engines (iFVG/ORB) OFF;
+on non-news days run the normal engines as usual. A day-level router keyed to
+`data/news_events.csv`.
+
+**Cheap insight FIRST (Phase 1a — NO dependency on B83, run regardless):**
+Tag every historical iFVG and ORB trade by whether its ET date is a CPI/PPI/FOMC
+day (from `data/news_events.csv`). Compare PF / net / win-rate on news days vs
+non-news days, per engine, 2021/2023/2024/2025-26 (NOT 2022). Two independent
+findings can come out of this:
+- If the normal engines are MATERIALLY WORSE on news days, then a plain
+  **news-day suppression** of iFVG/ORB is a candidate ON ITS OWN — no straddle
+  needed (this would extend the deployed intraday macro-blackout to a full-day
+  blackout on scheduled-event days). Benchmark that suppression alone vs control.
+- If they are NOT worse, the "turn the other engines off" half of the idea is
+  unjustified — say so, and the router collapses to "just also run B83".
+
+**Phase 2 — the conditional router (only if B83 Phase 1 = GO):**
+- Add `news_day_mode: bool = False` (default off). When on, for each calendar ET
+  day: if it is in `news_events.csv` -> enable ONLY `news_straddle`, suppress
+  iFVG/ORB signal emission for that day; else -> normal engines, straddle off.
+- Day-membership computed from the scheduled calendar (known in advance — no
+  lookahead). Deterministic Python (Rule 5). Reuse B83's straddle engine + the
+  per-day suppression mechanism already used by other day-level gates.
+- Defining tests (tests/test_news_day_router.py): (1) news day -> iFVG/ORB
+  suppressed, straddle armed; (2) non-news day -> straddle off, iFVG/ORB normal;
+  (3) flag off -> everything normal (live bot unaffected); (4) day membership from
+  scheduled ts only.
+
+**Benchmark:** the composite (router on) vs (a) control baseline B42, (b) B83
+straddle as a pure add-overlay (no suppression), (c) news-day suppression alone
+(from Phase 1a). This isolates which piece — suppression, straddle, or both —
+carries any edge. Both objectives + funded pipeline.
+
+**Success criteria:** the composite improves the funded pipeline ($/mo AND sust)
+vs B42 AND vs the best of {suppression-only, straddle-overlay}. **Stop rule:** if
+the composite beats neither the baseline nor its two component halves -> reject;
+keep whichever single component (if any) tested positive.
+
+**Prior:** the SUPPRESSION half is plausible (~45% — news days may genuinely be
+junk for sweep/displacement engines, which is the macro-blackout's premise); the
+STRADDLE half inherits B83's HIGH rejection prior (~70%). Most likely net outcome:
+news-day suppression is a small win, the straddle adds nothing. Worth running
+because Phase 1a is cheap and immediately useful regardless of B83.
+
+**Source:** Lawrence-requested 2026-06-14 (combine B83 with the existing strats
+via a news-day mode switch).
