@@ -3551,5 +3551,40 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T18:30Z",
+    "session": "wk6-b78",
+    "item": "B78",
+    "variant": "Phase A risk=0.75% r_mult=2.5",
+    "objective": "funded",
+    "metrics": {
+      "pipeline_net_per_month": 520,
+      "pipeline_sust": 2.46,
+      "combine_passes_test": "6/17",
+      "combine_pf_test": 1.27,
+      "combine_passes_train": "4/12",
+      "combine_pf_train": 1.29,
+      "phase_a_passes": "32/109",
+      "phase_a_avg_days_per_attempt": 9.5,
+      "phase_a_days_per_funded": 32.3,
+      "phase_a_reset_cost": 511,
+      "b42_baseline_net_per_month": 549,
+      "b42_baseline_sust": 3.23,
+      "b57_frontier_net_per_month": 566,
+      "b57_frontier_sust": 3.54,
+      "equity_2021_pf": 1.145,
+      "equity_2023_pf": 0.943,
+      "equity_2024_pf": 1.16,
+      "equity_2025_pf": 1.116,
+      "equity_2026_pf": 1.131
+    },
+    "verdict": "rejected",
+    "learned": "Reducing Phase A risk from 1.0% to 0.75% (holding r=2.5) worsens both funded-pipeline metrics: $/mo falls $549->$520, sust 3.23x->2.46x. Mechanism: fixed $3k combine target means lower risk = smaller daily P&L = longer combines = fewer cycles per year = fewer passes vs same bust count. Stop rule fires on both metrics. Lower risk% degrades pipeline monotonically at fixed r.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

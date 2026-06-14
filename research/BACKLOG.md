@@ -3335,7 +3335,7 @@ open contracts), no drift, no lockout. Market closed (weekend).
 
 ---
 
-## B78 — Phase A risk=0.75% pipeline sensitivity  [pending]
+## B78 — Phase A risk=0.75% pipeline sensitivity  [done — rejected; $520/mo sust=2.46x, both below B42; stop rule triggered]
 
 **Context:** Phase A combine risk has been tested at 1.25% (B28, rejected — worse than 1.0%) and
 1.0% (B42 deployed, 42 passes/5y, $549/mo, sust=3.23x). Risk=0.75% is the one untested level

@@ -3031,3 +3031,55 @@ Target hit rate 18.7% vs 21.6% for research-baseline LO ifvg_edge longs (wk5-r3)
 - **Lessons 142-144 added.** No code changes. Test suite: 728 passed, 2 skipped, 0 failures (no new code). Databento: $3.87/$20 (no spend).
 
 - **Next:** B78 (Phase A risk=0.75% pipeline sensitivity -- no code, fast benchmark), then B79 (iFVG freshness in deployed config -- small code + analysis), then B80 (live MFE/MAE tracking -- Rule 13 build).
+
+---
+
+## 2026-06-14T18:30Z -- session wk6-b78 -- B78 (Phase A risk=0.75% sensitivity -- REJECTED)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Claimed:** B78 (top pending item -- Phase A risk=0.75% pipeline sensitivity, no code).
+
+**Ran:**
+1. `scripts/equity_export.py` x5 (2021/2023/2024/2025/2026, risk=0.75%, r_multiple=2.5, partial_r=1.5, all deployed params via strategy_for + `--set r_multiple=2.5`). Output: `research/equity_b78/deployed_r75pct_{year}.csv`. Five parallel background tasks.
+2. `scripts/run_b78_pipeline.py` (new) -- two-phase pipeline at haircut=$200, Phase B fixed = B21 ORB-reentry r0.75.
+3. `scripts/run_monthly_combine.py` x2 -- test period (2025-2026) and train period (2024) at risk=0.75%, r=2.5.
+
+**Numbers:**
+
+Per-year equity summary (risk=0.75%, r=2.5):
+| Year | Trades | Net | PF |
+|------|--------|-----|-----|
+| 2021 | 643 | +$12,382 | 1.145 |
+| 2023 | 1,164 | -$8,615 | 0.943 |
+| 2024 | 1,238 | +$30,650 | 1.160 |
+| 2025 | 1,266 | +$26,045 | 1.116 |
+| 2026 | 542 | +$9,356 | 1.131 |
+
+Phase A (B78, risk=0.75%, r=2.5): 32/109 passes (29.4%), avg 9.5d/attempt, 32.3d/funded, $511 reset/funded.
+
+Phase B (B21 ORB-reentry r0.75): 13/14 busts, $3,131/acct, 73.5d/acct.
+
+**Two-phase pipeline:**
+| Config | Reset$ | XFA$ | Net/cyc | Cycle d | Net/mo | Sust |
+|--------|--------|------|---------|---------|--------|------|
+| B78 risk=0.75% r=2.5 | $511 | $3,131 | $2,620 | 105.8d | **$520** | **2.46x** |
+| B42 baseline r=1.0% r=3.5 | $568 | $3,131 | $2,563 | 98.1d | $549 | 3.23x |
+| B57 frontier r=1.0% r=2.5 | $545 | $3,131 | $2,586 | 96.2d | $566 | 3.54x |
+
+**Combine benchmark (risk=0.75%, r=2.5):**
+| Period | Passes | Run PF | Longs PF | Shorts PF |
+|--------|--------|--------|----------|-----------|
+| Test 2025-2026 | 6/17 (35%) | 1.27 | 1.43 | 1.13 |
+| Train 2024 | 4/12 (33%) | 1.29 | 1.73 | 0.96 |
+
+- **Stop rule check:** B78 $520/mo < B42 $549/mo AND B78 sust 2.46x < B42 3.23x. BOTH metrics below B42 → stop rule fires immediately. REJECTED.
+
+- **Root cause:** The $3k combine profit target is fixed. Reducing risk from 1.0% to 0.75% means daily P&L scales by 0.75, so each combine attempt takes ~33% longer to hit target. This produces: (a) fewer total attempts in the 5y window (109 vs 159), (b) fewer absolute passes (32 vs 42), (c) same bust count (13), (d) lower sustainability (2.46x vs 3.23x). The cycle also takes longer (105.8d vs 98.1d), reducing $/month despite a marginally higher net/cycle ($2,620 vs $2,563). Lower risk% degrades the funded pipeline monotonically -- the fixed target is anti-proportional to position size.
+
+- **Combine note:** Pass rate at 0.75% (6/17=35% test, 4/12=33% train) is similar to or slightly better than control baseline (6/17=35%, 4/12=33%). The monthly combine harness is not sensitive to this risk level change because the $3k target and monthly window interact differently than the continuous-year funded_sim.
+
+- **Verdict:** REJECTED -- stop rule fires (both $/mo and sust below B42). B57 ($566/mo, 3.54x) remains the sole frontier recommendation. No code changes. Lesson 145 added. Test suite: 728 passed, 2 skipped (no code changes from B77).
+
+- **Learned:** Lower Phase A risk% degrades the funded pipeline monotonically at fixed r, because the $3k combine target is inversely proportional to risk -- fewer cycles fit in the same time window, reducing both $/mo and sustainability. The optimal Phase A risk% at r=2.5 is 1.0-1.25% (where the combine attempt frequency is highest while bust rate remains manageable).
+
+- **Next:** B79 (iFVG setup freshness in deployed close-mode config -- adds displacement_ts to trade output, Phase 1 analysis).
