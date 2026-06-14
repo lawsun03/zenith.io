@@ -2637,21 +2637,57 @@
     "variant": "r_multiple sensitivity: 2.0 / 2.5 / 3.0 vs 3.5 baseline",
     "objective": "funded",
     "metrics": {
-      "combine_r20": {"passes": 12, "of": 61, "pf": 1.07},
-      "combine_r25": {"passes": 11, "of": 61, "pf": 1.05},
-      "combine_r30": {"passes": 10, "of": 61, "pf": 1.07},
-      "combine_r35_baseline": {"passes": 10, "of": 61, "pf": 1.06},
-      "pipeline_r20": {"net_per_month": 567, "sustainability": 3.54},
-      "pipeline_r25": {"net_per_month": 566, "sustainability": 3.54},
-      "pipeline_r30": {"net_per_month": 540, "sustainability": 3.08},
-      "pipeline_r35_baseline": {"net_per_month": 549, "sustainability": 3.23},
-      "holdout_2022_r25": {"combine_pass_rate": 0.258, "compare_r35": 0.246}
+      "combine_r20": {
+        "passes": 12,
+        "of": 61,
+        "pf": 1.07
+      },
+      "combine_r25": {
+        "passes": 11,
+        "of": 61,
+        "pf": 1.05
+      },
+      "combine_r30": {
+        "passes": 10,
+        "of": 61,
+        "pf": 1.07
+      },
+      "combine_r35_baseline": {
+        "passes": 10,
+        "of": 61,
+        "pf": 1.06
+      },
+      "pipeline_r20": {
+        "net_per_month": 567,
+        "sustainability": 3.54
+      },
+      "pipeline_r25": {
+        "net_per_month": 566,
+        "sustainability": 3.54
+      },
+      "pipeline_r30": {
+        "net_per_month": 540,
+        "sustainability": 3.08
+      },
+      "pipeline_r35_baseline": {
+        "net_per_month": 549,
+        "sustainability": 3.23
+      },
+      "holdout_2022_r25": {
+        "combine_pass_rate": 0.258,
+        "compare_r35": 0.246
+      }
     },
     "verdict": "candidate",
-    "learned": "Lowering iFVG r_multiple from deployed 3.5 to 2.5 improves both combine pass rate (11/61 vs 10/61) and funded pipeline economics ($566/mo, 3.54x sust vs $549/mo, 3.23x baseline), clearing both success criteria. The mechanism is structural: shorter targets produce more frequent Combine-phase wins, reducing reset cost per funded account by ~$23, which more than offsets any per-winner earning reduction. r=2.0 gives marginally identical results ($567/mo, 3.54x) — the pipeline is flat between 2.0 and 2.5; r=3.0 and r=3.5 are materially worse. 2022 holdout confirms: r=2.5 maintain its advantage in the 2022 bear market (25.8% vs 24.6% pass rate at r=3.5).",
+    "learned": "Lowering iFVG r_multiple from deployed 3.5 to 2.5 improves both combine pass rate (11/61 vs 10/61) and funded pipeline economics ($566/mo, 3.54x sust vs $549/mo, 3.23x baseline), clearing both success criteria. The mechanism is structural: shorter targets produce more frequent Combine-phase wins, reducing reset cost per funded account by ~$23, which more than offsets any per-winner earning reduction. r=2.0 gives marginally identical results ($567/mo, 3.54x) \u00e2\u20ac\u201d the pipeline is flat between 2.0 and 2.5; r=3.0 and r=3.5 are materially worse. 2022 holdout confirms: r=2.5 maintain its advantage in the 2022 bear market (25.8% vs 24.6% pass rate at r=3.5).",
     "links": {
       "doc": null,
-      "runs": ["b57_r20", "b57_r25", "b57_r30", "b57_r35_base"],
+      "runs": [
+        "b57_r20",
+        "b57_r25",
+        "b57_r30",
+        "b57_r35_base"
+      ],
       "src": null
     }
   },
@@ -2662,18 +2698,37 @@
     "variant": "confluence-weighted sizing (count-ladder: <=1->0.5x, ==2->1.0x, >=3->1.5x) vs flat-size control",
     "objective": "funded",
     "metrics": {
-      "combine_confluence": {"passes": 9, "of": 61, "pf": 1.12},
-      "combine_control_r25": {"passes": 13, "of": 61, "pf": 1.15},
-      "pipeline_confluence": {"net_per_month": 430, "sustainability": 0.65},
-      "pipeline_control_r25": {"net_per_month": 797, "sustainability": 0.77},
-      "pipeline_b42_baseline": {"net_per_month": 844, "sustainability": 0.79},
-      "stop_rule": "REJECT — worse than flat-size control on BOTH metrics"
+      "combine_confluence": {
+        "passes": 9,
+        "of": 61,
+        "pf": 1.12
+      },
+      "combine_control_r25": {
+        "passes": 13,
+        "of": 61,
+        "pf": 1.15
+      },
+      "pipeline_confluence": {
+        "net_per_month": 430,
+        "sustainability": 0.65
+      },
+      "pipeline_control_r25": {
+        "net_per_month": 797,
+        "sustainability": 0.77
+      },
+      "pipeline_b42_baseline": {
+        "net_per_month": 844,
+        "sustainability": 0.79
+      },
+      "stop_rule": "REJECT \u00e2\u20ac\u201d worse than flat-size control on BOTH metrics"
     },
     "verdict": "rejected",
-    "learned": "Confluence-weighted sizing (additive ladder: 0.5x for count<=1, 1.0x for count=2, 1.5x for count>=3) is rejected: -$367/mo (-46%) and -0.12x sust vs flat-size B57 r=2.5 control. Root cause: the down-sizing effect dominates. count>=3 signals (all of: long+rank-1+10 ET+combined) are rare (~20% of trades); the majority score count<=1 and get 0.5x sizing. Net average size < 1.0x, equivalent to running at reduced risk. The per-trade edge of high-confluence signals is not materially higher than the population average — the features are correlated (rank-1 long NY-AM signals tend to also be at 10 ET, and vice versa), not additively independent. This is the same failure mode as B47, B19, B48 — subtractive selection on the signal axis vs subtractive selection on the size axis produce the same result: reduced average bet size without proportional edge uplift. Rule: confluence sizing requires that the high-confluence cohort has a materially higher per-trade PnL distribution. Verify this with MFE/MAE analysis (B2) before attempting a size ladder.",
+    "learned": "Confluence-weighted sizing (additive ladder: 0.5x for count<=1, 1.0x for count=2, 1.5x for count>=3) is rejected: -$367/mo (-46%) and -0.12x sust vs flat-size B57 r=2.5 control. Root cause: the down-sizing effect dominates. count>=3 signals (all of: long+rank-1+10 ET+combined) are rare (~20% of trades); the majority score count<=1 and get 0.5x sizing. Net average size < 1.0x, equivalent to running at reduced risk. The per-trade edge of high-confluence signals is not materially higher than the population average \u00e2\u20ac\u201d the features are correlated (rank-1 long NY-AM signals tend to also be at 10 ET, and vice versa), not additively independent. This is the same failure mode as B47, B19, B48 \u00e2\u20ac\u201d subtractive selection on the signal axis vs subtractive selection on the size axis produce the same result: reduced average bet size without proportional edge uplift. Rule: confluence sizing requires that the high-confluence cohort has a materially higher per-trade PnL distribution. Verify this with MFE/MAE analysis (B2) before attempting a size ladder.",
     "links": {
       "doc": null,
-      "runs": ["b58_confluence"],
+      "runs": [
+        "b58_confluence"
+      ],
       "src": "scripts/_b58_funded_analysis.py"
     }
   },
@@ -2681,31 +2736,126 @@
     "ts": "2026-06-14T01:10:00Z",
     "session": "wk4-b59",
     "item": "B59",
-    "variant": "long-only sweep-reentry micro-engine (ORB long stop → session/prior-day-low sweep + bullish displacement+FVG inversion → long signal)",
+    "variant": "long-only sweep-reentry micro-engine (ORB long stop \u00e2\u2020\u2019 session/prior-day-low sweep + bullish displacement+FVG inversion \u00e2\u2020\u2019 long signal)",
     "objective": "funded",
     "metrics": {
-      "combine_sweep_reentry": {"passes": 12, "of": 61, "pf": 1.18, "note": "orb_r_multiple=2.5"},
+      "combine_sweep_reentry": {
+        "passes": 12,
+        "of": 61,
+        "pf": 1.18,
+        "note": "orb_r_multiple=2.5"
+      },
       "overlay_vs_orb_r025": {
-        "orb_only": {"sust": 1.6, "net_per_month": 467},
-        "orb_plus_overlay": {"sust": 2.0, "net_per_month": 475}
+        "orb_only": {
+          "sust": 1.6,
+          "net_per_month": 467
+        },
+        "orb_plus_overlay": {
+          "sust": 2.0,
+          "net_per_month": 475
+        }
       },
       "overlay_vs_orb_r050": {
-        "orb_only": {"sust": 2.14, "net_per_month": 742},
-        "orb_plus_overlay": {"sust": 1.27, "net_per_month": 725}
+        "orb_only": {
+          "sust": 2.14,
+          "net_per_month": 742
+        },
+        "orb_plus_overlay": {
+          "sust": 1.27,
+          "net_per_month": 725
+        }
       },
       "overlay_vs_orb_r10_b21config": {
-        "orb_only_r075": {"sust": 0.68, "net_per_month": 937},
-        "orb_plus_overlay_r075": {"sust": 0.64, "net_per_month": 914}
+        "orb_only_r075": {
+          "sust": 0.68,
+          "net_per_month": 937
+        },
+        "orb_plus_overlay_r075": {
+          "sust": 0.64,
+          "net_per_month": 914
+        }
       },
-      "b21_phase_b_reference": {"sust": 2.62, "net_per_month": 497},
-      "stop_rule": "REJECT — no consistent funded improvement; sust WORSE at risk=0.5% (-41%) and risk=1.0% (both pipeline-negative); marginal apparent win at risk=0.25% is 1-bust noise"
+      "b21_phase_b_reference": {
+        "sust": 2.62,
+        "net_per_month": 497
+      },
+      "stop_rule": "REJECT \u00e2\u20ac\u201d no consistent funded improvement; sust WORSE at risk=0.5% (-41%) and risk=1.0% (both pipeline-negative); marginal apparent win at risk=0.25% is 1-bust noise"
     },
     "verdict": "rejected",
-    "learned": "Sweep-reentry overlay (long-only, fires after ORB long stop) does not improve the funded pipeline at any tested risk level. Root cause: the overlay fires AFTER the account has already absorbed an ORB loss, adding additional loss risk to a day already strained toward the funded account MLL. Additional trades on a down day compound bust probability rather than recover it. The signal itself may be valid in isolation, but in the funded context — where a 2-loss day is near-fatal — it increases bust rate without sufficient win frequency to compensate. Sparse trigger chain (ORB long must fire + stop + sweep + displacement+FVG) limits trade volume too severely for the edge to matter at pipeline scale. Rule: recovery overlay signals need whole-day risk budgeting (size ORB + overlay together, not additively) to be safe in funded accounts.",
+    "learned": "Sweep-reentry overlay (long-only, fires after ORB long stop) does not improve the funded pipeline at any tested risk level. Root cause: the overlay fires AFTER the account has already absorbed an ORB loss, adding additional loss risk to a day already strained toward the funded account MLL. Additional trades on a down day compound bust probability rather than recover it. The signal itself may be valid in isolation, but in the funded context \u00e2\u20ac\u201d where a 2-loss day is near-fatal \u00e2\u20ac\u201d it increases bust rate without sufficient win frequency to compensate. Sparse trigger chain (ORB long must fire + stop + sweep + displacement+FVG) limits trade volume too severely for the edge to matter at pipeline scale. Rule: recovery overlay signals need whole-day risk budgeting (size ORB + overlay together, not additively) to be safe in funded accounts.",
     "links": {
       "doc": null,
-      "runs": ["equity_b59/sr_r025.csv", "equity_b59/sr_r050.csv", "equity_b59/orb_only_r025.csv", "equity_b59/orb_only_r050.csv", "equity_b59/b59_orb075_r10.csv", "equity_b59/orb075_r10.csv"],
+      "runs": [
+        "equity_b59/sr_r025.csv",
+        "equity_b59/sr_r050.csv",
+        "equity_b59/orb_only_r025.csv",
+        "equity_b59/orb_only_r050.csv",
+        "equity_b59/b59_orb075_r10.csv",
+        "equity_b59/orb075_r10.csv"
+      ],
       "src": "app/strategy/sweep_reentry.py"
+    }
+  },
+  {
+    "ts": "2026-06-14T12:00Z",
+    "session": "wk4-b60",
+    "item": "B60",
+    "variant": "ORB r2.5 + iFVG on ES.v.0/MES.v.0 -- ATR-normalized thresholds (min_abs_body_pct=0.000238, stop_buf_pct=0.000143), 5min, 1-contract MES",
+    "objective": "diagnostic",
+    "metrics": {
+      "data_cost_usd": 3.87,
+      "data_symbol": "ES.v.0",
+      "data_period": "2021-01-01 to 2024-01-01 (fetched; 2024-2026 already existed)",
+      "total_bars": 1912827,
+      "mes_ifvg_pf": 0.896,
+      "mes_ifvg_pf_longs": 0.89,
+      "mes_ifvg_pf_shorts": 0.71,
+      "mes_ifvg_combine_passes": 6,
+      "mes_ifvg_combine_months": 65,
+      "mes_ifvg_combine_pass_pct": 9.2,
+      "mes_ifvg_combine_run_pf": 0.8,
+      "mes_ifvg_funded_passes": 9,
+      "mes_ifvg_funded_xfa_busts": 51,
+      "mes_ifvg_sust": 0.18,
+      "mes_ifvg_net_per_month": 361,
+      "mes_orb_r25_pf": 1.075,
+      "mes_orb_r25_pf_longs": 1.08,
+      "mes_orb_r25_pf_shorts": 1.01,
+      "mes_orb_r25_combine_passes": 10,
+      "mes_orb_r25_combine_months": 65,
+      "mes_orb_r25_combine_pass_pct": 15.4,
+      "mes_orb_r25_combine_run_pf": 1.05,
+      "mes_orb_r25_per_year_passes": {
+        "2021": 2,
+        "2022": 3,
+        "2023": 1,
+        "2024": 1,
+        "2025": 1,
+        "2026_5mo": 1
+      },
+      "mes_orb_r25_funded_passes": 46,
+      "mes_orb_r25_xfa_busts": 83,
+      "mes_orb_r25_sust": 0.55,
+      "mes_orb_r25_net_per_month": 1597,
+      "mes_twophase_sust": 0.11,
+      "mnq_b42_baseline_sust": 3.23,
+      "mnq_b57_r25_sust": 3.54,
+      "mnq_b57_r25_net_per_month": 566,
+      "haircut": 200,
+      "bars_file": "bars/bars_ES_dbv_2021_2026.csv",
+      "note": "2022 holdout excluded from equity_export; combine runner includes 2022 (simulation)"
+    },
+    "verdict": "diagnostic -- iFVG fails on ES/MES (PF 0.896, sust 0.18x); ORB has weak structural edge (PF 1.075) but sust 0.55x < 1.0; both below the sust >= 1.0 threshold; edge is NQ-specific at 1-contract MES sizing",
+    "learned": "iFVG sweep+inversion patterns are NQ/MNQ-specific: PF drops from ~1.15 (MNQ) to 0.896 (MES) \u2014 a losing strategy on ES. ORB has weak but positive edge on ES (PF 1.075, combine 15% pass rate, sust 0.55x), confirming ORB breakout structure partially generalizes across index futures. Root cause of sust failure: at 1-contract MES (/pt), the funded account MLL triggers faster (smaller dollar P&L relative to account thresholds), generating 83 XFA busts vs 46 combine passes. The two-phase pipeline sust (iFVG passes / ORB busts) = 9/83 = 0.11x vs MNQ B42 3.23x -- a 29x gap. Do not expand funded accounts to MES without contract scaling (3-5 MES per MNQ equivalent). The ATR-normalized thresholds (pct=0.000238/0.000143) correctly scaled to ES price levels and did not bottleneck frequency.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "bars/bars_ES_dbv_2021_2026.csv",
+        "bars/yearly/bars_MES_dbv_2021.csv .. 2026.csv",
+        "research/equity_b60_MES_ifvg_r125.csv",
+        "research/equity_b60_MES_orb_r25.csv"
+      ],
+      "src": null
     }
   }
 ]

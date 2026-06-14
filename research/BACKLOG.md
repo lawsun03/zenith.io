@@ -2537,7 +2537,7 @@ long-only overlay raise funded $/mo or cut busts without dropping sustainability
 < 1.0? Success: funded pipeline improves with overlay vs without. Stop rule: no
 funded improvement -> reject. Source: Lawrence 2026-06-14.
 
-## B60 — ORB + iFVG expansion to ES.v.0 / MES.v.0  [pending — Lawrence-requested 2026-06-14; enables B64; rank ahead of routine queue]
+## B60 — ORB + iFVG expansion to ES.v.0 / MES.v.0  [done — diagnostic: iFVG fails on ES/MES (PF 0.896, sust 0.18x); ORB weak edge (PF 1.075, sust 0.55x); both below 1.0 threshold; edge is NQ/MNQ-specific at 1-contract sizing]
 Lawrence-specified. Port the NQ/MNQ 5min ORB and iFVG engines to ES/MES with the
 SAME structural rules (opening-range window, iFVG inversion chain, swept-extreme
 stop geometry). Replace fixed-point thresholds (min_absolute_body 5.0, stop_buffer

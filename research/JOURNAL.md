@@ -2200,3 +2200,26 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 **Test suite:** 707 passed, 2 skipped, 0 failures.
 
 **Next:** B60 — ORB + iFVG expansion to ES.v.0 / MES.v.0.
+
+## 2026-06-14T12:00Z — session wk4-b60 — B60
+
+- **Ran:** Databento fetch: ES.v.0 2021-01-01→2024-01-01 ($3.87, within $20 cap; 2024-2026 already on disk). Combined into bars/bars_ES_dbv_2021_2026.csv (1,912,827 bars). Created bars/yearly/bars_MES_dbv_2021.csv through 2026.csv. ATR-normalized thresholds: min_absolute_body_pct=0.000238, stop_buffer_pct=0.000143 (matches NQ 5.0pt/3.0pt at 21000). Ran equity_export + funded_sim + run_monthly_combine for both iFVG and ORB r2.5 with --instrument MES, 5min, 1 contract.
+
+- **Numbers:**
+
+| Engine | 5y PF | Combine pass% | sust | $/mo | vs MNQ B42 |
+|--------|-------|--------------|------|------|------------|
+| MES iFVG r1.25 | **0.896** | 9.2% (6/65) | **0.18x** | $361 | LOSING |
+| MES ORB r2.5 | **1.075** | 15.4% (10/65) | **0.55x** | $1597* | below 1.0 |
+| MNQ B42 (reference) | ~1.15 | ~21% | **3.23x** | $549 | baseline |
+
+*MES $/mo reflects single-phase XFA sim; not comparable to two-phase MNQ pipeline.
+
+MES ORB per-year passes: 2021:2, 2022:3, 2023:1, 2024:1, 2025:1, 2026(5mo):1.
+Two-phase MES pipeline sust (iFVG passes / ORB busts) = 9/83 = **0.11x** vs B42 3.23x.
+
+- **Verdict:** diagnostic — iFVG fails; ORB weak edge but sust < 1.0; edge NQ/MNQ-specific
+
+- **Learned:** iFVG sweep+inversion patterns are NQ-specific: PF drops from 1.15→0.896 on ES (losing). ORB has structural but insufficient edge on ES (PF 1.075, sust 0.55x). Root cause: at 1-contract MES ($5/pt), funded account MLL triggers faster — 83 XFA busts vs 46 combine passes in 53 months. Do NOT expand funded accounts to MES without contract scaling (~3-5 MES/account to match MNQ dollar risk). The ATR-normalized pct thresholds work correctly and do not bottleneck trade frequency.
+
+- **Next:** B61 — Excursion-ladder exit research (BE / partial variants on ORB-reentry and iFVG).

@@ -1,3 +1,4 @@
 CAP: $20.00 (weekend research loop — hard limit, estimate-only before any fetch)
-TOTAL SPENT: $0.00
+TOTAL SPENT: $3.87
 --- entries below: YYYY-MM-DD $X.XX <symbol> <range> ---
+2026-06-14 $3.87 ES.v.0 2021-01-01->2024-01-01 (B60: MES/ES 5y expansion — 2024-2026 already on disk)
