@@ -747,7 +747,12 @@ export function BacktestsPage() {
 
   function loadParamsFromSelected() {
     if (!selected) return
-    const src = selected.config.strategy as unknown as Record<string, unknown>
+    const src = selected.config?.strategy as unknown as Record<string, unknown> | undefined
+    if (!src) {
+      setMsg('This run has no saved strategy params (aggregate/looped result).')
+      setTimeout(() => setMsg(null), 4000)
+      return
+    }
     const next: Record<string, string> = {}
     for (const k of Object.keys(STRATEGY_DEFAULTS)) {
       next[k] = String(src[k] ?? STRATEGY_DEFAULTS[k])
@@ -958,6 +963,11 @@ export function BacktestsPage() {
 
   async function applyConfig() {
     if (!selected) return
+    if (!selected.config?.strategy) {
+      setMsg('This run has no saved strategy params to apply (aggregate/looped result).')
+      setTimeout(() => setMsg(null), 4000)
+      return
+    }
     const ok = await confirm(
       'Apply strategy params to live bot and hot-reload? The bot keeps running; open positions, risk state, and broker connection are untouched. Strategy internal state resets — next bar rebuilds it.',
       { title: 'Apply Config', variant: 'warn', confirmLabel: 'Apply' }
@@ -1623,23 +1633,30 @@ export function BacktestsPage() {
                   <KillzoneBreakdown byKillzone={selected.stats.by_killzone} />
                 )}
 
-                <div>
-                  <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
-                    Strategy Parameters (used for this run)
+                {selected.config?.strategy ? (
+                  <div>
+                    <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
+                      Strategy Parameters (used for this run)
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono tabular-nums">
+                      {Object.entries(selected.config.strategy).map(([k, v]) => (
+                        <div key={k} className="bg-bg border border-border px-3 py-2 flex items-center justify-between gap-2">
+                          <span className="text-[10px] uppercase tracking-wider text-dim">
+                            {PARAM_LABELS[k] ?? k}
+                          </span>
+                          <span className="text-ink">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono tabular-nums">
-                    {Object.entries(selected.config.strategy ?? {}).map(([k, v]) => (
-                      <div key={k} className="bg-bg border border-border px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wider text-dim">
-                          {PARAM_LABELS[k] ?? k}
-                        </span>
-                        <span className="text-ink">{String(v)}</span>
-                      </div>
-                    ))}
+                ) : (
+                  <div className="bg-bg border border-border px-3 py-2 text-[10px] text-dim/80 leading-relaxed">
+                    Aggregate / looped result — per-run strategy params and individual trades were not
+                    saved (stats, funded-pipeline, and monthly-Combine breakdowns above are the full record).
                   </div>
-                </div>
+                )}
 
-                {selected.config.enabled_killzones && (
+                {selected.config?.enabled_killzones && (
                   <div>
                     <div className="text-[10px] tracking-[0.3em] text-dim uppercase mb-2">
                       Killzones (used for this run)
@@ -1730,7 +1747,7 @@ export function BacktestsPage() {
                         · {gradeFilter} only ({displayedTrades.length} of {selected.trades.length})
                       </span>
                     )}
-                    {!gradeFilter && ` (${selected.trades.length})`}
+                    {!gradeFilter && ` (${selected.trades.length || selected.stats.trades})`}
                   </div>
                   <div className="max-h-[40vh] overflow-y-auto feed border border-border divide-y divide-border">
                     {displayedTrades.map((t, i) => {
@@ -1777,7 +1794,13 @@ export function BacktestsPage() {
                       )
                     })}
                     {displayedTrades.length === 0 && (
-                      <div className="px-3 py-4 text-[11px] text-dim">No trades match the current filter.</div>
+                      <div className="px-3 py-4 text-[11px] text-dim">
+                        {selected.trades.length === 0 && selected.stats.trades > 0
+                          ? `${selected.stats.trades} trades executed — per-trade detail not saved for this aggregate/looped run (stats above are the full record).`
+                          : gradeFilter
+                            ? 'No trades match the current filter.'
+                            : 'No trades.'}
+                      </div>
                     )}
                   </div>
                 </div>
