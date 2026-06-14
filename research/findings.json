@@ -2306,5 +2306,44 @@
       "runs": ["scripts/analyze_b51_grade.py"],
       "src": "bars/yearly/bars_MNQ_dbv_{year}.csv (2021/2023/2024/2025/2026)"
     }
+  },
+  {
+    "ts": "2026-06-14T05:00Z",
+    "session": "wk3-r1",
+    "item": "RESEARCH",
+    "variant": "Session wk3-r1: backlog replenishment — N+1 bar confirmation, pre-RTH ORB alignment, Phase A config optimization",
+    "objective": "infra",
+    "metrics": {
+      "n1_bar_confirmed_pf": 1.619,
+      "n1_bar_unconfirmed_pf": 0.661,
+      "n1_bar_pf_ratio": 2.45,
+      "n1_bar_confirmed_pct": 46.8,
+      "n1_bar_per_year_consistency": "5/5",
+      "n1_bar_phase1_verdict": "NO-GO (confirm-filter volume < 60%); REFRAMED as adversity early exit",
+      "prertth_aligned_pf": 1.300,
+      "prertth_opposing_pf": 1.134,
+      "prertth_ratio": 1.146,
+      "prertth_threshold": 1.25,
+      "prertth_phase1_verdict": "NO-GO (ratio below threshold, 2021 non-monotonic inversion)",
+      "phase_a_opt_passes": "9/61",
+      "phase_a_opt_pass_pct": 15.0,
+      "phase_a_baseline_passes": "6/61",
+      "phase_a_baseline_pass_pct": 10.0,
+      "phase_a_improvement_pct": 50.0,
+      "phase_a_run_pf": 1.11,
+      "new_items_added": 3,
+      "databento_spent": 0.0
+    },
+    "verdict": "dataset",
+    "learned": "The iFVG N+1 bar direction (does the bar 5min after entry close in the signal direction?) is the strongest signal-level discriminator found in this program: 2.45x PF split, 5/5 years consistent. Original confirm-filter design fails volume threshold (only 46.8% confirm); REFRAME as adversity early exit for the 53.2% not-confirmed bucket (B53). Phase A config correction (lookback=0, target_clarity=reject) gives +50% combine pass rate with zero code changes — immediate Monday config action for Lawrence.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/analyze_b53_next_bar.py",
+        "scripts/analyze_b54_prertth.py",
+        "scripts/run_monthly_combine.py --save-id b52_phase_a_optimized"
+      ],
+      "src": "research/mfe_mae_ifvg_clean.csv, research/mfe_mae_orb_clean.csv, bars/bars_MNQ_dbv_2021_2026.csv"
+    }
   }
 ]

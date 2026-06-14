@@ -1848,3 +1848,35 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected — Phase 1 NO-GO. SetupGrader grade does not predict per-trade outcome under the deployed iFVG config. The sizing premise (concentrate risk on higher-grade trades) requires grade to predict WR/PF; it does not. No code changes. `scripts/analyze_b51_grade.py` committed for reproducibility. Lesson 99 added. Databento spend: $0.
 - **Learned:** The SetupGrader's structural-quality score (fib extension, P/D, delivery FVG, momentum, BPR, target clarity) captures setup "richness" — how many structural elements are present — but does not predict per-trade directional edge. C-grade (missing more criteria but still passing grader_min_grade=F) producing worse PF (0.996) than D (1.060) or F (1.124) shows the grader is not reliably ordered by trade quality. This is the 4th consecutive quality-score rejection: OR width (B5/B45), extension magnitude (B49), and now structural grade (B51). Quality proxies consistently fail to separate iFVG signal outcomes on NQ 5min.
 - **Next:** Backlog fully exhausted (B1-B51 all done). Lawrence to replenish backlog. Candidates: further pipeline variants, live monitoring improvements, UI observability (Rule 13), or new data-driven hypothesis generation.
+
+## 2026-06-14T05:00Z — session wk3-r1 — RESEARCH (wk3-r1 backlog replenishment)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Session note:** Backlog fully exhausted (B1-B51 all done). Protocol mandates research/ideation session. Ran 3 data-mining probes to generate new backlog items.
+- **Ran:**
+  1. `scripts/analyze_b53_next_bar.py` — iFVG N+1 bar directional confirmation (5y excl 2022, n=2477 trades).
+     Confirmed (N+1 closes with signal): n=1159 (46.8%), WR=40.2%, PF=1.619, Net=+$209,964.
+     Not confirmed (N+1 closes against signal): n=1318 (53.2%), WR=23.9%, PF=0.661, Net=-$173,312.
+     PF ratio: 2.45x. Per-year: confirmed > unconfirmed in all 5 years (5/5 consistent).
+     Phase 1 result: **NO-GO** for confirm-filter (46.8% < 60% volume threshold).
+     Reframe: adversity EXIT mechanism — block not-confirmed signals via early exit at N+1 close.
+
+  2. `scripts/analyze_b54_prertth.py` — ORB pre-RTH (08:30-09:30 ET) direction alignment (5y excl 2022, n=1026).
+     Aligned: n=486, PF=1.300. Opposing: n=540, PF=1.134. Ratio=1.146 (< 1.25 threshold).
+     Per-year: 2021 INVERTED (opposing PF=1.696 > aligned PF=1.330). Non-monotonic.
+     Phase 1 result: **NO-GO**.
+
+  3. `scripts/run_monthly_combine.py` — Phase A config optimization (lookback=0 + target_clarity=reject vs deployed B42).
+     Full config: engine=combined, ifvg_entry_mode=close, killzones=all, risk=1.0%, partial_r=1.5,
+     swing_stop_lookback=0, target_clarity_mode=reject, min_absolute_body=5.0, stop_buffer=3.0.
+     Result (61 months, 2021-2026 incl 2022 holdout):
+       Passes: 9/61 (15%), PF=1.11. Saved: backtests/b52_phase_a_optimized.json.
+
+- **Numbers vs baselines:**
+  - N+1 bar: confirmed PF=1.619 vs unconfirmed PF=0.661 — 2.45x split (strongest signal-level discriminator found)
+  - Pre-RTH alignment: aligned PF=1.300 / opposing PF=1.134 — ratio 1.146, fails threshold
+  - Phase A optimization: 9/61 (15%) vs B26 deployed 6/61 (10%) — +50% monthly pass rate
+
+- **Verdict:** research — yielded 3 new backlog items (B52 done, B53 pending, B54 rejected)
+- **Learned:** The iFVG N+1 bar direction is the strongest signal-level discriminator found to date (2.45x PF split, 5/5 years consistent). The original confirm-filter design (require N+1 to enter) fails on volume; the actionable mechanism is an adversity early exit for the 53.2% not-confirmed signals currently dragging PF to 0.661. Phase A config correction (lookback=0, target_clarity=reject) delivers +50% monthly combine pass rate with zero code changes — priority Monday action for Lawrence.
+- **Next:** B53 (iFVG N+1 adversity early exit — Phase 1 data mining to quantify early-exit PnL vs held-to-stop PnL). Lawrence to apply B52 config change (swing_stop_lookback=0, target_clarity_mode=reject) before next live combine attempt.

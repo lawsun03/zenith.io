@@ -2092,3 +2092,82 @@ Benchmark (BOTH objectives, parity flags `--partial-r 0 --set swing_stop_lookbac
 Source: Lawrence direct request 2026-06-14 (varying risk). Uses the existing
 SetupGrader; Phase 1 first because we have no evidence grade predicts outcome
 and several quality-score hypotheses have already failed (fib/OTE, OR width).
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk3-r1  [done — 2026-06-14T05:00Z]
+
+B1-B51 all exhausted. Mandatory research/ideation session. Data-mined 3 topics; yielded 3
+new backlog items (B52/B53/B54):
+1. iFVG N+1 bar confirmation (analyze_b53_next_bar.py): confirmed PF=1.619 vs unconfirmed
+   PF=0.661, ratio 2.45x — strongest signal-level discriminator found. Phase 1 NO-GO for
+   confirm-filter (only 46.8% confirm, < 60% threshold) but REFRAMED as adversity early exit.
+2. ORB pre-RTH direction alignment (analyze_b54_prertth.py): aligned PF=1.300 vs opposing
+   PF=1.134, ratio=1.146 < 1.25 threshold, non-monotonic (2021 inverted) — Phase 1 NO-GO.
+3. Phase A config optimization (lookback=0 + target_clarity=reject, run_monthly_combine.py):
+   9/61 (15%) passes vs B26 deployed 6/61 (10%) — +50% improvement, config change recommended.
+
+## B52 — Phase A deployed config parity fix  [done — session wk3-r1]
+
+Deployed Phase A (B42) uses swing_stop_lookback=30 and target_clarity_mode="off". B26
+established these degrade monthly Phase A pass rate vs research defaults (lookback=0,
+target_clarity=reject). B52 benchmarks the corrected config in the deployed context.
+
+Config tested: engine=combined, ifvg_entry_mode=close, killzones=all, risk=1.0%,
+partial_r=1.5, swing_stop_lookback=0, target_clarity_mode=reject, min_absolute_body=5.0,
+stop_buffer=3.0, orb_r_multiple=2.5.
+
+Results (monthly harness, 61 months, 2021-2026 incl 2022 holdout):
+- Passes: 9/61 (15%) vs B26 deployed 6/61 (10%) — +50%
+- Run PF: 1.11
+- Saved: backtests/b52_phase_a_optimized.json
+
+VERDICT: config change RECOMMENDED. Lawrence to apply Monday:
+  swing_stop_lookback: 30 → 0
+  target_clarity_mode: "off" → "reject"
+Full funded pipeline validation deferred (needs funded_sim run with corrected params).
+Source: B26/Lessons 58-59; scripts/run_monthly_combine.py --save-id b52_phase_a_optimized.
+
+## B53 — iFVG N+1 bar adversity early exit gate  [pending]
+
+**Hypothesis**: After entering an iFVG signal, if the first bar after entry (N+1, 5 min later)
+closes AGAINST the signal direction (below entry for longs; above entry for shorts), exit
+immediately rather than holding to the full swept-extreme stop. The N+1 bar direction is a
+real-time signal observable 5 min after entry that predicts outcome with 2.45x PF separation.
+
+**Evidence from wk3-r1 data mining (analyze_b53_next_bar.py, 5y excl 2022, n=2477):**
+- Confirmed (N+1 closes with signal direction): n=1159 (46.8%), PF=1.619, Net=+$209,964
+- Not confirmed (N+1 closes against signal direction): n=1318 (53.2%), PF=0.661, Net=-$173,312
+- PF ratio: 2.45x — strongest discriminator found in this research program
+- Per-year: confirmed > unconfirmed PF in ALL 5 tested years (5/5 consistent)
+
+Why the confirm-filter was Phase 1 NO-GO: only 46.8% confirm (< 60% volume threshold).
+Reframe: adversity EXIT, not entry filter. Enter all signals normally; exit at N+1 close
+if adverse. Converts full-stop losses to small early-exit losses for 53.2% of trades.
+
+**Phase 1** (data mining, no code): compute early-exit P&L for each not-confirmed trade.
+For longs: early_exit_pnl = (nb_close - entry_price) × position_size. Sum vs current
+held-to-stop P&L. GO/NO-GO: early exit reduces not-confirmed net losses by ≥ 30% AND
+improves aggregate PF ≥ 10% vs baseline aggregate PF.
+
+**Phase 2** (build if Phase 1 GO): add `ifvg_early_exit_on_nbar_adverse: bool = False` to
+StrategyParams. Live broker: after fill, arm 5-min N+1 bar check; if bar close adverse vs
+entry price, close position immediately. Requires live broker timer integration.
+
+Objective: funded (PF improvement). Script: scripts/analyze_b53_next_bar.py.
+Source: wk3-r1 research session.
+
+## B54 — ORB pre-RTH direction alignment gate  [done — Phase 1 NO-GO, session wk3-r1]
+
+**Hypothesis**: ORB signals aligned with 08:30-09:30 ET pre-RTH direction have better quality.
+Economic data releases at 08:30 ET establish intraday momentum that persists through the ORB.
+
+**Phase 1 data mining (analyze_b54_prertth.py, 5y excl 2022, n=1026):**
+- Aligned (ORB with pre-RTH direction): n=486, PF=1.300
+- Opposing (ORB vs pre-RTH direction): n=540, PF=1.134
+- Ratio: 1.146 (GO threshold: ≥ 1.25) — FAILS
+- Per-year: 2021 INVERTED (opposing PF=1.696 > aligned PF=1.330) — non-monotonic
+
+VERDICT: Phase 1 NO-GO. Ratio below threshold AND 2021 inversion makes hypothesis
+structurally unstable. Phase 2 NOT built. Script: scripts/analyze_b54_prertth.py.
