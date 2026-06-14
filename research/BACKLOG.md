@@ -2129,7 +2129,7 @@ VERDICT: config change RECOMMENDED. Lawrence to apply Monday:
 Full funded pipeline validation deferred (needs funded_sim run with corrected params).
 Source: B26/Lessons 58-59; scripts/run_monthly_combine.py --save-id b52_phase_a_optimized.
 
-## B53 — iFVG N+1 bar adversity early exit gate  [pending]
+## B53 — iFVG N+1 bar adversity early exit gate  [done — rejected: Phase 1 NO-GO; early exit WORSENS both criteria (not-confirmed net -$194k vs -$173k; aggregate PF 1.029 vs 1.043); cutting 315 not-confirmed winners (-$365k gross wins) exceeds loser savings (+$344k); N+1 adverse is an outcome predictor not an exit signal; 5/5 years aggregate PF degrades; Phase 2 NOT built; scripts/analyze_b53_early_exit.py committed; Lesson 102]
 
 **Hypothesis**: After entering an iFVG signal, if the first bar after entry (N+1, 5 min later)
 closes AGAINST the signal direction (below entry for longs; above entry for shorts), exit

@@ -1880,3 +1880,32 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** research — yielded 3 new backlog items (B52 done, B53 pending, B54 rejected)
 - **Learned:** The iFVG N+1 bar direction is the strongest signal-level discriminator found to date (2.45x PF split, 5/5 years consistent). The original confirm-filter design (require N+1 to enter) fails on volume; the actionable mechanism is an adversity early exit for the 53.2% not-confirmed signals currently dragging PF to 0.661. Phase A config correction (lookback=0, target_clarity=reject) delivers +50% monthly combine pass rate with zero code changes — priority Monday action for Lawrence.
 - **Next:** B53 (iFVG N+1 adversity early exit — Phase 1 data mining to quantify early-exit PnL vs held-to-stop PnL). Lawrence to apply B52 config change (swing_stop_lookback=0, target_clarity_mode=reject) before next live combine attempt.
+
+## 2026-06-14T03:30Z -- session wk3-b53 -- B53 (iFVG N+1 bar adversity early exit -- Phase 1 NO-GO)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B53 (sole pending item -- top of backlog after B52 done in wk3-r1).
+- **Ran:** scripts/analyze_b53_early_exit.py -- extended the wk3-r1 next-bar analysis to compute early-exit PnL per trade using scale factor (realized_pnl / directional_price_diff) to convert N+1 close distance into dollar PnL. All 2477 iFVG trades (excl 2022), 100% N+1 bar match rate (0 missing, 0 scale errors).
+- **Numbers (5y excl 2022, n=2477):**
+
+  | Group | n | WR% | PF | Net$ |
+  |-------|---|-----|----|------|
+  | Confirmed (N+1 favorable) | 1159 | 40.2 | 1.619 | +09,964 |
+  | Not-confirmed actual | 1318 | 23.9 | 0.661 | -73,312 |
+  | ALL baseline | 2477 | 31.5 | 1.043 | +6,652 |
+  | Not-confirmed early exit | 1318 | 0.6 | 0.017 | -94,535 |
+  | ALL with early exit | 2477 | 19.1 | 1.029 | +5,429 |
+
+  Not-confirmed sub-groups:
+  - 315 winners cut short: avg win ,074 -> avg early exit -5 (gross cost: -65k)
+  - 1003 losers capped: avg loss -10 -> avg early exit -67 (gross savings: +44k)
+
+  GO/NO-GO:
+  - Crit 1 (not-confirmed loss reduction >= 30%): -12.2% (WORSE by 1k) -- FAIL
+  - Crit 2 (aggregate PF improvement >= 10%): -1.4% (1.043 -> 1.029) -- FAIL
+
+  Per-year: aggregate PF degrades in 4 of 5 years with early exit.
+
+- **Verdict:** rejected -- Phase 1 NO-GO. Both criteria fail. Phase 2 NOT built. No code changes. scripts/analyze_b53_early_exit.py committed for reproducibility. Lesson 102 added.
+- **Learned:** The N+1 adverse bar is an outcome predictor, not an exit signal -- 23.9% of not-confirmed trades still win despite the early adverse close, and those wins are large enough (,074 avg) that early-exiting them at -5 destroys more value than the loser savings provide. The 2.45x confirmed/not-confirmed PF split is real and structural, but it cannot be harvested via an exit mechanism because the not-confirmed group has a sufficient win rate to make early exits net-negative.
+- **Next:** Backlog fully exhausted (B1-B54 all done). Protocol mandates a research/ideation session. Target: 1-3 new testable strategy hypotheses from data mining + web search.

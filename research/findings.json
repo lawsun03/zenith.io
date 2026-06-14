@@ -2256,10 +2256,10 @@
       "pf_ratio_required": 1.4,
       "q1_eod_pct": 49.0,
       "q5_eod_pct": 68.0,
-      "shallow_long_pf": 1.260,
+      "shallow_long_pf": 1.26,
       "shallow_short_pf": 0.992,
       "deep_long_pf": 1.313,
-      "deep_short_pf": 1.220,
+      "deep_short_pf": 1.22,
       "overall_pf": 1.214,
       "overall_n": 1030,
       "databento_spend": 0.0
@@ -2268,7 +2268,9 @@
     "learned": "ORB breakout extension (how far the signal bar closed past the OR boundary, in ATR units) is a non-monotonic predictor of PnL per trade. The mid-bucket (Q3, ext 0.481-0.845) achieves the highest PF (1.322), while both shallow (Q1: PF=1.163) and deep (Q5: PF=1.258) underperform it. The deep/shallow PF ratio is 1.128, well below the 1.4 GO/NO-GO threshold. The extension DOES predict hold-time: Q5 (deepest) has 68% EOD-flatten rate vs Q1 (shallowest) at 49%, a real structural pattern. But EOD-flatten probability does not map to better PnL per trade because shallow-extension EOD flattens are also profitable. Short signals particularly improve at high extension (shallow short PF=0.992 vs deep short PF=1.220), but the overall aggregate is insufficient for Phase 2.",
     "links": {
       "doc": null,
-      "runs": ["scripts/analyze_b49_breakout_extension.py"],
+      "runs": [
+        "scripts/analyze_b49_breakout_extension.py"
+      ],
       "src": "research/mfe_mae_orb_clean.csv, bars/yearly/bars_MNQ_dbv_{year}.csv"
     }
   },
@@ -2288,12 +2290,12 @@
       "grade_C_n": 286,
       "grade_C_pf": 0.996,
       "grade_D_n": 617,
-      "grade_D_pf": 1.060,
+      "grade_D_pf": 1.06,
       "grade_F_n": 285,
       "grade_F_pf": 1.124,
       "top2_AB_pf": 1.286,
-      "bot2_DF_pf": 1.080,
-      "pf_ratio_top_bot": 1.190,
+      "bot2_DF_pf": 1.08,
+      "pf_ratio_top_bot": 1.19,
       "pf_ratio_required": 1.3,
       "monotonic": false,
       "worst_bucket": "C",
@@ -2303,7 +2305,9 @@
     "learned": "SetupGrader grade (A-F structural richness score) does not predict per-trade outcome under the deployed close-mode config. Grade ordering is non-monotonic: C (PF=0.996) is the worst bucket, worse than D (1.060) and F (1.124). Top-2 / Bottom-2 PF ratio = 1.190, below the 1.3 threshold. Grade distribution is bottom-heavy (D=617, F=285, C=286, B=86, A=2). This is the 4th quality-predictor rejection after B5/B45/B49. The SetupGrader score captures structural richness, not directional edge. Lesson 99 added.",
     "links": {
       "doc": null,
-      "runs": ["scripts/analyze_b51_grade.py"],
+      "runs": [
+        "scripts/analyze_b51_grade.py"
+      ],
       "src": "bars/yearly/bars_MNQ_dbv_{year}.csv (2021/2023/2024/2025/2026)"
     }
   },
@@ -2311,7 +2315,7 @@
     "ts": "2026-06-14T05:00Z",
     "session": "wk3-r1",
     "item": "RESEARCH",
-    "variant": "Session wk3-r1: backlog replenishment — N+1 bar confirmation, pre-RTH ORB alignment, Phase A config optimization",
+    "variant": "Session wk3-r1: backlog replenishment \u00e2\u20ac\u201d N+1 bar confirmation, pre-RTH ORB alignment, Phase A config optimization",
     "objective": "infra",
     "metrics": {
       "n1_bar_confirmed_pf": 1.619,
@@ -2320,7 +2324,7 @@
       "n1_bar_confirmed_pct": 46.8,
       "n1_bar_per_year_consistency": "5/5",
       "n1_bar_phase1_verdict": "NO-GO (confirm-filter volume < 60%); REFRAMED as adversity early exit",
-      "prertth_aligned_pf": 1.300,
+      "prertth_aligned_pf": 1.3,
       "prertth_opposing_pf": 1.134,
       "prertth_ratio": 1.146,
       "prertth_threshold": 1.25,
@@ -2335,7 +2339,7 @@
       "databento_spent": 0.0
     },
     "verdict": "dataset",
-    "learned": "The iFVG N+1 bar direction (does the bar 5min after entry close in the signal direction?) is the strongest signal-level discriminator found in this program: 2.45x PF split, 5/5 years consistent. Original confirm-filter design fails volume threshold (only 46.8% confirm); REFRAME as adversity early exit for the 53.2% not-confirmed bucket (B53). Phase A config correction (lookback=0, target_clarity=reject) gives +50% combine pass rate with zero code changes — immediate Monday config action for Lawrence.",
+    "learned": "The iFVG N+1 bar direction (does the bar 5min after entry close in the signal direction?) is the strongest signal-level discriminator found in this program: 2.45x PF split, 5/5 years consistent. Original confirm-filter design fails volume threshold (only 46.8% confirm); REFRAME as adversity early exit for the 53.2% not-confirmed bucket (B53). Phase A config correction (lookback=0, target_clarity=reject) gives +50% combine pass rate with zero code changes \u00e2\u20ac\u201d immediate Monday config action for Lawrence.",
     "links": {
       "doc": null,
       "runs": [
@@ -2344,6 +2348,34 @@
         "scripts/run_monthly_combine.py --save-id b52_phase_a_optimized"
       ],
       "src": "research/mfe_mae_ifvg_clean.csv, research/mfe_mae_orb_clean.csv, bars/bars_MNQ_dbv_2021_2026.csv"
+    }
+  },
+  {
+    "ts": "2026-06-14T03:30:00Z",
+    "session": "wk3-b53",
+    "item": "B53",
+    "variant": "ifvg N+1 adversity early exit (Phase 1 PnL analysis)",
+    "objective": "funded",
+    "metrics": {
+      "baseline_pf": 1.043,
+      "early_exit_pf": 1.029,
+      "pf_change_pct": -1.4,
+      "unconf_net_actual": -173312,
+      "unconf_net_early_exit": -194535,
+      "loss_reduction_pct": -12.2,
+      "n_unconf_winners_cut": 315,
+      "avg_winner_sacrificed": 1074,
+      "avg_early_exit_loss_from_winners": -85,
+      "gross_cost_of_cutting_winners": -365089,
+      "gross_savings_on_losers": 343866,
+      "phase2_built": false
+    },
+    "verdict": "rejected",
+    "learned": "N+1 adverse bar early exit is self-defeating: the 23.9% not-confirmed winners with avg win $1074 cost $365k gross wins when cut, exceeding the $344k savings on 1003 losers. The 2.45x PF split between confirmed and not-confirmed groups is an outcome predictor, not an exit signal.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": "scripts/analyze_b53_early_exit.py"
     }
   }
 ]
