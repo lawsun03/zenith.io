@@ -2060,7 +2060,7 @@ Source: Lawrence direct request 2026-06-14. Distinct from B1 (which swept static
 risk levels). This is the one sanctioned dynamic-sizing search; the objective
 (survival under a trailing MLL) is exactly where path-dependent sizing can pay.
 
-## B51 — Setup-grade-scaled position sizing  [pending — Lawrence-requested 2026-06-14; rank with B50]
+## B51 — Setup-grade-scaled position sizing  [done — rejected: Phase 1 NO-GO; grade does not predict outcome monotonically (top-2 A+B PF 1.286 / bottom-2 D+F PF 1.080, ratio 1.190 < 1.3); C grade (PF 0.996) is WORST bucket, worse than D (1.060) and F (1.124); non-monotonic pattern kills the sizing premise; 4th quality predictor rejected (joins B5/B45/B49); 684 total green; Lesson 99]
 A second "varying risk" axis: size by the existing SetupGrader grade instead of
 a flat size. UNLIKE B50, this CAN change expectancy (it concentrates risk on
 trades the grader rates higher) -- so PF IS a valid metric here, IF grade

@@ -862,3 +862,20 @@ Appended 2026-06-14 (B49 ORB breakout extension Phase 1):
 98. **ORB breakout extension (how far the signal bar closes past the OR boundary, in ATR units) is a non-monotonic predictor of PnL per trade.** B49 tested 1030 ORB trades (2021/2023/2024/2025/2026, excl 2022) bucketed by extension quintile. The mid-bucket (Q3: ext 0.481–0.845) achieves the highest PF (1.322), outperforming both the shallowest (Q1: PF=1.163) and deepest (Q5: PF=1.258) buckets. Bottom-40% vs top-40% PF ratio = 1.128, below the 1.4 GO/NO-GO threshold. The extension DOES predict EOD-flatten rate monotonically (Q5: 68% EOD vs Q1: 49%), but this hold-time shift does not translate to better per-trade PnL because shallow-extension EOD flattens are equally profitable when they occur. Short signals specifically improve at high extension (shallow short PF=0.992 vs deep short PF=1.220), but the aggregate remains insufficient.
     This is the third consecutive rejection of ORB day-level quality predictors: prior-day range (B5), current-day OR width (B45), and signal-bar breakout extension (B49) all fail the 1.4x PF ratio threshold. The ORB signal quality appears robust to these range/momentum indicators — the EOD-flatten capture mechanism (4h+ hold PF=4.129, Lesson 88) dominates any quality stratification available from range or breakout magnitude.
     Rule: do not propose ORB filters based on breakout bar extension magnitude relative to the OR boundary. Mid-extension breakouts are empirically the best performers; deep extension does not predict better P&L despite predicting longer hold times. The B45/B49 pattern (non-monotonic PF, peak at middle bucket) is now a recurring signature of these ORB quality proxies.
+
+Appended 2026-06-14 (B51 setup-grade-scaled sizing Phase 1):
+
+99. **The SetupGrader's structural-quality score (0-100, grades A-F) does NOT predict per-trade directional edge on NQ 5min under the deployed close-mode config.**
+    B51 Phase 1 (1276 graded iFVG trades, 5y excl 2022, engine=ifvg, close mode, all-day KZ, MNQ overrides):
+    Grade distribution: A=2, B=86, C=286, D=617, F=285. PF by grade: B=1.311, C=0.996, D=1.060, F=1.124.
+    The C-grade bucket (PF=0.996, loss-making) is WORSE than both D (1.060) and F (1.124) — the ordering
+    is non-monotonic, violating the basic premise that higher structural quality predicts better trade outcomes.
+    Top-2 (A+B) PF=1.286 vs bottom-2 (D+F) PF=1.080; ratio 1.190 < 1.3 GO/NO-GO threshold. Phase 2 not built.
+    Grade distribution is bottom-heavy: 70% of trades score D or F under the deployed config (close-mode entry
+    lacks the structural context that scores A/B: no BPR, no P/D with target_clarity_mode=off, sparse delivery FVGs).
+    This is the 4th consecutive quality-score rejection: prior-day range (B5), OR width (B45), breakout extension (B49),
+    structural grade (B51). The iFVG chain's directional edge appears independent of these structural-richness metrics.
+    Rule: do not re-propose quality-score filters for iFVG signals without a fundamentally different quality metric.
+    The SetupGrader grade is not a valid sizing or selection signal for the deployed close-mode config.
+    The grader may still serve its original purpose (rejecting very-low-quality signals), but its grade ordering
+    within the "passing" set has no predictive value for trade outcomes.

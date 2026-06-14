@@ -1810,3 +1810,41 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Learned:** Breakout extension is a non-monotonic PnL predictor — Q3 mid-extension peaks at PF=1.322, outperforming both the shallowest (Q1: PF=1.163) and deepest (Q5: PF=1.258) buckets. Extension does predict EOD-flatten rate monotonically (Q5: 68% vs Q1: 49%), but this hold-time shift does not translate to better P&L because shallow-extension EOD flattens are also profitable when they occur. This is now the third rejected ORB quality predictor: prior-day range (B5), current-day OR width (B45), and signal-bar breakout extension (B49) all fail the 1.4x threshold.
 
 - **Next:** B51 (setup-grade-scaled position sizing — Lawrence-requested; requires a per-trade edge mechanism, unlike B50's path-rescaling).
+
+## 2026-06-14T02:30Z — session wk2-b51 — B51 (setup-grade-scaled position sizing — Phase 1 NO-GO)
+
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no lockout. Market closed (weekend).
+- **Claimed:** B51 (sole pending item — Lawrence-requested; rank with B50 per BACKLOG).
+- **Ran:** `scripts/analyze_b51_grade.py`:
+  - Engine=ifvg, close mode, all-day KZ, MNQ overrides (stop_buffer=3.0, min_abs_body=5.0, r=3.5), grader_min_grade=F (all grades trade), swing_stop_lookback=0 (research parity).
+  - 5 years: 2021/2023/2024/2025/2026 (excluding 2022 holdout).
+  - Captured grade (A/B/C/D/F) per trade from result.trades. Computed WR%, PF, net per grade bucket.
+  - Total: 1276 graded trades, 0 ungraded (engine=ifvg isolates only graded iFVG signals; ORB signals have no grade).
+- **Numbers:**
+
+  **Grade vs Outcome (deployed iFVG config, 5y excl 2022, n=1276):**
+  | Grade | n | WR% | PF | Net |
+  |-------|---|-----|----|-----|
+  | A | 2 | 0.0% | N/A | -$580 |
+  | B | 86 | 31.4% | **1.311** | +$9,147 |
+  | C | 286 | 25.2% | **0.996** | -$395 |
+  | D | 617 | 27.7% | 1.060 | +$13,451 |
+  | F | 285 | 28.8% | 1.124 | +$12,612 |
+
+  **GO/NO-GO:**
+  | Bucket | PF |
+  |--------|-----|
+  | Top-2 (A+B) | 1.286 |
+  | Bottom-2 (D+F) | 1.080 |
+  | Ratio (top/bot) | 1.190 (threshold: ≥ 1.3) |
+
+  **VERDICT: NO-GO** — ratio 1.190 < 1.3 threshold. Phase 2 code NOT built.
+
+- **Stop rule check:** Phase 1 gate fails. No Phase 2 was entered; stop rule is the Phase 1 NO-GO itself.
+- **Root cause analysis:**
+  1. **Non-monotonic:** The grade does NOT produce a monotonic PF staircase. C-grade (PF=0.996) is the WORST bucket, worse than both D (PF=1.060) and F (PF=1.124). The expected ordering A>B>C>D>F does not hold for any metric.
+  2. **Grade distribution collapse:** A-grade has only 2 trades (statistically meaningless). B-grade has 86 trades. The overwhelming majority are D (617=48%) and F (285=22%). The grader under deployed close-mode+all-day rarely scores A or B — most setups lack the structural context (BPR, P/D, delivery FVG) that produces high scores.
+  3. **No signal in the scoring:** With C worse than D and F, and A having n=2, there is simply no information in the grade about future trade quality. The grader captures "structural richness" of setup context, not directional edge.
+- **Verdict:** rejected — Phase 1 NO-GO. SetupGrader grade does not predict per-trade outcome under the deployed iFVG config. The sizing premise (concentrate risk on higher-grade trades) requires grade to predict WR/PF; it does not. No code changes. `scripts/analyze_b51_grade.py` committed for reproducibility. Lesson 99 added. Databento spend: $0.
+- **Learned:** The SetupGrader's structural-quality score (fib extension, P/D, delivery FVG, momentum, BPR, target clarity) captures setup "richness" — how many structural elements are present — but does not predict per-trade directional edge. C-grade (missing more criteria but still passing grader_min_grade=F) producing worse PF (0.996) than D (1.060) or F (1.124) shows the grader is not reliably ordered by trade quality. This is the 4th consecutive quality-score rejection: OR width (B5/B45), extension magnitude (B49), and now structural grade (B51). Quality proxies consistently fail to separate iFVG signal outcomes on NQ 5min.
+- **Next:** Backlog fully exhausted (B1-B51 all done). Lawrence to replenish backlog. Candidates: further pipeline variants, live monitoring improvements, UI observability (Rule 13), or new data-driven hypothesis generation.

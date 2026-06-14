@@ -2271,5 +2271,40 @@
       "runs": ["scripts/analyze_b49_breakout_extension.py"],
       "src": "research/mfe_mae_orb_clean.csv, bars/yearly/bars_MNQ_dbv_{year}.csv"
     }
+  },
+  {
+    "ts": "2026-06-14T02:30:00Z",
+    "session": "wk2-b51",
+    "item": "B51",
+    "variant": "SetupGrader grade vs outcome analysis (Phase 1 data mining, engine=ifvg close mode all-day KZ MNQ overrides)",
+    "objective": "combine+funded",
+    "metrics": {
+      "n_graded": 1276,
+      "n_ungraded": 0,
+      "grade_A_n": 2,
+      "grade_A_pf": null,
+      "grade_B_n": 86,
+      "grade_B_pf": 1.311,
+      "grade_C_n": 286,
+      "grade_C_pf": 0.996,
+      "grade_D_n": 617,
+      "grade_D_pf": 1.060,
+      "grade_F_n": 285,
+      "grade_F_pf": 1.124,
+      "top2_AB_pf": 1.286,
+      "bot2_DF_pf": 1.080,
+      "pf_ratio_top_bot": 1.190,
+      "pf_ratio_required": 1.3,
+      "monotonic": false,
+      "worst_bucket": "C",
+      "databento_spend": 0.0
+    },
+    "verdict": "rejected",
+    "learned": "SetupGrader grade (A-F structural richness score) does not predict per-trade outcome under the deployed close-mode config. Grade ordering is non-monotonic: C (PF=0.996) is the worst bucket, worse than D (1.060) and F (1.124). Top-2 / Bottom-2 PF ratio = 1.190, below the 1.3 threshold. Grade distribution is bottom-heavy (D=617, F=285, C=286, B=86, A=2). This is the 4th quality-predictor rejection after B5/B45/B49. The SetupGrader score captures structural richness, not directional edge. Lesson 99 added.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/analyze_b51_grade.py"],
+      "src": "bars/yearly/bars_MNQ_dbv_{year}.csv (2021/2023/2024/2025/2026)"
+    }
   }
 ]
