@@ -1909,3 +1909,18 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected -- Phase 1 NO-GO. Both criteria fail. Phase 2 NOT built. No code changes. scripts/analyze_b53_early_exit.py committed for reproducibility. Lesson 102 added.
 - **Learned:** The N+1 adverse bar is an outcome predictor, not an exit signal -- 23.9% of not-confirmed trades still win despite the early adverse close, and those wins are large enough (,074 avg) that early-exiting them at -5 destroys more value than the loser savings provide. The 2.45x confirmed/not-confirmed PF split is real and structural, but it cannot be harvested via an exit mechanism because the not-confirmed group has a sufficient win rate to make early exits net-negative.
 - **Next:** Backlog fully exhausted (B1-B54 all done). Protocol mandates a research/ideation session. Target: 1-3 new testable strategy hypotheses from data mining + web search.
+
+## 2026-06-14T06:00Z — session wk3-r2 — RESEARCH (wk3-r2 backlog replenishment)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 contracts), no drift, no lockout. Market closed (weekend).
+- **Session note:** Backlog fully exhausted (B1-B54 all done). Protocol mandates research/ideation session. Web search yielded no new mechanisms (7-for-7 external-claim failures confirmed, Lesson 6). Primary source: data mining on mfe_mae_ifvg_clean.csv, mfe_mae_orb_clean.csv, and bars volume data.
+- **Ran:**
+  1. `scripts/analyze_cross_engine_confluence.py` (inline) — cross-engine iFVG×ORB same-day directional alignment. For each ORB trade, found all prior same-day iFVG signals and classified: A (all same-dir), B (no prior iFVG), C (all oppose), D (mixed). 5y excl 2022, n=1030 ORB trades.
+  2. Volume analysis (inline) — matched mfe_mae_ifvg_clean.csv entry timestamps to bars CSV for inversion bar volume. Bucketed by quartile, computed PF per bucket.
+  3. WebSearch — NQ futures intraday strategies 2025-2026; no new mechanism families found.
+- **Numbers:**
+  - Cross-engine confluence: A+D (any same-dir prior iFVG, n=595, 57.8%): PF=1.427. B+C (none, n=435, 42.2%): PF=0.963. Ratio=1.48x (>1.4 threshold). Per-year: A+D > B+C in ALL 5 years (2021 1.928/1.085 … 2026 1.248/0.934). **Phase 1 GO for B56.**
+  - Volume: Q1 (low, <=64): PF=1.023; Q2 (65-155): PF=1.268; Q3 (155-782): PF=0.885; Q4 (>782): PF=0.995. High/low ratio=0.823. Non-monotonic, ratio<1.4. **Phase 1 NO-GO.**
+- **Verdict:** research — 3 backlog items appended (B55, B56, B57)
+- **Learned:** ORB trades preceded by any same-direction iFVG signal that day (57.8% of all ORB trades) have PF=1.427 — the remaining 42.2% are essentially breakeven or loss-making (PF=0.963). This 5-for-5 consistent pattern is the strongest cross-engine quality predictor found in this research program, and it passes Phase 1 GO criteria. The complementary volume mining found that iFVG inversion bar volume is non-monotonic (moderate volume best), consistent with the B45/B49/B51 pattern of non-monotonic ORB quality predictors.
+- **Next:** B55 — Phase A config-optimized full funded-pipeline benchmark (no code, run immediately; informs Lawrence's Monday config decision).

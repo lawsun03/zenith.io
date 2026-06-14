@@ -2377,5 +2377,34 @@
       "runs": [],
       "src": "scripts/analyze_b53_early_exit.py"
     }
+  },
+  {
+    "ts": "2026-06-14T06:00:00Z",
+    "session": "wk3-r2",
+    "item": "RESEARCH",
+    "variant": "cross-engine iFVG×ORB confluence + inversion-bar volume mining",
+    "objective": "dataset",
+    "metrics": {
+      "orb_ad_pf": 1.427,
+      "orb_bc_pf": 0.963,
+      "ratio_ad_bc": 1.48,
+      "years_ad_gt_bc_consistent": 5,
+      "orb_a_all_same_pf": 1.707,
+      "orb_b_no_prior_pf": 0.990,
+      "orb_c_all_oppose_pf": 0.939,
+      "orb_d_mixed_pf": 1.224,
+      "ifvg_volume_q1_pf": 1.023,
+      "ifvg_volume_q2_pf": 1.268,
+      "ifvg_volume_q3_pf": 0.885,
+      "ifvg_volume_q4_pf": 0.995,
+      "ifvg_volume_high_low_ratio": 0.823
+    },
+    "verdict": "dataset",
+    "learned": "ORB trades with any prior same-direction iFVG on the same day (57.8% of all ORB trades) have PF=1.427 vs PF=0.963 for those without — 5/5 years consistent, ratio 1.48x exceeds Phase 1 GO threshold. iFVG inversion bar volume is non-monotonic (moderate-volume Q2 best, high-vol loss-making) — no clean threshold gate, Phase 1 NO-GO.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

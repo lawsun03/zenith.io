@@ -2172,6 +2172,138 @@ Economic data releases at 08:30 ET establish intraday momentum that persists thr
 VERDICT: Phase 1 NO-GO. Ratio below threshold AND 2021 inversion makes hypothesis
 structurally unstable. Phase 2 NOT built. Script: scripts/analyze_b54_prertth.py.
 
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH — Session wk3-r2  [done — 3 items appended: B55 Phase-A-optimized pipeline, B56 ORB×iFVG alignment gate Phase 2, B57 iFVG r_multiple sensitivity]
+
+Backlog fully exhausted (B1-B54). Protocol mandates research/ideation session. Sources: WebSearch (no new mechanisms — 7-for-7 external failures, Lesson 6 confirmed) + data mining on mfe_mae_ifvg_clean.csv, mfe_mae_orb_clean.csv, and bars volume data.
+
+**Key data findings driving the 3 proposals:**
+
+1. **ORB×iFVG cross-engine directional alignment** — Phase 1 GO (ratio 1.48x, 5/5 years):
+   - A+D (any prior same-day same-direction iFVG before ORB): n=595, PF=1.427, net=+$53,893
+   - B+C (no same-direction iFVG before ORB): n=435, PF=0.963, net=-$3,940
+   - Per-year: A+D > B+C in all 5 tested years (min gap: 2023, 1.204 vs 1.084)
+   - Group breakdown: A (all same-dir): PF=1.707; B (no prior iFVG): PF=0.990; C (all oppose): PF=0.939; D (mixed): PF=1.224
+   - Mechanism: London iFVG establishes institutional directional conviction; ORB aligned with that conviction has structural support. ORB without any prior directional signal fires into ambiguity.
+
+2. **iFVG inversion bar volume** — Phase 1 NO-GO (non-monotonic, high/low ratio 0.823 < 1.4):
+   - Q1 (low, <=64): PF=1.023; Q2 (moderate, 65-155): PF=1.268 (BEST); Q3 (high-mid, 155-782): PF=0.885; Q4 (highest, >782): PF=0.995
+   - High-vol underperforms low-vol but pattern peaks at Q2, NOT monotonic → no clean threshold gate
+
+3. **Phase A config optimization pipeline impact** — B52 proved +50% Phase A combine pass rate (9/61 vs 6/61) from swing_stop_lookback=0 + target_clarity_mode=reject, but full funded pipeline $/mo + sust impact is UNQUANTIFIED. This is the most actionable open item for Lawrence's Monday config decision.
+
+4. **iFVG r_multiple** — never varied in funded benchmarks. Deployed r_mult=3.5 was assumed; ORB uses orb_r_multiple=2.0/2.5 separately. A lower iFVG target (2.5R vs 3.5R) increases WR but reduces per-trade R — net effect on funded pipeline is unknown.
+
+## B55 — Phase A config-optimized full funded-pipeline benchmark  [pending]
+
+**Hypothesis:** B52 showed swing_stop_lookback=0 + target_clarity_mode=reject improves Phase A combine pass rate 50% (9/61 vs 6/61, PF 1.11 vs 1.11). These settings are config-only changes. If Phase A passes improve from ~42 to ~63 over 5y (same 1.5x scale as combine harness), the full pipeline $/mo and sust should improve materially vs B42 ($549/mo, sust=3.23x).
+
+Mechanism: no new code. Generate per-year Phase A equity CSVs using the optimized Phase A settings:
+```
+for year in [2021, 2023, 2024, 2025, 2026]:
+  equity_export --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ --timeframe 5
+    --risk-pct 1.0 --partial-r 1.5 --set engine=combined --set ifvg_entry_mode=close
+    --set enabled_killzones=all --set swing_stop_lookback=0 --set target_clarity_mode=reject
+    --out research/equity_b55/phase_a_opt_{year}.csv
+```
+Write scripts/run_b55_pipeline.py (or extend run_b42_pipeline.py) using:
+  Phase A: equity_b55/phase_a_opt_{year}.csv (replaces equity_b42/ Phase A)
+  Phase B: equity_b21/orb_reentry_r0p75_{year}.csv (unchanged from B21/B42)
+Run funded_sim --haircut 200. Report $/mo, sust vs B42 baseline.
+
+Also run 2022 holdout: equity_export with same settings on 2022 bars → check Phase A PF in 2022.
+
+Fixed defaults: engine=combined, ifvg_entry_mode=close, killzones=all, risk=1.0%, partial_r=1.5, swing_stop_lookback=0, target_clarity_mode=reject.
+Defining-behavior tests: none needed (no code changes).
+
+Success criteria (vs B42: $549/mo, sust=3.23x):
+- Primary: $/mo AND sust both improve → config change is directly deployable
+- Secondary: sust improves even if $/mo marginally drops → priority is pipeline health
+- If neither improves: B52's combine-harness result does not translate to pipeline (unexpected)
+
+Priority: HIGHEST — directly informs Monday config decision for Lawrence. Run immediately.
+
+Source: B52 combine harness result (9/61 passes); Lesson 101 (B52 confirmed +50% Phase A passes with zero code changes).
+
+## B56 — ORB×iFVG same-day directional alignment gate (Phase 2 code + benchmark)  [pending]
+
+**Phase 1 GO confirmed (wk3-r2):** ratio A+D/B+C = 1.48x > 1.4x threshold; 5/5 years consistent.
+
+Hypothesis: Suppressing ORB signals when no prior same-direction iFVG has fired that day filters the 42.2% B+C group (PF=0.963) and retains the 57.8% A+D group (PF=1.427). For the funded phase, higher PF → lower bust frequency → improved pipeline sustainability despite lower volume.
+
+Mechanism (code changes):
+1. Add `orb_ifvg_alignment_required: bool = False` to StrategyParams (default off)
+2. Add `app/strategy/day_signal_log.py` — `DaySignalLog` class:
+   ```python
+   class DaySignalLog:
+       def on_bar(self, ts: datetime) -> None:  # reset on new day
+       def log(self, ts: datetime, side: str) -> None
+       def has_same_direction(self, ts: datetime, side: str) -> bool
+   ```
+3. In `SweepDisplacementComposer.on_bar()`: when `self.day_log` is set and a signal fires, call `self.day_log.log(bar.ts, signal.side)` before returning
+4. In `ORBComposer.on_bar()` (or ORBDetector.on_bar): when `orb_ifvg_alignment_required=True`, check `self.day_log.has_same_direction(bar.ts, signal.side)` — if False, return None
+5. Wire in backtest/runner.py `_build_runner`: create shared DaySignalLog instance; pass to both the iFVG runner's composer and the ORB runner's composer when engine=combined
+6. Wire in main.py `_build_runner`: same
+
+Defining-behavior tests (tests/test_orb_ifvg_alignment.py):
+1. Day log resets on new trading day (signal logged day 1, query day 2 → False)
+2. Gate passes: same-direction iFVG logged before ORB time → ORB signal fires
+3. Gate blocks: only opposite-direction iFVG logged → ORB returns None
+4. Gate blocks: empty log (no prior iFVG on that day) → ORB returns None
+5. Gate passes with mixed log: some same, some opposite → ORB fires (A+D group included)
+6. Gate disabled by default: orb_ifvg_alignment_required=False → ORB fires unconditionally
+7. iFVG runner logs signal to shared log on signal emission
+
+Fixed defaults: `orb_ifvg_alignment_required=False` (off; enable for benchmark).
+
+Benchmark (after code):
+1. Phase B: equity_export --set engine=orb --set orb_reentry_after_stop=True
+   --set orb_r_multiple=2.5 --set orb_ifvg_alignment_required=True --risk-pct 0.75 --partial-r 1.5
+   per-year equity_b56/ CSVs + funded_sim --haircut 200
+2. Full pipeline: Phase A (equity_b55/ optimized) → Phase B (equity_b56/ filtered ORB-reentry)
+3. Compare to B42 ($549/mo, sust=3.23x)
+
+Volume note: from Phase 1 analysis, 42.2% of ORB days filtered → ~12 ORB trades/month before reentry; with reentry ~16-17/month. Lower volume reduces per-account earnings; higher PF reduces busts. Net pipeline impact: unknown until benchmarked.
+
+Success criteria (vs B42: $549/mo, sust=3.23x):
+- Primary: sust >= 3.23x (maintains pipeline sustainability at lower volume)
+- Secondary: $/mo >= $450 (acceptable reduction)
+- If sust > 3.23x AND $/mo >= $549: clear win; recommend as Phase B replacement
+
+Source: wk3-r2 cross-engine confluence data mining (scripts/analyze_cross_engine_confluence.py). Lesson 103.
+
+## B57 — iFVG r_multiple sensitivity benchmark (funded + combine)  [pending]
+
+**Hypothesis:** The deployed iFVG r_multiple=3.5 has never been varied in funded benchmarks (all B1-B54 used the deployed MNQ instrument override of 3.5). A lower target (2.5R or 3.0R) increases WR by bringing target closer to entry — potentially improving combine pass rate (more months reach $3k threshold) and funded bust rate (more frequent exits reduce holding-period risk exposure).
+
+From MFE/MAE data (iFVG, partial_r=0, 5y excl 2022):
+- Winner MFE p25=1.11R, p50=3.0R, p75=3.69R, p90=3.69R+ → ~50% of winners hit 3.5R target exactly
+- Loser MFE p75=1.03R, p90=1.80R → at r=2.5R, trades with loser-MFE >= 2.5R (10%) become winners
+- Lowering target to 2.5R: ~25% of current winners (those with MFE 2.5-3.5R) capture target earlier; losers with MFE >= 2.5R flip to winners
+
+Mechanism: no new code. `r_multiple` is already in StrategyParams (bot_config.py:31). Test via `--set r_multiple=2.5` etc. NOTE: verify MNQ instrument override (r_mult=3.5 in MNQ overrides) doesn't silently take precedence over CLI `--set r_multiple`. If it does, disable or modify the MNQ override in the benchmark call (using `--instrument-override MNQ r_mult=2.5` or similar).
+
+Fixed defaults to test: r_multiple=2.0, 2.5, 3.0 (vs deployed 3.5 baseline).
+Defining-behavior tests: none needed (no code changes).
+
+Benchmark (funded objective, deployed config):
+1. Combine harness: run_monthly_combine.py --set r_multiple=2.0/2.5/3.0 --instrument MNQ
+   Compare passes/61 and PF at each value vs deployed baseline (9/61, PF=1.11 from B52)
+2. Funded: equity_export per-year at r_multiple=2.0/2.5/3.0 with deployed settings + funded_sim
+   Compare $/mo, sust vs B42 baseline ($549/mo, 3.23x)
+
+Important: run at FULL deployed config (combined+close+all-day+partial=1.5+r=1.0%) to avoid research-vs-deployed discrepancy (Lesson 50). Verify r_multiple override behavior before running.
+
+Success criteria (vs B42/B55 baselines):
+- Combine: r_multiple=2.5 or 3.0 achieves >= 11/61 passes (B24 level) → shorter target improves combine throughput
+- Funded: any r_multiple achieves sust >= 3.23x AND $/mo >= $500 → actionable change
+
+Prior: ~40% that r=2.5 improves both combine AND funded. Shorter targets often help combine pass rate (more achievable monthly goals) but reduce per-account funded earnings. Net pipeline effect uncertain.
+
+Source: MFE/MAE winner MFE distribution (wk1-r3); Lesson 50 config parity gap. iFVG r_multiple is the only unexplored primary StrategyParams field for the funded objective.
+
 ## B55 — iFVG "Silver Bullet" window (10:00-11:00 AM ET only)  [pending — Lawrence-requested 2026-06-14 (Chermane Trades ICT video); rank ahead of routine queue]
 Source: Chermane Trades "This Trade Required PATIENCE / NQ ICT SMC" walkthrough
 (youtu.be/rj7B8bdFaLs). The video's mechanics are standard ICT (sweep ->
