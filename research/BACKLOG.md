@@ -3937,3 +3937,34 @@ overlay instead, i.e. run BOTH that day, as a fallback variant to report).
 
 **Source:** Lawrence-requested 2026-06-14 (CPI-day mode switch + standalone). Builds
 on B85 (confirmed straddle) + B89 (engine). Analogue of B84 but CPI-specific & grounded.
+
+---
+
+## B91 -- News straddle multi-instrument: ES/MES + gold (incl. gold-FOMC), 1s confirmation  [pending — Lawrence-requested 2026-06-14; rank with B89/B90; model:opus]
+
+The CPI breakout straddle GENERALIZES beyond NQ (doc:
+trade_analysis/2026-06-14_news_multi_instrument.md, script scripts/news_multi.py,
+ATR-normalized 0.5xATR which reproduces the NQ confirmed fixed-60t result):
+- **CPI straddle 5/5 years positive on NQ (PF 4.2), ES/MES (3.36), GOLD (2.50).**
+- **GOLD also works on FOMC (PF 2.21, 4/5)** — rates drive gold directionally while
+  index futures whipsaw (FOMC fakeout). NQ/ES FOMC straddles fail.
+- OIL dead on all news; the FADE has no robust edge on any instrument; PPI marginal.
+
+Scope:
+1. **1s confirmation** for ES.v.0 + GC.v.0 CPI windows (and GC.v.0 FOMC windows) —
+   same as B85 for NQ, budget-gated (est-only first; ~$1-2; ledger $8.74/$20). ES/gold
+   above are 1-min only; NQ's 1s check showed 1s ≈ 1-min (slightly better), so this is
+   confirmation not discovery. Reuse scripts/fetch_cpi_1s.py (param the symbol/event).
+2. If confirmed, the B89 engine must be **instrument-parameterized** (tick size, ATR
+   offset) so it can run CPI straddles on NQ/ES/gold and the FOMC straddle on gold.
+   Consider multi-instrument diversification (correlated on CPI, but gold-FOMC is
+   independent of the index CPI trades).
+3. Fold into B90's pipeline/funded framing: the CPI-day mode switch + the gold-FOMC-day
+   variant; quantify whether a small basket (NQ-CPI + gold-CPI + gold-FOMC) beats a
+   single-instrument straddle on the funded objective.
+
+Stop rule: any instrument/event whose 1s confirmation drops it below PF ~1.5 or breaks
+year-consistency is dropped. Oil and the fade are already rejected — do not revisit.
+
+**Source:** Lawrence-requested 2026-06-14 (test straddle + fade on MGC/oil/MES).
+Result: CPI straddle generalizes; gold adds FOMC; oil + fade rejected.
