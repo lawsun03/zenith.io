@@ -2112,3 +2112,45 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 **Test suite:** 698 passed, 2 skipped, 0 failures (no code changes — all new files are analysis scripts).
 
 **Next:** B58 — confluence-weighted additive sizing (Lawrence-requested).
+
+---
+
+## B58 — Confluence-weighted sizing (additive) — 2026-06-14T09:00Z (wk3-b58-confluence)
+
+- **Bot health:** XFA shadow combine live, market closed, flat. No changes to bot_config.json or .env.
+- **Item claimed:** B58 — confluence-weighted additive sizing incl. Silver Bullet (Lawrence-requested).
+- **Implementation:** TDD-first. Added `confluence_count: int = 0` field to `Signal` dataclass; daily rank tracking (`_daily_signal_rank`) to `SweepDisplacementComposer`; `risk_policy: str = "constant"` to `StrategyParams`; `_confluence_multiplier()` helper and updated `_entry_size()` in `ExecutionEngine`. All signals still emitted (additive — `confluence_count` is informational only). 4 defining-behavior tests written first, all pass.
+
+**Confluence features** (4 validated predictors per B58 spec):
+- +1 long side (B15 proven)
+- +1 rank-1 of day (B23 proven; daily rank tracked unconditionally in composer)
+- +1 Silver Bullet hour 10:00-11:00 ET (B55/B18 proven as soft bonus)
+- +1 combined-engine context (B40 proven; `session_ctx is not None`)
+
+**Sizing ladder** (default-off, `risk_policy="confluence"`):
+- count>=3 → 1.5x base, count==2 → 1.0x, count<=1 → 0.5x; capped at max_contracts.
+
+**Combine benchmark** (61 months, r=2.5, risk_policy=confluence vs flat-size r=2.5 control):
+| Variant | Passes/61 | Pass Rate | Run PF |
+|---------|-----------|-----------|--------|
+| B58 confluence r=2.5 | 9 | 15% | 1.12 |
+| B57 r=2.5 (control) | 13 | 21% | 1.15 |
+
+**Funded pipeline (single-phase iFVG equity, same framework for both):**
+| Variant | Net/mo | Sust |
+|---------|--------|------|
+| B58 confluence | $430 | 0.65x |
+| B57 r=2.5 control | $797 | 0.77x |
+| B42 deployed baseline | $844 | 0.79x |
+
+**Stop rule:** B58 WORSE than flat-size control on **BOTH** metrics. **REJECT.**
+
+**Root cause:** The down-sizing effect dominates. Most signals score count<=1 and get 0.5x size. count>=3 (all four features aligning) is rare — the four features are correlated (rank-1 long NY-AM signals tend to also hit the 10 ET window) so stacking them produces a sparse cohort. With ~20% of trades at count>=3 getting 1.5x and ~50%+ at count<=1 getting 0.5x, the average bet size falls below 1.0x — equivalent to running at reduced risk. The per-trade edge of high-confluence signals is not materially different from the population average, so the down-sizing on majority trades drives lower combine throughput and lower XFA payouts. This is the same failure mode as B47, B19, B48 — subtractive on size instead of subtractive on gate.
+
+**Verdict:** REJECTED. Code ships (4 tests, `risk_policy="confluence"` available), but default-off. Document alongside B47 in the failed-confluence graveyard.
+
+**Lesson 112 added** (confluence sizing fails when high-conviction cohort is sparse and features are correlated).
+
+**Test suite:** 702 passed, 2 skipped, 0 failures (+4 B58 tests).
+
+**Next:** B59 — Long-only sweep-reentry micro-engine (Lawrence-requested, pending).

@@ -224,6 +224,12 @@ class StrategyParams(BaseModel):
     # Phase-1 GO: A+D/B+C ratio 1.48x > 1.4x threshold, consistent across 5/5 years.
     orb_ifvg_alignment_required: bool = False
 
+    # B58: per-signal sizing policy. "constant" = unchanged (default). "confluence" =
+    # scale base size by a fixed ladder: count>=3 → 1.5x, count==2 → 1.0x, count<=1 → 0.5x.
+    # Count = validated-edge features that align: long side, rank-1, Silver Bullet hour,
+    # combined-engine context. Cap at max_contracts. All signals still taken (additive, no gate).
+    risk_policy: str = "constant"
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -66,6 +66,15 @@ from app.strategy.volume_profile import VolumeProfileTracker
 log = logging.getLogger(__name__)
 
 
+def _confluence_multiplier(confluence_count: int) -> Decimal:
+    """B58: fixed sizing ladder keyed on per-signal confluence count."""
+    if confluence_count >= 3:
+        return Decimal("1.5")
+    if confluence_count == 2:
+        return Decimal("1.0")
+    return Decimal("0.5")
+
+
 def _is_opposite_side(signal_side: str, open_contracts: int) -> bool:
     """True when the signal direction conflicts with the current open position."""
     return (signal_side == "long" and open_contracts < 0) or \
@@ -907,51 +916,66 @@ class ExecutionEngine:
 
     def _entry_size(self, signal: Signal) -> int:
         """Contracts for this entry. Risk-based when risk_per_trade_pct > 0,
-        else the fixed `contracts` count. Logs the decision (Rule 12)."""
-        if not self.risk_per_trade_pct or self.risk_per_trade_pct <= 0:
-            return self.contracts
-
-        if self.phase is not None and self.phase.phase in ("combine", "xfa"):
-            # Phase-aware sizing: the tracked account (real or shadow) is the
-            # capital at risk — broker equity may be an unrelated practice
-            # balance (e.g. $153k practice vs a simulated $50k Combine).
-            # XFA balances start at $0, so its risked capital is the MLL
-            # cushion, not the balance.
-            if self.phase.phase == "combine":
-                equity = self.phase.balance
-            else:
-                equity = self.phase.cushion or Decimal("1")
-            offset = Decimal("0")
-        else:
-            equity = self.risk_state.current_equity
-            if equity <= 0:  # before the first mark-to-market tick of the session
-                equity = self.risk_state.realized_balance
-            offset = self.risk_state.config.risk_sizing_equity_offset
-            if offset > 0:
-                equity = max(equity - offset, Decimal("1"))
-        stop_distance = abs(signal.entry - signal.stop)
-        if stop_distance <= 0:
-            return self.contracts  # degenerate signal; fall back rather than divide by zero
-
-        pv = _point_value(signal.instrument)
+        else the fixed `contracts` count. B58: scaled by confluence multiplier
+        when risk_policy='confluence'. Logs the decision (Rule 12)."""
         account_max = self.risk_state.config.max_contracts
         effective_max = (
             min(account_max, self.max_contracts_override)
             if self.max_contracts_override is not None
             else account_max
         )
-        size = risk_based_size(
-            equity, self.risk_per_trade_pct, stop_distance, pv,
-            max_size=effective_max,
-        )
-        budget = equity * (self.risk_per_trade_pct / Decimal("100"))
-        risk_per_contract = stop_distance * pv
-        over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
-        offset_note = f" (profit-above-base; offset={offset})" if offset > 0 else ""
-        log.info(
-            "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s%s",
-            equity, budget, stop_distance, risk_per_contract, size, over, offset_note,
-        )
+
+        if not self.risk_per_trade_pct or self.risk_per_trade_pct <= 0:
+            size = self.contracts
+        else:
+            if self.phase is not None and self.phase.phase in ("combine", "xfa"):
+                # Phase-aware sizing: the tracked account (real or shadow) is the
+                # capital at risk — broker equity may be an unrelated practice
+                # balance (e.g. $153k practice vs a simulated $50k Combine).
+                # XFA balances start at $0, so its risked capital is the MLL
+                # cushion, not the balance.
+                if self.phase.phase == "combine":
+                    equity = self.phase.balance
+                else:
+                    equity = self.phase.cushion or Decimal("1")
+                offset = Decimal("0")
+            else:
+                equity = self.risk_state.current_equity
+                if equity <= 0:  # before the first mark-to-market tick of the session
+                    equity = self.risk_state.realized_balance
+                offset = self.risk_state.config.risk_sizing_equity_offset
+                if offset > 0:
+                    equity = max(equity - offset, Decimal("1"))
+            stop_distance = abs(signal.entry - signal.stop)
+            if stop_distance <= 0:
+                size = self.contracts  # degenerate signal; fall back rather than divide by zero
+            else:
+                pv = _point_value(signal.instrument)
+                size = risk_based_size(
+                    equity, self.risk_per_trade_pct, stop_distance, pv,
+                    max_size=effective_max,
+                )
+                budget = equity * (self.risk_per_trade_pct / Decimal("100"))
+                risk_per_contract = stop_distance * pv
+                over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
+                offset_note = f" (profit-above-base; offset={offset})" if offset > 0 else ""
+                log.info(
+                    "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s%s",
+                    equity, budget, stop_distance, risk_per_contract, size, over, offset_note,
+                )
+
+        # B58: apply confluence multiplier when risk_policy="confluence"
+        if (self.strategy_cfg is not None and
+                self.strategy_cfg.risk_policy == "confluence"):
+            mult = _confluence_multiplier(signal.confluence_count)
+            base_before_mult = size
+            scaled = int(Decimal(str(size)) * mult)
+            size = max(1, min(scaled, effective_max))
+            log.info(
+                "Confluence-sized: count=%d mult=%s base=%d -> size=%d",
+                signal.confluence_count, mult, base_before_mult, size,
+            )
+
         return size
 
     async def _act_on_signal(self, signal: Signal) -> OrderOutcome:

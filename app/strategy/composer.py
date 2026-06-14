@@ -88,6 +88,10 @@ class Signal:
     setup_grade: "SetupGrade | None" = None
     armed_zone: "ArmedZone | None" = None
     ce: Decimal | None = None
+    # B58: confluence count at signal emission time.
+    # Features: +1 long side, +1 rank-1 of day, +1 Silver Bullet hour, +1 combined-engine.
+    # 0 = uncounted (non-iFVG engines, old signals). Default 0 is neutral (no up/down sizing).
+    confluence_count: int = 0
 
 
 @dataclass
@@ -255,6 +259,10 @@ class SweepDisplacementComposer:
         self.session_ctx = None
         # B56: injected by CombinedRunner when alignment_gate=True.
         self.alignment_ctx = None
+        # B58: daily signal rank — always tracked (regardless of daily_signal_cap).
+        # Rank-1 = first signal emitted today; rank-2+ = subsequent signals.
+        self._daily_signal_rank: int = 0
+        self._daily_rank_et_day: "date | None" = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -494,8 +502,25 @@ class SweepDisplacementComposer:
                 self._awaiting = []
                 return None
 
-            signal = self._build_signal(bar, awaiting, event)
+            # B58: compute confluence count (features with validated edges).
+            _et_day_rank = bar.ts.astimezone(_ET).date()
+            if _et_day_rank != self._daily_rank_et_day:
+                self._daily_rank_et_day = _et_day_rank
+                self._daily_signal_rank = 0
+            _cc = 0
+            if event.side == "bullish":
+                _cc += 1  # +1 long side (B15)
+            if self._daily_signal_rank == 0:
+                _cc += 1  # +1 rank-1 of day (B23)
+            if bar.ts.astimezone(_ET).hour == 10:
+                _cc += 1  # +1 Silver Bullet 10-11 ET (B55/B18)
+            if self.session_ctx is not None:
+                _cc += 1  # +1 combined-engine context (B40)
+
+            signal = self._build_signal(bar, awaiting, event, confluence_count=_cc)
             self._awaiting = []
+            if signal is not None:
+                self._daily_signal_rank += 1
             if signal is not None and self.config.daily_signal_cap > 0:
                 self._daily_signal_count += 1
             if signal is not None and self.config.max_short_rank > 0 and event.side == "bearish":
@@ -588,6 +613,7 @@ class SweepDisplacementComposer:
         bar: Bar,
         awaiting: _Awaiting,
         event: DisplacementEvent,
+        confluence_count: int = 0,
     ) -> Signal:
         cfg = self.config
         fvg = event.fvg
@@ -711,4 +737,5 @@ class SweepDisplacementComposer:
             fvg_high=zone_high,
             rationale=rationale,
             sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
+            confluence_count=confluence_count,
         )

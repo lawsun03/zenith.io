@@ -2654,5 +2654,27 @@
       "runs": ["b57_r20", "b57_r25", "b57_r30", "b57_r35_base"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T10:00:00Z",
+    "session": "wk3-b58-confluence",
+    "item": "B58",
+    "variant": "confluence-weighted sizing (count-ladder: <=1->0.5x, ==2->1.0x, >=3->1.5x) vs flat-size control",
+    "objective": "funded",
+    "metrics": {
+      "combine_confluence": {"passes": 9, "of": 61, "pf": 1.12},
+      "combine_control_r25": {"passes": 13, "of": 61, "pf": 1.15},
+      "pipeline_confluence": {"net_per_month": 430, "sustainability": 0.65},
+      "pipeline_control_r25": {"net_per_month": 797, "sustainability": 0.77},
+      "pipeline_b42_baseline": {"net_per_month": 844, "sustainability": 0.79},
+      "stop_rule": "REJECT — worse than flat-size control on BOTH metrics"
+    },
+    "verdict": "rejected",
+    "learned": "Confluence-weighted sizing (additive ladder: 0.5x for count<=1, 1.0x for count=2, 1.5x for count>=3) is rejected: -$367/mo (-46%) and -0.12x sust vs flat-size B57 r=2.5 control. Root cause: the down-sizing effect dominates. count>=3 signals (all of: long+rank-1+10 ET+combined) are rare (~20% of trades); the majority score count<=1 and get 0.5x sizing. Net average size < 1.0x, equivalent to running at reduced risk. The per-trade edge of high-confluence signals is not materially higher than the population average — the features are correlated (rank-1 long NY-AM signals tend to also be at 10 ET, and vice versa), not additively independent. This is the same failure mode as B47, B19, B48 — subtractive selection on the signal axis vs subtractive selection on the size axis produce the same result: reduced average bet size without proportional edge uplift. Rule: confluence sizing requires that the high-confluence cohort has a materially higher per-trade PnL distribution. Verify this with MFE/MAE analysis (B2) before attempting a size ladder.",
+    "links": {
+      "doc": null,
+      "runs": ["b58_confluence"],
+      "src": "scripts/_b58_funded_analysis.py"
+    }
   }
 ]

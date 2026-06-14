@@ -2456,7 +2456,7 @@ recommendation). Source: Lawrence direct request 2026-06-14; builds on B51/B56
 grader findings + the full validated-predictor set from B5/B15/B18/B23/B34/B40/
 B45/B49/B53/B55.
 
-## B58 — Confluence-weighted sizing (additive, not a gate) incl. Silver Bullet  [in-progress — session 2026-06-14T07:10Z]
+## B58 — Confluence-weighted sizing (additive, not a gate) incl. Silver Bullet  [done — REJECTED: $430/mo sust 0.65x vs flat-size $797/mo 0.77x; down-sizing dominates up-sizing; document alongside B47]
 Lawrence asked: can B55 (Silver Bullet 10-11 ET window) be used in confluence
 with other strats? Landscape: HARD confluence gates already failed -- B47
 (iFVGxORB must-agree) lost on both metrics by removing trades. SOFT scoring
