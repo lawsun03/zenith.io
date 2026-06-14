@@ -2456,7 +2456,7 @@ recommendation). Source: Lawrence direct request 2026-06-14; builds on B51/B56
 grader findings + the full validated-predictor set from B5/B15/B18/B23/B34/B40/
 B45/B49/B53/B55.
 
-## B58 — Confluence-weighted sizing (additive, not a gate) incl. Silver Bullet  [pending — Lawrence-requested 2026-06-14; do AFTER B50 + B55 (+ ideally B57); rank ahead of routine queue]
+## B58 — Confluence-weighted sizing (additive, not a gate) incl. Silver Bullet  [in-progress — session 2026-06-14T07:10Z]
 Lawrence asked: can B55 (Silver Bullet 10-11 ET window) be used in confluence
 with other strats? Landscape: HARD confluence gates already failed -- B47
 (iFVGxORB must-agree) lost on both metrics by removing trades. SOFT scoring
@@ -2500,3 +2500,147 @@ alongside B47).
 Source: Lawrence 2026-06-14 (B55 confluence question). The additive complement to
 B57's scoring and B50's dynamic risk; the one confluence form (size, not gate)
 not yet tested.
+
+## B59 — Long-only sweep-reentry micro-engine (funded-only overlay)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+Lawrence-specified. A long-only reentry micro-engine that ACTIVATES only after
+the day's main ORB long has stopped out, as a funded-phase overlay.
+
+Mechanism (standalone detector + runner shim per the engine pattern; new engine
+`sweep_reentry`, default-off):
+- Arm only after an ORB long stop-out on the day (consume the ORB on_stop_loss
+  signal, same wiring as B14 ORB-reentry). Long-only; never short.
+- Trigger: a downside liquidity sweep that breaks the current session low OR the
+  prior-day low by an ATR-normalized amount (sweep depth >= k x ATR; declare k
+  fixed, e.g. 0.25 ATR), THEN a clean iFVG-style upward displacement + inversion
+  (reuse the existing SweepDisplacement detection + inversion quality filter --
+  do NOT reinvent; Lesson 1 the inversion is the quality filter).
+- Entry respects the existing iFVG inversion quality filter and swept-extreme stop
+  convention; WIDE swing-anchored stop; SMALL risk (test r0.25 and r0.5 only).
+- Log trades SEPARATELY (own engine tag) so the overlay's contribution is isolable.
+
+Priors: B14 (ORB-reentry) was candidate-only and pipeline-negative solo but lifted
+in two-phase (B21). B33 (anticipatory probe pre-inversion) was rejected -- but THIS
+keeps the full inversion filter (post-inversion entry), so it does not inherit B33's
+failure. Sweeping the session/prior-day low + displacement is the iFVG mechanism
+applied to a specific reentry context. Medium prior.
+
+Defining-behavior tests (tests/test_sweep_reentry.py):
+1. Engine off / no prior ORB stop today: no signal.
+2. ORB long stopped, then sweep of session low by >= k ATR + upward displacement +
+   inversion -> long signal at inversion close, stop beyond swept extreme.
+3. Sweep too shallow (< k ATR) -> no signal. 4. Short setups -> never fire.
+5. Only one reentry overlay arm per day.
+
+Benchmark: Combine trade count + PF (report, expect sparse); FUNDED as an overlay
+ON TOP of the B21/B27 best pipeline (ORB-reentry Phase B) -- does adding this
+long-only overlay raise funded $/mo or cut busts without dropping sustainability
+< 1.0? Success: funded pipeline improves with overlay vs without. Stop rule: no
+funded improvement -> reject. Source: Lawrence 2026-06-14.
+
+## B60 — ORB + iFVG expansion to ES.v.0 / MES.v.0  [pending — Lawrence-requested 2026-06-14; enables B64; rank ahead of routine queue]
+Lawrence-specified. Port the NQ/MNQ 5min ORB and iFVG engines to ES/MES with the
+SAME structural rules (opening-range window, iFVG inversion chain, swept-extreme
+stop geometry). Replace fixed-point thresholds (min_absolute_body 5.0, stop_buffer
+3.0) with ATR- or %-of-price-normalized values calibrated per instrument (this is
+B6's ATR-normalization, which was a no-op on NQ alone -- but ES has a different
+price/tick regime so it matters here). Tune ONLY ATR and volume multipliers so
+Combine trade frequency stays in the 60-90 trades/month band (declare the tuned
+values; this is a calibration, not an edge sweep).
+
+Data: pull ES.v.0 + MES.v.0 5min over the SAME 5y window as NQ via Databento.
+DATABENTO BUDGET: estimate-only FIRST, log to research/databento_ledger.txt, abort
+if it would exceed the $20 cap. Prefer the v-rolled contract (Lesson: c.0 has thin
+expiry Fridays). Save to bars/bars_ES_dbv_2021_2026.csv etc.
+
+Benchmark: per-year Combine passes, funded PF, pipeline sustainability (passes vs
+XFA busts) for ES/MES vs NQ. Question answered: is the edge NQ-specific or general
+across index futures? Success criterion is DIAGNOSTIC (not pass/fail) -- report
+whether ES/MES show comparable per-year passes + sustainability >= 1.0. Defining
+tests: engine runs on ES bars; ATR-normalized thresholds reproduce NQ behavior at
+NQ price levels (parity check). Source: Lawrence 2026-06-14.
+
+## B61 — Excursion-ladder exit research (BE / partial variants)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+Lawrence-specified. Using the existing 5y MFE/MAE infrastructure (B2) and the
+`mfe_pts/mae_pts/r_mfe/r_mae` fields, mine excursion-ladder exit policies for
+ORB-reentry r0.75 and close-mode iFVG. Keep the initial swept-extreme stop; vary
+BE-move point and partial-profit point as PLUGGABLE exit modes:
+- BE at 1.0R vs 1.5R; partial at 2.0R vs 2.5R (the declared grid -- this is the one
+  sanctioned exit sweep, justified because B2 only tested be_trail_r=1.0 which
+  failed by killing two-thrust winners; the lesson said any BE must engage AFTER
+  ~2.0R, so this grid tests exactly that boundary).
+- Implement as default-off exit modes via runner.exit_request (B2 infra exists).
+For each ladder, re-score Combine PF, funded PF, two-phase pipeline metrics.
+Success: an exit scheme that improves funded PF OR cuts XFA busts WITHOUT dropping
+Combine volume below 60-90/mo or sustainability below 1.0. Stop rule: every ladder
+worse than the fixed-target baseline on both objectives -> reject (confirms B2's
+finding that NQ winners need to run, exits don't help). Defining tests: each exit
+mode triggers BE/partial at the specified R; off-by-default unchanged.
+Source: Lawrence 2026-06-14; extends B2.
+
+## B62 — Orderflow-proxy confirmation + veto for ORB (cum-delta + RVOL)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+Lawrence-specified. Extend the NQ 5min ORB engine with bar-derived orderflow-style
+filters (we have no tick/L2 data, so APPROXIMATE from OHLCV):
+- Cumulative delta proxy: per bar, approximate up-tick vs down-tick volume (e.g.,
+  classify the bar's volume by close position in range, or Bear/Bull volume split);
+  maintain an intraday cumulative series. Declare ONE fixed proxy formula.
+- RVOL: intraday relative volume vs the trailing-N-day same-time-of-day average.
+Experiments (default-off flags):
+  (a) CONFIRM: take ORB breakout only when 3-bar cumulative-delta AND RVOL confirm
+      the breakout direction.
+  (b) VETO/EXIT: exit early when a 3-bar cumulative-delta divergence forms against
+      the open position.
+Report trade count, Combine pass rate, funded PF, pipeline sustainability per
+variant vs ORB baseline. Priors: orderflow proxies from bars are crude; academic
+work found no OHLCV signal family survives on MNQ (Lesson 6). Treat as falsifiable.
+PHASE 1 cheap check FIRST: does the cum-delta/RVOL proxy at breakout correlate with
+ORB outcome at all (bucket by proxy value -> PF separation)? If no separation, do
+not build (b). Success: a variant improves funded PF or pass rate without cutting
+volume below 60-90/mo. Stop rule: both variants worse -> reject. Defining tests:
+proxy computed deterministically; confirm-gate suppresses unconfirmed breakouts;
+divergence-exit fires on the specified pattern. Source: Lawrence 2026-06-14.
+
+## B63 — Pipeline-aware funded-only sizing/routing variants  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+Lawrence-specified. Funded-only configs for ORB and long-only close-mode iFVG that
+target the funded objective, ASSUMING Phase A supplies Combine accounts separately.
+Start from the current best two-phase pair (iFVG Phase A + ORB-reentry r0.75 Phase
+B, B21). Experiments:
+  (a) conditional intraday SIZE INCREASE after an early ORB winner (declare the
+      rule: e.g., +0.5x risk on the next signal if the first trade of the day won
+      by >= 1R; reuse B50 sizing hook).
+  (b) long-only / session-filtered iFVG funded configs that raise PF but change
+      account cycling speed (reuse B15/B19 configs).
+For each: per-account net, funded bust count, cycle duration, resulting two-phase
+$/mo and sustainability. Success: beats the B21/B27 pipeline benchmark on $/mo or
+sustainability WITHOUT violating sustainability >= 1.0. Stop rule: none beat B21 ->
+reject (B21 stands). Metric note: (a) is path-dependent sizing -> judge on funded
+objective not PF (B50 trap). Defining tests: size-up rule fires only after the
+qualifying early winner; respects per-trade risk cap. Source: Lawrence 2026-06-14.
+
+## B64 — SMT divergence (NQ vs ES) reversal filter  [pending — Lawrence-requested 2026-06-14 (TradeZella review); DEPENDS ON B60 (needs ES data); rank after B60]
+From TradeZella (Trader Kane "SMT Divergence + PO3"; Trader Mayne) -- the one
+genuinely new mechanism on that page not already covered. SMT divergence: when NQ
+makes a higher high but the correlated ES does NOT (or NQ lower low while ES holds),
+it flags a likely reversal -- a cross-instrument liquidity-sweep tell.
+
+Hypothesis: gating/confirming iFVG (or ORB) signals with concurrent NQ-vs-ES SMT
+divergence improves quality. Requires the ES feed from B60 (do B60 first).
+Mechanism: at an iFVG sweep, check whether ES swept its corresponding level on the
+same bar; SMT-divergence = NQ swept but ES did NOT (non-confirmation). Default-off
+`smt_filter_enabled: bool = False`; when on, require SMT divergence at the sweep.
+PHASE 1 cheap check FIRST (no engine): over 5y, label each iFVG signal with
+SMT-divergence-present? and compare forward PF (divergence vs no-divergence). GO
+only if divergence cohort PF materially exceeds non-divergence (>= 1.25x). Else
+reject (SMT joins the failed external-claim list).
+Priors: external/ICT claims are 4-for-4+ failures here; SMT needs a second data
+feed and adds a hard gate (B47 gates failed). But it is a genuinely different
+signal (cross-instrument, not setup-geometry). Medium-low prior (~25%).
+Benchmark (if GO): both objectives vs control. Defining tests: SMT label computed
+from aligned NQ/ES bars; gate suppresses non-divergent signals; off-by-default
+unchanged. Source: Lawrence 2026-06-14; TradeZella strategies page.
+
+(TradeZella review note: the other ~35 strategies map to existing/rejected work --
+ICT sweep/FVG/OTE/breaker/PO3/liquidity = iFVG/sweep_bos/B33/B34/B47; auction/
+volume-profile/VWAP/value-area = rejected VWAP-MR + kz_levels; break&retest =
+sweep_bos; order-flow/delta/Bookmap = B62 proxy. Round-number .20/.80 levels and
+ADR-target models noted as LOW-prior candidates, not queued. Only SMT divergence
+was novel + testable enough to queue.)
