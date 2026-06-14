@@ -2387,7 +2387,7 @@ recommendation only. Success: either a grader whose grades actually predict
 outcome (monotone A>B>C>D>F by PF), or a documented recommendation to drop the
 gate. Source: Lawrence flag + B51 non-monotonic finding (Lesson 99).
 
-## B57 — New lessons-based trade-quality grader (composite filter)  [pending — PRIORITY: Lawrence-requested 2026-06-14; do AFTER B56 (B56 feeds it); rank ahead of routine queue]
+## B57 — New lessons-based trade-quality grader (composite filter)  [done — Phase 1 NO-GO: composite WoE score (is_long, is_rank1, is_orb, hour buckets) fails both OOS criteria (decile ratio 1.08 < 1.30; top-half PF 1.187 < best single rank-1 PF 1.234); contextual features are not additively independent; no grader built; analysis script scripts/analyze_b57_composite_grader.py committed]
 Lawrence: build a NEW grader that takes ALL lessons learned into account, ranks
 a scenario more accurately than the current one, to filter trades. B56 audits
 the OLD grader's components; B57 builds a fresh composite quality score from

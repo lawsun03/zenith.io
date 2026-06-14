@@ -2014,3 +2014,55 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected — volume starvation kills funded phase. Gate removes 42.2% of ORB signals; funded accounts average only 18.7d (vs 73.5d baseline) before MLL bust. 51/52 accounts bust before payout. $602/mo headline is misleading — no payouts actually collected (accounts bust without reaching threshold). Lesson 109 added. Feature ships default-off (`orb_ifvg_alignment_required=False`).
 - **Learned:** Phase 1 GO (PF ratio 1.48x, 5/5 years) does not guarantee Phase 2 pipeline improvement when the gate removes a high fraction of an already-sparse signal stream. ORB fires ≤1 trade/day with reentry at most 1 more; removing 42.2% of days leaves funded accounts with ~3 trades/month — too few to compound to payout before normal drawdown reaches MLL. The remaining A+D trades ARE higher quality (PF=1.427 vs 0.963), but they can't sustain the account long enough to collect. This is the same failure pattern as B47 (Lesson 94) and B55 Silver Bullet (Lesson 105), now confirmed for cross-engine gates on sparse ORB. Rule (Lesson 109): estimate post-gate trade frequency before building cross-engine gates; ORB at 4-6 signals/month sits near the survival floor and cannot absorb a 42% cut.
 - **Next:** B57 (new trade-quality grader — Lawrence-requested, priority) or B58 (confluence-weighted sizing — Lawrence-requested). Both ranked ahead of routine queue items.
+
+## 2026-06-14T07:30Z — session wk3-b57 — B57 (composite quality grader — Phase 1 NO-GO)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B57 (Lawrence-requested new lessons-based trade-quality grader; ranked ahead of routine queue; B56 fed it — done).
+- **Ran:** `scripts/analyze_b57_composite_grader.py` — Phase 1 composite WoE grader analysis.
+  - Combined iFVG (2477 trades) + ORB (1030 trades), excl 2022 holdout. Total: 3507 trades.
+  - Train: 2021+2023+2024 (n=2199). OOS: 2025+2026 (n=1308).
+  - Features: is_long, is_rank1, is_orb, hour_london, hour_ny_am, hour_noon, hour_ny_pm, is_long_london, is_long_ny_am (all pre-entry, derived from MFE/MAE CSVs).
+  - Scoring method: weight-of-evidence (WoE) per feature from training set, combined additively. Pure pandas/numpy, no sklearn.
+  - Trained WoE table, scored OOS, computed per-decile PF, compared to best single-filter baselines.
+
+- **Numbers:**
+
+  **Training WoE table (strongest to weakest):**
+  | Feature | WoE | Training PF (True) | Training PF (False) |
+  |---------|-----|-------------------|---------------------|
+  | is_orb | +0.389 | 1.242 | 0.995 |
+  | is_long_ny_am | +0.289 | 1.276 | 0.997 |
+  | hour_ny_am | +0.256 | 1.171 | 0.968 |
+  | is_rank1 | +0.212 | 1.117 | 0.978 |
+  | is_long | +0.211 | 1.214 | 0.914 |
+  | hour_london | -0.196 | 0.979 | 1.075 |
+  | hour_ny_pm | +0.087 | 0.899 | 1.067 |
+  | hour_noon | +0.078 | 0.817 | 1.070 |
+  | is_long_london | -0.074 | 1.070 | 1.057 |
+
+  **OOS per-decile PF (composite score, lowest → highest score):**
+  D1: PF=1.001 | D2: 1.296 | D3: 1.195 | D4: 1.168 | D5: 0.710 | D6: 1.257 | D7: 1.185 | D8: 1.235 | D9: 1.082
+
+  **OOS summary:**
+  - Baseline PF: 1.109 (n=1308)
+  - Top-half PF: 1.187 (n=659, 50%)
+  - Bot-half PF: 1.057 (n=649)
+  - Top-decile PF: 1.082 | Bottom-decile PF: 1.001 | Ratio: **1.081**
+
+  **OOS single-filter baselines:**
+  - Rank-1-only: PF=1.234 (n=745, 57%) ← best single
+  - London+NY AM: PF=1.175 (n=773, 59%)
+  - Long-only: PF=1.130 (n=663, 51%)
+  - ORB-only: PF=1.158 (n=371, 28%)
+
+- **GO/NO-GO:**
+  - Criterion 1 (decile ratio >= 1.30): **FAIL** — 1.081 < 1.30
+  - Criterion 2 (top-half PF >= best single + 40% volume): **FAIL** — 1.187 < 1.234
+  - **VERDICT: NO-GO. Phase 2 NOT built.**
+
+- **Stop rule check:** both criteria fail on OOS data. No code changes to strategy. Phase 1 analysis script committed; no new tests needed (pure analysis).
+
+- **Verdict:** rejected (Phase 1 NO-GO)
+- **Learned:** Compositing validated contextual features through WoE does not break through the best single predictor (rank-1-only OOS PF 1.234). The composite score is non-monotone in OOS deciles (D2=1.296 outperforms D9=1.082). The hour_london WoE is NEGATIVE in the combined iFVG+ORB population because iFVG London shorts are loss-making, even though B19 showed long-only London iFVG is good — the composite can't capture this side-specific interaction cleanly. All "good signal" characteristics (long, rank-1, NY AM, ORB) co-occur, making them correlated rather than independent; WoE additivity assumes independence that doesn't hold.
+- **Next:** B58 (confluence-weighted sizing — Lawrence-requested, additive complement to B57's scoring approach). B57 r_multiple sensitivity (first pending B57 item) is also unaddressed.

@@ -2382,7 +2382,7 @@
     "ts": "2026-06-14T06:00:00Z",
     "session": "wk3-r2",
     "item": "RESEARCH",
-    "variant": "cross-engine iFVG×ORB confluence + inversion-bar volume mining",
+    "variant": "cross-engine iFVG\u00c3\u2014ORB confluence + inversion-bar volume mining",
     "objective": "dataset",
     "metrics": {
       "orb_ad_pf": 1.427,
@@ -2390,7 +2390,7 @@
       "ratio_ad_bc": 1.48,
       "years_ad_gt_bc_consistent": 5,
       "orb_a_all_same_pf": 1.707,
-      "orb_b_no_prior_pf": 0.990,
+      "orb_b_no_prior_pf": 0.99,
       "orb_c_all_oppose_pf": 0.939,
       "orb_d_mixed_pf": 1.224,
       "ifvg_volume_q1_pf": 1.023,
@@ -2400,7 +2400,7 @@
       "ifvg_volume_high_low_ratio": 0.823
     },
     "verdict": "dataset",
-    "learned": "ORB trades with any prior same-direction iFVG on the same day (57.8% of all ORB trades) have PF=1.427 vs PF=0.963 for those without — 5/5 years consistent, ratio 1.48x exceeds Phase 1 GO threshold. iFVG inversion bar volume is non-monotonic (moderate-volume Q2 best, high-vol loss-making) — no clean threshold gate, Phase 1 NO-GO.",
+    "learned": "ORB trades with any prior same-direction iFVG on the same day (57.8% of all ORB trades) have PF=1.427 vs PF=0.963 for those without \u00e2\u20ac\u201d 5/5 years consistent, ratio 1.48x exceeds Phase 1 GO threshold. iFVG inversion bar volume is non-monotonic (moderate-volume Q2 best, high-vol loss-making) \u00e2\u20ac\u201d no clean threshold gate, Phase 1 NO-GO.",
     "links": {
       "doc": null,
       "runs": [],
@@ -2411,7 +2411,7 @@
     "ts": "2026-06-14T00:00:00Z",
     "session": "wk3-b55",
     "item": "B55",
-    "variant": "silver_bullet_only=True — iFVG emission gated to 10:00-11:00 ET only",
+    "variant": "silver_bullet_only=True \u00e2\u20ac\u201d iFVG emission gated to 10:00-11:00 ET only",
     "objective": "combine+funded",
     "metrics": {
       "combine_sb_passes": 6,
@@ -2421,7 +2421,7 @@
       "combine_baseline_passes": 9,
       "combine_baseline_attempts": 61,
       "combine_baseline_run_pf": 1.11,
-      "r125_pf": 1.060,
+      "r125_pf": 1.06,
       "r125_trades": 1545,
       "r125_net_4y": 96891,
       "r125_combine_passes": 33,
@@ -2432,9 +2432,9 @@
       "r100_net_4y": 80632,
       "r100_combine_passes": 29,
       "r100_xfa_busts": 69,
-      "r100_sust": 0.420,
+      "r100_sust": 0.42,
       "b19_baseline_r125_pf": 1.173,
-      "b19_baseline_r125_sust": 1.600,
+      "b19_baseline_r125_sust": 1.6,
       "b24_baseline_pf": 1.167,
       "b24_baseline_sust": 2.524,
       "tests_added": 7,
@@ -2444,7 +2444,7 @@
       "bars": "bars_MNQ_dbv_2021_2026.csv (2021+2023-2026, excl 2022 holdout for funded)"
     },
     "verdict": "rejected",
-    "learned": "Silver Bullet hour concentration (10:00-11:00 ET only) fails on both objectives and both r-levels. Combine: 6/61 passes PF=1.04 vs 9/61 PF=1.11 baseline — worse on both. Funded r=1.25: PF=1.060 sust=0.485 vs B19 PF=1.173 sust=1.600 — worse on both. Root cause: volume starvation. Restricting to one 60-minute window yields ~5-10 signals/month, too sparse for the two-phase pipeline to sustain XFA account cycling. The wk1-r2 per-hour PF=1.235 finding for 10:xx ET does not transfer to funded pipeline improvement — Lesson 89 confirmed again: per-hour PF in the population-level data does not predict per-hour PF within the specific deployed config. Feature ships as code toggle (silver_bullet_only=False default) — flag available for combination testing but not routed to any account.",
+    "learned": "Silver Bullet hour concentration (10:00-11:00 ET only) fails on both objectives and both r-levels. Combine: 6/61 passes PF=1.04 vs 9/61 PF=1.11 baseline \u00e2\u20ac\u201d worse on both. Funded r=1.25: PF=1.060 sust=0.485 vs B19 PF=1.173 sust=1.600 \u00e2\u20ac\u201d worse on both. Root cause: volume starvation. Restricting to one 60-minute window yields ~5-10 signals/month, too sparse for the two-phase pipeline to sustain XFA account cycling. The wk1-r2 per-hour PF=1.235 finding for 10:xx ET does not transfer to funded pipeline improvement \u00e2\u20ac\u201d Lesson 89 confirmed again: per-hour PF in the population-level data does not predict per-hour PF within the specific deployed config. Feature ships as code toggle (silver_bullet_only=False default) \u00e2\u20ac\u201d flag available for combination testing but not routed to any account.",
     "links": {
       "doc": null,
       "runs": [
@@ -2466,7 +2466,7 @@
       "b55_avg_days_per_attempt": 14.9,
       "b55_reset_cost_per_funded": 398,
       "b55_pipeline_net_per_month": 508,
-      "b55_sustainability": 2.00,
+      "b55_sustainability": 2.0,
       "b42_combine_passes": 42,
       "b42_combine_attempts": 159,
       "b42_avg_days_per_attempt": 6.5,
@@ -2482,7 +2482,7 @@
       "bars": "bars_MNQ_dbv_{year}.csv per year (2021/2023/2024/2025/2026); 2022 holdout separate"
     },
     "verdict": "rejected",
-    "learned": "B52's combine-harness pass rate improvement (9/61 vs 6/61) does NOT transfer to funded pipeline economics. B55 optimized config (lookback=0, target_clarity=reject) earns $508/mo sust=2.00x vs B42 deployed $549/mo sust=3.23x — worse on BOTH metrics. The mechanism is trade frequency: target_clarity=reject skips low-clarity-target signals, reducing combine attempts from 159 to 69 over 5y (2.3x fewer). B42's higher attempt frequency generates 42 absolute passes vs B55's 26, despite B55's higher per-attempt pass rate (38% vs 26%). Total absolute passes — not per-attempt rate — determines pipeline throughput. The 2022 holdout result actually favors B55 (PF=1.164 vs B42's 0.934), confirming B55 is more regime-robust. But the 5y deployment window (2021/2023-2026) is better served by B42's volume. Monday action: do NOT change deployed config. Keep swing_stop_lookback=30 and target_clarity_mode=off.",
+    "learned": "B52's combine-harness pass rate improvement (9/61 vs 6/61) does NOT transfer to funded pipeline economics. B55 optimized config (lookback=0, target_clarity=reject) earns $508/mo sust=2.00x vs B42 deployed $549/mo sust=3.23x \u00e2\u20ac\u201d worse on BOTH metrics. The mechanism is trade frequency: target_clarity=reject skips low-clarity-target signals, reducing combine attempts from 159 to 69 over 5y (2.3x fewer). B42's higher attempt frequency generates 42 absolute passes vs B55's 26, despite B55's higher per-attempt pass rate (38% vs 26%). Total absolute passes \u00e2\u20ac\u201d not per-attempt rate \u00e2\u20ac\u201d determines pipeline throughput. The 2022 holdout result actually favors B55 (PF=1.164 vs B42's 0.934), confirming B55 is more regime-robust. But the 5y deployment window (2021/2023-2026) is better served by B42's volume. Monday action: do NOT change deployed config. Keep swing_stop_lookback=30 and target_clarity_mode=off.",
     "links": {
       "doc": null,
       "runs": [
@@ -2500,7 +2500,7 @@
     "ts": "2026-06-13T23:30:00Z",
     "session": "wk3-b56-orb-align",
     "item": "B56-orb-align",
-    "variant": "ORB×iFVG same-day directional alignment gate (orb_ifvg_alignment_required=True, Phase 2 code + pipeline benchmark, B42 Phase A)",
+    "variant": "ORB\u00c3\u2014iFVG same-day directional alignment gate (orb_ifvg_alignment_required=True, Phase 2 code + pipeline benchmark, B42 Phase A)",
     "objective": "funded",
     "metrics": {
       "phase_a_passes": 42,
@@ -2529,7 +2529,7 @@
       "note": "B42 Phase A (deployed, 42 passes) + B56-aligned Phase B (orb_reentry_after_stop=True, orb_r_multiple=2.5, orb_ifvg_alignment_required=True, risk=0.75%); 5y excl 2022 holdout; per-year equity stitch"
     },
     "verdict": "rejected",
-    "learned": "The ORB×iFVG alignment gate passes Phase 1 (PF ratio 1.48x, 5/5 years consistent) but fails Phase 2 via volume starvation. Removing 42.2% of ORB signals (groups B+C, PF=0.963) dramatically shortens funded account life (18.7d vs 73.5d baseline), causing 51/52 funded accounts to bust before payout. Pipeline sustainability = 0.82x (unsustainable: more busts than combine passes). The $/mo headline ($602) is misleading — accounts average only 18.7d before busting, so no payout is collected. Mechanism: ORB is already a sparse signal stream; the alignment gate cuts it to a level too thin for the XFA account to trade its way to payout. Same failure as B47 (Lesson 94) and B55 Silver Bullet (Lesson 105): Phase 1 quality improvements do not transfer to funded pipeline when they are purchased via volume reduction below the sustainability threshold. The orb_ifvg_alignment_required feature ships default-off (7 TDD tests, 698 total green).",
+    "learned": "The ORB\u00c3\u2014iFVG alignment gate passes Phase 1 (PF ratio 1.48x, 5/5 years consistent) but fails Phase 2 via volume starvation. Removing 42.2% of ORB signals (groups B+C, PF=0.963) dramatically shortens funded account life (18.7d vs 73.5d baseline), causing 51/52 funded accounts to bust before payout. Pipeline sustainability = 0.82x (unsustainable: more busts than combine passes). The $/mo headline ($602) is misleading \u00e2\u20ac\u201d accounts average only 18.7d before busting, so no payout is collected. Mechanism: ORB is already a sparse signal stream; the alignment gate cuts it to a level too thin for the XFA account to trade its way to payout. Same failure as B47 (Lesson 94) and B55 Silver Bullet (Lesson 105): Phase 1 quality improvements do not transfer to funded pipeline when they are purchased via volume reduction below the sustainability threshold. The orb_ifvg_alignment_required feature ships default-off (7 TDD tests, 698 total green).",
     "links": {
       "doc": null,
       "runs": [
@@ -2548,20 +2548,85 @@
     "metrics": {
       "total_trades": 1276,
       "years": "2021/2023/2024/2025/2026 excl 2022",
-      "mom_true_n": 1276, "mom_false_n": 0, "mom_verdict": "VACUOUS (100% True; engine pre-filters all weak-body signals)",
-      "pd_true_n": 0, "pd_false_n": 1276, "pd_verdict": "VACUOUS (100% False; premium_discount_ok never fires in deployed long-only config)",
-      "tgt_true_pf": 1.248, "tgt_true_n": 159, "tgt_false_pf": 1.050, "tgt_false_n": 1117, "tgt_ratio": 1.189, "tgt_verdict": "NOISE (below 1.2 threshold)",
-      "fvg_true_pf": 0.962, "fvg_true_n": 478, "fvg_false_pf": 1.145, "fvg_false_n": 798, "fvg_ratio": 0.840, "fvg_verdict": "INVERTED BUG (singular=True is the WORSE bucket; grader rewards it)",
-      "del_true_pf": 1.015, "del_true_n": 503, "del_false_pf": 1.113, "del_false_n": 773, "del_ratio": 0.912, "del_verdict": "NOISE (mildly inverted but within noise band)",
-      "fib_lt1_pf": 1.106, "fib_lt1_n": 667, "fib_1to15_pf": 1.017, "fib_1to15_n": 327, "fib_ge15_pf": 1.066, "fib_ge15_n": 282, "fib_verdict": "NON-MONOTONE (lowest tier outperforms highest; grader scoring is inverted direction)",
+      "mom_true_n": 1276,
+      "mom_false_n": 0,
+      "mom_verdict": "VACUOUS (100% True; engine pre-filters all weak-body signals)",
+      "pd_true_n": 0,
+      "pd_false_n": 1276,
+      "pd_verdict": "VACUOUS (100% False; premium_discount_ok never fires in deployed long-only config)",
+      "tgt_true_pf": 1.248,
+      "tgt_true_n": 159,
+      "tgt_false_pf": 1.05,
+      "tgt_false_n": 1117,
+      "tgt_ratio": 1.189,
+      "tgt_verdict": "NOISE (below 1.2 threshold)",
+      "fvg_true_pf": 0.962,
+      "fvg_true_n": 478,
+      "fvg_false_pf": 1.145,
+      "fvg_false_n": 798,
+      "fvg_ratio": 0.84,
+      "fvg_verdict": "INVERTED BUG (singular=True is the WORSE bucket; grader rewards it)",
+      "del_true_pf": 1.015,
+      "del_true_n": 503,
+      "del_false_pf": 1.113,
+      "del_false_n": 773,
+      "del_ratio": 0.912,
+      "del_verdict": "NOISE (mildly inverted but within noise band)",
+      "fib_lt1_pf": 1.106,
+      "fib_lt1_n": 667,
+      "fib_1to15_pf": 1.017,
+      "fib_1to15_n": 327,
+      "fib_ge15_pf": 1.066,
+      "fib_ge15_n": 282,
+      "fib_verdict": "NON-MONOTONE (lowest tier outperforms highest; grader scoring is inverted direction)",
       "deployed_grader_min_grade": "F",
       "current_p_and_l_impact": "zero (grader_min_grade=F means no signals are blocked)"
     },
     "verdict": "rejected",
-    "learned": "The SetupGrader is miscalibrated on every component: fvg_singular is the worst offender (INVERTED BUG — singular=True PF=0.962 vs False PF=1.145, ratio=0.840; grader rewards singularity but stacked/multi-FVG zones outperform), mom and pd are vacuous (100%-one-sided; engine pre-filters handle this before the grader runs), tgt/del/fib are noise. Current P&L impact is zero (grader_min_grade=F = no filtering). Keep grader_min_grade=F until B57 builds a replacement grader from empirically-validated predictors. Do NOT raise the grade floor with the current grader.",
+    "learned": "The SetupGrader is miscalibrated on every component: fvg_singular is the worst offender (INVERTED BUG \u00e2\u20ac\u201d singular=True PF=0.962 vs False PF=1.145, ratio=0.840; grader rewards singularity but stacked/multi-FVG zones outperform), mom and pd are vacuous (100%-one-sided; engine pre-filters handle this before the grader runs), tgt/del/fib are noise. Current P&L impact is zero (grader_min_grade=F = no filtering). Keep grader_min_grade=F until B57 builds a replacement grader from empirically-validated predictors. Do NOT raise the grade floor with the current grader.",
     "links": {
       "doc": null,
-      "runs": ["scripts/audit_grader.py"],
+      "runs": [
+        "scripts/audit_grader.py"
+      ],
+      "src": null
+    }
+  },
+  {
+    "ts": "2026-06-14T07:30:00Z",
+    "session": "wk3-b57",
+    "item": "B57",
+    "variant": "composite WoE grader (is_long + is_rank1 + is_orb + hour_london + hour_ny_am + hour_noon + hour_ny_pm + is_long_london + is_long_ny_am)",
+    "objective": "combine+funded",
+    "metrics": {
+      "oos_years": "2025+2026",
+      "oos_n": 1308,
+      "oos_baseline_pf": 1.109,
+      "oos_top_decile_pf": 1.082,
+      "oos_bot_decile_pf": 1.001,
+      "oos_decile_ratio": 1.081,
+      "oos_top_half_pf": 1.187,
+      "oos_top_half_n": 659,
+      "best_single_filter": "rank-1-only",
+      "best_single_pf": 1.234,
+      "crit1_pass": false,
+      "crit2_pass": false,
+      "go_nogo": "NO-GO",
+      "train_years": "2021+2023+2024",
+      "train_n": 2199,
+      "woe_is_orb": 0.389,
+      "woe_is_rank1": 0.212,
+      "woe_is_long": 0.211,
+      "woe_hour_ny_am": 0.256,
+      "woe_hour_london": -0.196
+    },
+    "verdict": "rejected",
+    "learned": "A composite weight-of-evidence scorer combining all validated contextual predictors (side, rank, hour, engine) does not rank OOS trades better than the best single predictor. Top-decile/bottom-decile PF ratio is 1.081 (threshold 1.30) and top-half PF 1.187 is below rank-1-only 1.234. The contextual features are correlated (not independently additive): WoE for London is negative because short-iFVG in London is loss-making, yet the feature appears positive in single-filter B19 analysis. Phase 2 grader NOT built.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/analyze_b57_composite_grader.py"
+      ],
       "src": null
     }
   }
