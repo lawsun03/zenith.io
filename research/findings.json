@@ -3063,5 +3063,34 @@
       "runs": [],
       "src": "TradeZella / ICT SMT divergence concept"
     }
+  },
+  {
+    "ts": "2026-06-14T19:00Z",
+    "session": "wk4-r3",
+    "item": "RESEARCH wk4-r3",
+    "variant": "backlog-replenishment",
+    "objective": "dataset",
+    "metrics": {
+      "day_chain_ratio": 1.19,
+      "day_chain_years_consistent": "2/5",
+      "dow_thursday_pf": 0.962,
+      "dow_thursday_years_negative": "4/5",
+      "dow_best_worst_ratio": 1.219,
+      "inversion_clv_ratio": 0.817,
+      "inversion_clv_q1_pf": 1.46,
+      "inversion_clv_q5_pf": 0.986,
+      "n_multi_day_signals": 1461,
+      "n_ifvg_trades": 2477
+    },
+    "verdict": "dataset",
+    "learned": "3 Phase 1 data-mining probes on existing MFE/MAE data: (1) same-day iFVG outcome chain (ratio 1.190, 2/5 years, NO-GO); (2) day-of-week PF (Thursday PF=0.962 in 4/5 years but aggregate ratio 1.219, NO-GO standalone); (3) inversion bar CLV (INVERTED: weak closes PF=1.460 vs strong closes 0.986, ratio 0.817 wrong direction, inconsistent per-year). All 3 probes fail Phase 1 GO threshold (1.30x or 1.40x). Added B67/B68/B69 to backlog: ORB-reentry r_multiple sweep for Phase B, deployed-config Thursday DOW verification, iFVG setup freshness (displacement-to-inversion gap).",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/analyze_wk4r3_ifvg_day_chain.py",
+        "scripts/analyze_wk4r3_inversion_clv.py"
+      ],
+      "src": null
+    }
   }
 ]

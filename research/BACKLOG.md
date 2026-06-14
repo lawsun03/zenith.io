@@ -2688,6 +2688,141 @@ loses on both -> reject. Prior ~30% (daily-context gates have failed here, but t
 probabilistic stride-corrected matrix is a more principled test than B35).
 Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.
 
+## B67 — ORB-reentry r_multiple sensitivity sweep (Phase B funded objective)  [pending]
+
+Analogous to B57 (iFVG Phase A r_multiple sweep) but for the Phase B ORB-reentry
+funded engine. B21/B42 Phase B uses orb_r_multiple=2.5 (base StrategyParams
+default). B57 showed lower r improves Phase A throughput by hitting targets more
+frequently (lower reset cost per funded account). The same mechanism may apply to
+Phase B: lower ORB-reentry targets might allow accounts to reach payout more often
+before MLL, improving sust.
+
+Mechanism: sweep orb_r_multiple = {1.5, 2.0, 2.5 (baseline), 3.0, 3.5} for the
+Phase B ORB-reentry engine. No code changes needed -- orb_r_multiple is already
+a StrategyParams field wired through equity_export.py via --set.
+
+Method (no code):
+1. For each r in {1.5, 2.0, 3.0, 3.5}, run:
+   `equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 0.75
+    --set engine=combined --set orb_reentry_after_stop=True
+    --set orb_r_multiple=<r> --partial-r 1.5 --out research/equity_b67/orb_reentry_r<r>_<year>.csv`
+   for each year in {2021, 2023, 2024, 2025, 2026} (excl 2022 holdout).
+2. Run `funded_sim.py research/equity_b67/orb_reentry_r<r>_*.csv --haircut 200`
+   for each r. Compare vs B21 reference (r=2.75 per B21, or current r=2.5 from B42).
+3. Phase A fixed at B42 deployed (42 passes / $568 reset).
+4. Two-phase pipeline matrix: Phase A --> each Phase B r variant.
+
+Success criteria vs B42 baseline ($549/mo, sust=3.23x): both $/mo AND sust must
+improve. Stop rule: if ALL tested r values lose on both metrics vs B42, reject.
+
+Prior: ~20%. Lower r worked for Phase A iFVG (B57: r=2.5 vs r=3.5 improved sust
+0.31x). ORB-reentry has a different stop structure (stop below sweep extreme, not
+swept-level ATR-based), so the target distance / win probability relationship
+differs. The 4h+ EOD-flatten cohort (Lesson 88) holds PF=4.129 regardless of r --
+lower r targets get hit MORE often by EOD, but larger r targets may also get hit
+(NQ moves far enough). Counter-risk: very low r (1.5) forces early target hits
+that convert EOD-flatten winners to early partial exits, potentially clipping the
+best tail. Use funded_sim sensitivity haircut=0/200/400.
+
+Do NOT test r values below 1.5 (below risk/reward threshold for funded accounts).
+Source: B57 iFVG r_multiple finding (wk3-b57-rmult, 2026-06-14); wk4-r3 research.
+
+---
+
+## B68 — Thursday iFVG block (Phase 1 in deployed config, Phase 2 conditional)  [pending]
+
+Research-baseline data (mfe_mae_ifvg_clean.csv, ifvg_edge mode, all sides) shows
+Thursday is loss-making in 4/5 years: PF=0.962, net=-$6,454 over 5y, negative in
+2021 (0.94), 2023 (0.95), 2024 (0.82), 2026 (0.94); positive only 2025 (1.07).
+Per Lesson 89, this must be validated in the EXACT deployed config before proposing
+a block.
+
+Phase 1 (MUST complete before any Phase 2): run a deployed-config backtest and
+extract per-trade day-of-week distribution.
+- Config: engine=combined, ifvg_entry_mode=close, enabled_killzones=all,
+  allowed_sides=long, risk=1.0%, partial_r=1.5, swing_stop_lookback=30,
+  stop_buffer=3.0, min_abs_body=5.0, r_multiple=2.5 (B57 candidate value).
+- Use run_monthly_combine.py (captures BacktestResult.trades per month) to
+  generate per-trade data, then break down by entry_ts day-of-week.
+- GO criterion: Thursday PF < 1.0 in 3+/5 years AND overall Thursday PF < 0.90
+  in deployed config.
+
+Phase 2 (ONLY if Phase 1 GO):
+- Add `ifvg_block_days: list[int] = []` to StrategyParams (list of isoweekday
+  ints; 4 = Thursday). Gate in SweepDisplacementComposer.on_displacement():
+  if bar.ts.weekday() in self.block_days: return None.
+- Defining tests (tests/test_block_days.py): default=[] no suppression; [4]
+  suppresses Thursday; [1,4] suppresses Mon+Thu; other days unaffected.
+- Benchmark: run_monthly_combine.py with block_days=[4] vs control. Then
+  equity_export.py + funded_sim.py for full pipeline comparison.
+- Success criteria vs B42: $/mo >= $549 AND sust >= 3.23x.
+
+Mechanism: Thursday may be structurally weaker for iFVG because (a) Thursday
+institutional positioning often anticipates Friday expiration flow, creating
+noise-heavy intraday structure where reversals fail to follow through; (b) the
+London session Thursday setups fire before the NY opens, and NY may not confirm
+London direction on Thursdays when weekly DTE hedging creates counter-flow.
+These are mechanistic hypotheses, not established facts -- the data test is the judge.
+
+Prior: ~25%. Lesson 89 is the key uncertainty (research-baseline pattern may
+not transfer to deployed close-mode long-only). 4/5 year consistency in
+research-baseline is stronger than B44's lunch-hour finding (2/5 direction in
+deployed config was wrong). But a Thursday block removes only 19% of signals,
+less volume-harmful than B44's or B18's session blocks. The deployed
+close-mode long-only removes most iFVG shorts from the signal pool, which
+might expose or amplify the Thursday weakness that's diluted in the all-sides data.
+
+Source: wk4-r3 data mining (2026-06-14); DOW analysis scripts/analyze_wk4r3_ifvg_day_chain.py.
+
+---
+
+## B69 — iFVG setup freshness (displacement-to-inversion bar gap)  [pending]
+
+Untested structural characteristic: how many 5-min bars elapsed between the
+displacement bar (large bullish body that creates the FVG) and the inversion bar
+(bar that closes back into the FVG zone)? Hypothesis: a "fresh" inversion (1-3
+bars after displacement) represents immediate institutional follow-through with
+strong conviction; a "stale" inversion (10+ bars later) might reflect a weaker
+or more contested setup. Not tested in any prior session.
+
+Phase 1 requires new instrumentation: the current backtest does not log
+displacement_bar_ts per trade. Implementation plan:
+1. Add `displacement_ts: datetime | None = None` field to the Signal dataclass
+   (app/strategy/signals.py or wherever Signal is defined).
+2. In SweepDisplacementComposer.on_displacement() or DisplacementDetector, set
+   displacement_ts = displacement_bar.ts when a displacement is detected.
+3. In BacktestResult.trades output, include displacement_ts so scripts can
+   compute gap = (entry_ts - displacement_ts) in 5-min bars.
+4. Run a small analysis script (scripts/analyze_b69_freshness.py):
+   - Load per-trade data with displacement_ts
+   - Compute gap_bars = (entry_ts - displacement_ts) / 5min for each trade
+   - Bucket: fresh (1-3 bars), mid (4-9 bars), stale (10+ bars)
+   - Compute PF per bucket
+
+GO criteria (Phase 1): fresh/stale PF ratio >= 1.3x, consistent in 3+/5 years.
+Phase 2 (only if GO): add `ifvg_max_freshness_bars: int = 99` to StrategyParams;
+gate in composer to reject inversions where gap > threshold.
+Defining tests: verify displacement_ts is populated, gap computed correctly;
+off-by-default (max_freshness_bars=99 passes everything).
+Benchmark: run_monthly_combine.py + equity_export/funded_sim vs B42.
+Success criteria: $/mo >= $549 AND sust >= 3.23x.
+
+Prior: ~15-20%. Mechanism is distinct from all prior quality predictors (which
+measured bar-level price characteristics, not setup temporal structure).
+Counterpoint: the existing close-mode entry may already de-facto select fresh
+setups because the FVG disappears once price transits it (very stale setups
+can't be inverted in the same direction). Measure first.
+
+Lessons to avoid replication: B45 (OR width, non-monotonic), B49 (breakout
+extension, non-monotonic), B51 (grade, non-monotonic). The non-monotonic pattern
+is common for iFVG/ORB quality proxies; use PF ratio (not level) as GO criterion.
+Not opus-tagged: instrumentation is a small code addition (1 field + 1 line in
+composer), not a full engine refactor.
+
+Source: wk4-r3 research session (2026-06-14); novel -- not found in prior sessions.
+
+---
+
 ## B66 — Markov 2.0 STANDALONE daily-directional engine (Topstep-compatible)  [deferred — B65 Phase 1 NO-GO; Markov stride-sampled signal shows weak persistence + backward short direction; no directional edge at 5min level; re-evaluate only if a fundamentally different regime labeling method shows Phase 1 GO; model:opus]
 Markov STANDALONE mode, expressed within Topstep's intraday-flatten constraint
 (pure multi-day holds are impossible — accounts flatten EOD). Each session: the

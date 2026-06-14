@@ -2370,3 +2370,52 @@ SMT divergence rate: 28.4% (NQ swept its level but ES did not on ~28% of trades)
 - **Test suite:** No code changed — full suite green at 718 (last verified in B63 +5 tests). Verified pass below.
 - **Next:** Backlog is now exhausted (B58-B66 all resolved). Research/ideation session needed to replenish.
 
+
+## 2026-06-14T19:00Z -- session wk4-r3 -- RESEARCH (wk4-r3 backlog replenishment)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity \,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Session note:** Backlog fully exhausted (B64 was last done item; B65/B66 deferred/rejected). Protocol mandates research/ideation session. Ran 3 Phase 1 data-mining probes on existing MFE/MAE CSVs (n=2477 iFVG, n=1030 ORB, 5y excl 2022).
+- **Ran:**
+  1. scripts/analyze_wk4r3_ifvg_day_chain.py -- same-day iFVG outcome chain and day-of-week analysis.
+  2. scripts/analyze_wk4r3_inversion_clv.py -- inversion bar CLV (5-min bar close strength).
+
+- **Numbers:**
+
+  **Same-day iFVG outcome chain (n=1461 non-first signals on 726 multi-iFVG days):**
+  | Context | n | PF | WR% |
+  |---------|---|----|-----|
+  | After first iFVG WIN | 436 | 1.104 | 31.9% |
+  | After first iFVG LOSS | 1025 | 0.928 | 30.9% |
+  | Win/Loss PF ratio | -- | 1.190 | -- |
+  GO threshold: >= 1.30 -> NO-GO. Per-year: 2/5 years consistent (2024 ratio=1.667, 2026 ratio=1.927; 2021/2023/2025 inverted or flat).
+  Non-first signals overall PF=0.981 (breakeven or slight loss); 70.2% come after a same-day iFVG loss.
+  B63 combined verification: second-trade ratio 1.175 (vs B63 original 1.473x -- discrepancy because B63 used exactly-2-trade days; all multi-signal days give weaker ratio).
+
+  **Day-of-week iFVG PF (5y excl 2022, research-baseline config):**
+  | DOW | n | PF |
+  |-----|---|----|
+  | Monday | 497 | 1.050 |
+  | Tuesday | 515 | 1.003 |
+  | Wednesday | 517 | 1.172 |
+  | Thursday | 477 | 0.962 |
+  | Friday | 402 | 1.030 |
+  Best/worst ratio (Wed/Thu): 1.219 -> NO-GO (threshold 1.30). Thursday loss-making in 4/5 years
+  (2021: 0.94, 2023: 0.95, 2024: 0.82, 2026: 0.94; only 2025: 1.07). Must verify in deployed config (Lesson 89).
+
+  **Inversion bar CLV (n=2477, 100% bar match from bars_MNQ_dbv_2021_2026.csv):**
+  | Quintile | PF |
+  |----------|----|
+  | Q1 (weakest close) | 1.460 |
+  | Q2 | 0.967 |
+  | Q3 | 0.879 |
+  | Q4 | 0.973 |
+  | Q5 (strongest close) | 0.986 |
+  Top-40%/Bottom-40% ratio: 0.817 -- INVERTED (weak closes better) and NO-GO. Non-monotonic, inconsistent per-year.
+  Mean CLV=0.514; weak-close Q1 paradoxically has PF=1.460 (not actionable: non-monotonic, 3/5 years wrong direction).
+
+- **Verdict:** research -- all 3 Phase 1 probes fail GO threshold. 3 new BACKLOG items appended: B67, B68, B69.
+
+- **Learned:** (1) Same-day iFVG outcome chain is not reliable: B63 combined 1.473x on 2-trade days does not transfer to iFVG-specific chains (1.190x, 2/5 years). (2) Thursday is the weakest DOW (4/5 years negative) but requires deployed-config verification before proposing a block (Lesson 89). (3) Inversion bar CLV is inverted and non-monotonic -- weak closes have PF=1.460 (Q1) but this is inconsistent across years. The inversion bar internal structure does not predict iFVG quality in a usable way.
+
+- **Next:** B67 (ORB-reentry r_multiple sweep for Phase B, no code, analogous to B57), then B68 (Thursday deployed-config Phase 1), then B69 (setup freshness, needs instrumentation).
+
