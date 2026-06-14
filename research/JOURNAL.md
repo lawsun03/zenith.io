@@ -2743,3 +2743,52 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 - **Lesson 134 added.** Test suite: 723 passed, 2 skipped, 0 failures (no code changes). Doc: trade_analysis/2026-06-14_B73_orb_ifvg_alignment_gate_phaseA.md. New files: scripts/run_b73_pipeline.py, research/equity_b73/.
 
 - **Next:** B74 (per-hour iFVG PF audit for deployed close-mode config — data mining; the last pending backlog item).
+
+---
+
+## 2026-06-14T15:31Z — session wk5-b74 — B74 (per-hour iFVG PF audit, deployed close-mode — REJECTED)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B74 (sole pending item — per-hour iFVG PF audit, data mining + Phase 2 if GO).
+- **Infrastructure:** Added `--trade-csv <path>` flag to `scripts/equity_export.py` (writes one row per closed trade: entry_ts, exit_ts, side, pnl_usd, engine_type). 2 defining-behavior tests in `tests/test_b74_trade_csv.py`. Note: must run with `--partial-r 0` for accurate per-trade PnL — `_reconstruct_trades` pairs each entry with the FIRST exit fill; with partial_r=1.5 the first exit is a partial, making all losers look full-size and all winners look partial, corrupting per-hour PF (Lesson 136). Ran Phase 1 with `--partial-r 0` for clean analysis.
+
+- **Phase 1 (n=2376 iFVG trades, deployed close-mode r=2.5, 5y excl 2022):**
+
+  | Hour (ET) | n | WR% | PF | 2021 | 2023 | 2024 | 2025 | 2026 | GO? |
+  |-----------|---|-----|----|------|------|------|------|------|-----|
+  | 6 | 84 | 22.6% | 0.578 | 0.304 | 0.935 | 0.977 | 0.295 | 0.436 | GO (3/5 yrs) |
+  | 9 | 211 | 19.4% | **0.487** | 0.801 | 0.407 | 0.210 | 0.648 | 0.432 | **GO (5/5 yrs)** |
+  | 13 | 85 | 37.6% | 0.735 | 0.172 | 0.664 | 1.358 | 0.329 | 1.164 | GO (3/5 yrs) |
+  | 21 | 67 | 32.8% | 0.788 | 1.424 | 1.585 | 0.400 | 0.811 | 0.459 | GO (3/5 yrs) |
+
+  ORB: hour 11ET PF=0.655 (3/5 years); no ORB block mechanism exists for individual hours.
+
+  Phase 1 criterion met for 4 iFVG hours. Most actionable: hour 9ET (5/5 years, PF=0.487, n=211 = 8.9% of iFVG signals). This is the 09:00-09:30 ET pre-RTH window where price action is pre-market and close-mode iFVG entries are structurally weak.
+
+- **Phase 2 (block variants, compare vs B57 $566/mo 3.54x):**
+
+  | Variant | A passes/att | Reset$/funded | $/mo | Sust | vs B57 | vs B42 |
+  |---------|-------------|---------------|------|------|--------|--------|
+  | B57 r=2.5 baseline | 46/167 | $545 | $566 | 3.54x | — | +$17, +0.31x |
+  | B42 deployed | 42/159 | $568 | $549 | 3.23x | -npm/-sust | baseline |
+  | **block_9 [9ET]** | **44/155** | **$528** | **$564** | **3.38x** | -$2, -0.16x | **+$15, +0.15x** |
+  | block_6_9 [6ET,9ET] | 41/136 | $498 | $560 | 3.15x | -npm/-sust | +$11, -0.08x |
+
+  Phase B (B21 ORB-reentry r=0.75): fixed — 13/14 busts, $3,131/acct, 73.5d/acct.
+
+- **Stop rule check:** block_9 loses vs B57 on BOTH $/mo ($564 < $566) AND sust (3.38 < 3.54). Stop rule fires. block_6_9 also loses vs B57 on both. Both variants lose vs B57 on both metrics → REJECTED.
+
+- **What we found:** Hour 9ET is genuinely loss-making in close-mode deployed config (5/5 years, PF=0.487) — the most consistent single-hour loss-making pattern found in this research program. But blocking it only partially recovers what was being lost (44 vs 46 passes, $564 vs $566/mo vs B57). Root cause: B57's r=2.5 change already modestly reduces the 9ET damage (lower target = more trades exiting before EOD at 9ET), while the volume reduction from blocking (8.9% of iFVG removed) creates a marginal throughput penalty that offsets the quality improvement. The block_9 variant is essentially equivalent to B42 baseline (within rounding), not an improvement over B57.
+
+- **Verdict:** REJECTED — stop rule fires (both variants lose vs B57 on both metrics). B57 (remove MNQ r_multiple override) remains the sole standing recommendation. The 9ET hour-block is noted as a real pattern but not tradable via a simple gate given current pipeline economics.
+
+- **Infrastructure delivered:**
+  - `--trade-csv` flag in `equity_export.py` (2 defining tests)
+  - `research/mfe_mae_deployed_close.csv` — per-trade dataset for deployed config at r=2.5, 5y excl 2022 (3238 trades; re-run with partial_r=0 for accuracy)
+  - `scripts/run_b74_per_hour_audit.py`, `scripts/run_b74_phase2.py`
+  - `research/equity_b74/` — Phase A equity CSVs for block variants
+
+- **Learned:** Hour 9ET (09:00-09:30 pre-RTH) is the most consistently loss-making iFVG window in close-mode deployed config (PF=0.487, 5/5 years), but the pipeline improvement from blocking it is insufficient to beat B57 — the r=2.5 lever is stronger and more global than any per-hour gate at this signal volume. The --trade-csv flag requires --partial-r 0 to produce accurate per-trade PnL (partial exits corrupt the first-fill pairing).
+
+- **Lessons 135-136 added.** Test suite: **725 passed, 2 skipped, 0 failures** (+2 B74 tests).
+- **Next:** Backlog fully exhausted (B74 was the last pending item). Next session = research/ideation to replenish backlog.

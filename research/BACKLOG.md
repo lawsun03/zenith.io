@@ -3052,7 +3052,7 @@ hurt pipeline throughput at the margin (Lessons 83, 105, 109).
 **Source:** Lesson 103 (wk2-r5 data mining); B56 Phase 2 failure analysis (Lesson 109);
 Lesson 92 (causal ordering rule). First session to test this gate in the combined engine.
 
-## B74 -- Per-hour iFVG PF audit for deployed close-mode config (data mining)  [pending]
+## B74 -- Per-hour iFVG PF audit for deployed close-mode config (data mining)  [done — REJECTED: Phase 1 GO (9ET PF=0.487 5/5 years; 6ET PF=0.578 3/5 years) but Phase 2 block_9 $564/mo 3.38x and block_6_9 $560/mo 3.15x both lose vs B57 $566/mo 3.54x on both metrics; stop rule fires; hour-9ET pattern is real but r=2.5 config change (B57) is the more impactful lever; Lessons 135-136 added; --trade-csv flag added to equity_export.py]
 
 All prior per-hour iFVG analyses used the RESEARCH BASELINE (ifvg_edge, all-sides,
 partial_r=0):

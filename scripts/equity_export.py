@@ -51,6 +51,9 @@ def main() -> int:
     ap.add_argument("--exclude-years", default="",
                     help="Comma-separated calendar years to exclude from bars "
                          "before running (e.g. '2022' for holdout protocol)")
+    ap.add_argument("--trade-csv", default=None,
+                    help="Optional path: write one row per closed trade with "
+                         "entry_ts,exit_ts,side,pnl_usd,engine_type columns")
     args = ap.parse_args()
 
     bot_cfg = load_bot_config(Path(args.config))
@@ -105,6 +108,19 @@ def main() -> int:
     print(f"wrote {len(curve)} equity points -> {out} "
           f"(trades={result.stats.trades}, net={result.stats.net_pnl}, "
           f"pf={result.stats.profit_factor})")
+    if args.trade_csv:
+        tpath = Path(args.trade_csv)
+        tpath.parent.mkdir(parents=True, exist_ok=True)
+        with tpath.open("w", newline="", encoding="utf-8") as tf:
+            tw = csv.writer(tf)
+            tw.writerow(["entry_ts", "exit_ts", "side", "pnl_usd", "engine_type"])
+            for t in result.trades:
+                engine_type = "ifvg" if t.get("grade") else "orb"
+                tw.writerow([
+                    t["entry_ts"], t["exit_ts"], t["side"],
+                    t["realized_pnl"], engine_type,
+                ])
+        print(f"wrote {len(result.trades)} trades -> {tpath}")
     return 0
 
 
