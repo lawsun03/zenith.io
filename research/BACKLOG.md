@@ -1953,7 +1953,7 @@ in practice; mild uncertainty about behavioral transfer to deployed config).
 Source: wk2-r5 rank analysis on mfe_mae_ifvg_clean.csv (rank column imputed from intraday
 signal ordering by entry_ts within each ET date and side). JOURNAL wk2-r5.
 
-## B49 — ORB breakout extension quality filter (Phase 1 data mining)  [pending]
+## B49 — ORB breakout extension quality filter (Phase 1 data mining)  [done — rejected Phase 1: deep/shallow PF ratio 1.128 < 1.4; non-monotonic peaks Q3; Lesson 98]
 
 Mechanism (hypothesis): When the ORB breakout bar (first bar closing past the OR boundary)
 extends significantly past that boundary, it signals stronger momentum and predicts higher

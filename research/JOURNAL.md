@@ -1711,9 +1711,9 @@ Entry format:
 
 Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) confirms that mixing iFVG and ORB on a single account is WORSE than the separate Phase A (iFVG combine) + Phase B (ORB funded) pipeline. The two-account architecture is load-bearing for pipeline sustainability.
 
-## 2026-06-14T02:00Z � session wk2-b48 � B48 (iFVG hybrid rank-aware signal filter)
+## 2026-06-14T02:00Z � session wk2-b48 � B48 (iFVG hybrid rank-aware signal filter)
 
-- **Bot health:** Port 5175 responsive � XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Bot health:** Port 5175 responsive � XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
 - **Claimed:** B48 (top pending item). TDD: wrote 4 defining-behavior tests in tests/test_rank_filter.py; confirmed fail; implemented ifvg_max_short_rank in ComposerConfig + StrategyParams + backtest/runner.py + main.py; all 4 tests pass; full suite 677 passed, 2 skipped.
 - **Ran:** Monthly combine harness (run_monthly_combine.py) on bars_MNQ_dbv_2021_2026.csv (61 months), ifvg_entry_mode=close, enabled_killzones=all (deployed settings). Two runs:
   1. LO baseline: allowed_sides=long (current deployed iFVG setting)
@@ -1725,15 +1725,15 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
   | LO baseline | 12 | 20% | 1.21 | 1011 | 1.25 | 220 (ORB only) | 1.02 |
   | B48 hybrid | 11 | 18% | 1.09 | 761 | 1.28 | 492 | 0.84 |
 
-  Stop rule check: hybrid passes (11) < baseline passes (12) AND hybrid PF (1.09) < baseline PF (1.21). **TRIGGERED � REJECTED.**
+  Stop rule check: hybrid passes (11) < baseline passes (12) AND hybrid PF (1.09) < baseline PF (1.21). **TRIGGERED � REJECTED.**
 
 - **Root cause:** Close-mode iFVG rank-1 shorts are loss-making in the deployed config (PF 0.84, 272 extra exits vs LO). The research baseline finding (rank-1 all-sides PF=1.127 in ifvg_edge mode) does not transfer to close-mode. Mechanism: close-mode enters at the inversion bar close, which for short setups is at zone_low (bottom of the FVG zone). This is structurally weaker than the ifvg_edge retrace entry which waits for price to pull back to the proximal edge. The B48 hybrid adds ~272 iFVG shorts with deeply negative expectancy, degrading both the volume quality and monthly pass rate. Note: the 220 ORB shorts (PF 1.02) are unchanged in both runs and come from the combined engine's ORB component.
 
-- **Verdict:** rejected � stop rule triggered (both combines passes and PF worse). Close-mode LO filter for iFVG remains correct. ifvg_max_short_rank ships default-off (4 defining-behavior tests, 677 total green). Lesson 96 added.
+- **Verdict:** rejected � stop rule triggered (both combines passes and PF worse). Close-mode LO filter for iFVG remains correct. ifvg_max_short_rank ships default-off (4 defining-behavior tests, 677 total green). Lesson 96 added.
 
 - **Learned:** The rank-1 short quality measured in the ifvg_edge research baseline (PF=1.127) does not transfer to the close-mode deployed config where rank-1 iFVG shorts are loss-making (PF 0.84). Entry mode fundamentally changes the short signal quality distribution, consistent with Lesson 89. The long-only iFVG filter is the structurally correct choice for close-mode short suppression.
 
-- **Next:** B49 (ORB breakout extension quality filter � Phase 1 data mining, no code; prior 40%; completes the ORB quality predictor research thread).
+- **Next:** B49 (ORB breakout extension quality filter � Phase 1 data mining, no code; prior 40%; completes the ORB quality predictor research thread).
 
 ## 2026-06-14T04:00Z -- session wk2-b50 -- B50 (account-state dynamic risk sizing)
 
@@ -1779,3 +1779,34 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Learned:** Survival-mode risk reduction is counterproductive for positive-expectancy algorithmic strategies under MLL-bounded accounts. Reducing size near the MLL floor slows recovery, extends the danger zone duration, and increases bust frequency -- the opposite of the intended effect. Dynamic risk sizing only helps when it improves per-trade edge, not when it just rescales an already-fixed-edge process.
 
 - **Next:** B49 (ORB breakout extension quality filter -- Phase 1 data mining, no code). B51 (setup-grade-scaled sizing) is another Lawrence-requested item but requires a different mechanism that CAN change per-trade expectancy. One item per session.
+
+## 2026-06-14T02:30Z — session wk2-b49 — B49 (ORB breakout extension quality filter — Phase 1)
+
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no lockout. Market closed (weekend).
+- **Claimed:** B49 (top pending item; Phase 1 data mining, no code warranted until GO/NO-GO passes).
+- **Ran:** `scripts/analyze_b49_breakout_extension.py` on 1030 ORB trades (mfe_mae_orb_clean.csv, 2021/2023/2024/2025/2026, excl 2022 holdout). Per-trade extension = |entry_price − OR boundary| / ATR14 where OR boundary = or_high for longs, or_low for shorts. ATR(14) and OR high/low from 1-min bars aggregated to 5-min (same pipeline as B45). All 1030 trades matched, 0 negative extensions (every signal bar genuinely cleared the OR boundary).
+
+- **Numbers (extension quintile analysis, n=1030):**
+
+  | Bucket | n | WR% | PF | %early(<2h) | %EOD(>4h) |
+  |--------|---|-----|----|-------------|-----------|
+  | Q1 shallowest (ext < 0.247) | 206 | 41.3% | 1.163 | 36.4% | 49.0% |
+  | Q2 (ext 0.247–0.481) | 206 | 38.3% | 1.086 | 32.0% | 51.0% |
+  | Q3 (ext 0.481–0.845) | 206 | 48.1% | **1.322** | 27.2% | 61.7% |
+  | Q4 (ext 0.845–1.394) | 206 | 50.5% | 1.275 | 31.1% | 58.7% |
+  | Q5 deepest (ext > 1.394) | 206 | 46.6% | 1.258 | 22.8% | **68.0%** |
+
+  GO/NO-GO:
+  - Bottom 40% (shallow, ext < 0.481): n=412, WR=39.8%, PF=1.123
+  - Top 40% (deep, ext ≥ 0.845): n=412, WR=48.5%, PF=1.267
+  - Deep/Shallow PF ratio: **1.128** (need ≥ 1.4) → **FAIL**
+
+  Long/short breakdown:
+  - Shallow (Q1+Q2): long n=222 PF=1.260, short n=190 PF=0.992
+  - Deep (Q4+Q5): long n=209 PF=1.313, short n=203 PF=1.220
+
+- **Verdict:** rejected — Phase 1 NO-GO. Deep/Shallow PF ratio 1.128 < 1.4. Phase 2 code NOT built. No code changes. Lesson 98 added. `scripts/analyze_b49_breakout_extension.py` committed for reproducibility. Databento spend: $0.
+
+- **Learned:** Breakout extension is a non-monotonic PnL predictor — Q3 mid-extension peaks at PF=1.322, outperforming both the shallowest (Q1: PF=1.163) and deepest (Q5: PF=1.258) buckets. Extension does predict EOD-flatten rate monotonically (Q5: 68% vs Q1: 49%), but this hold-time shift does not translate to better P&L because shallow-extension EOD flattens are also profitable when they occur. This is now the third rejected ORB quality predictor: prior-day range (B5), current-day OR width (B45), and signal-bar breakout extension (B49) all fail the 1.4x threshold.
+
+- **Next:** B51 (setup-grade-scaled position sizing — Lawrence-requested; requires a per-trade edge mechanism, unlike B50's path-rescaling).

@@ -2230,5 +2230,46 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T02:30:00Z",
+    "session": "wk2-b49",
+    "item": "B49",
+    "variant": "ORB breakout extension / atr14 quintile analysis (Phase 1 data mining)",
+    "objective": "combine+funded",
+    "metrics": {
+      "n_matched": 1030,
+      "n_no_match": 0,
+      "n_negative_ext": 0,
+      "ext_p20": 0.247,
+      "ext_p40": 0.481,
+      "ext_p60": 0.845,
+      "ext_p80": 1.394,
+      "q1_shallowest_pf": 1.163,
+      "q2_pf": 1.086,
+      "q3_mid_pf": 1.322,
+      "q4_pf": 1.275,
+      "q5_deepest_pf": 1.258,
+      "shallow_bottom40_pf": 1.123,
+      "deep_top40_pf": 1.267,
+      "pf_ratio_deep_shallow": 1.128,
+      "pf_ratio_required": 1.4,
+      "q1_eod_pct": 49.0,
+      "q5_eod_pct": 68.0,
+      "shallow_long_pf": 1.260,
+      "shallow_short_pf": 0.992,
+      "deep_long_pf": 1.313,
+      "deep_short_pf": 1.220,
+      "overall_pf": 1.214,
+      "overall_n": 1030,
+      "databento_spend": 0.0
+    },
+    "verdict": "rejected",
+    "learned": "ORB breakout extension (how far the signal bar closed past the OR boundary, in ATR units) is a non-monotonic predictor of PnL per trade. The mid-bucket (Q3, ext 0.481-0.845) achieves the highest PF (1.322), while both shallow (Q1: PF=1.163) and deep (Q5: PF=1.258) underperform it. The deep/shallow PF ratio is 1.128, well below the 1.4 GO/NO-GO threshold. The extension DOES predict hold-time: Q5 (deepest) has 68% EOD-flatten rate vs Q1 (shallowest) at 49%, a real structural pattern. But EOD-flatten probability does not map to better PnL per trade because shallow-extension EOD flattens are also profitable. Short signals particularly improve at high extension (shallow short PF=0.992 vs deep short PF=1.220), but the overall aggregate is insufficient for Phase 2.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/analyze_b49_breakout_extension.py"],
+      "src": "research/mfe_mae_orb_clean.csv, bars/yearly/bars_MNQ_dbv_{year}.csv"
+    }
   }
 ]
