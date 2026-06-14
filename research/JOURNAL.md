@@ -1607,3 +1607,68 @@ Entry format:
 - **Learned:** Current-day OR/ATR width does not reliably improve ORB signal selection: the relationship between OR width and subsequent PF is non-monotonic (peak at medium width). The hold-time shift (wide OR → more EOD flattens) is structurally real but doesn't map to better P&L because early-stop narrow-OR days also produce profitable EOD flattens. OR width joins prior-day range (B5) as a day-level ORB quality predictor that fails in NQ 5min data.
 
 - **Next:** B46 (B42+B43 deployed-config full pipeline benchmark — no code, prior 70%; closes the gap between research benchmarks and live config; highest value remaining item).
+
+## 2026-06-15T02:00:00Z — session wk2-r5 — RESEARCH (ideation and data mining)
+
+- **Protocol trigger:** Session count %3 == 0; last 2 build items (B44, B45) both rejected; mandated research/ideation session before B46.
+- **Bot health:** Port 5175 responsive — XFA shadow, equity $152,227.12 at high-water, flat, 0 open contracts, no lockout. Market closed (weekend).
+- **Ran:**
+  1. Full PROTOCOL.md, LESSONS.md, BACKLOG.md, and JOURNAL.md (last 3 entries) review.
+  2. Web search: 4 queries — ORB+FVG cross-signal confluence in professional literature; VWAP anchor + ORB extension as signal filter; London/NY session directional correlation studies; ORB VA-midpoint reversal patterns. Result: no new structural mechanism families found (8-for-8; Lesson 6 confirmed again). Most interesting web finding: ORB VA-midpoint reversal (71.1% continuation without midpoint return vs 22.7% with midpoint return) — noted but requires intrabar position-path tracking not in current infrastructure.
+  3. Own data mining (`scripts/_tmp_confluence_yr.py`, now deleted):
+     a. For each of 1030 ORB trades in mfe_mae_orb_clean.csv, classified by prior same-day iFVG direction (same_only / opp_only / both / no_prior_ifvg).
+     b. For each iFVG trade, classified by same-day ORB direction (orb_same_only / orb_opp_only / orb_both / no_orb).
+     c. Computed PF by class, 5y overall and per-year (2021, 2023, 2024, 2025, 2026).
+     d. Ranked iFVG signals by within-day side count; computed PF by rank and side.
+
+- **Headline numbers:**
+
+  **ORB quality by prior iFVG direction (5y excl 2022, n=1030 total ORB trades):**
+  | Classification | n | PF |
+  |---|---|---|
+  | ifvg_same_only (ORB agrees with prior iFVG) | 360 | **1.689** |
+  | ifvg_opp_only (ORB contradicts prior iFVG) | 227 | **0.957** (loss-making) |
+  | ifvg_both (mixed prior iFVG) | 169 | 1.485 |
+  | no_prior_ifvg | 274 | 1.136 |
+
+  **ORB suppress-opp per-year PF improvement:**
+  | Year | Baseline PF | Gated PF | Delta |
+  |---|---|---|---|
+  | 2021 | 1.493 | 1.515 | +1.5% |
+  | 2023 | 1.153 | 1.214 | +5.3% |
+  | 2024 | 1.219 | 1.280 | +5.0% |
+  | 2025 | 1.188 | 1.341 | +12.9% |
+  | 2026 | 1.079 | 1.140 | +5.7% |
+
+  **iFVG quality by ORB direction (same-day, 5y excl 2022):**
+  | Classification | PF |
+  |---|---|
+  | orb_same_only | **1.375** |
+  | orb_opp_only | **0.757** (loss-making) |
+
+  **iFVG orb_same vs orb_opp per-year:**
+  | Year | orb_same PF | orb_opp PF |
+  |---|---|---|
+  | 2021 | 1.323 | 1.030 (borderline) |
+  | 2023 | 1.261 | 0.525 |
+  | 2024 | 1.291 | 0.752 |
+  | 2025 | 1.478 | 0.779 |
+  | 2026 | 1.481 | 0.846 |
+
+  **iFVG rank analysis:**
+  | Subset | ~vol/mo | PF |
+  |---|---|---|
+  | Rank-1 all sides | ~17 | 1.129 |
+  | Rank-2+ longs | ~12 | 1.090 |
+  | Rank-2+ shorts | — | 0.858 (loss-making) |
+  | Hybrid (rank-1 + rank-2+ long) | ~29 | 1.133 |
+  | Long-only / B15 baseline | ~25 | 1.136 |
+
+- **Verdict:** dataset — 3 new backlog items generated.
+  - **B47: iFVG×ORB directional confluence gate** — GO status (year-by-year consistent, causal gate, mechanism is structurally grounded). Strong candidate.
+  - **B48: iFVG hybrid rank filter** — Phase 2 pending (rank-2+ shorts loss-making PF=0.858; hybrid matches LO PF at +16% volume, potentially more combine passes).
+  - **B49: ORB breakout extension quality filter** — Phase 1 data mining (breakout bar extension vs OR boundary in ATR units; prior 40%; B45 precedent is adverse but different variable).
+
+- **Learned:** London iFVG and NY ORB provide independent directional confirmation of day structure. When both agree on direction, signals from both engines are dramatically higher quality (ORB PF +54%, iFVG PF +32% vs respective baselines). When they disagree, both become loss-making or near-zero expectancy. This is the first cross-engine quality gate found that is simultaneously: (a) causal — iFVG fires before ORB, ORB fires before post-ORB iFVG re-entries; (b) year-by-year consistent — 5/5 years for ORB suppress-opp, 4/5 for iFVG suppress-opp (2021 borderline at PF=1.030); and (c) structurally grounded — multi-session order flow alignment theory. Lessons 91, 92 added.
+
+- **Next:** B46 (B42+B43 deployed-config integration benchmark; highest-priority pending item; no code; closes the gap between research baselines and live config).

@@ -792,3 +792,33 @@ Appended 2026-06-15 (B45 ORB range-width filter Phase 1):
     Notable side finding: long/short PF inverts by OR width (narrow: long PF=1.518 vs short PF=0.821;
     wide: long PF=1.142 vs short PF=1.244). Wide OR days produce more balanced long/short outcomes,
     possibly because large pre-market moves create genuine two-way uncertainty at the regular session open.
+
+Appended 2026-06-15 (wk2-r5 confluence data mining):
+
+91. **London iFVG and NY ORB provide independent directional confirmation of day structure; their
+    agreement or disagreement is the strongest cross-engine quality predictor found in this research
+    program.** From 5y MFE/MAE data (excl 2022): ORB signals preceded by a same-direction iFVG that
+    day have PF=1.689 (n=360, 35% of all ORB trades); ORB signals where all prior same-day iFVG signals
+    were in the OPPOSITE direction have PF=0.957 (n=227, 22%, loss-making). Suppressing the opp-only
+    ORB signals improves per-year PF in 5/5 years (+1.5% to +12.9%). Similarly, iFVG signals on days
+    where the ORB fires in the same direction have PF=1.375; iFVG signals where the ORB fires in the
+    opposite direction have PF=0.757 (loss-making in 4/5 years; 2021 exception: PF=1.030, borderline).
+    Mechanism: the London iFVG and NY ORB represent institutional order flow from two separate sessions.
+    When both sessions agree on direction, there is genuine multi-session directional conviction — both
+    signals are reinforcing. When they disagree, one session is fighting against the other — both signals
+    fail. This is NOT the day-level regime gate anti-pattern (Lesson 4): the gate is directional (not a
+    day-level binary on/off — some trades are still allowed on conflicted days), and both signals are
+    structural/institutional (not derived from VIX, volatility, or external-market factors).
+    Rule: when two structural engines agree on direction for the same day, signal confidence compounds.
+    When they disagree, suppress the conflicted-direction signal or treat it as markedly lower quality.
+
+92. **Cross-engine directional gates must be causal: the earlier-firing engine's output gates the
+    later-firing engine's signals.** The iFVG×ORB confluence gate works because iFVG fires London
+    session (03:00-07:30 ET) before ORB fires at 09:30-09:45 ET, and ORB fires before any post-ORB
+    iFVG re-entries. This ordering makes both gates forward-compatible with no look-ahead: at ORB
+    signal time, all prior same-day iFVG directions are already in the books; after ORB fires, its
+    direction is known before any subsequent iFVG intraday re-entry fires. Do not attempt to gate
+    EARLIER engine signals using the LATER engine's same-day output — that requires future information.
+    Rule: document the temporal ordering of engines before implementing any cross-engine gate. Gates
+    between engines that fire in overlapping time windows (or in an uncertain order) cannot be made
+    causal without introducing lookahead bias.

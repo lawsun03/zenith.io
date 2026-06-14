@@ -1769,7 +1769,9 @@ loss mechanism. Related: B34 Lesson 73 showed no-retrace BOS signals (immediate 
 have the best performance — this structural principle generalizes: tight coils → false
 breakouts → early reversals → stops.
 
-## B46 — B42+B43 deployed-config full pipeline benchmark (orb_signal_window_mins=60 at partial_r=1.5)  [pending]
+## B46 — B42+B43 deployed-config full pipeline benchmark (orb_signal_window_mins=60 at partial_r=1.5)  [pending — research session wk2-r5 intervening per protocol (session count %3==0 + last 2 items B44/B45 are build items)]
+
+## RESEARCH — Session wk2-r5  [done — 3 items appended: B47 confluence gate, B48 rank hybrid, B49 breakout extension; 2026-06-15T02:00Z]
 Hypothesis: B43 showed orb_signal_window_mins=60 reduces ORB-reentry Phase B busts from
 25 to 22 (-12%) and improves two-phase sust from 1.68x to 1.91x (+14%). BUT B43 was
 benchmarked at partial_r=0 (research parity baseline), while the deployed bot uses
@@ -1831,3 +1833,173 @@ Source: B43 (orb_signal_window_mins=60 candidate, partial_r=0 benchmark); B42 (d
 baseline, partial_r=1.5); B25 (partial_r=1.5 effect on ORB-reentry Phase B). This is the
 "deployed-config integration test" that closes the gap between research-baseline benchmarks
 and the actual live configuration.
+
+## B47 — iFVG×ORB directional confluence gate  [pending]
+
+Phase 1 data mining COMPLETE (wk2-r5) — GO status confirmed. Proceed directly to Phase 2 engine.
+
+Mechanism: London iFVG and NY ORB represent institutional order flow from two separate sessions.
+When both agree on direction for the same day, signals from both engines show dramatically higher
+quality: ORB same-direction PF=1.689 (n=360, 35% of ORB trades) vs opp-direction PF=0.957
+(n=227, 22%, loss-making). iFVG orb_same_only PF=1.375 vs orb_opp_only PF=0.757 (loss-making
+in 4/5 years; 2021 exception PF=1.030, borderline). Suppressing ORB opp-only signals improves
+per-year ORB PF in 5/5 years (+1.5% to +12.9%). This is the strongest cross-engine quality
+predictor found in this research program.
+
+Two complementary gates (both implemented in one Phase 2 build):
+
+GATE 1 — ORB suppressed when all prior same-day iFVG signals are in the OPPOSITE direction:
+  At ORB signal time (09:30-09:45 ET), check today's iFVG signals (filed since 00:00 ET):
+    - ifvg_same_only or ifvg_both or no_prior_ifvg → ORB fires normally
+    - ifvg_opp_only (all prior same-day iFVG opposite to ORB direction) → suppress ORB
+
+GATE 2 — post-ORB iFVG signals in the opposite direction of ORB are suppressed:
+  After ORB fires, record orb_direction_today in shared session context.
+  For any iFVG signals emitted AFTER ORB fires (typically intraday re-entries):
+    - signal.side == orb_direction_today → allow (orb_same_only case, PF=1.375)
+    - signal.side != orb_direction_today → suppress (orb_opp_only case, PF=0.757)
+    - No ORB fired today → allow signal (no_orb case)
+
+Both gates are causal: iFVG fires London session (03:00-07:30 ET) before ORB fires (09:30-09:45
+ET); ORB fires before any post-ORB iFVG intraday re-entries. No lookahead required.
+
+Fixed defaults: `ifvg_orb_confluence_gate: bool = False` (off by default; enabled only for
+benchmark; enabling gates both Gate 1 and Gate 2 simultaneously).
+
+Implementation plan:
+1. Read `app/strategy/composer.py` and the combined engine runner to understand how engines
+   share state. Do NOT add state to individual runner classes — use a shared context object.
+2. Add `DailySessionContext` (or extend the existing session context if one exists):
+   - `ifvg_signals_today: list[tuple[date, str]]` — reset daily (ET date boundary)
+   - `orb_direction_today: str | None` — set to 'long'|'short' when ORB fires; reset daily
+3. iFVG runner: on signal emission, append (et_date, signal.side) to context.ifvg_signals_today.
+4. ORB runner: at signal-ready time, read context.ifvg_signals_today for today; apply Gate 1.
+5. ORB runner: after emitting, set context.orb_direction_today = signal.side.
+6. iFVG runner: before emitting a post-ORB signal, check context.orb_direction_today; apply Gate 2.
+7. Both context fields reset to empty/None at each new ET date boundary.
+
+Defining-behavior tests (tests/test_confluence_gate.py):
+1. Gate disabled (flag=False): all signals fire regardless of confluence (backward compat)
+2. No prior iFVG same day → ORB fires (no_prior case unchanged)
+3. Prior iFVG same direction as ORB → ORB fires (same_only case)
+4. Prior iFVG OPPOSITE direction only → ORB suppressed (opp_only case) ← key test
+5. Prior iFVG both directions → ORB fires (both case; PF=1.485, positive expectancy)
+6. ORB long fired → subsequent iFVG short suppressed (Gate 2 opp case) ← key test
+7. ORB long fired → subsequent iFVG long allowed (Gate 2 same case)
+8. No ORB fired today → iFVG signals allowed regardless of side (no_orb case)
+9. Context resets at ET midnight: day-N iFVG signals do not gate day-N+1 ORB signals
+
+Benchmark (funded + combine objectives; parity flags; run AFTER B46):
+1. B46 baseline (B42 Phase A + B43-deployed Phase B, no confluence gate)
+2. B47 Gate-1-only: suppress ORB opp-only; iFVG unchanged
+3. B47 full: Gate 1 + Gate 2 (suppress both ORB opp-only AND post-ORB iFVG opp)
+Report: passes/61, sust, $/mo for each variant; per-year PF consistency check.
+
+Success criteria:
+- Primary: B47 full sust > B46 baseline sust
+- Secondary: combine passes >= B46 baseline passes (gating may reduce ORB volume 22%;
+  net effect on passes depends on pipeline balance)
+- Per-year consistency: PF improvement in 4+/5 non-holdout years for whichever gate is kept
+- Stop rule: if BOTH B47 Gate-1-only AND B47 full reduce sust AND reduce combine passes vs
+  B46 baseline, reject. If mixed (one metric better, one worse), report as MIXED; do not
+  deploy without Lawrence review.
+
+Prior: 80% (data mining is done; year-by-year consistency confirmed; GO/NO-GO already passed;
+implementation complexity is the remaining risk — shared context across two runners).
+
+Source: wk2-r5 data mining on mfe_mae_orb_clean.csv + mfe_mae_ifvg_clean.csv. Year-by-year
+consistency check in JOURNAL wk2-r5. Lessons 91, 92.
+
+## B48 — iFVG hybrid rank-aware signal filter  [pending]
+
+Mechanism: iFVG sweep-displacement signals have a within-day rank per side (rank-1 = first
+signal of the day on a given side; rank-2+ = subsequent signals on the same side). From 5y
+data (excl 2022): rank-1 signals (all sides) PF=1.129; rank-2+ longs PF=1.090; rank-2+ shorts
+PF=0.858 (loss-making). Current deployed config (B15 LO) removes all shorts, including
+profitable rank-1 shorts. Hybrid approach: keep rank-1 on both sides + rank-2+ longs only;
+suppress only rank-2+ shorts. Expected: PF=1.133 at ~29 signals/month vs LO PF=1.136 at ~25
+signals/month. Same PF, +16% volume — potentially more combine passes.
+
+Deterministic rule:
+  Track daily_side_count[et_date][signal.side] (increment on each emission).
+  If signal.side == 'short' AND daily_side_count[et_date]['short'] >= 2:
+      suppress signal (rank-2+ short, PF=0.858)
+  All other signals allowed: rank-1 shorts (PF=positive), all longs at any rank.
+
+Fixed defaults: `ifvg_max_short_rank: int = 0` (0 = no limit, existing behavior;
+set to 1 in benchmark to suppress rank-2+ shorts). Does NOT break existing `allowed_sides` param.
+
+Defining-behavior tests (tests/test_rank_filter.py):
+1. max_short_rank=0 (default): rank-3 shorts fire normally (backward compat)
+2. max_short_rank=1: rank-1 short fires; rank-2 short suppressed; rank-2 long fires
+3. max_short_rank=1: rank counter resets at ET midnight (new day, rank=1 again)
+4. Longs are not affected by max_short_rank at any rank level
+
+Benchmark (combine objective; parity flags):
+  B42 LO baseline (long-only, 42 passes/61 months, PF=~1.136)
+  B48 hybrid: max_short_rank=1, rank-1 both sides + all longs
+  Report: passes/61, combine PF for both; sust vs B46 if funded phase also updated.
+
+Success criteria:
+- Hybrid passes >= LO passes (more volume should produce >= passes if PF is equivalent)
+- Hybrid PF >= 1.12 (within 1.5% of LO's 1.136, given research-to-deployed config noise)
+- Stop rule: if hybrid passes < LO passes AND hybrid combine PF < LO PF, reject (rank-1 shorts
+  add vol without adding quality; in deployed config they may behave differently from baseline)
+
+Prior: 55% (rank-1 shorts are positive in research baseline, but close-mode LO deployed config
+may reduce their incidence; the rank-2+ short suppression may not add meaningful volume over LO
+in practice; mild uncertainty about behavioral transfer to deployed config).
+
+Source: wk2-r5 rank analysis on mfe_mae_ifvg_clean.csv (rank column imputed from intraday
+signal ordering by entry_ts within each ET date and side). JOURNAL wk2-r5.
+
+## B49 — ORB breakout extension quality filter (Phase 1 data mining)  [pending]
+
+Mechanism (hypothesis): When the ORB breakout bar (first bar closing past the OR boundary)
+extends significantly past that boundary, it signals stronger momentum and predicts higher
+probability of EOD-flatten wins. A shallow close (just clearing OR boundary) may indicate a
+weak breakout that reverses early, producing the 0-2h stop-out losses that dominate the ORB
+loss side (Lesson 88). This is DISTINCT from B45 (which measured OR WIDTH before the break):
+B49 measures the breakout BAR's extension past the boundary at the moment of signal emission.
+A tight OR can produce a decisive breakout bar; a wide OR can produce a shallow one — the
+variables are not correlated.
+
+Phase 1 data mining (no engine code; go/no-go gate):
+Write `scripts/analyze_b49_breakout_extension.py`:
+1. For each ORB trade in mfe_mae_orb_clean.csv, extract entry_ts, side, instrument.
+2. Load 1-min bars for that session day; compute ATR(14) from bars ending before 09:30 ET.
+3. Reconstruct 5-min bars; find the first bar after 09:30 ET where:
+   - Long: close > OR_high
+   - Short: close < OR_low
+   This is the breakout bar.
+4. Compute extension: ext = |close - or_boundary| / atr14 (in ATR units, always positive).
+5. Bucket trades by ext quintile; compute WR and PF per bucket.
+6. GO/NO-GO: top 40% ext PF >= 1.4× bottom 40% ext PF AND each bucket n >= 40.
+
+Phase 2 (engine, ONLY if Phase 1 = GO):
+- In ORBDetector, track each bar's close vs OR boundary after range locks.
+- At first breakout bar close: compute ext = |close - or_boundary| / atr14.
+- Add `orb_min_breakout_ext_atr: float = 0` (default 0 = no filter).
+- Suppress signal if ext < orb_min_breakout_ext_atr.
+
+Defining-behavior tests (ONLY if Phase 1 = GO):
+1. ext=0 (default): all breakouts fire regardless of extension (backward compat)
+2. ext=0.3: breakout bar 0.3x ATR past boundary → fires; 0.1x ATR → suppressed
+3. ATR computed correctly from pre-ORB bars (not from OR bars themselves)
+
+Benchmark (ONLY if Phase 1 = GO, funded + combine objectives, vs B46 baseline):
+Same script pattern as B45; threshold set by Phase 1 optimal bucket.
+
+Stop rule (Phase 1 NO-GO): if top-40% extension PF < 1.4× bottom-40% extension PF, do not
+implement. Document that ORB breakout extension magnitude joins OR width (B45) and prior-day
+range (B5) in the set of day-level ORB quality predictors that fail on NQ 5min data. Close
+the "ORB breakout bar quality" research line; no further variants warranted.
+
+Prior: 40% (B45 precedent is adverse for OR-quality predictors in general; the breakout bar
+extension is a more direct momentum indicator than OR width and is mechanistically more likely
+to predict EOD-flatten survival; the 40% prior acknowledges B45 while staying open to this
+different variable).
+
+Source: Lesson 88 (ORB value concentrated in EOD-flatten cohort; early 0-2h stop-outs are
+the dominant loss mechanism); B45 (Phase 1 falsification precedent for OR quality filters);
+wk2-r5 review. Next after B46 and B47.
