@@ -2171,3 +2171,84 @@ Economic data releases at 08:30 ET establish intraday momentum that persists thr
 
 VERDICT: Phase 1 NO-GO. Ratio below threshold AND 2021 inversion makes hypothesis
 structurally unstable. Phase 2 NOT built. Script: scripts/analyze_b54_prertth.py.
+
+## B55 — iFVG "Silver Bullet" window (10:00-11:00 AM ET only)  [pending — Lawrence-requested 2026-06-14 (Chermane Trades ICT video); rank ahead of routine queue]
+Source: Chermane Trades "This Trade Required PATIENCE / NQ ICT SMC" walkthrough
+(youtu.be/rj7B8bdFaLs). The video's mechanics are standard ICT (sweep ->
+displacement -> FVG/OB retracement in a killzone) = already covered by iFVG +
+sweep_bos + killzone filtering. The one crisp, testable element of this ICT-NQ
+style not yet isolated: the "Silver Bullet" hour, 10:00-11:00 AM ET.
+
+Hypothesis: concentrating iFVG entries into the single 10:00-11:00 ET hour
+improves quality. Supporting prior (OUR data, wk1-r2 per-hour): 10:xx ET is the
+strongest NY-AM hour (PF 1.235). This is a CONCENTRATION test (keep only the
+best hour), distinct from B18 (which REMOVED sessions and hurt) and B44 (which
+blocked a mid-session band, close-mode mismatch). Volume will be severe (~1
+hour/day, ~5-10 signals/mo) -> route to the FUNDED objective primarily; combine
+is secondary (likely too sparse).
+
+Mechanism: default-off `silver_bullet_only: bool = False` in StrategyParams.
+When True, the iFVG signal path emits ONLY for closed bars whose ET time is
+within [10:00, 11:00) ET; detector state still accumulates outside the window
+(suppress at emission, not detection). ET conversion as elsewhere
+(astimezone(ZoneInfo("America/New_York"))). Note: check whether enabled_killzones
+can already express this window; if so, prefer a no-code benchmark and skip the
+flag.
+
+Defining-behavior tests (tests/test_silver_bullet.py):
+1. silver_bullet_only=False (default): signals unchanged vs baseline.
+2. =True: a valid iFVG at 10:30 ET fires; the same setup at 09:45 ET and at
+   11:15 ET is suppressed.
+3. Window boundary: 10:00:00 ET fires; 11:00:00 ET does not (half-open interval).
+4. ET timezone correct across a UTC bar that maps into the window.
+
+Benchmark (FUNDED primary, combine secondary; parity `--partial-r 0 --set swing_stop_lookback=0`):
+- equity_export/funded_sim silver-bullet-on vs control AND vs B19 best.
+Success: improves the funded objective AND PF vs control despite the volume cut.
+Stop rule: loses on both -> reject (it joins B18/B44 as evidence that NQ iFVG
+time-windowing does not add value). Prior ~30% (concentration into a known
+high-PF hour is evidence-backed, but the volume cut is brutal and prior
+time-window items have failed).
+
+## B56 — SetupGrader audit + conditional refactor  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue]
+Lawrence: "the grader might need to get refactored, I'm not sure it's working
+well." B51 already produced strong evidence he is RIGHT: grade does not predict
+outcome monotonically (A+B PF 1.286 vs D+F 1.080, ratio 1.190; and C PF 0.996 is
+the WORST bucket -- worse than D 1.060 and F 1.124). A grader where C ranks below
+F is miscalibrated. This item diagnoses WHY before changing anything (Rule 3 /
+Rule 8: audit before refactor; don't refactor what you haven't measured).
+
+PHASE 1 -- per-component audit (no behavior change):
+SetupGrader scores a setup from several inputs/components (read
+app/strategy/grader.py / SetupGrader to enumerate them). For EACH component,
+over 5y (2021/2023/2024/2025-26, NOT 2022), measure its standalone correlation
+with trade outcome (WR / PF / mean-R), bucketing trades by that component's
+value. Output a table: component -> predictive (monotone with outcome)?,
+inverted?, or noise. Reuse the trade lists + excursion data; write
+scripts/audit_grader.py.
+
+DECISION (from the audit, three outcomes):
+- (a) Some components predict, others are noise/inverted -> Phase 2 REFACTOR:
+  re-weight to keep only the predictive components. Grader is used live via
+  grader_min_grade, so per loop guardrails this ships default-off + a written
+  recommendation; Lawrence decides Monday.
+- (b) NO component predicts outcome -> recommend REMOVING the grader gate rather
+  than refactoring (consistent with fib/OTE, OR-width, breakout-ext, and B51
+  grade all failing as NQ 5min quality predictors -- grade may simply not be a
+  signal here). Document; do not build a refactor that can't help.
+- (c) The grader is computing something other than what its grades imply (a bug,
+  e.g. an inverted sign on a component) -> fix the bug, add a regression test,
+  re-run the B51 monotonicity check to confirm grades now rank by outcome.
+
+Phase 2 tests (only if a refactor/bugfix happens):
+1. Grader produces expected grades for known synthetic setups (pin intended
+   behavior first).
+2. Post-refactor: re-run the per-grade PF check -> grades rank monotonically with
+   outcome (the property B51 showed is currently violated), OR the item lands as
+   "remove the gate" with evidence.
+
+Guardrails: deterministic only (Rule 5 -- grader stays code, no LLM). NEVER
+change live grader_min_grade behavior without Lawrence; default-off /
+recommendation only. Success: either a grader whose grades actually predict
+outcome (monotone A>B>C>D>F by PF), or a documented recommendation to drop the
+gate. Source: Lawrence flag + B51 non-monotonic finding (Lesson 99).
