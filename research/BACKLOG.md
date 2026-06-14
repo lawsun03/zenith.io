@@ -2252,3 +2252,72 @@ change live grader_min_grade behavior without Lawrence; default-off /
 recommendation only. Success: either a grader whose grades actually predict
 outcome (monotone A>B>C>D>F by PF), or a documented recommendation to drop the
 gate. Source: Lawrence flag + B51 non-monotonic finding (Lesson 99).
+
+## B57 — New lessons-based trade-quality grader (composite filter)  [pending — PRIORITY: Lawrence-requested 2026-06-14; do AFTER B56 (B56 feeds it); rank ahead of routine queue]
+Lawrence: build a NEW grader that takes ALL lessons learned into account, ranks
+a scenario more accurately than the current one, to filter trades. B56 audits
+the OLD grader's components; B57 builds a fresh composite quality score from
+EVERY empirically-validated predictor we have, validated OUT OF SAMPLE. Do B56
+first — its per-component table is B57's starting feature inventory.
+
+What we have LEARNED actually predicts iFVG/ORB outcome (candidate features):
+- side: iFVG long PF 1.136 vs short 0.960 (B15); ORB long 1.320 vs short 1.109 (wk1-r2)
+- signal rank of day: rank-1 PF 1.129 vs rank-2 0.970 / rank-2+ shorts 0.841 (B23)
+- hour-of-day: 10:xx ET 1.235, 09:xx 1.178, London 04-05:xx 1.31-1.43; noon/NY-PM
+  negative (B18, B55)
+- engine/context: combined Phase A 2x passes (B40); ORB value concentrates in the
+  EOD-flatten cohort (Lesson 88)
+- N+1 next-bar confirmation: confirmed PF 1.619 vs unconfirmed 0.661, ratio 2.45x
+  (B53) — THE strongest discriminator, BUT it is POST-entry (arrives one bar after
+  fill) so it CANNOT be a pre-trade filter; B53 already showed using it as an exit
+  fails. EXCLUDE from the entry grader; note it as the reason a pre-trade grader
+  has a hard ceiling.
+What we have learned does NOT predict (EXCLUDE — do not re-add as features):
+  fib/OTE retrace depth (B34), OR width (B45), breakout extension (B49), prior-day
+  range (B5), daily-bias direction (B35), inversion body size at deployed config
+  (B16), and the current SetupGrader's own grade (B51). Quality-of-geometry has
+  failed 6x; the predictors that survive are STRUCTURAL/CONTEXTUAL (side, rank,
+  hour), not setup-shape.
+
+THE central risk: a composite of "long + rank-1 + good-hour" is just B15/B23/B18
+stacked, and stacking filters has cut volume without adding edge before (B19
+marginal, B48 hybrid rejected). So B57 must prove the COMPOSITE beats the BEST
+SINGLE existing filter OUT OF SAMPLE — not merely beats the broken current grader
+(a low bar) and not merely separates IN sample (multi-feature scores overfit).
+
+PHASE 1 — feature study + interpretable composite design (analysis only, go/no-go):
+1. Assemble the per-trade feature matrix (side, rank, ET-hour bucket, engine,
+   killzone, ATR-regime bucket, displacement size — all PRE-entry) + outcome
+   (R / win) from 5y trade lists + excursion data. EXCLUDE 2022.
+2. Fit a SIMPLE, INTERPRETABLE, DETERMINISTIC scorer — a weighted score table or
+   a shallow (depth<=3) decision tree / few-term logistic regression. NO opaque
+   ML (Rule 5: deterministic, inspectable). Train on 2021+2023+2024; VALIDATE on
+   held-out 2025-26 (true OOS). Report per-decile PF on the OOS set.
+3. GO/NO-GO: proceed to Phase 2 ONLY if, on the OOS years, the top score-decile
+   PF materially exceeds the bottom decile (monotone-ish) AND the top-half-by-score
+   subset beats the BEST single existing filter (long-only / rank-1 / 10-11ET) on
+   the funded objective at comparable volume. If the composite only matches a
+   single filter, REJECT — it is complexity without edge (document it).
+
+PHASE 2 — engine + benchmark (only if Phase 1 = GO):
+- Implement the scorer as a NEW default-off grader (e.g. `quality_grader="v2"`),
+  emitting a numeric score + a pass/block at a fixed threshold chosen on TRAIN,
+  applied on the OOS years only for the headline result. Deterministic; keep the
+  old grader intact (this is additive, default-off).
+- Defining-behavior tests (tests/test_quality_grader_v2.py): scorer is a pure
+  function of the documented features; known feature vectors -> known scores;
+  threshold gates as specified; off by default (signals unchanged).
+- Benchmark BOTH objectives (parity `--partial-r 0 --set swing_stop_lookback=0`)
+  vs (a) control, (b) the best single filter, (c) the old grader. Report volume.
+
+Success: the v2 grader's score ranks trades monotonically by OOS PF AND the gated
+subset beats the best single existing filter on the funded objective. Stop rule:
+fails OOS monotonicity OR fails to beat the best single filter -> reject; document
+that contextual filters are best applied singly, not composited (would be the
+strongest statement yet of the quality-score ceiling on NQ 5min).
+
+Guardrails: deterministic only; OOS validation mandatory (overfitting is the
+expected failure); never change live grading without Lawrence (default-off +
+recommendation). Source: Lawrence direct request 2026-06-14; builds on B51/B56
+grader findings + the full validated-predictor set from B5/B15/B18/B23/B34/B40/
+B45/B49/B53/B55.
