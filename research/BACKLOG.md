@@ -3720,7 +3720,24 @@ via a news-day mode switch).
 
 ---
 
-## B85 -- CPI straddle TICK/1s confirmation of the entry-bar path  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B85 -- CPI straddle TICK/1s confirmation of the entry-bar path  [done — CONFIRMED 2026-06-14: 1s replay PF 5.99/67% win/+1.68R 3R, 5.88/61%/+1.97R 4R, 5/5 yrs, 7% same-second whipsaw; slippage-immune (PF 5.43 at 10t); entry-bar concern resolved. Data $1.06 (ledger $8.74). FOLLOW-ON -> B86 engine build. doc: trade_analysis/2026-06-14_news_straddle_userspec.md]
+
+## B86 -- CPI breakout-straddle engine + funded/combine framing  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+B85 CONFIRMED the CPI straddle on 1s data (PF ~6, 5/5 yrs, slippage-immune). Build it.
+- Engine: default-off `news_straddle` (standalone detector + runner shim per the pattern),
+  CPI-only via `data/news_events.csv`. Rules (validated): 15-min pre-release range; OCO
+  buy_stop=range_high+60t / sell_stop=range_low-60t; first leg fills, OCO-cancel the other;
+  stop = broken range boundary (R=60t); TP = 3R (and expose 4R); flat EOD. Deterministic
+  (Rule 5); closed-bar/■tick entry via the engine bar stream; never auto-enable live.
+- Defining tests: range+stops from pre-release only (no lookahead); long fires on up-break,
+  OCO cancels short; stop at range boundary; TP at 3R; both-legs-one-bar -> whipsaw; off by
+  default. Reuse scripts/news_straddle_cpi_1s.py logic as the oracle.
+- Framing: ~9 CPI/yr is too sparse for the Combine alone -> evaluate as a FUNDED-phase overlay
+  ON TOP of the B42 pipeline (does adding CPI-straddle days raise $/mo without busting?), and
+  report standalone combine numbers for completeness. Note: bot trades MNQ; CPI straddle is
+  same instrument, different trigger -> can run in the same process.
+- Open realism item: spot-check live stop-order fill on the 08:30 print (modeled up to 10t
+  adverse and it held). Source: B85 confirmation; Lawrence 2026-06-14.
 
 **Why:** the user's exact straddle spec (15-min pre-news range, entry at
 range±60t, TIGHT stop at the broken range boundary = R=60t, TP 3-4R) tested

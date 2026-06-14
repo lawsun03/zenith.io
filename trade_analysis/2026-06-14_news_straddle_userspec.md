@@ -48,3 +48,28 @@ straddle's viability is a function of RR, not just "does the break happen."
    check validated 123/124). CPI edge holds even dropping 2026.
 3. This is RAW profitability only — not yet combine/funded-scaled (sparse: 47 CPI/5yr).
 4. MNQ only; not tested on other instruments.
+
+## 1-SECOND CONFIRMATION (B85, 2026-06-14) — CONFIRMED, entry-bar concern resolved
+Fetched NQ.v.0 ohlcv-1s for the 47 CPI windows ([-30m,+90m], $1.06; ledger $8.74/$20;
+`scripts/fetch_cpi_1s.py` -> `bars/bars_NQ_1s_cpi_windows.csv`) and replayed the straddle
+managing from the second AFTER the trigger (`scripts/news_straddle_cpi_1s.py`).
+
+| resolution | 60/3R | 60/4R |
+|---|---|---|
+| 1-min (fair est.) | 63% win, PF 5.0, +1.51R, 5/5 | 59%, PF 5.57, +1.92R, 5/5 |
+| **1-second (accurate)** | **67% win, PF 5.99, +1.68R, 5/5** | **61%, PF 5.88, +1.97R, 5/5** |
+
+The intra-minute "spike→tag stop→recover" path does NOT eat the edge — 1s is slightly BETTER
+than the conservative 1-min handling; only 7% of entries are same-second whipsaws.
+
+**Slippage stress (1s, 60/3R), per-fill adverse ticks:** 2t PF 5.99 / 4t 5.86 / 6t 5.64 /
+8t 5.53 / 10t 5.43 — all 67% win, 5/5 years. The edge is slippage-immune because wins are
++3R (45 pts); a few ticks barely dent them while the stop is fixed.
+
+### Verdict: CPI breakout straddle CONFIRMED (the session's one real find)
+Robust across resolution (1m→1s), target (3R/4R), offset (40/60/80 from the earlier sweep),
+slippage (2–10t), and year (5/5). Remaining before live: (1) realistic STOP-ORDER fill on
+the print second (we modeled adverse slip up to 10t and it held, but live fills should be
+spot-checked); (2) it's sparse (~9/yr) → a supplement/overlay, not a Combine-volume engine;
+(3) build as a default-off `news_straddle` engine (CPI-only) + funded/combine framing.
+
