@@ -2792,3 +2792,51 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 
 - **Lessons 135-136 added.** Test suite: **725 passed, 2 skipped, 0 failures** (+2 B74 tests).
 - **Next:** Backlog fully exhausted (B74 was the last pending item). Next session = research/ideation to replenish backlog.
+
+---
+
+## 2026-06-14T16:20Z -- session wk5-r3 -- RESEARCH (backlog replenishment)
+
+- **Bot health:** /api/status OK -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Session note:** Backlog fully exhausted (B74 last done item). Protocol mandates research/ideation. Ran 2 inline Phase 1 falsifications + MFE distribution analysis + WebSearch before proposing new backlog items.
+
+**Ran:**
+1. `scripts/run_monthly_combine.py --set r_multiple=1.5` -- inline r=1.5 Phase 1 check (fills the one gap below B57's sweep at r={2.0, 2.5, 3.0, 3.5}).
+2. `scripts/analyze_wk5r3_displacement_body.py` (new) -- displacement bar body/ATR Phase 1 check on mfe_mae_ifvg_clean.csv (LO longs, 5y excl 2022, n=1214 matched).
+3. MFE excursion distribution analysis (inline Python) -- r_mfe distribution for LO longs.
+4. WebSearch -- NQ intraday / prop firm strategies 2025-2026 (no new mechanism classes).
+
+**Numbers:**
+
+| Check | Result | Verdict |
+|-------|--------|---------|
+| r_multiple=1.5 combine harness | 9/61 passes (15%), PF=1.05 | INLINE NO-GO |
+| Displacement bar body/ATR top/bottom ratio | 0.914 (INVERTED), 1/5 years | INLINE NO-GO |
+| MFE: % reaching 2.5R | 21.6% | informative |
+| MFE: P(reach 2.5R | reached 2.0R) | 81.3% | confirms B57 calibration |
+
+r_multiple=1.5 result extends the B57 sweep monotone pattern:
+| r | Passes/61 | $/mo | Sust |
+|---|-----------|------|------|
+| 1.5 (this session) | 9 | -- | -- |
+| 2.0 | 12 | $567 | 3.54x |
+| 2.5 | 11 | $566 | 3.54x |
+| 3.0 | 10 | $540 | 3.08x |
+| 3.5 | 10 | $549 | 3.23x |
+
+Displacement bar body/ATR: Q2(1.303) and Q3(1.336) outperform Q1(1.006) and Q5(1.004). Classic non-monotonic mid-range-best pattern. Extends Lessons 90/99/117/122. Root cause: displacement bar magnitude is structurally orthogonal to inversion quality -- a large impulse creates a FVG zone but does not predict whether the subsequent reversal trade will be profitable.
+
+**Verdict:** dataset (research/ideation session). 3 new backlog items appended.
+
+**Learned:** (1) r_multiple below 2.0 continues the downward trend in combine passes (9 vs 12 at r=2.0); the B57 r-sweep is confirmed complete with the optimum at r=2.0-2.5. (2) Displacement bar body/ATR joins the non-monotonic quality-predictor graveyard -- the FVG creation impulse strength does not predict inversion trade quality. (3) MFE data confirms 81.3% of trades reaching 2.0R also reach 2.5R, validating the B57 r=2.5 target calibration. Web search confirms no new mechanism classes relevant to this strategy.
+
+**New lessons:** 137 (r < 2.0 confirmed sub-optimal), 138 (displacement body/ATR inverted, non-monotonic).
+
+**New backlog items appended:**
+- B75: ORB flatten-time Phase 1 sensitivity (15:30 vs 16:00 ET EOD flatten, no code)
+- B76: Skip-second-iFVG-after-loss day filter Phase 1 (open thread from B63, first pure-skip test)
+- B77: Deployed-config MFE/MAE dataset infrastructure (add r_mfe/r_mae to --trade-csv, generate deployed excursion data)
+
+**Test suite:** 725 passed, 2 skipped, 0 failures (no code changes; scripts/analyze_wk5r3_displacement_body.py added as analysis script).
+
+**Next:** B75 (ORB flatten-time Phase 1 -- fastest, no code), or B77 (infrastructure -- small code change enabling future research).

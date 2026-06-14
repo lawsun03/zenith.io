@@ -3116,3 +3116,160 @@ Stop rule (Phase 2): worse on both combine PF AND pipeline sust vs B57 -> reject
 The deployed config may have fewer loss-making hours than the research baseline. But the
 all-day + combined engine still includes overnight/pre-market sessions and the ORB component
 adds signals throughout the morning -- some subset may be net-negative in the deployed config.
+
+---
+
+## RESEARCH -- Session wk5-r3  [done -- 3 items appended: B75, B76, B77]
+
+Session 2026-06-14T16:20Z. Backlog fully exhausted (B74 was last item). Mandatory
+research/ideation session. Inline Phase 1 falsification checks:
+1. r_multiple=1.5 combine harness: 9/61 passes (15%), PF=1.05 -- INLINE NO-GO (worse than
+   B42's 10/61; B57 r-sweep is now confirmed complete with r=2.0 as the combine-harness
+   optimum; pipeline optimum is r=2.0 or 2.5 both giving sust=3.54x).
+2. Displacement bar body/ATR Phase 1 (n=1214, LO longs, 5y excl 2022): top/bottom-40%
+   ratio=0.914 INVERTED, Q2-Q3 best (mid-range body), non-monotonic, 1/5 years -- INLINE
+   NO-GO. Extends the non-monotonic predictor graveyard (Lessons 90/99/117/122).
+3. MFE excursion distribution (research baseline, LO longs): 21.6% reach 2.5R, 81.3%
+   of trades reaching 2.0R continue to 2.5R -- confirms r=2.5 is well-calibrated.
+Web search: no new mechanism classes found (ICT/iFVG/ORB patterns, same 7-for-7 failure class).
+New lessons: 137 (r_multiple below 2.0 is confirmed sub-optimal), 138 (displacement bar
+body/ATR inverted + non-monotonic). 3 new backlog items: B75, B76, B77.
+
+---
+
+## B75 -- ORB flatten-time Phase 1 sensitivity  [pending]
+
+**Mechanism:** The ORB engine flattens all positions at 16:00 ET (RTH close). Lesson 88
+established the 4h+ EOD-flatten cohort (PF=4.129) is the profit driver (33.6% of ORB
+trades, held from ~09:45 entry to ~16:00 close). This probe checks whether the FINAL 30
+minutes (15:30-16:00 ET) consistently adds or removes value from these EOD trades --
+i.e., does NQ systematically reverse in the last 30 min of RTH, and if so, would a
+15:30 ET flatten capture better prices?
+
+**Exact deterministic rules:**
+1. Load mfe_mae_orb_clean.csv (n=1030 ORB trades, 5y excl 2022).
+2. Convert exit_ts UTC -> ET (EDT: UTC-4h May-Nov; EST: UTC-5h Dec-Apr).
+3. Select "late-EOD" trades: exit_ts_ET in [15:30, 16:00) ET. These are ORB positions
+   that were still open at 15:30 ET and exited at or before 16:00 ET.
+4. For each late-EOD trade: look up the 5-min bar closing at 15:30 ET from
+   bars_MNQ_dbv_2021_2026.csv. Hypothetical exit price = that bar's close.
+5. Compute hypothetical_pnl = (hyp_exit_price - entry_price) * direction * contract_value
+   using entry_price from the CSV and direction from side column.
+6. Compare: sum(actual late-EOD pnl) vs sum(hypothetical_pnl). Per-year split.
+
+**Fixed defaults:** No code changes. Pure data analysis. No new parameters.
+
+**Phase 1 GO criterion:** Hypothetical 15:30 flatten improves aggregate late-EOD net P&L
+by >= 15% AND the improvement is consistent in 3+/5 open years.
+
+**If Phase 1 GO -- Phase 2:** Add `orb_flatten_hour: float = 16.0` to StrategyParams
+(default = 16.0 = current behavior). Wire in ORBDetector.on_bar() exit condition. Run
+funded pipeline benchmark vs B57. Stop rule: both metrics worse than B57 -> reject.
+
+**Defining-behavior tests (Phase 2 only, if GO):**
+1. orb_flatten_hour=15.5: position open at 15:29 ET flattens at 15:30 ET
+2. orb_flatten_hour=16.0 (default): no change from current behavior
+
+**Success criteria vs baseline:** Phase 1 -- 15:30 flatten saves >= 15% of late-EOD P&L.
+Phase 2 -- pipeline $/mo > $566 AND sust > 3.54x (vs B57).
+
+**Prior:** LOW. NQ's RTH final 30 min has mixed historical behavior (sometimes extends
+trends, sometimes mean-reverts before close). B61 (early exit variants) was rejected for
+iFVG; ORB's different exit mechanism (EOD flatten, not R-level exit) makes this a
+genuinely different test. Lesson 88 showed the 4h+ cohort IS profitable; this asks if the
+very last 30 min consistently detracts. Expected result: no material difference (the 30-min
+window is small relative to the 4h+ trade duration). Tag: Sonnet.
+
+---
+
+## B76 -- Skip-second-iFVG-after-loss day filter -- Phase 1 data mining  [pending]
+
+**Mechanism:** B63(a) found that on exactly-2-trade days, the second iFVG signal after a
+first-iFVG LOSS has PF=0.946 (slightly negative), while after a first WIN it is PF=1.394
+(Lesson 119). B63 tested this as a SIZE-BOOST (rejected: amplifies bust risk). The
+SKIP variant -- skip the second iFVG signal entirely when the first iFVG of the day lost --
+has never been tested. Unlike size-boost, skip is purely SUBTRACTIVE (never increases
+risk, just removes near-breakeven trades). Volume impact: moderate -- roughly 50% of
+multi-signal days have a first-signal loss, so ~15-20% of total iFVG signals are removed.
+
+**Exact deterministic rules (Phase 1, data-mining only):**
+1. Load mfe_mae_ifvg_clean.csv (research baseline, LO longs, 5y excl 2022).
+   (Note: must verify results hold in deployed-close-mode config at Phase 2.)
+2. For each trade: determine daily rank (entry order within date). Sort by (date, entry_ts).
+3. For rank-1 trades: always include.
+4. For rank-2+ trades: include ONLY if the preceding rank-1 trade (same date) was a WIN
+   (realized_pnl > 0).
+5. Compute PF of the filtered dataset vs the unfiltered dataset.
+6. Compute funded_sim economics using modified daily P&L (sum of included trades per day).
+   Compare vs B57 ($566/mo, sust=3.54x) and B42 ($549/mo, 3.23x).
+
+**Fixed defaults:** skip_after_loss_ifvg: bool = False (default off).
+
+**Phase 1 GO criterion:** Modified funded pipeline: sust >= 3.54x (>= B57) AND $/mo >=
+$566 (>= B57). Both must clear B57 (current best). If the skip removes enough near-
+breakeven trades to improve per-day P&L variance without excessively cutting throughput.
+
+**Phase 2 (only if Phase 1 GO):** Implement `skip_ifvg_after_daily_loss: bool = False`
+in StrategyParams. In SweepDisplacementComposer: track first-iFVG-result via DaySignalLog
+(already exists from B56/B73). If first signal of day lost AND skip_ifvg_after_daily_loss
+is True: suppress subsequent iFVG signals (still emit ORB signals). Define-behavior tests:
+3 tests verifying suppress behavior and default-off.
+
+**Defining-behavior tests (Phase 2 only):**
+1. Default-off: second iFVG fires normally regardless of first outcome
+2. skip=True, first iFVG LOSS: second iFVG suppressed, ORB still fires
+3. skip=True, first iFVG WIN: second iFVG fires normally
+
+**Success criteria vs baseline:** Phase 1: sust >= 3.54x AND $/mo >= $566 (vs B57).
+Stop rule (Phase 1): if modified sust < B42's 3.23x on BOTH tries -> reject immediately.
+
+**Prior:** LOW. The volume-starvation lesson (Lessons 94/105/109/134) predicts that any
+subtractive quality gate fails the funded pipeline. The B63(a) after-loss PF of 0.946 is
+almost breakeven -- removing near-breakeven trades cuts volume without a clear quality
+benefit. However, this is the FIRST pure-skip (no size change) test, so documenting it
+is worthwhile. High expected rejection. Tag: Sonnet.
+
+---
+
+## B77 -- Deployed-config MFE/MAE dataset (infrastructure)  [pending]
+
+**Mechanism:** The existing research/mfe_mae_ifvg_clean.csv and mfe_mae_orb_clean.csv
+were generated with the RESEARCH BASELINE config (ifvg_edge entry mode, no swing-stop
+lookback, named killzones, research-level thresholds). Every Phase 1 quality-predictor
+analysis has used this data. BUT the deployed config uses CLOSE-MODE entry (different
+entry price and risk geometry), all-day killzones, and swing_stop_lookback=30. The
+excursion distribution (MFE/MAE) in close-mode may differ from the research-baseline
+data because: (1) close-mode enters at inversion bar close (a later, more confirmed
+entry) vs proximal FVG edge, and (2) the risk/R-multiple geometry differs. Without
+deployed-config MFE/MAE data, all Phase 1 quality-predictor analyses are approximate.
+
+**Exact deterministic rules:**
+1. Add r_mfe, r_mae, mfe_pts, mae_pts fields to equity_export.py --trade-csv output.
+   Source: BacktestResult.trades[t].get("r_mfe"), .get("r_mae"), .get("mfe_pts"),
+   .get("mae_pts") -- already computed in backtest runner (same as mfe_mae_ifvg_clean.csv
+   generation). Add to the existing entry_ts, exit_ts, side, pnl_usd, engine_type columns.
+2. Run equity_export.py with deployed config (engine=combined, ifvg_entry_mode=close,
+   enabled_killzones=all, r_multiple=2.5, swing_stop_lookback=30, stop_buffer=3.0,
+   min_absolute_body=5.0, allowed_sides=both, partial_r=0 [for accurate per-trade PnL --
+   Lesson 136], risk_pct=1.0) for each year in {2021, 2023, 2024, 2025, 2026}.
+3. Concatenate: research/mfe_mae_deployed_combined_clean.csv (~3200+ rows).
+4. Verify: r_mfe histogram shows cluster at 2.5 (target hits) and near 0 (stops);
+   r_mae bounded by 1.0 (all losers reach stop at most 1.0R adverse).
+
+**Fixed defaults:** --trade-csv flag is already default-off; new columns appear when flag
+is used. No strategy behavior changes.
+
+**Defining-behavior tests:**
+1. equity_export with --trade-csv out.csv and r_mfe present in BacktestResult: output
+   CSV contains r_mfe, r_mae, mfe_pts, mae_pts columns.
+2. A trade with r_mfe=2.5 (target hit) appears with r_mfe >= 2.4 in the output CSV.
+3. Without --trade-csv flag: no output CSV written (unchanged behavior, existing test).
+
+**Success criteria:** Dataset generated with >= 2000 trades, all 4 new columns present,
+r_mfe distribution consistent with expected (~21% of trades reaching 2.5R from B57
+combine harness win rate estimate). No stop rule (infrastructure item).
+
+**Prior:** N/A (infrastructure). This enables more accurate Phase 1 analyses. The
+immediate follow-on analysis: run the displacement-bar-body check (wk5-r3 analog) and
+inversion-bar CLV check on the deployed-config data to see if the non-monotonic pattern
+persists in the correct config. Tag: Sonnet.
