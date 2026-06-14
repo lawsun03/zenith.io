@@ -230,6 +230,12 @@ class StrategyParams(BaseModel):
     # combined-engine context. Cap at max_contracts. All signals still taken (additive, no gate).
     risk_policy: str = "constant"
 
+    # B59: sweep_reentry overlay — long-only session-low/prior-day-low reentry micro-engine.
+    # Minimum sweep depth below the reference level (session_low or prior_day_low) in ATR units.
+    # 0.25 = bar must dip at least 0.25 × ATR below the level to qualify as a sweep.
+    # Default-off (engine="sweep_reentry" must be explicitly selected).
+    sweep_reentry_depth_atr: Decimal = Decimal("0.25")
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

@@ -2676,5 +2676,36 @@
       "runs": ["b58_confluence"],
       "src": "scripts/_b58_funded_analysis.py"
     }
+  },
+  {
+    "ts": "2026-06-14T01:10:00Z",
+    "session": "wk4-b59",
+    "item": "B59",
+    "variant": "long-only sweep-reentry micro-engine (ORB long stop → session/prior-day-low sweep + bullish displacement+FVG inversion → long signal)",
+    "objective": "funded",
+    "metrics": {
+      "combine_sweep_reentry": {"passes": 12, "of": 61, "pf": 1.18, "note": "orb_r_multiple=2.5"},
+      "overlay_vs_orb_r025": {
+        "orb_only": {"sust": 1.6, "net_per_month": 467},
+        "orb_plus_overlay": {"sust": 2.0, "net_per_month": 475}
+      },
+      "overlay_vs_orb_r050": {
+        "orb_only": {"sust": 2.14, "net_per_month": 742},
+        "orb_plus_overlay": {"sust": 1.27, "net_per_month": 725}
+      },
+      "overlay_vs_orb_r10_b21config": {
+        "orb_only_r075": {"sust": 0.68, "net_per_month": 937},
+        "orb_plus_overlay_r075": {"sust": 0.64, "net_per_month": 914}
+      },
+      "b21_phase_b_reference": {"sust": 2.62, "net_per_month": 497},
+      "stop_rule": "REJECT — no consistent funded improvement; sust WORSE at risk=0.5% (-41%) and risk=1.0% (both pipeline-negative); marginal apparent win at risk=0.25% is 1-bust noise"
+    },
+    "verdict": "rejected",
+    "learned": "Sweep-reentry overlay (long-only, fires after ORB long stop) does not improve the funded pipeline at any tested risk level. Root cause: the overlay fires AFTER the account has already absorbed an ORB loss, adding additional loss risk to a day already strained toward the funded account MLL. Additional trades on a down day compound bust probability rather than recover it. The signal itself may be valid in isolation, but in the funded context — where a 2-loss day is near-fatal — it increases bust rate without sufficient win frequency to compensate. Sparse trigger chain (ORB long must fire + stop + sweep + displacement+FVG) limits trade volume too severely for the edge to matter at pipeline scale. Rule: recovery overlay signals need whole-day risk budgeting (size ORB + overlay together, not additively) to be safe in funded accounts.",
+    "links": {
+      "doc": null,
+      "runs": ["equity_b59/sr_r025.csv", "equity_b59/sr_r050.csv", "equity_b59/orb_only_r025.csv", "equity_b59/orb_only_r050.csv", "equity_b59/b59_orb075_r10.csv", "equity_b59/orb075_r10.csv"],
+      "src": "app/strategy/sweep_reentry.py"
+    }
   }
 ]

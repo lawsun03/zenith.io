@@ -2154,3 +2154,49 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 **Test suite:** 702 passed, 2 skipped, 0 failures (+4 B58 tests).
 
 **Next:** B59 — Long-only sweep-reentry micro-engine (Lawrence-requested, pending).
+
+---
+
+## Session wk4-b59 — 2026-06-14
+
+**Item:** B59 — Long-only sweep-reentry micro-engine (funded-only overlay)
+
+**Hypothesis:** After an ORB long stops out, arm a long-only "sweep-reentry" detector that waits for a downside liquidity sweep of the session low or prior-day low (by >= 0.25×ATR), then requires a bullish displacement + FVG inversion (reuse Lesson 1 quality filter). Entry at inversion bar close; stop below sweep extreme. This micro-engine fires rarely but each signal is high-quality; adding it to the funded account as an overlay should recover some of the ORB loss and improve sustainability.
+
+**Implementation:** New engine `sweep_reentry` (app/strategy/sweep_reentry.py). SweepReentryDetector: 4-state machine (IDLE→ARMED→SWEPT→USED), reuses DisplacementDetector for ATR warmup + FVG inversion quality filter. SweepReentryRunner bundles ORBDetector + SweepReentryDetector; SweepReentryComposer hooks on_stop_loss to arm the overlay when ORB long stops. Long-only by construction; one overlay signal per day. Registered in runner.py and main.py. bot_config.py: `sweep_reentry_depth_atr` field added.
+
+**Tests:** 5 defining-behavior tests in tests/test_sweep_reentry.py — all passed. Full suite: **707 passed, 2 skipped, 0 failures** (+5 B59 tests vs B58's 702).
+
+**Combine benchmark (ORB r=2.5, orb_reentry_after_stop=False, 5y excl 2022):**
+- 12/61 months passed (20%), PF 1.18, 0 MLL failures
+- Signal volume sparse as expected (overlay fires only on: ORB long → stop → sweep → inversion sequence)
+
+**Funded overlay benchmark (5y excl 2022, 2021-06 to 2026-06, ~48 months):**
+
+| Config | Comb. passes | XFA busts | $/mo | sust | vs baseline |
+|--------|------|-------|------|------|---|
+| ORB r=2.5 only, risk=0.25% | 8 | 5 | $467 | 1.60x | baseline |
+| ORB r=2.5 + overlay, risk=0.25% | 8 | 4 | $475 | **2.0x** | +25% sust, +$8/mo |
+| ORB r=2.5 only, risk=0.50% | 15 | 7 | $742 | **2.14x** | baseline |
+| ORB r=2.5 + overlay, risk=0.50% | 14 | 11 | $725 | 1.27x | -41% sust, -$17/mo |
+| ORB r=0.75 only, risk=1.0% | 19 | 28 | $937 | 0.68x | baseline |
+| ORB r=0.75 + overlay, risk=1.0% | 18 | 28 | $914 | 0.64x | -6% sust, -$23/mo |
+| **B21 Phase B (ORB-reentry r=0.75, orb_reentry=True)** | — | — | **$497** | **2.62x** | reference |
+
+**Stop rule check:** No consistent funded improvement.
+- risk=0.25%: overlay appears to help (sust 2.0x vs 1.6x) — but this is **1 fewer bust out of 5 total** (noise; 48-month series, < 10 events).
+- risk=0.50%: overlay **hurts** significantly (sust 1.27x vs 2.14x, -41%). More XFA busts (11 vs 7), fewer combine passes (14 vs 15).
+- risk=1.0%: both pipeline-negative standalone; overlay marginally worse (0.64x vs 0.68x).
+- None of the overlay configs approach B21 Phase B (sust 2.62x), which uses ORB-reentry-after-stop (a different but proven recovery mechanism).
+
+**Stop rule triggered. REJECT.**
+
+**Root cause:** The overlay fires AFTER the account has already absorbed an ORB loss (~1% of account). A second trade on the same down day adds loss exposure to an account already close to its daily loss limit. If the overlay also loses, the combined daily loss (~1.25–1.5%) increases bust probability dramatically. The trigger chain is also very sparse: ORB long must fire + stop + sweep below session/prior-day low + bullish displacement+FVG in a 10-bar window — probably <0.5 events/week in live trading. At that frequency, winning trades can't offset the bust-risk they add. This is the same structural failure as B47 and B56: sparse signals after a loss add risk without enough compensating volume.
+
+**Rule (Lesson 113):** Recovery overlay signals (fire after same-day loss) need whole-day risk budgeting — size the primary trade SMALLER to leave budget for the overlay. An overlay that adds risk at full size to a day that's already down amplifies bust risk instead of recovering it. Verify post-loss trade quality independently before assuming the quality filter (FVG inversion) transfers to the recovery context.
+
+**Code decision:** engine ships default-off. The SweepReentryDetector code is correct and the defining-behavior tests pass. Don't remove — the trigger chain is mechanically sound and the inversion filter is the right quality gate. The problem is funded-account risk budgeting, not signal quality.
+
+**Test suite:** 707 passed, 2 skipped, 0 failures.
+
+**Next:** B60 — ORB + iFVG expansion to ES.v.0 / MES.v.0.

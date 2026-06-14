@@ -2501,7 +2501,7 @@ Source: Lawrence 2026-06-14 (B55 confluence question). The additive complement t
 B57's scoring and B50's dynamic risk; the one confluence form (size, not gate)
 not yet tested.
 
-## B59 — Long-only sweep-reentry micro-engine (funded-only overlay)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+## B59 — Long-only sweep-reentry micro-engine (funded-only overlay)  [done — REJECTED: overlay does not improve funded pipeline at any tested risk level; sust worse at risk=0.50% (1.27x vs 2.14x) and risk=1.0% (0.64x vs 0.68x); marginal apparent win at risk=0.25% is 1-bust noise; engine ships default-off; doc research/equity_b59/; Lesson 113 added]
 Lawrence-specified. A long-only reentry micro-engine that ACTIVATES only after
 the day's main ORB long has stopped out, as a funded-phase overlay.
 

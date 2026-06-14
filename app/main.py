@@ -181,6 +181,39 @@ def _build_runner(
             strategy_cfg=s,
             signal_instrument=signal_instrument or "",
         )
+    if s.engine == "sweep_reentry":
+        from app.strategy.orb import ORBConfig, ORBDetector  # noqa: F811
+        from app.strategy.sweep_reentry import (
+            SweepReentryConfig, SweepReentryDetector, SweepReentryRunner)
+        _orb_det = ORBDetector(ORBConfig(
+            instrument=instrument,
+            open_et=s.orb_open_et,
+            range_minutes=s.orb_range_minutes,
+            r_multiple=s.orb_r_multiple,
+            max_trades_per_day=s.orb_max_trades_per_day,
+            reentry_after_stop=s.orb_reentry_after_stop,
+            long_only=s.orb_long_only,
+            skip_trading_days=s.skip_trading_days,
+            signal_window_mins=s.orb_signal_window_mins,
+        ))
+        _sr_det = SweepReentryDetector(SweepReentryConfig(
+            instrument=instrument,
+            sweep_depth_atr=s.sweep_reentry_depth_atr,
+            atr_period=s.atr_period,
+            min_absolute_body=s.min_absolute_body,
+            body_atr_multiple=s.body_atr_multiple,
+            min_body_to_range_ratio=s.min_body_to_range_ratio,
+            r_multiple=s.r_multiple,
+            stop_buffer=s.stop_buffer,
+        ))
+        return SweepReentryRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            orb_detector=_orb_det,
+            sr_detector=_sr_det,
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
     if s.engine == "vwap":
         from app.strategy.vwap import VWAPConfig, VWAPDetector, VWAPRunner
         return VWAPRunner(
