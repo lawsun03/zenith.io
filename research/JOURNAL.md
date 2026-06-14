@@ -3291,3 +3291,39 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Next:** No remaining high-priority research items pending. Bot-keeper health check for the session.
 
 ---
+
+## 2026-06-14T21:35Z -- session wk6-b83 -- B83 (news-event straddle -- REJECTED Phase 1)
+
+- **Bot-keeper:** healthy. `GET :5175/api/status` 200 -- XFA acct, 0 open contracts, no drift, last_reconcile clean. Market closed (Sun pre-15:00 PT); stale bars normal. No restart needed.
+
+- **Claimed:** B83 (top pending, Lawrence-requested priority, model:opus). No orphan in-progress claims.
+
+- **Phase 1 falsification (cheap, no engine):** pre-placed OCO straddle around every scheduled CPI/PPI/FOMC release, simulated from 1-min bars with a full news-slippage cost model. GO only if mean net expectancy > 0 at slip=4 ticks AND whipsaw < 35%.
+
+- **Built (free, no Databento):**
+  1. `scripts/build_news_events.py` -> `data/news_events.csv` (156 events; CPI/PPI 08:30 ET, FOMC 14:00 ET; DST-correct via zoneinfo). FOMC exact (Fed calendar); CPI 2023 confirmed full; CPI other years + PPI from BLS pattern + confirmed anchors (PPI = lowest-confidence series).
+  2. `scripts/news_straddle_phase1.py` -> `research/news_straddle_phase1.csv`. Verified bars are START-labeled (Sunday-open + RTH-open volume jump on the 13:30Z bar). No-lookahead: all params from ts <= placement (= event - 2min). 124 events qualified (47 CPI/45 PPI/32 FOMC), 2021 H2/2023/2024/2025-26, **2022 holdout excluded**.
+  3. Vol-expansion diagnostic (window range / pre-event ATR5) to validate the hand-assembled calendar independently of straddle profit.
+
+- **Result -- mean net expectancy (R/trade):**
+
+  | slip | CPI | PPI | FOMC | ALL | whip% | win% |
+  |---|---|---|---|---|---|---|
+  | 2 | -0.014 | -0.149 | -0.342 | -0.148 | 17 | 44 |
+  | **4 (GO)** | -0.080 | -0.218 | -0.361 | **-0.203** | 17 | 43 |
+  | 6 | -0.145 | -0.240 | -0.379 | -0.240 | 17 | 42 |
+  | 8 | -0.209 | -0.259 | -0.396 | -0.276 | 17 | 41 |
+
+  Fill rate 100%. Outcomes (slip=2): 55 TP / 48 stop / 21 whipsaw = 44% win. Expansion median 8.2x ATR5, only 1/124 below 1.5x -> calendar is clean; confirmed-subset expectancy (-0.195R slip=4) matches -> not a date artifact.
+
+- **Stop rule:** negative expectancy at slip=4 for EVERY event type -> **REJECT, no tuning, no Phase 2 engine.** Whipsaw (17%/25% FOMC) is below the 35% cap, so the killer is the 44% win rate on a ~1:1 RR (opposite-leg stop, tp_r=1.0), not whipsaw. The 5-min news break round-trips faster than a 2X target can monetize.
+
+- **Verdict:** REJECTED (Phase 1). Lesson 152 added. findings.json #105. Doc: trade_analysis/2026-06-14_B83_news_straddle.md. `bot_config.json` untouched; nothing ships to the bot.
+
+- **Learned:** News straddles on NQ are negative-expectancy at the 1-5min scale at all realistic slippage -- the post-release move fails to extend a full 2X before retracing to the opposite leg ~57% of the time. Counterintuitively FOMC is the WORST event (34% win, 25% same-bar whipsaw -- the 14:00 statement spikes then mean-reverts), not the best; "bigger event = better straddle" is inverted. The data validates the deployed macro-blackout (these windows are not a directional edge), extending Lesson 6 to >4-for-4 on external claims.
+
+- **Tests:** 748 passed, 2 skipped, 0 failures (no app/ code touched; only research scripts/data/docs). Note: B82 logged 754 passed -- the delta predates this session (nothing I added is imported by tests); 0 failures = green.
+
+- **Next:** B84 -- but its Phase-2 router (engines OFF + straddle ON on event days) is now MOOT (no profitable straddle). Remaining worthwhile scope = **B84 Phase-1a only**: tag historical iFVG/ORB trades by news-day vs non-news-day (using data/news_events.csv, already built) and test whether a plain news-day SUPPRESSION of the existing engines is a standalone win. No engine build -> demoted to Sonnet (opus tag removed in BACKLOG).
+
+---

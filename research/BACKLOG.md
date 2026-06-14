@@ -3576,7 +3576,7 @@ scripts/run_monthly_combine.py --bars bars/bars_MNQ_dbv_2021_2026.csv --instrume
 
 ---
 
-## B83 -- News-event straddle (CPI / PPI / FOMC breakout)  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B83 -- News-event straddle (CPI / PPI / FOMC breakout)  [done — REJECTED Phase 1: negative expectancy every slip & every event type (slip=4: ALL -0.203R, CPI -0.080R, PPI -0.218R, FOMC -0.361R); fill 100%, whipsaw 17% (<35% cap) so the killer is 44% win on a 1:1 RR not whipsaw; FOMC is WORST not best; vol-expansion diag confirms 123/124 real events so not a date artifact; no Phase 2 engine, no tuning (stop rule); doc trade_analysis/2026-06-14_B83_news_straddle.md]
 
 **Hypothesis:** Scheduled macro releases (CPI, PPI, FOMC) inject a volatility
 burst at a KNOWN time. A pre-placed OCO straddle (buy-stop above / sell-stop
@@ -3668,7 +3668,7 @@ Lawrence wants them as the front-of-queue priority.**
 
 ---
 
-## B84 -- News-day mode switch (straddle ON / other engines OFF on event days)  [pending — PRIORITY: Lawrence-requested 2026-06-14; DEPENDS ON B83; rank immediately after B83; model:opus]
+## B84 -- News-day mode switch (straddle ON / other engines OFF on event days)  [pending — PRIORITY: Lawrence-requested 2026-06-14; B83 straddle REJECTED so Phase-2 router is MOOT; remaining scope = Phase-1a news-day SUPPRESSION analysis ONLY (no straddle, no engine build) -> demote to Sonnet, untag opus; uses data/news_events.csv already built]
 
 **Hypothesis (Lawrence):** if the B83 straddle is profitable on news days, then on
 those days take ONLY the straddle and turn the normal engines (iFVG/ORB) OFF;
