@@ -2094,5 +2094,33 @@
       "runs": [],
       "src": "research/mfe_mae_orb_clean.csv + research/mfe_mae_ifvg_clean.csv"
     }
+  },
+  {
+    "ts": "2026-06-15T03:00:00Z",
+    "session": "wk2-b46",
+    "item": "B46",
+    "variant": "B42 Phase A + deployed Phase B w=0 vs w=60",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_passes": 42,
+      "phase_a_reset_per_funded": 568,
+      "phase_b_w0_busts": 13,
+      "phase_b_w0_net_per_acct": 3131,
+      "phase_b_w60_busts": 13,
+      "phase_b_w60_net_per_acct": 2540,
+      "pipeline_w0_net_per_month": 549,
+      "pipeline_w0_sust": 3.23,
+      "pipeline_w60_net_per_month": 456,
+      "pipeline_w60_sust": 3.23,
+      "primary_pass": false,
+      "secondary_pass": false
+    },
+    "verdict": "rejected",
+    "learned": "orb_signal_window_mins=60 does NOT improve deployed pipeline sustainability: both w=0 and w=60 Phase B produce identical bust counts (13) and sust (3.23x), but w=60 reduces per-account earnings by $591 (-19%), lowering $/mo from $549 to $456 (-17%). The B43 candidate finding (bust reduction at partial_r=0) does not transfer to the deployed partial_r=1.5 config because partial exits smooth the equity curve and prevent busts that the window cutoff would have otherwise blocked. Key confirmation: deployed partial_r=1.5 produces identical pipeline economics to research-parity partial_r=0 (B46 w=0 = B21 ref exactly), validating B25's finding that partial exits have negligible pipeline impact at ORB r=0.75.",
+    "links": {
+      "doc": "trade_analysis/2026-06-15_B46_deployed_pipeline_w60.md",
+      "runs": [],
+      "src": null
+    }
   }
 ]

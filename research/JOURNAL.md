@@ -1672,3 +1672,19 @@ Entry format:
 - **Learned:** London iFVG and NY ORB provide independent directional confirmation of day structure. When both agree on direction, signals from both engines are dramatically higher quality (ORB PF +54%, iFVG PF +32% vs respective baselines). When they disagree, both become loss-making or near-zero expectancy. This is the first cross-engine quality gate found that is simultaneously: (a) causal — iFVG fires before ORB, ORB fires before post-ORB iFVG re-entries; (b) year-by-year consistent — 5/5 years for ORB suppress-opp, 4/5 for iFVG suppress-opp (2021 borderline at PF=1.030); and (c) structurally grounded — multi-session order flow alignment theory. Lessons 91, 92 added.
 
 - **Next:** B46 (B42+B43 deployed-config integration benchmark; highest-priority pending item; no code; closes the gap between research baselines and live config).
+
+## 2026-06-15T03:00:00Z — session wk2-b46 — B46 (deployed pipeline w=60 integration benchmark)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at high-water, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Ran:** Generated 10 per-year equity CSVs (5 years x 2 window variants: w=0 and w=60) using deployed Phase B settings (ORB-reentry r=0.75, partial_r=1.5, stop_buffer=3.0, min_absolute_body=5.0, swing_stop_lookback=0). Phase A from equity_b42/ (deployed, 42 passes). Wrote `scripts/run_b46_pipeline.py` and executed. All 10 equity exports completed successfully.
+- **Numbers:**
+  - Phase A (B42 deployed r=1.0%): 42 passes / 159 attempts, 24.6d/funded, $568 reset/funded
+  - B46 w=0 deployed Phase B: 14 accounts, 13 busts, $3,131/acct, 73.5d/acct (IDENTICAL to B21 ref at partial_r=0)
+  - B46 w=60 deployed Phase B: 14 accounts, 13 busts, $2,540/acct, 66.2d/acct
+  - Two-phase pipeline w=0: $549/mo, sust 3.23x (matches B42 published exactly)
+  - Two-phase pipeline w=60: $456/mo, sust 3.23x (-17% $/mo, same sust)
+  - Primary criterion (w=60 sust > w=0 sust): FAIL (3.23x = 3.23x)
+  - Secondary criterion (beats B42 $549/mo, 3.23x): FAIL ($456 < $549)
+- **Verdict:** rejected — orb_signal_window_mins=60 does not improve the deployed pipeline. Do NOT enable w=60 on the live bot funded phase.
+- **Learned:** The B43 bust-reduction from w=60 (25->22 at partial_r=0) does not transfer to partial_r=1.5: busts are identical (13 vs 13) because partial exits convert potential stop-outs into breakeven outcomes, defanging the late-session loss risk that w=60 was designed to remove. Key confirmation: B46 w=0 (partial_r=1.5) = B21 ref (partial_r=0) exactly — the deployed partial_r=1.5 setting has zero impact on the ORB-reentry funded pipeline at r=0.75, confirming B25's 1.8% finding. The B42 pipeline result ($549/mo, 3.23x) is robust to partial_r choice.
+- **Next:** B47 (iFVG x ORB directional confluence gate — Phase 1 complete, GO status; highest-value strategy candidate remaining; requires DailySessionContext shared across iFVG+ORB runners).

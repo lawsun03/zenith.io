@@ -822,3 +822,9 @@ Appended 2026-06-15 (wk2-r5 confluence data mining):
     Rule: document the temporal ordering of engines before implementing any cross-engine gate. Gates
     between engines that fire in overlapping time windows (or in an uncertain order) cannot be made
     causal without introducing lookahead bias.
+
+
+Appended 2026-06-15 (B46 deployed pipeline w=60 benchmark):
+
+93. **orb_signal_window_mins=60 (B43 candidate) does NOT improve the funded pipeline when partial_r=1.5 is deployed.** At partial_r=0 (B43), w=60 reduced Phase B busts from 25 to 22 and lifted sust 1.68x to 1.91x. At partial_r=1.5 (deployed, B46), bust counts are identical (13 vs 13) and sust is unchanged (3.23x vs 3.23x); w=60 only reduces per-account earnings by $591 (-19%), lowering pipeline $/mo from $549 to $456. Mechanism: partial exits at 1.5R convert full losses to breakeven exits, removing the bust risk that the window cutoff would otherwise prevent. Late-session signals that w=60 removes include profitable EOD flattens that under partial_r=1.5 would have locked in a partial gain before the EOD exit. Validate any signal-reduction mechanism at the deployed partial_r setting, not just at partial_r=0.
+    Rule: B43 orb_signal_window_mins=60 is NOT recommended for the deployed funded phase (partial_r=1.5). The B43 combine-phase PF improvement (+5.2%) remains valid but the deployed Phase A uses iFVG, so w=60 is irrelevant there too. Do not enable orb_signal_window_mins=60 on the live bot.

@@ -1769,7 +1769,7 @@ loss mechanism. Related: B34 Lesson 73 showed no-retrace BOS signals (immediate 
 have the best performance — this structural principle generalizes: tight coils → false
 breakouts → early reversals → stops.
 
-## B46 — B42+B43 deployed-config full pipeline benchmark (orb_signal_window_mins=60 at partial_r=1.5)  [pending — research session wk2-r5 intervening per protocol (session count %3==0 + last 2 items B44/B45 are build items)]
+## B46 — B42+B43 deployed-config full pipeline benchmark (orb_signal_window_mins=60 at partial_r=1.5)  [done — rejected: w=60 does not improve sust (3.23x vs 3.23x); $/mo drops $549->$456 (-17%); bust count identical (13 vs 13); partial_r=1.5 converts the bust-preventing effect of w=60 into zero additional bust reduction; do NOT enable orb_signal_window_mins=60 on deployed bot; Lesson 93; B46 w=0 validates partial_r=1.5 produces same pipeline as partial_r=0 (identical to B42 result)]
 
 ## RESEARCH — Session wk2-r5  [done — 3 items appended: B47 confluence gate, B48 rank hybrid, B49 breakout extension; 2026-06-15T02:00Z]
 Hypothesis: B43 showed orb_signal_window_mins=60 reduces ORB-reentry Phase B busts from
