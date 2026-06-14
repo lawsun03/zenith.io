@@ -2996,7 +2996,7 @@ mfe_mae_orb_clean.csv and mfe_mae_ifvg_clean.csv.
   LO, combined, all-day). B44 showed close-mode changes which hours are profitable;
   the deployed distribution is unknown and may contain actionable loss-making windows.
 
-## B73 -- ORBxiFVG directional gate in Phase A combined engine  [pending -- model:opus]
+## B73 -- ORBxiFVG directional gate in Phase A combined engine  [done -- rejected: gate improves combine harness (11/61 PF 1.12 vs 10/61 PF 1.06, short PF 0.84->0.97) but degrades funded pipeline on BOTH metrics at both r (gate r3.5 $541/2.92x vs B42 $549/3.23x; gate r2.5 $559/3.15x vs B57 $566/3.54x); ~8% ORB-volume cut reduces absolute Phase A passes 42->38/46->41, sust scales with passes; stop rule fired; Lesson 134; doc trade_analysis/2026-06-14_B73_orb_ifvg_alignment_gate_phaseA.md; no code (reused B56 gate)]
 
 **Phase 1 already passed** (Lesson 103, wk2-r5): ORB signals preceded by at least one
 same-direction iFVG signal that day achieve PF=1.427 (n=595) vs PF=0.963 (n=435, 42.2%

@@ -2705,3 +2705,41 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
   bias fail). No code changes. Test suite unchanged (723 passed, 2 skipped).
 
 - **Next:** B73 -- ORB x iFVG directional gate in Phase A combined engine [model:opus].
+
+---
+
+## 2026-06-14T16:30Z — session wk5-b73 — B73 (ORB×iFVG alignment gate in Phase A combined engine — REJECTED)
+
+- **Bot health:** /api/status OK — XFA shadow combine, equity $152,227.12 at high-water, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B73 (top pending, model:opus) — test the ORB×iFVG directional alignment gate in the Phase A combined engine.
+- **No code:** the gate already ships as `orb_ifvg_alignment_required` (the B56 alignment gate: `DailySessionContext.gate_b56_orb_suppressed`, wired in runner.py + main.py). The B73 spec's proposed `orb_require_ifvg_alignment` has identical semantics; reused per Rule 2/8. All 5 B73 defining-behaviors are covered by existing `tests/test_orb_ifvg_alignment.py`. B73 is a pure benchmark.
+
+- **Step 1 — Combine harness (61 months, deployed config), gate off vs on (both run this session):**
+
+  | Config | Passes/61 | Run PF | Short PF | Short net |
+  |--------|-----------|--------|----------|-----------|
+  | Baseline (no gate) | 10 (16%) | 1.06 | 0.84 | −$20,214 |
+  | Gate ON | **11 (18%)** | **1.12** | **0.97** | **−$3,848** |
+
+  Gate IMPROVES the monthly harness (+1 pass, PF +0.06, short PF +0.13) by removing loss-making conflicted ORB shorts. Step 1 criterion met.
+
+- **Step 2 — Two-phase funded pipeline (per-year, 2022 excl, haircut $200; Phase B = B21 ORB-reentry r0.75, unchanged):**
+
+  | Config | A passes/att | $/mo | Sust |
+  |--------|--------------|------|------|
+  | B42 baseline (r3.5, no gate) | 42/159 | $549 | 3.23× |
+  | B73 gate (r3.5) | 38/146 | $541 | 2.92× |
+  | B57 baseline (r2.5, no gate) | 46/167 | $566 | 3.54× |
+  | B73 gate (r2.5) | 41/149 | $559 | 3.15× |
+
+  Gate isolated (same r): r=3.5 → Δ$/mo −$7, Δsust −0.31× (BOTH WORSE vs B42); r=2.5 → Δ$/mo −$7, Δsust −0.38× (BOTH WORSE vs B57).
+
+- **Stop rule:** gate r3.5 worse than B42 on BOTH metrics → **stop rule fires.** Success criterion (beat B57 on both) not met. 2022 holdout not required.
+
+- **Verdict:** REJECTED. Do NOT enable `orb_ifvg_alignment_required` live. B57 (remove MNQ r_multiple override → base r=2.5) remains the only clean improvement over B42 and the standing Monday recommendation. Gate stays default-off.
+
+- **Learned:** Same harness-vs-pipeline decoupling as B71 (Lesson 130) and B56 (Lesson 109): the gate's ~8% ORB-volume cut reduces absolute Phase A passes (42→38, 46→41) faster than it lifts per-attempt quality (per-attempt pass rate ≈ unchanged, 26.0% vs 26.4%). Sustainability scales directly with passes (Phase B busts fixed at 13), so thinning the signal stream mechanically lowers sust even when monthly PF improves. The B73 prior (~40%) flagged exactly this risk; it materialized.
+
+- **Lesson 134 added.** Test suite: 723 passed, 2 skipped, 0 failures (no code changes). Doc: trade_analysis/2026-06-14_B73_orb_ifvg_alignment_gate_phaseA.md. New files: scripts/run_b73_pipeline.py, research/equity_b73/.
+
+- **Next:** B74 (per-hour iFVG PF audit for deployed close-mode config — data mining; the last pending backlog item).
