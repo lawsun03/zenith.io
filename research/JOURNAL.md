@@ -2306,3 +2306,42 @@ Boost does improve both metrics (+$133/mo, +0.15x sust) but neither clears the 1
 - **Learned:** (b) iFVG long-only at funded Phase B busts 3x faster than ORB-reentry (25.7d vs 73.5d lifetime); the $/mo improvement at r1.25% reflects higher risk, not better edge, and sust=1.08x is fragile. (a) The early_win_boost Phase 1 ratio (1.473x) is the strongest intraday discriminator found in this research program, but at the funded account level the combined engine is too volatile — size escalation after wins also amplifies bust risk. Open thread: the 1.473x ratio may be usable as a day-filter (skip second signal when first lost) rather than size-modifier.
 - **Lessons 118–119 added.** Test suite: 718 passed, 2 skipped, 0 failures (+5 B63 tests).
 - **Next:** B64 (SMT divergence NQ vs ES reversal filter; depends on B60 ES data already on disk).
+
+
+## 2026-06-14T10:55Z -- session wk4-b65 -- B65 (Markov 2.0 regime FILTER -- REJECTED Phase 1 NO-GO)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity \,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B65 (PRIORITY Lawrence-requested; top unblocked pending item; model:opus tag noted but session runs Sonnet per wrapper assignment).
+- **Method:** Markov 2.0 FIX 1 + FIX 2 compliant -- stride-sampled (20d non-overlapping windows), walk-forward point-in-time signal, label self-check vs known NQ periods.
+
+**FIX 1 -- Overlapping vs Stride-sampled (the core diagnostic):**
+
+| Matrix | BULL stickiness | SIDEWAYS stickiness | BEAR stickiness |
+|--------|----------------|--------------------|--------------| 
+| Overlapping (legacy) | **0.83** | **0.90** | **0.80** |
+| Stride-sampled (true) | **0.21** | **0.67** | **0.10** |
+
+Overlapping fakes persistence. Stride-sampled shows the true signal is weak.
+
+**FIX 2 -- Label self-check:** 8 mismatches vs naive expectations (e.g., 2021 bull windows labeled SIDEWAYS because NQ 20d moves rarely exceed +/-5% threshold). Not a direction swap -- labels are directionally correct. Root cause: at +-5%, NQ produces 67% SIDEWAYS windows (52/77) -- the threshold is too conservative for NQ volatility. This is the method's default; not tuned.
+
+**Phase 1 results -- PF per regime x side:**
+
+| Engine | Side | BULL PF (n) | BEAR PF (n) | Ratio | GO? |
+|--------|------|-------------|-------------|-------|-----|
+| iFVG | Long | 1.145 (525) | 0.896 (86) | 1.28x | NO-GO (<1.3x) |
+| iFVG | Short | 1.110 (530) | 0.566 (96) | 0.51x | BACKWARD |
+| ORB | Long | 1.234 (218) | 1.341 (47) | 0.92x | BACKWARD |
+| ORB | Short | 0.995 (222) | 0.611 (32) | 0.61x | BACKWARD |
+
+Year consistency (iFVG longs): 1/5 open years with BULL >= 1.3x BEAR.
+
+- **Verdict:** **REJECTED -- Phase 1 NO-GO.** Markov daily regime provides no material separation of NQ 5min trade quality. iFVG longs ratio barely missed (1.28x vs 1.3x threshold) but only 1/5 years consistent. ORB direction is backward. Shorts direction backward for both engines -- consistent with NQ structural long bias (Lesson 8): bear-regime days produce iFVG/ORB short UNDERPERFORMANCE, not outperformance, because intraday structural demand persists regardless of daily macro context.
+
+- **Learned:** The Markov 2.0 stride-sampled correction is working as designed -- it honestly shows weak persistence (BULL stickiness 0.21 vs 0.83 from overlapping). The weak persistence means the prediction adds little over knowing the current state. Even the raw trailing-state label (no Markov prediction) shows similar separation for iFVG longs (1.41x) but fails the short criterion. The daily macro context simply does not gate intraday iFVG/ORB quality, extending the pattern of B35 (daily-bias), B5 (prior-day range), and now B65 (probabilistic regime). Daily context cannot gate NQ 5min trade quality.
+
+- **B66 consequence:** B66 (Markov standalone engine) is deferred -- depends on B65 signal infra, and the Markov signal shows no directional edge at the 5min intraday level. Updated BACKLOG accordingly.
+
+- **Lesson 120 added.** Test suite unchanged (no code path touched -- Phase 1 data mining only); verified green below.
+
+- **Next:** B64 (SMT divergence NQ vs ES -- Phase 1 data check; depends on B60 ES bars already on disk).

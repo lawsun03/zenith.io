@@ -2645,7 +2645,7 @@ sweep_bos; order-flow/delta/Bookmap = B62 proxy. Round-number .20/.80 levels and
 ADR-target models noted as LOW-prior candidates, not queued. Only SMT divergence
 was novel + testable enough to queue.)
 
-## B65 — Markov 2.0 regime FILTER over iFVG + ORB  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B65 — Markov 2.0 regime FILTER over iFVG + ORB  [done — rejected: Phase 1 NO-GO; stride-sampled Markov signal BULL/BEAR ratio=1.28x iFVG longs (below 1.3x); ORB longs BACKWARD (bear-regime PF 1.34 > bull 1.23); shorts backward both engines; 1/5 years consistent; joins B35/B5 in failed daily-context set; Lesson 120]
 Apply the Markov 2.0 regime method (see skill `markov-2-hedge-fund-method`) as a
 daily-regime FILTER that gates the existing intraday engines. The method: label
 each day by its trailing 20-day cumulative return (>= +5% BULL, <= -5% BEAR, else
@@ -2688,7 +2688,7 @@ loses on both -> reject. Prior ~30% (daily-context gates have failed here, but t
 probabilistic stride-corrected matrix is a more principled test than B35).
 Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.
 
-## B66 — Markov 2.0 STANDALONE daily-directional engine (Topstep-compatible)  [pending — Lawrence-requested 2026-06-14; DEPENDS ON B65 signal infra; rank ahead of routine queue; model:opus]
+## B66 — Markov 2.0 STANDALONE daily-directional engine (Topstep-compatible)  [deferred — B65 Phase 1 NO-GO; Markov stride-sampled signal shows weak persistence + backward short direction; no directional edge at 5min level; re-evaluate only if a fundamentally different regime labeling method shows Phase 1 GO; model:opus]
 Markov STANDALONE mode, expressed within Topstep's intraday-flatten constraint
 (pure multi-day holds are impossible — accounts flatten EOD). Each session: the
 day's regime signal sets direction + conviction; enter at session open in the
