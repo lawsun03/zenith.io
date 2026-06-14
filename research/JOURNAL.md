@@ -1734,3 +1734,48 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Learned:** The rank-1 short quality measured in the ifvg_edge research baseline (PF=1.127) does not transfer to the close-mode deployed config where rank-1 iFVG shorts are loss-making (PF 0.84). Entry mode fundamentally changes the short signal quality distribution, consistent with Lesson 89. The long-only iFVG filter is the structurally correct choice for close-mode short suppression.
 
 - **Next:** B49 (ORB breakout extension quality filter — Phase 1 data mining, no code; prior 40%; completes the ORB quality predictor research thread).
+
+## 2026-06-14T04:00Z -- session wk2-b50 -- B50 (account-state dynamic risk sizing)
+
+- **Bot health:** Port 5175 responsive -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B50 (Lawrence-requested, explicitly ranked ahead of B49 in BACKLOG).
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. TDD: wrote 7 defining-behavior tests in tests/test_risk_policy.py (RED first): constant policy identity, combine_ramp early/protect/survival multipliers, funded_survival normal/near-MLL multipliers, state-dependence proof (later days scaled differently from earlier days). Confirmed all 7 fail before implementation.
+  3. Implementation: created app/backtest/risk_policy.py with combine_ramp_multiplier() and funded_survival_multiplier(). Modified app/backtest/funded_sim.py to accept risk_policy: str and base_risk_pct: Decimal params in both simulate_combines() and simulate_xfa_chain(); multiplier applied to daily P&L before tracker.on_pnl() (start-of-day state reads running equity BEFORE updating balance). Haircut also scaled by multiplier for consistency.
+  4. All 7 tests pass. Full suite: **684 passed, 2 skipped** (677 prior + 7 new).
+  5. Wrote scripts/run_b50_policy_benchmark.py and executed on equity_b42/deployed_r1p0 (Phase A) + equity_b21/orb_reentry_r0p75 (Phase B).
+
+- **Numbers (B42 baseline vs B50 policies, h200, 5y excl 2022):**
+
+  **Phase A (Combine):**
+  | Policy | Passes | Attempts | Busts | Avg d/attempt | Median d to pass |
+  |--------|--------|----------|-------|---------------|-----------------|
+  | baseline | 42 | 159 | 116 | 6.5d | 6.5d |
+  | combine_ramp | 32 | 133 | 100 | 7.8d | 10.0d |
+
+  **Phase B (XFA):**
+  | Policy | Accounts | Busts | Net payouts | Net/acct | Avg d/acct |
+  |--------|----------|-------|-------------|----------|-----------|
+  | baseline | 14 | 13 | $43,834 | $3,131 | 73.5d |
+  | funded_survival | 18 | 17 | $41,806 | $2,323 | 57.2d |
+
+  **Two-phase pipeline matrix:**
+  | Scenario | Reset$ | Net/mo | Sust |
+  |----------|--------|--------|------|
+  | baseline -> baseline (B42 ref) | $568 | $549/mo | 3.23x |
+  | combine_ramp -> baseline | $623 | $498/mo | 2.46x |
+  | baseline -> funded_survival | $568 | $451/mo | 2.47x |
+  | combine_ramp -> funded_survival (B50) | $623 | $399/mo | 1.88x |
+
+- **Stop rule check:** All three variants worse on BOTH $/mo AND sust vs baseline. Stop rule triggered on all three.
+
+- **Root cause (combine_ramp):** The 0.75x protect phase slows the final $1,500 gap to the $3k target after early progress. This extends attempt duration (6.5d -> 7.8d average) and reduces total attempts over 5y from 159 to 133 (-16%). Fewer attempts = fewer passes (42 -> 32). The early 1.5x ramp does accelerate accumulation but the 0.75x brake after $1,500 gain outweighs it. Net: combine_ramp reduces pass throughput.
+
+- **Root cause (funded_survival):** Reducing to 0.4% when within $750 of MLL slows daily equity accumulation to ~$17/day (from ~$33/day at 0.75%). This prolongs the time in the danger zone rather than escaping it quickly. Result: 4 more busts (17 vs 13) and $2k less net. For a positive-EV strategy, maximum size is the fastest path out of the MLL zone.
+
+- **Verdict:** rejected -- stop rule triggered on all three variants (combine_ramp, funded_survival, full B50). Risk policy infrastructure ships default-off. Code and 7 tests committed. Lesson 97 added.
+
+- **Learned:** Survival-mode risk reduction is counterproductive for positive-expectancy algorithmic strategies under MLL-bounded accounts. Reducing size near the MLL floor slows recovery, extends the danger zone duration, and increases bust frequency -- the opposite of the intended effect. Dynamic risk sizing only helps when it improves per-trade edge, not when it just rescales an already-fixed-edge process.
+
+- **Next:** B49 (ORB breakout extension quality filter -- Phase 1 data mining, no code). B51 (setup-grade-scaled sizing) is another Lawrence-requested item but requires a different mechanism that CAN change per-trade expectancy. One item per session.

@@ -18,6 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 from statistics import median
 
+from app.backtest.risk_policy import combine_ramp_multiplier, funded_survival_multiplier
 from app.risk.account_phase import CombineRules, PhaseTracker, XfaRules
 from app.risk.flatten import trading_day_ct
 
@@ -59,6 +60,8 @@ def simulate_combines(
     daily_pnl: list[tuple[datetime, Decimal]],
     rules: CombineRules | None = None,
     haircut: Decimal = Decimal("0"),
+    risk_policy: str = "constant",
+    base_risk_pct: Decimal = Decimal("1.0"),
 ) -> dict:
     """Sequential Combine attempts over the series. Bust -> new attempt next day.
 
@@ -79,12 +82,16 @@ def simulate_combines(
             tracker = PhaseTracker(phase="combine", combine=rules, xfa=XfaRules())
             attempts += 1
             days_in_attempt = 0
-        tracker.on_pnl(pnl, ts)
+        if risk_policy == "combine_ramp":
+            mult = combine_ramp_multiplier(tracker.balance, tracker.mll, base_risk_pct)
+        else:
+            mult = Decimal("1")
+        tracker.on_pnl(pnl * mult, ts)
         days_in_attempt += 1
         # Daily granularity: this only sees the day's CLOSING balance — an
         # intraday MLL touch that recovered by close is invisible (busts
         # understated, per module caveat; `haircut` partially compensates).
-        if _dead_with_haircut(tracker, haircut):
+        if _dead_with_haircut(tracker, haircut * mult):
             busts += 1
             tracker = None
             continue
@@ -103,6 +110,8 @@ def simulate_xfa_chain(
     daily_pnl: list[tuple[datetime, Decimal]],
     rules: XfaRules | None = None,
     haircut: Decimal = Decimal("0"),
+    risk_policy: str = "constant",
+    base_risk_pct: Decimal = Decimal("0.75"),
 ) -> dict:
     """Sequential XFA accounts: bust -> next account starts the following day."""
     rules = rules or XfaRules()
@@ -118,9 +127,13 @@ def simulate_xfa_chain(
             accounts += 1
             days_in_account = 0
             had_payout = False
-        tracker.on_pnl(pnl, ts)
+        if risk_policy == "funded_survival":
+            mult = funded_survival_multiplier(tracker.balance, tracker.mll, base_risk_pct)
+        else:
+            mult = Decimal("1")
+        tracker.on_pnl(pnl * mult, ts)
         days_in_account += 1
-        if _dead_with_haircut(tracker, haircut):
+        if _dead_with_haircut(tracker, haircut * mult):
             busts += 1
             tracker = None
             continue

@@ -2153,6 +2153,59 @@
     }
   },
   {
+    "ts": "2026-06-14T04:00Z",
+    "session": "wk2-b50",
+    "item": "B50",
+    "variant": "account-state dynamic risk sizing: combine_ramp (1.5%->0.75%->0.5%) + funded_survival (0.75%->0.4% near MLL)",
+    "objective": "combine+funded",
+    "metrics": {
+      "baseline_combine_passes": 42,
+      "baseline_combine_attempts": 159,
+      "baseline_combine_busts": 116,
+      "baseline_combine_avg_days": 6.5,
+      "combine_ramp_passes": 32,
+      "combine_ramp_attempts": 133,
+      "combine_ramp_busts": 100,
+      "combine_ramp_avg_days": 7.8,
+      "baseline_xfa_busts": 13,
+      "baseline_xfa_accounts": 14,
+      "baseline_xfa_net": 43834,
+      "baseline_xfa_net_per_acct": 3131,
+      "baseline_xfa_avg_days": 73.5,
+      "funded_survival_xfa_busts": 17,
+      "funded_survival_xfa_accounts": 18,
+      "funded_survival_xfa_net": 41806,
+      "funded_survival_xfa_net_per_acct": 2323,
+      "funded_survival_xfa_avg_days": 57.2,
+      "baseline_net_per_month": 549,
+      "baseline_sust": 3.23,
+      "combine_ramp_only_net_per_month": 498,
+      "combine_ramp_only_sust": 2.46,
+      "funded_survival_only_net_per_month": 451,
+      "funded_survival_only_sust": 2.47,
+      "b50_full_net_per_month": 399,
+      "b50_full_sust": 1.88,
+      "equity_phase_a": "equity_b42/deployed_r1p0",
+      "equity_phase_b": "equity_b21/orb_reentry_r0p75",
+      "haircut": 200,
+      "tests_added": 7,
+      "total_tests_after": 684
+    },
+    "verdict": "rejected",
+    "learned": "All three B50 variants (combine_ramp only, funded_survival only, full B50) are worse on both $/mo and sustainability vs the B42 baseline ($549/mo, 3.23x). Root cause: for a positive-expectancy strategy, survival-mode risk reduction is counterproductive -- reducing size near MLL slows recovery without proportionally reducing bust frequency, extending the danger zone duration. combine_ramp's 0.75x protect phase slows the final $1.5k gap to target, reduces total attempts (133 vs 159, -16%), and yields fewer funded accounts. The path-only rescaling approach is valid but the policies themselves hurt. Dynamic sizing is only beneficial when combined with a mechanism that improves per-trade edge at the risk trigger points -- none exists here.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/run_b50_policy_benchmark.py"
+      ],
+      "src": [
+        "app/backtest/risk_policy.py",
+        "app/backtest/funded_sim.py",
+        "tests/test_risk_policy.py"
+      ]
+    }
+  },
+  {
     "ts": "2026-06-14T02:00Z",
     "session": "wk2-b48",
     "item": "B48",

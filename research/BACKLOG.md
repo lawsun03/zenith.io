@@ -2004,7 +2004,7 @@ Source: Lesson 88 (ORB value concentrated in EOD-flatten cohort; early 0-2h stop
 the dominant loss mechanism); B45 (Phase 1 falsification precedent for OR quality filters);
 wk2-r5 review. Next after B46 and B47.
 
-## B50 — Account-state dynamic risk sizing (varying risk, not constant)  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of the routine queue]
+## B50 — Account-state dynamic risk sizing (varying risk, not constant)  [done — rejected: all three variants (combine_ramp, funded_survival, full B50) worse on BOTH $/mo AND sust vs B42 baseline ($549/mo, 3.23x); combine_ramp $498/mo 2.46x; funded_survival $451/mo 2.47x; full B50 $399/mo 1.88x; Lesson 97; 7 tests added; 684 total green; 2026-06-14T04:00Z]
 Lawrence asked directly: "backtest with varying risk instead of keeping risk a
 constant variable." Every benchmark to date holds risk-pct constant within a run
 (B1 swept LEVELS, but each run was one fixed %). This item varies risk-pct
