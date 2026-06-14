@@ -2958,3 +2958,161 @@ intraday bet is a coarse instrument vs the sweep/displacement engines; the value
 if any, is likely as the B65 filter, not standalone -- but the user asked to test
 it on its own, so we do, honestly). Note in the writeup whether standalone adds
 anything the filter does not. Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.
+
+---
+(Research sessions append new items below this line.)
+
+## RESEARCH -- Session wk5-r2  [done -- 2 items appended: B73 ORB x iFVG gate in combined Phase A engine (model:opus), B74 deployed per-hour iFVG PF audit]
+
+**Backlog replenishment** after B70/B71/B72 (all rejected/mixed; backlog exhausted). Sources:
+WebSearch (confirmed external claims still failing, 5-for-5 per Lesson 6) + data mining on
+mfe_mae_orb_clean.csv and mfe_mae_ifvg_clean.csv.
+
+**Phase 1 falsifications this session (not proposed as backlog items):**
+- **ADX(14) trend-strength gate for iFVG**: computed 14-period ADX at each signal bar from
+  5-min bars (2477 iFVG signals, 5y excl 2022). Q1 PF=1.119, Q2 PF=0.922, Q3 PF=1.018,
+  Q4 PF=1.120 -- classic non-monotonic pattern (Lesson 90/99/104/117/122 series).
+  High-ADX threshold tests: ADX>=30 PF=1.023 vs ADX<30 PF=1.115 (ratio 0.917 -- INVERTED).
+  Phase 1 NO-GO. Rule extension: trend-strength indicators (ADX) join bar-level metrics
+  (CLV, body ratio, OR width) as non-monotonic iFVG quality predictors.
+- **ORB overnight gap alignment** (gap-up + long ORB, or gap-down + short ORB vs opposed):
+  Aligned n=511 PF=1.267 vs Opposed n=516 PF=1.167, ratio=1.086. Below 1.40 threshold.
+  Phase 1 NO-GO.
+- **ORB range bias** (whether OR mid is biased above/below prior close, aligned with ORB direction):
+  Aligned n=196 PF=1.207 vs Opposed n=49 PF=0.937, ratio=1.288. Below 1.40 threshold;
+  small opposed sample. Phase 1 NO-GO. Confirms Lesson 117 (B62 gap): "any OHLCV-derived
+  measure will be collinear with or dominated by the breakout condition."
+
+**Key data driving the 2 proposals:**
+- wk2-r5 (Lesson 103): ORB signals with at least one prior same-direction iFVG that day:
+  PF=1.427 (n=595, 57.8%); no same-direction prior iFVG: PF=0.963 (n=435, 42.2%).
+  Ratio 1.48x, consistent 5/5 years. PHASE 1 GO. B56 Phase 2 failed only due to
+  volume starvation (ORB-only funded account). In combined Phase A engine, iFVG still
+  fires on "blocked ORB" days; total volume cut is only ~9% (ORB ~20% of combined
+  signals x 42.2% blocked). B73 tests this fix.
+- All prior per-hour iFVG analyses (wk1-r2 Lesson 34, wk2-r4 Lesson 87, B44 Lesson 89)
+  used the research baseline (ifvg_edge, all-sides, partial_r=0) or tested BLOCKING
+  specific hours. No DISCOVERY pass has been done on the deployed config (close-mode,
+  LO, combined, all-day). B44 showed close-mode changes which hours are profitable;
+  the deployed distribution is unknown and may contain actionable loss-making windows.
+
+## B73 -- ORBxiFVG directional gate in Phase A combined engine  [pending -- model:opus]
+
+**Phase 1 already passed** (Lesson 103, wk2-r5): ORB signals preceded by at least one
+same-direction iFVG signal that day achieve PF=1.427 (n=595) vs PF=0.963 (n=435, 42.2%
+of ORB trades) for those with no same-direction prior iFVG. Ratio 1.48x, consistent 5/5
+years. B56 Phase 2 (Lesson 109) failed because in the ORB-ONLY funded engine, gating 42.2%
+of ORB trades created volume starvation (51/52 accounts bust before payout, avg 18.7d life
+vs 73.5d baseline). The combined engine solves this: iFVG still fires on all days, regardless
+of whether the ORB component is allowed to fire. The ORB component is a minority of Phase A
+signals (~20-23/month of ~100 total). Gating 42.2% of ORB signals removes ~9-10 signals/month
+(~9% of Phase A total) -- far below the starvation threshold.
+
+**Causal ordering is valid** (Lesson 92): London iFVG fires at 03:00-07:30 ET; ORB fires at
+09:30-10:30 ET. All prior same-day iFVG signals are already in the books when ORB fires.
+No lookahead bias.
+
+**Mechanism:**
+- Add `orb_require_ifvg_alignment: bool = False` to StrategyParams (default off)
+- In `app/strategy/combined.py` (CombinedRunner or equivalent), maintain a per-day set
+  `_daily_ifvg_directions: set[str]` (e.g., {"long", "short"}), reset at ET midnight.
+  On each iFVG signal emission (inside combined.on_bar), add signal.side to the set.
+- When the ORB component emits a signal and `orb_require_ifvg_alignment=True`:
+  check if signal.side is in `_daily_ifvg_directions`. If NOT: suppress the ORB signal
+  (return None for the ORB component). If YES: allow as normal.
+- iFVG signals are NEVER gated by this parameter (one-directional filter).
+
+**Defining-behavior tests** (tests/test_orb_ifvg_alignment.py):
+1. orb_require_ifvg_alignment=True, prior long iFVG fired today + ORB long fires -> ORB allowed
+2. orb_require_ifvg_alignment=True, prior short iFVG fired today + ORB long fires -> ORB suppressed
+3. orb_require_ifvg_alignment=True, no prior iFVG today + ORB fires -> ORB suppressed
+4. orb_require_ifvg_alignment=False (default): ORB fires regardless of iFVG history
+5. iFVG signals always fire regardless of this parameter (pure ORB gate, not iFVG gate)
+
+**Benchmark:**
+1. Combine: `run_monthly_combine.py [deployed params] --set orb_require_ifvg_alignment=True`
+   vs B42 baseline (10/61, 16%, PF 1.06, deployed config). Success: passes improve.
+2. Two-phase pipeline: regenerate Phase A equity CSVs with gate enabled + B21 Phase B.
+   vs B42 full pipeline ($549/mo, sust=3.23x) and B57 ($566/mo, sust=3.54x).
+   Success: $/mo AND sust both improve vs B57.
+3. 2022 holdout REQUIRED if result beats B57 on both metrics.
+
+**Fixed defaults:** `orb_require_ifvg_alignment=False` (default off; enable for benchmark only).
+
+**Success criteria vs B57 ($566/mo, sust=3.54x):** BOTH $/mo AND sust must improve.
+Stop rule vs B42 ($549/mo, sust=3.23x): if result is worse on BOTH metrics, reject.
+
+**Prior:** ~40%. The Phase 1 ratio (1.48x) is solid and year-consistent. The volume impact
+is small (~9%). The main risk is that the combined Phase A pipeline is already near-optimal
+(B57 moved $/mo by only +$17 and sust by +0.31x over B42), so the ORB gate's
+~9% volume cut might cause a throughput penalty that offsets the quality improvement.
+The B56 starvation failure was extreme (ORB-only), but even moderate volume cuts can
+hurt pipeline throughput at the margin (Lessons 83, 105, 109).
+
+**Source:** Lesson 103 (wk2-r5 data mining); B56 Phase 2 failure analysis (Lesson 109);
+Lesson 92 (causal ordering rule). First session to test this gate in the combined engine.
+
+## B74 -- Per-hour iFVG PF audit for deployed close-mode config (data mining)  [pending]
+
+All prior per-hour iFVG analyses used the RESEARCH BASELINE (ifvg_edge, all-sides,
+partial_r=0):
+- wk1-r2 (Lesson 34): noon (12:xx ET) PF=0.591, NY PM (14-15:xx ET) PF=0.763-0.946
+- wk2-r4 (Lesson 87): 11:xx-13:xx ET PF=0.744-0.932, "lunch doldrums" 4/5 years consistent
+- B44 (Lesson 89): BLOCKING those hours in DEPLOYED config (close, LO) actually HURT
+  (blocked profitable signals; combine passes 9->7). Close-mode fundamentally changes which
+  hours are positive/negative.
+
+The deployed config's actual per-hour distribution has NEVER been fully mapped. B44 proved
+that one specific block (11-13 ET) is net-positive in close-mode; the comprehensive per-hour
+map is missing. This gap matters because:
+1. The 2022 holdout (Lesson 85) shows Phase A PF=0.934 (loss-making) -- some hours must be
+   dragging this down. Understanding which hours drive 2022 losses may reveal regime-robust
+   filters.
+2. The optimal session filter for the deployed config may differ from research-baseline
+   analyses. B18/B19 recommendations were research-baseline; the deployed per-hour map
+   is the correct foundation for any future session-filter proposals.
+
+**Method (no new code Phase 1):**
+1. Generate per-trade output for the deployed config using equity_export.py. Check if
+   existing equity CSV format includes per-trade timestamps; if not, add a `--trade-csv <out>`
+   flag to equity_export.py that writes one row per trade (date, entry_ts, exit_ts, side,
+   pnl_usd, engine_type=ifvg/orb). Test: 2 defining-behavior tests for the flag.
+2. Run for all 5y (2021/2023/2024/2025/2026 excl 2022) with deployed params:
+   `equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 1.0
+    --set engine=combined --set ifvg_entry_mode=close --set enabled_killzones=all
+    --set swing_stop_lookback=30 --set r_multiple=2.5 --partial-r 1.5 --instrument MNQ
+    --set stop_buffer=3.0 --set min_absolute_body=5.0
+    --trade-csv research/mfe_mae_deployed_close.csv`
+   Note: use r_multiple=2.5 (B57 candidate, not the 3.5 MNQ override) for forward-looking
+   relevance. Also run with r_multiple=3.5 (current deployed) for a direct comparison.
+3. For each trade, compute ET hour from entry_ts. Compute per-hour PF for the 5y excl 2022
+   and also for 2022 specifically.
+4. Identify hours where PF < 0.90 in 3+/5 years AND overall PF < 0.90.
+
+**Phase 1 GO criterion:** At least one ET-hour bucket satisfies PF < 0.90 in 3+/5 years AND
+overall PF < 0.90 IN THE DEPLOYED CONFIG (not research baseline, not any other config).
+
+**Phase 2 (only if Phase 1 GO):** Test `ifvg_block_hours=[h1, h2, ...]` (already implemented
+from B44) with the identified loss-making hours. Run combine + funded pipeline vs B42/B57.
+Success: PF improves AND pipeline $/mo and sust improve vs B57 baseline.
+
+**Caution:** Lesson 89 mandates that the block must be tested within the EXACT deployed config.
+The ifvg_block_hours parameter from B44 gates iFVG signals only; ORB signals still fire.
+Compute per-engine (iFVG vs ORB) per-hour PF separately to identify which engine drives
+the per-hour loss-making, and gate only the relevant engine.
+
+**Defining-behavior tests** (only needed if equity_export needs a new --trade-csv flag):
+1. `--trade-csv out.csv`: output file has one row per closed trade with entry_ts, exit_ts,
+   pnl_usd, side, engine_type columns
+2. Without flag: existing behavior unchanged (no trade CSV written)
+
+**Fixed defaults:** no config changes (benchmarking only; production unchanged).
+
+**Success criteria:** Phase 1: find at least one actionable hour (PF<0.90 in 3+/5 years).
+Phase 2: combine PF improves and pipeline $/mo and sust both improve vs B57 ($566, 3.54x).
+Stop rule (Phase 2): worse on both combine PF AND pipeline sust vs B57 -> reject.
+
+**Prior:** ~30%. B44 showed close-mode keeps more signals profitable during normally-bad hours.
+The deployed config may have fewer loss-making hours than the research baseline. But the
+all-day + combined engine still includes overnight/pre-market sessions and the ORB component
+adds signals throughout the morning -- some subset may be net-negative in the deployed config.

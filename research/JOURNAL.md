@@ -2667,3 +2667,41 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 - **Lesson 131 added.** No code changes. Test suite unchanged (723 passed, 2 skipped).
 - **Next session:** Backlog fully exhausted (B72 was the last item). Next = research/ideation
   session per every-3rd-session rule; replenish backlog with new hypotheses.
+
+---
+
+## 2026-06-14T04:00:00Z -- session wk5-r2 -- RESEARCH (backlog replenishment)
+
+- **Ran:** Every-3rd-session research/ideation pass after B70/B71/B72 (all rejected/mixed;
+  B72 was the last pending item). Three Phase 1 falsification checks on existing excursion
+  datasets (no new Databento spend):
+  1. **ADX(14) gate for iFVG signals** -- computed 14-period ADX at each signal bar from 5-min
+     bars (2477 iFVG signals, 5y excl 2022). Q1=1.119, Q2=0.922, Q3=1.018, Q4=1.120 (V-shape,
+     non-monotonic). High-ADX (>=30) test: gated PF=1.023 vs ungated PF=1.115 (ratio 0.917 --
+     INVERTED). Phase 1 NO-GO.
+  2. **ORB overnight gap alignment** -- gap direction matches ORB breakout direction: aligned
+     n=511 PF=1.267 vs opposed n=516 PF=1.167, ratio=1.086. Phase 1 NO-GO.
+  3. **ORB range bias** -- OR midpoint biased toward ORB direction: aligned n=196 PF=1.207 vs
+     opposed n=49 PF=0.937, ratio=1.288. Phase 1 NO-GO (below 1.40 threshold; small opposed
+     sample). Note: most trades lacked bar lookups, reducing matched sample to 245/1030.
+
+  No code changes. No Databento spend ($3.87 running total).
+
+- **Numbers:** ADX ratio 1.001x; gap-alignment ratio 1.086x; range-bias ratio 1.288x.
+  All below 1.40 Phase 1 GO threshold. 2 new items appended to BACKLOG.md: B73, B74.
+
+- **Verdict:** dataset (research/ideation session)
+
+- **Learned:** Three additional single-dimension quality-filter candidates for existing signals
+  all fail Phase 1, extending the documented pattern (Lessons 90/99/104/117/122) that
+  OHLCV-derived bar-level metrics are non-monotonic predictors for both iFVG and ORB signals.
+  The two new backlog items (B73, B74) target structural changes -- a cross-engine directional
+  gate that already passed Phase 1 in wk2-r5 (Lesson 103, 1.48x, now testable in the combined
+  engine where volume starvation is not an issue), and a discovery audit of the deployed
+  per-hour PF distribution (never fully mapped for close-mode config, established by B44 to
+  differ materially from the research baseline).
+
+- **Lessons added:** 132 (ADX non-monotonic iFVG predictor), 133 (ORB gap alignment + range
+  bias fail). No code changes. Test suite unchanged (723 passed, 2 skipped).
+
+- **Next:** B73 -- ORB x iFVG directional gate in Phase A combined engine [model:opus].

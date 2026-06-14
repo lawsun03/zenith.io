@@ -3347,5 +3347,29 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T04:00:00Z",
+    "session": "wk5-r2",
+    "item": "RESEARCH",
+    "variant": "ideation -- ADX filter, gap alignment, range bias; 3 Phase 1 falsifications",
+    "objective": "dataset",
+    "metrics": {
+      "adx_ratio": 1.001,
+      "adx_high_gate_ratio": 0.917,
+      "gap_alignment_ratio": 1.086,
+      "range_bias_ratio": 1.288,
+      "range_bias_n": 245,
+      "databento_spend_usd": 0.0,
+      "databento_running_usd": 3.87,
+      "items_added": 2
+    },
+    "verdict": "dataset",
+    "learned": "Three Phase 1 falsifications confirm single-dimension OHLCV quality filters continue to fail (Lessons 90/99/104/117/122 pattern) for both iFVG and ORB signals. Two new backlog items added: B73 (ORB x iFVG directional gate in combined Phase A engine -- Phase 1 already at 1.48x in wk2-r5, now testable without volume starvation) and B74 (deployed per-hour PF audit -- close-mode distribution never fully mapped, B44 showed it differs materially from research baseline).",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
