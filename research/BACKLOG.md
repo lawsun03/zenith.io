@@ -3373,7 +3373,7 @@ equity_export + funded_sim run needed.
 
 ---
 
-## B79 — iFVG setup freshness in deployed config (B69 extension)  [pending]
+## B79 — iFVG setup freshness in deployed config (B69 extension)  [done — REJECTED Phase 1 NO-GO: overall fresh/stale PF ratio=1.191 (below 1.30 GO threshold); 3/5 years consistent (threshold met) but overall fails; fresh PF=0.990, stale PF=0.831, mid PF=0.957; neither bucket profitable in isolation; close-mode entry absorbs freshness signal in the inversion confirmation step; displacement_ts column added to equity_export --trade-csv; Lesson 146 added]
 
 **Context:** B69 tested freshness (FVG age at inversion = bars from fvg.created_at to entry_ts)
 in the RESEARCH BASELINE (ifvg_edge, all-sides, partial_r=0) and found fresh/stale PF ratio

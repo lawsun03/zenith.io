@@ -3083,3 +3083,43 @@ Phase B (B21 ORB-reentry r0.75): 13/14 busts, $3,131/acct, 73.5d/acct.
 - **Learned:** Lower Phase A risk% degrades the funded pipeline monotonically at fixed r, because the $3k combine target is inversely proportional to risk -- fewer cycles fit in the same time window, reducing both $/mo and sustainability. The optimal Phase A risk% at r=2.5 is 1.0-1.25% (where the combine attempt frequency is highest while bust rate remains manageable).
 
 - **Next:** B79 (iFVG setup freshness in deployed close-mode config -- adds displacement_ts to trade output, Phase 1 analysis).
+
+## 2026-06-14T18:05:00Z — session wk6-b79 — B79 (iFVG freshness in deployed close-mode config)
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B79 (top pending item — adds displacement_ts to equity_export --trade-csv; Phase 1 freshness analysis in deployed config; Phase 1 NO-GO terminates the item).
+- **Ran:**
+  1. TDD: wrote `tests/test_b79_freshness_deployed.py` (2 defining-behavior tests) BEFORE implementation.
+  2. Implementation: added `displacement_ts` column to equity_export.py `--trade-csv` output (header + `t.get("displacement_ts", "")` per row). One-line change.
+  3. Tests: **730 passed, 2 skipped** — 2 new tests for the displacement_ts column (iFVG trade non-null, ORB trade empty).
+  4. Regenerated deployed-config per-trade dataset: ran equity_export for 2021/2023/2024/2025/2026 (excl 2022 holdout) with deployed params (engine=combined, close, killzones=all, r=2.5, lookback=30, stop=3.0, body=5.0, both sides, partial_r=0, risk=1.0%). Wrote `research/mfe_mae_deployed_b79.csv` (3238 trades: 2372 iFVG, 866 ORB).
+  5. Analysis: `scripts/analyze_b79_freshness_deployed.py` — computed gap_bars = (entry_ts - displacement_ts) / 5min per iFVG trade; bucketed fresh/mid/stale; computed PF per bucket and per year.
+  6. Full test suite re-verified: 730 passed, 2 skipped.
+
+- **Numbers:**
+
+  | Bucket | n | PF | Net$ |
+  |--------|---|-----|------|
+  | Fresh (1-3 bars) | 1275 | 0.990 | -$5,233 |
+  | Mid (4-9 bars) | 707 | 0.957 | -$11,498 |
+  | Stale (10+ bars) | 390 | 0.831 | -$23,062 |
+
+  **Fresh/Stale PF ratio: 1.191** (GO criterion: >= 1.30)
+
+  **Per-year breakdown:**
+  | Year | Fresh PF | Stale PF | Ratio | Result |
+  |------|----------|----------|-------|--------|
+  | 2021 | 1.341 (n=159) | 0.514 (n=59) | 2.611 | GO |
+  | 2023 | 0.958 (n=305) | 0.885 (n=100) | 1.083 | NO-GO |
+  | 2024 | 0.901 (n=312) | 0.513 (n=90) | 1.755 | GO |
+  | 2025 | 0.904 (n=332) | 1.168 (n=101) | 0.774 | NO-GO |
+  | 2026 | 1.196 (n=167) | 0.821 (n=40) | 1.456 | GO |
+
+  Years with ratio >= 1.30: **3/5** (threshold met; but overall ratio fails)
+
+- **Stop rule check:** Overall ratio 1.191 < 1.30 → Phase 1 NO-GO. Phase 2 not built.
+
+- **Verdict:** REJECTED (Phase 1 NO-GO). The freshness direction is real and consistent in 3/5 years, but the overall ratio (1.191) falls below the 1.30 GO threshold. Neither fresh nor stale iFVG setups are individually profitable in the deployed config; the edge comes from volume and the inversion-confirmation filter, not freshness selection. A hard freshness gate would cut 16% of signals (390 stale trades) for insufficient quality gain. Lesson 146 added. Infrastructure shipped: displacement_ts in --trade-csv output.
+
+- **Learned:** The freshness signal (fresh > stale by 0.159 PF) exists but is too weak relative to the volume-starvation cost to implement as a hard gate. B69 (research baseline) found ratio=1.285; close-mode gives ratio=1.191 — marginally weaker, consistent with the close-mode inversion-bar confirmation absorbing part of the freshness signal (the confirmation step already de-facto selects setups where the FVG is still relevant). The non-monotonic 2025 year (stale BEATS fresh, ratio=0.774) confirms the signal is not regime-stable.
+
+- **Next:** B80 (live MFE/MAE tracking — Rule 13 observability; broker-state threading + SSE wiring; model:opus).
