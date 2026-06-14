@@ -46,6 +46,10 @@ class ORBConfig:
     skip_trading_days: list[str] = field(default_factory=list)
     # B43: suppress new ORB signals at or after this many minutes since open_et. 0 = disabled.
     signal_window_mins: int = 0
+    # B82: gate signals that don't clear the 08:00-09:29 ET pre-market high (long) or low (short).
+    # When True and PM data exists, long signals require close > pm_high; short require close < pm_low.
+    # No PM bars (holiday/early-open) → allow all signals (graceful fallback). Default off.
+    require_pm_break: bool = False
 
 
 class ORBDetector:
@@ -66,6 +70,9 @@ class ORBDetector:
         self._pdr_day_high: Decimal | None = None
         self._pdr_day_low: Decimal | None = None
         self._pdr_day_close: Decimal | None = None
+        # B82: pre-market range accumulator (08:00-09:29 ET), reset daily.
+        self._pm_high: Decimal | None = None
+        self._pm_low: Decimal | None = None
         # B47: injected by CombinedRunner when confluence_gate=True.
         self.session_ctx = None
         # B56: injected by CombinedRunner when alignment_gate=True.
@@ -88,6 +95,8 @@ class ORBDetector:
             self._pdr_day_high = None
             self._pdr_day_low = None
             self._pdr_day_close = None
+            self._pm_high = None
+            self._pm_low = None
 
         # Track running high/low/close for the current ET day (all bars)
         if self._pdr_day_high is None:
@@ -97,6 +106,15 @@ class ORBDetector:
             self._pdr_day_high = max(self._pdr_day_high, bar.high)
             self._pdr_day_low = min(self._pdr_day_low, bar.low)
         self._pdr_day_close = bar.close
+
+        # B82: accumulate 08:00-09:29 ET pre-market high/low
+        if time(8, 0) <= et.time() < self._open_t:
+            if self._pm_high is None:
+                self._pm_high = bar.high
+                self._pm_low = bar.low
+            else:
+                self._pm_high = max(self._pm_high, bar.high)
+                self._pm_low = min(self._pm_low, bar.low)
 
         start = datetime.combine(et.date(), self._open_t, tzinfo=ET)
         end = start + timedelta(minutes=self.config.range_minutes)
@@ -143,6 +161,17 @@ class ORBDetector:
             side, stop, broken = "short", self._or_high, self._or_low
         else:
             return None
+
+        # B82: pre-market break gate — only allow signals that clear the PM range.
+        if self.config.require_pm_break and self._pm_high is not None:
+            if side == "long" and bar.close <= self._pm_high:
+                log.info("ORB suppressed: B82 PM-break gate — long close %s <= pm_high %s",
+                         bar.close, self._pm_high)
+                return None
+            if side == "short" and bar.close >= self._pm_low:
+                log.info("ORB suppressed: B82 PM-break gate — short close %s >= pm_low %s",
+                         bar.close, self._pm_low)
+                return None
 
         # B47: Gate 1 — suppress ORB when all prior same-day iFVG signals oppose ORB.
         if self.session_ctx is not None and self.session_ctx.gate1_orb_suppressed(

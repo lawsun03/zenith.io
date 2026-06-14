@@ -3695,8 +3695,49 @@
     "learned": "B81 direction gate (suppress same-direction iFVG repeats within ET day, r=2.5) improves per-trade PF (1.095 vs 1.055, single-phase) and marginally improves $/mo (+$2 vs B57) but degrades sust -0.23x vs B57 (3.31 vs 3.54). Stop rule does not fire (both metrics above B42 floor: $568>$549, 3.31>3.23). Pattern matches B71/B73: 26.6% volume cut causes absolute-pass starvation (43 vs 46 passes), and sust scales directly with Phase A passes (sust=passes/Phase_B_busts). Phase 2b (shorts-only) skipped: max additional passes ~2, sust ~3.46x at best, still below B57 3.54x threshold. Code ships default-off (ifvg_suppress_same_direction_repeat=False). Lesson 149 added.",
     "links": {
       "doc": null,
-      "runs": ["scripts/run_b81_pipeline.py"],
+      "runs": [
+        "scripts/run_b81_pipeline.py"
+      ],
       "src": "scripts/run_b81_pipeline.py"
+    }
+  },
+  {
+    "ts": "2026-06-15T06:00:00Z",
+    "session": "wk6-b82",
+    "item": "B82",
+    "variant": "orb_require_pm_break_r0p75_phase_b",
+    "objective": "pipeline_$/mo_and_sust",
+    "metrics": {
+      "phase_b_baseline_busts": 13,
+      "phase_b_baseline_accounts": 14,
+      "phase_b_baseline_net_per_acct": 3131,
+      "phase_b_baseline_avg_days": 73.5,
+      "phase_b_pm_busts": 16,
+      "phase_b_pm_accounts": 17,
+      "phase_b_pm_net_per_acct": 2508,
+      "phase_b_pm_avg_days": 59.4,
+      "phase_a_passes": 46,
+      "phase_a_attempts": 167,
+      "baseline_net_per_month": 566,
+      "baseline_sust": 3.54,
+      "gate_net_per_month": 504,
+      "gate_sust": 2.88,
+      "d_net_per_month": -62,
+      "d_sust": -0.66,
+      "subperiod_2021_2023_delta_net": 658,
+      "subperiod_2024_2026_delta_net": -1931,
+      "volume_removed_pct": 30.5,
+      "b42_floor_npm": 549,
+      "b42_floor_sust": 3.23
+    },
+    "verdict": "rejected",
+    "learned": "B82 ORB PM-break gate (30.5% signal volume cut, Phase B only) produces more funded busts (16 vs 13) and lower $/acct ($2508 vs $3131), yielding pipeline $504/mo and sust=2.88x -- both below B42 floor. Stop rule fires. Despite Phase 1 PF ratio 2.097, the 30.5% ORB signal cut slows equity accumulation in funded accounts, increasing bust exposure before reaching payout. Sub-period: PM gate helps 2021+2023 (+$658 net) but hurts 2024-2026 (-$1931 net) -- the opposite of Phase 1 predictions. Volume starvation pattern confirmed for Phase B ORB: removing >30% of ORB signals at $50k funded account level is too aggressive even when per-trade PF would improve. Lesson 151 added.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/run_b82_pipeline.py"
+      ],
+      "src": "scripts/run_b82_pipeline.py"
     }
   }
 ]

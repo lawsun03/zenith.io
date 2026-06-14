@@ -244,6 +244,12 @@ class StrategyParams(BaseModel):
     # ORB signals are never gated by this flag.
     ifvg_suppress_same_direction_repeat: bool = False
 
+    # B82: ORB pre-market break gate. When True, ORB signals are only emitted when the
+    # signal bar close exceeds the 08:00-09:29 ET pre-market high (long) or is below the
+    # pre-market low (short). No PM bars (holiday/early-open) → all signals allowed.
+    # Phase 1 data: PM-break PF=1.857 vs within-PM PF=0.886 (ratio 2.097, 3/5 years GO).
+    orb_require_pm_break: bool = False
+
 
 class BotConfig(BaseModel):
     instrument: str | None = None          # None → fall back to TOPSTEP_BOT_INSTRUMENT env var

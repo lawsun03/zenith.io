@@ -195,6 +195,7 @@ def _build_runner(
             long_only=s.orb_long_only,
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
+            require_pm_break=s.orb_require_pm_break,
         ))
         _sr_det = SweepReentryDetector(SweepReentryConfig(
             instrument=instrument,
@@ -241,6 +242,7 @@ def _build_runner(
             long_only=s.orb_long_only,
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
+            require_pm_break=s.orb_require_pm_break,
         ))
         return ORBRunner(
             instrument=instrument,

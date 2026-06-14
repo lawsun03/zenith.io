@@ -3249,3 +3249,45 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Learned:** Same-direction iFVG repeat gate confirms Phase 1 pattern (continuation PF=0.785 → filtered out) but falls victim to volume starvation at 26.6% signal volume cut. The gate improves per-trade quality but reduces the number of combine passes more than it improves the quality of each attempt. The starvation threshold appears to be ~15-20%: B73 (~8% ORB cut) degraded sust by -0.38x, B81 (26.6% iFVG cut) degrades by -0.23x (partially offset by faster combine cycling — 142 attempts vs 167 baseline, fewer resets, $495 vs $545). Volume starvation is now the documented ceiling for all signal-quality gates in this pipeline.
 
 - **Next:** B82 (ORB pre-market break gate, Phase 2 code + benchmark). Highest remaining priority. Phase 1 ratio 2.097 >> 1.30, 3/5 years. Acts on Phase B (ORB signals) not Phase A (iFVG), so starvation dynamics differ.
+
+## 2026-06-15T06:00Z -- session wk6-b82 -- B82 (ORB pre-market break gate -- REJECTED)
+
+- **Claimed:** B82 (top pending after B81) -- code + two-phase pipeline benchmark for ORB pre-market break gate (Phase 1 data: PM-break PF=1.857, within-PM PF=0.886, ratio=2.097, 3/5 years from wk6-r2).
+
+- **Ran:** Phase 1 data already in BACKLOG.md from wk6-r2 inline probes. Phase 2:
+  1. Implemented `require_pm_break: bool = False` in `ORBConfig` and `orb_require_pm_break: bool = False` in `StrategyParams`.
+  2. Added PM accumulator (`_pm_high`, `_pm_low`) to `ORBDetector.__init__`, reset on day boundary.
+  3. Gate logic in `on_bar()`: accumulate bars where 08:00 <= ET.time() < 09:30 into `_pm_high`/`_pm_low`; after signal side determined, suppress if close does not clear the PM extreme; `_pm_high is None` (no PM data, e.g. holiday) -> graceful fallback, signal allowed.
+  4. Wired to both `sweep_reentry` and `orb` ORBConfig paths in `app/backtest/runner.py` and `app/main.py`.
+  5. 6 defining-behavior tests in `tests/test_b82_pm_break.py`: long clears PM high (allowed), long within PM (suppressed), short clears PM low (allowed), short within PM (suppressed), flag=False passes all, no PM bars -> allowed. All 6 pass.
+  6. Generated `research/equity_b82/orb_reentry_pm_r0p75_{year}.csv` per-year (5y excl 2022) via equity_export.py with `--set engine=orb --set r_multiple=2.5 --set orb_reentry_after_stop=True --set orb_require_pm_break=True`.
+  7. Ran two-phase pipeline: Phase A = B57 (r2p5, unchanged), Phase B = B82 PM gate.
+
+- **Numbers:**
+  | Config | Phase B busts | $/acct | Pipeline $/mo | sust |
+  |---|---|---|---|---|
+  | Baseline (no PM gate) | 13/14 | $3,131 | $566 | 3.54x |
+  | B82 PM break gate | 16/17 | $2,508 | $504 | 2.88x |
+  | d vs baseline | +3 busts | -$623 | -$62 | -0.66x |
+
+  Sub-period (regime dependence):
+  - 2021+2023: PM gate net delta = +$658 (marginal improvement, consistent with Phase 1 near-flat 2021/2023)
+  - 2024-2026: PM gate net delta = -$1,931 (degradation -- against Phase 1 prediction of 2024-2026 being the strong regime)
+
+  B42 floor: $549/mo, 3.23x. Both gate metrics below floor. Stop rule fires.
+
+- **Verdict:** REJECTED -- stop rule fires (both $/mo and sust below B42 floor).
+
+- **Root cause -- volume starvation in Phase B:** The gate removes 30.5% of ORB signals (within-PM trades). At the funded-account ($50k trail) level, fewer signals means slower equity accumulation. The XFA trail is fixed-size; a slower equity curve has less recovery speed after a losing streak, increasing bust probability. The net effect: 16 busts vs 13 baseline -- the quality gain (per-trade) is overwhelmed by the throughput loss. The sub-period surprise (gate hurts in 2024-2026 despite Phase 1 showing strong 2024-2026 PM-break advantage) confirms that funded-sim dynamics (drawdown timing, recovery speed) are NOT predicted by PF ratio alone when the gate removes >20-30% of signals.
+
+- **Code ships:** `orb_require_pm_break=False` default. Gate is implemented and available, not recommended for deployment.
+
+- **Tests:** 754 passed, 2 skipped, 0 failures (+6 B82 tests vs 748 from B81).
+
+- **Lesson 151 added.** Script: scripts/run_b82_pipeline.py.
+
+- **Learned:** The ORB PM-break signal quality ratio (2.097 Phase 1) does not translate to funded-sim gains when the gate removes 30.5% of signals. Funded-account sust is governed by throughput (how many accounts cycle through Phase B per unit time) more than per-trade quality at >20% signal volume cuts. This extends the volume starvation ceiling (Lessons 94/105/109/134/150) to Phase B (ORB signals), not just Phase A (iFVG signals).
+
+- **Next:** No remaining high-priority research items pending. Bot-keeper health check for the session.
+
+---

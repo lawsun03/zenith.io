@@ -3515,7 +3515,7 @@ scripts/funded_sim.py research/equity_b81.csv --haircut 200
 
 ---
 
-## B82 -- ORB pre-market break gate (Phase 2 code + benchmark)  [in-progress — session 2026-06-15T00:00Z]
+## B82 -- ORB pre-market break gate (Phase 2 code + benchmark)  [done -- REJECTED 2026-06-15 Phase 2 NO-GO]
 
 **Hypothesis:** ORB signals that break through the pre-market (08:00-09:29 ET) high (for longs) or pre-market low (for shorts) are dramatically higher quality (PF=1.857) than those remaining within the pre-market range (PF=0.886). Gating the ORB on PM-break condition will improve funded pipeline.
 
