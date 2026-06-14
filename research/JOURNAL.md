@@ -2582,3 +2582,43 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 - **Learned:** Unlike iFVG Phase A (where lower r=2.5 improved combine throughput by hitting the $3k monthly target more often, Lesson 111), the ORB Phase B target is a fixed-dollar payout threshold, not a per-trade R-level. The r_multiple setting only governs the 11% of ORB trades that hit target before EOD; the 89% that flatten EOD are unaffected. At r=2.5, those 11% exit optimally; any change degrades per-account economics and bust rates. The B21 baseline r=2.5 was confirmed as the correct Phase B setting, and B70 is the controlled study that formally proves it.
 
 - **Next:** B71 (LO+r=2.5 full two-phase pipeline benchmark — highest priority; Phase 1 combine harness already showed 14/61 passes in wk5-r1; this is the full funded-pipeline economic verification).
+
+---
+
+## 2026-06-14T14:08Z — session wk5-b71 — B71 (LO+r=2.5 full pipeline benchmark — MIXED)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Claimed:** B71 (top pending item — LO+r=2.5 full two-phase pipeline; Phase 1 combine signal was 14/61 in wk5-r1, highest ever).
+- **Ran:** `scripts/run_b71_pipeline.py` — generated 5 per-year Phase A equity CSVs (`research/equity_b71/lo_r25_{year}.csv`, 2021/2023/2024/2025/2026, excl 2022 holdout) with `--set allowed_sides=long --set r_multiple=2.5 --risk-pct 1.0 --partial-r 1.5` (all other params deployed). Phase B = equity_b21/orb_reentry_r0p75 (unchanged). Compared vs B42 ($549/mo, sust=3.23x) and B57 ($566/mo, sust=3.54x).
+
+- **Numbers:**
+
+  | Metric | B71 (LO+r=2.5) | B42 (both-sides r=3.5) | B57 (both-sides r=2.5) |
+  |--------|---------------|----------------------|----------------------|
+  | Phase A passes | 40 | 42 | 46 |
+  | Phase A attempts | 115 | 159 | 167 |
+  | Per-attempt pass rate | 34.8% | 26.4% | 27.5% |
+  | Avg days/attempt | 9.0d | 6.5d | 6.4d |
+  | Reset$/funded | $431 | $568 | $545 |
+  | Phase B busts/accts | 13/14 | 13/14 | 13/14 |
+  | Phase B $/acct | $3,131 | $3,131 | $3,131 |
+  | Net/month | **$571** | $549 | $566 |
+  | Sustainability | **3.08x** | 3.23x | 3.54x |
+
+  Phase B (B21 ORB-reentry r=0.75) unchanged: 13/14 busts, $43,834 net 5y, $3,131/acct, 73.5d/acct.
+
+- **Stop rule check:** B71 improves $/mo (+$22 vs B42) but degrades sust (-0.15x vs B42, -0.46x vs B57). Not worse on BOTH metrics → stop rule does NOT fire. Result is genuinely MIXED.
+
+- **Root cause:**
+  1. LO (allowed_sides=long) removes iFVG shorts, cutting total combine attempts 28% (115 vs 159). Despite higher per-attempt pass rate (35% vs 26%), fewer absolute passes result (40 vs 42).
+  2. Fewer absolute passes → lower sustainability (40/13 = 3.08x vs 42/13 = 3.23x for B42).
+  3. Lower reset cost per funded account ($431 vs $568) → marginally better $/mo ($571 vs $549).
+  4. The monthly combine harness (wk5-r1: 14/61=23%) overstated the pipeline benefit because it normalizes by CALENDAR MONTH SLOTS, while the pipeline counts ABSOLUTE PASSES over continuous attempts. When signal volume drops (iFVG shorts removed), attempt frequency drops too (9.0d/attempt vs 6.5d), consuming more calendar time per attempt.
+
+- **Verdict:** MIXED — $/mo improves marginally vs both baselines but sust degrades significantly vs B57 (the key metric). B57 (both-sides r=2.5, $566/mo, sust=3.54x) remains the best recommendation. Do NOT add `allowed_sides=long` to deployed config based on this result.
+
+- **Monday recommendation:** Same as B57: remove MNQ r_multiple override (set base r=2.5 in StrategyParams). Do NOT change allowed_sides (keep "both" — LO hurts sust).
+
+- **Lesson 130 added.** Test suite: 723 passed, 2 skipped, 0 failures (no code changes).
+
+- **Next:** B72 (iFVG rank-1-only Phase 1 data mining — low prior but fast Phase 1 check from existing B71 equity CSVs).

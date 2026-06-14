@@ -3255,5 +3255,42 @@
       "runs": ["equity_b70"],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T14:08:00Z",
+    "session": "wk5-b71",
+    "item": "B71",
+    "variant": "Phase A: allowed_sides=long + r_multiple=2.5 (LO+r2.5 combination)",
+    "objective": "funded",
+    "metrics": {
+      "b71_phase_a_passes": 40,
+      "b71_phase_a_attempts": 115,
+      "b71_phase_a_pass_pct": 34.8,
+      "b71_phase_a_avg_days_attempt": 9.0,
+      "b71_phase_a_days_per_funded": 25.8,
+      "b71_phase_a_reset_per_funded": 431,
+      "b71_phase_b_busts": 13,
+      "b71_phase_b_accounts": 14,
+      "b71_phase_b_net_per_acct": 3131,
+      "b71_phase_b_avg_days": 73.5,
+      "b71_net_per_month": 571,
+      "b71_sustainability": 3.08,
+      "b42_net_per_month": 549,
+      "b42_sustainability": 3.23,
+      "b57_net_per_month": 566,
+      "b57_sustainability": 3.54,
+      "b71_vs_b42_npm_delta": 22,
+      "b71_vs_b42_sust_delta": -0.15,
+      "b71_vs_b57_npm_delta": 5,
+      "b71_vs_b57_sust_delta": -0.46,
+      "haircut": 200
+    },
+    "verdict": "rejected",
+    "learned": "LO+r=2.5 gives MIXED pipeline results: $/mo improves (+$22 vs B42, +$5 vs B57) but sustainability degrades (-0.15x vs B42, -0.46x vs B57). Root cause: removing iFVG shorts cuts total combine attempts 28% (115 vs 159) even though per-attempt pass rate improves (35% vs 26%). Fewer absolute passes (40 vs 42) reduce pipeline sustainability. B57 (both-sides r=2.5, $566/mo, sust 3.54x) remains the best candidate. The monthly combine harness (14/61 in wk5-r1) overstated the pipeline benefit because it normalizes by calendar month, not attempt count.",
+    "links": {
+      "doc": null,
+      "runs": ["equity_b71"],
+      "src": null
+    }
   }
 ]

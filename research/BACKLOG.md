@@ -2865,7 +2865,7 @@ Source: Lesson 124 (B67); wk5-r1 research session (2026-06-15).
 
 ---
 
-## B71 — Full pipeline: allowed_sides=long + r_multiple=2.5 (combining B15+B57)  [pending]
+## B71 — Full pipeline: allowed_sides=long + r_multiple=2.5 (combining B15+B57)  [done — MIXED: $/mo $571 (+$22 vs B42) but sust 3.08x (-0.15x vs B42, -0.46x vs B57); LO removes iFVG shorts, cuts attempts 28% (115 vs 159), fewer absolute passes (40 vs 42); B57 (both-sides r=2.5, $566/mo, sust 3.54x) remains best candidate; Lesson 130 added]
 
 Two independent improvements (B15 and B57) have never been tested TOGETHER in the full
 two-phase pipeline. wk5-r1 Phase 1 (combine harness): LO+r=2.5 achieves 14/61 monthly
