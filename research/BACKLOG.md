@@ -2196,9 +2196,11 @@ Backlog fully exhausted (B1-B54). Protocol mandates research/ideation session. S
 
 4. **iFVG r_multiple** — never varied in funded benchmarks. Deployed r_mult=3.5 was assumed; ORB uses orb_r_multiple=2.0/2.5 separately. A lower iFVG target (2.5R vs 3.5R) increases WR but reduces per-trade R — net effect on funded pipeline is unknown.
 
-## B55 — Phase A config-optimized full funded-pipeline benchmark  [pending]
+## B55 — Phase A config-optimized full funded-pipeline benchmark  [done — REJECTED 2026-06-14]
 
-**Hypothesis:** B52 showed swing_stop_lookback=0 + target_clarity_mode=reject improves Phase A combine pass rate 50% (9/61 vs 6/61, PF 1.11 vs 1.11). These settings are config-only changes. If Phase A passes improve from ~42 to ~63 over 5y (same 1.5x scale as combine harness), the full pipeline $/mo and sust should improve materially vs B42 ($549/mo, sust=3.23x).
+**Result:** B55 worse than B42 on BOTH metrics: $508/mo sust=2.00x vs $549/mo sust=3.23x. B52's combine-harness improvement (9/61 vs 6/61) does NOT transfer to pipeline economics. target_clarity=reject cuts signal count -> 69 combine attempts vs 159 -> 26 absolute passes vs 42, despite 38% vs 26% per-attempt rate. 2022 holdout: B55 PF=1.164 (positive vs B42's 0.934), but 5y throughput penalty dominates. Monday action: keep deployed settings (lookback=30, clarity=off). See Lesson 106, scripts/run_b55_pipeline.py, research/equity_b55/.
+
+**Hypothesis (original):** B52 showed swing_stop_lookback=0 + target_clarity_mode=reject improves Phase A combine pass rate 50% (9/61 vs 6/61, PF 1.11 vs 1.11). These settings are config-only changes. If Phase A passes improve from ~42 to ~63 over 5y (same 1.5x scale as combine harness), the full pipeline $/mo and sust should improve materially vs B42 ($549/mo, sust=3.23x).
 
 Mechanism: no new code. Generate per-year Phase A equity CSVs using the optimized Phase A settings:
 ```

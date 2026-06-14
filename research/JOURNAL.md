@@ -1942,3 +1942,22 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected
 - **Learned:** Volume starvation kills the Silver Bullet hypothesis. Restricting to 10:00-11:00 ET (~20% of trading hours) cuts signal volume so severely that combine pass frequency cannot keep pace with XFA busts, making the pipeline net-drain (sust 0.42-0.49 vs baseline 1.6). The wk1-r2 per-hour PF=1.235 for 10:xx ET does not transfer to funded pipeline advantage — Lesson 89 confirmed: per-hour PF in population-level data does not predict per-hour PF within the specific deployed config, and volume is a prerequisite for pipeline sustainability regardless of hourly PF.
 - **Next:** B56 — SetupGrader audit + conditional refactor (Lawrence-requested); or wk3-r3 Phase A optimized pipeline benchmark (wk3-r2 B55 item).
+
+## 2026-06-14T10:00Z — session wk3-b55-pipeline — B55-pipeline (Phase A config-optimized funded pipeline)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 contracts), no drift, no lockout. Market closed (weekend).
+- **Session note:** wk3-r2 B55 (Phase A config-optimized full pipeline benchmark) was not executed in the prior Silver Bullet session — numbering collision caused the wrong B55 to run. This session executes the correct item: tests whether B52's config fix (lookback=0, target_clarity=reject) transfers to funded pipeline economics vs B42 deployed ($549/mo, sust=3.23x). No code changes required (equity_export.py already accepts --set flags).
+- **Ran:**
+  1. `scripts/run_b55_pipeline.py` (new) — generates 6 per-year Phase A equity CSVs (2021/2023/2024/2025/2026 + 2022 holdout) via `equity_export.py --set swing_stop_lookback=0 --set target_clarity_mode=reject`, then runs funded_sim pipeline comparison vs B42.
+  2. Phase B fixed at equity_b21/orb_reentry_r0p75_{year}.csv (unchanged from B21/B42).
+- **Numbers:**
+  - B55 Phase A (lookback=0, target_clarity=reject): combine 26/69 (38% per-attempt), avg 14.9d/attempt, 39.6d/funded, $398 reset/funded
+  - B42 Phase A (deployed, lookback=30, clarity=off): combine 42/159 (26% per-attempt), avg 6.5d/attempt, 24.6d/funded, $568 reset/funded
+  - Phase B (ORB-reentry r=0.75): 13 busts / 14 accounts, $3,131/account, 73.5d/account
+  - Pipeline result B55: $508/mo, sust=2.00x
+  - Pipeline result B42: $549/mo, sust=3.23x (confirmed)
+  - B55 vs B42: $/mo -41, sust -1.23 -> WORSE on BOTH
+  - 2022 holdout: B55 Phase A PF=1.164 (positive); B42 Phase A PF=0.934 (loss-making)
+- **Verdict:** rejected — B55 worse than B42 on both primary criteria
+- **Learned:** B52's combine-harness improvement (9/61 vs 6/61) does not transfer to pipeline economics. target_clarity=reject reduces signal count, cutting combine attempts from 159 to 69 over 5y, reducing absolute passes from 42 to 26 despite higher per-attempt rate (38% vs 26%). The pipeline sim (continuous attempts) diverges from the combine harness (61 monthly slots) when frequency changes: harness normalizes by time; pipeline rewards throughput — Lesson 106. 2022 holdout regime-robustness advantage (B55 positive vs B42 loss-making) is real but insufficient to compensate for 5y throughput penalty. Monday action: do NOT change deployed config. Keep swing_stop_lookback=30, target_clarity_mode=off.
+- **Next:** B56 — ORB x iFVG alignment gate Phase 2 (build + benchmark under deployed config).

@@ -2453,5 +2453,47 @@
       ],
       "src": "tests/test_silver_bullet.py"
     }
+  },
+  {
+    "ts": "2026-06-14T10:00Z",
+    "session": "wk3-b55-pipeline",
+    "item": "B55-pipeline",
+    "variant": "Phase A config-optimized (swing_stop_lookback=0, target_clarity_mode=reject) full 5y funded-pipeline benchmark",
+    "objective": "combine+funded",
+    "metrics": {
+      "b55_combine_passes": 26,
+      "b55_combine_attempts": 69,
+      "b55_avg_days_per_attempt": 14.9,
+      "b55_reset_cost_per_funded": 398,
+      "b55_pipeline_net_per_month": 508,
+      "b55_sustainability": 2.00,
+      "b42_combine_passes": 42,
+      "b42_combine_attempts": 159,
+      "b42_avg_days_per_attempt": 6.5,
+      "b42_reset_cost_per_funded": 568,
+      "b42_pipeline_net_per_month": 549,
+      "b42_sustainability": 3.23,
+      "phase_b_xfa_net_per_account": 3131,
+      "phase_b_xfa_busts": 13,
+      "phase_b_avg_days": 73.5,
+      "b55_2022_holdout_pf": 1.164,
+      "b42_2022_holdout_pf": 0.934,
+      "haircut": 200,
+      "bars": "bars_MNQ_dbv_{year}.csv per year (2021/2023/2024/2025/2026); 2022 holdout separate"
+    },
+    "verdict": "rejected",
+    "learned": "B52's combine-harness pass rate improvement (9/61 vs 6/61) does NOT transfer to funded pipeline economics. B55 optimized config (lookback=0, target_clarity=reject) earns $508/mo sust=2.00x vs B42 deployed $549/mo sust=3.23x — worse on BOTH metrics. The mechanism is trade frequency: target_clarity=reject skips low-clarity-target signals, reducing combine attempts from 159 to 69 over 5y (2.3x fewer). B42's higher attempt frequency generates 42 absolute passes vs B55's 26, despite B55's higher per-attempt pass rate (38% vs 26%). Total absolute passes — not per-attempt rate — determines pipeline throughput. The 2022 holdout result actually favors B55 (PF=1.164 vs B42's 0.934), confirming B55 is more regime-robust. But the 5y deployment window (2021/2023-2026) is better served by B42's volume. Monday action: do NOT change deployed config. Keep swing_stop_lookback=30 and target_clarity_mode=off.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b55/phase_a_opt_2021.csv",
+        "research/equity_b55/phase_a_opt_2023.csv",
+        "research/equity_b55/phase_a_opt_2024.csv",
+        "research/equity_b55/phase_a_opt_2025.csv",
+        "research/equity_b55/phase_a_opt_2026.csv",
+        "research/equity_b55/phase_a_opt_2022.csv"
+      ],
+      "src": "scripts/run_b55_pipeline.py"
+    }
   }
 ]
