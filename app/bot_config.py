@@ -219,6 +219,10 @@ class StrategyParams(BaseModel):
     # iFVG signals that oppose the ORB direction (orb_opp PF=0.757, loss-making in 4/5 years).
     # Data: ORB same-dir PF=1.689 vs opp-dir PF=0.957; iFVG same-dir PF=1.375 vs opp-dir PF=0.757.
     ifvg_orb_confluence_gate: bool = False
+    # B56: suppress ORB when no prior same-direction iFVG has fired today.
+    # Groups A+D (PF=1.427) allowed; groups B+C (PF=0.963) suppressed.
+    # Phase-1 GO: A+D/B+C ratio 1.48x > 1.4x threshold, consistent across 5/5 years.
+    orb_ifvg_alignment_required: bool = False
 
 
 class BotConfig(BaseModel):

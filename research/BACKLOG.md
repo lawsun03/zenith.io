@@ -2229,7 +2229,7 @@ Priority: HIGHEST — directly informs Monday config decision for Lawrence. Run 
 
 Source: B52 combine harness result (9/61 passes); Lesson 101 (B52 confirmed +50% Phase A passes with zero code changes).
 
-## B56 — ORB×iFVG same-day directional alignment gate (Phase 2 code + benchmark)  [pending]
+## B56 — ORB×iFVG same-day directional alignment gate (Phase 2 code + benchmark)  [done — rejected: sust=0.82x (unsustainable); volume starvation kills funded phase (51/52 accounts bust, avg 18.7d life vs 73.5d baseline); gate removes 42.2% of already-sparse ORB signals; Lesson 109]
 
 **Phase 1 GO confirmed (wk3-r2):** ratio A+D/B+C = 1.48x > 1.4x threshold; 5/5 years consistent.
 

@@ -159,7 +159,8 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
             secondary = _build_runner(dataclasses.replace(
                 cfg, strategy_params=s.model_copy(update={"engine": "orb"})))
             return CombinedRunner(primary=primary, secondary=secondary,
-                                  confluence_gate=s.ifvg_orb_confluence_gate)
+                                  confluence_gate=s.ifvg_orb_confluence_gate,
+                                  alignment_gate=s.orb_ifvg_alignment_required)
         if s.engine == "regime_switch":
             from app.strategy.regime_switch import RegimeSwitchRunner
             ifvg = _build_runner(dataclasses.replace(

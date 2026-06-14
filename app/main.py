@@ -122,7 +122,8 @@ def _build_runner(
             instrument, s.model_copy(update={"engine": "orb"}),
             enabled_killzones, timeframe, signal_instrument)
         return CombinedRunner(primary=primary, secondary=secondary,
-                              confluence_gate=s.ifvg_orb_confluence_gate)
+                              confluence_gate=s.ifvg_orb_confluence_gate,
+                              alignment_gate=s.orb_ifvg_alignment_required)
     if s.engine == "regime_switch":
         from app.strategy.regime_switch import RegimeSwitchRunner
         active = _build_runner(

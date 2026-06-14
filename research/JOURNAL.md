@@ -1988,3 +1988,29 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** informational / infra — grader is miscalibrated, zero current impact, B57 to replace
 - **Learned:** The SetupGrader's fvg_singular criterion is INVERTED — stacked/multi-FVG zones (singular=False) outperform singular clean gaps by a clear margin (PF 1.145 vs 0.962). The grader currently rewards the wrong configuration. Additionally, two criteria (mom/pd) are structurally vacuous under the deployed config — the engine's body filter and long-only restriction make these gates 100% one-sided before the grader even runs, so their scoring contributions are dead weight. Taken together, no grader component predicts iFVG trade outcome; the grade ordering (A>B>C>D>F by PF) seen in B51 is a score-composition artifact rather than structural quality discrimination.
 - **Next:** B57 — new lessons-based trade-quality grader (Lawrence-requested, do after B56); then wk3-r2 B56 (ORB×iFVG alignment gate, Lesson 103).
+
+## 2026-06-13T23:30Z — session wk3-b56-orb-align — B56-orb-align (ORB×iFVG same-day directional alignment gate, Phase 2 code + pipeline benchmark)
+- **Bot health:** /api/status OK — XFA shadow running, equity at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Session type:** B56 ORB×iFVG alignment gate (wk3-r2 item, distinct from Lawrence-requested B56 SetupGrader audit which was already done). Phase 1 GO was confirmed in wk3-r2 (ratio A+D/B+C = 1.48x > 1.4x, 5/5 years consistent).
+- **Ran:**
+  1. **TDD (RED → GREEN):** 7 defining-behavior tests in `tests/test_orb_ifvg_alignment.py` written first. Confirmed all 7 fail with `AttributeError: 'DailySessionContext' has no attribute 'gate_b56_orb_suppressed'`. Implementation added: `gate_b56_orb_suppressed` method to `DailySessionContext` in `combined.py`; `alignment_ctx` attribute to `ORBDetector` + gate check in `on_bar`; `alignment_ctx` attribute to `SweepDisplacementComposer` + `alignment_ctx.record_ifvg_signal` call after signal emission; `orb_ifvg_alignment_required: bool = False` to `StrategyParams`; `alignment_gate` parameter to `CombinedRunner.__init__`; wired `alignment_gate=s.orb_ifvg_alignment_required` in `backtest/runner.py` and `main.py`. All 7 tests pass. Full suite: **698 passed, 2 skipped** (was 691 + 7 new).
+  2. **Phase B equity generation:** 5 per-year equity CSVs (`research/equity_b56/orb_reentry_aligned_r0p75_{year}.csv`, 2021/2023/2024/2025/2026) via `equity_export.py --set engine=combined --set orb_reentry_after_stop=True --set orb_r_multiple=2.5 --set orb_ifvg_alignment_required=True --risk-pct 0.75 --partial-r 1.5`. 2022 = frozen holdout (excluded).
+  3. **Pipeline benchmark:** `scripts/run_b56_pipeline.py` (new). Phase A = B42 deployed (42 passes, $568 reset/funded). Phase B = B56 aligned vs B21 unfiltered reference.
+- **Numbers:**
+
+  **Phase B standalone stats (per-year, 5y excl 2022, h200):**
+  | Config | Accounts | Busts | Net 5y | $/acct | Avg days | Sust |
+  |--------|----------|-------|--------|--------|----------|------|
+  | B56 aligned r=0.75 | 52 | 51 | $94,038 | $1,808 | 18.7d | 0.69x |
+  | B21 unfiltered r=0.75 (ref) | 14 | 13 | $43,834 | $3,131 | 73.5d | 1.46x |
+
+  **Two-phase pipeline:**
+  | Phase A → Phase B | Reset$ | XFA$/acct | Net/mo | Sust |
+  |---|---|---|---|---|
+  | B42 → B56 aligned r0.75 | $568 | $1,808 | $602 | **0.82x** (FAIL) |
+  | B42 → B21 unfiltered r0.75 (ref) | $568 | $3,131 | $549 | 3.23x |
+
+- **Stop rule check:** sust=0.82x < 1.0 — pipeline net-drain (more funded accounts bust than Combines pass). Primary criterion not met.
+- **Verdict:** rejected — volume starvation kills funded phase. Gate removes 42.2% of ORB signals; funded accounts average only 18.7d (vs 73.5d baseline) before MLL bust. 51/52 accounts bust before payout. $602/mo headline is misleading — no payouts actually collected (accounts bust without reaching threshold). Lesson 109 added. Feature ships default-off (`orb_ifvg_alignment_required=False`).
+- **Learned:** Phase 1 GO (PF ratio 1.48x, 5/5 years) does not guarantee Phase 2 pipeline improvement when the gate removes a high fraction of an already-sparse signal stream. ORB fires ≤1 trade/day with reentry at most 1 more; removing 42.2% of days leaves funded accounts with ~3 trades/month — too few to compound to payout before normal drawdown reaches MLL. The remaining A+D trades ARE higher quality (PF=1.427 vs 0.963), but they can't sustain the account long enough to collect. This is the same failure pattern as B47 (Lesson 94) and B55 Silver Bullet (Lesson 105), now confirmed for cross-engine gates on sparse ORB. Rule (Lesson 109): estimate post-gate trade frequency before building cross-engine gates; ORB at 4-6 signals/month sits near the survival floor and cannot absorb a 42% cut.
+- **Next:** B57 (new trade-quality grader — Lawrence-requested, priority) or B58 (confluence-weighted sizing — Lawrence-requested). Both ranked ahead of routine queue items.

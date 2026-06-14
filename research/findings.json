@@ -2497,6 +2497,49 @@
     }
   },
   {
+    "ts": "2026-06-13T23:30:00Z",
+    "session": "wk3-b56-orb-align",
+    "item": "B56-orb-align",
+    "variant": "ORB×iFVG same-day directional alignment gate (orb_ifvg_alignment_required=True, Phase 2 code + pipeline benchmark, B42 Phase A)",
+    "objective": "funded",
+    "metrics": {
+      "phase_a_passes": 42,
+      "phase_a_reset_per_funded": 568,
+      "phase_b_aligned_accounts": 52,
+      "phase_b_aligned_busts": 51,
+      "phase_b_aligned_net_5y": 94038,
+      "phase_b_aligned_per_account_net": 1808,
+      "phase_b_aligned_avg_days": 18.7,
+      "phase_b_aligned_sust_standalone": 0.69,
+      "phase_b_ref_accounts": 14,
+      "phase_b_ref_busts": 13,
+      "phase_b_ref_net_5y": 43834,
+      "phase_b_ref_per_account_net": 3131,
+      "phase_b_ref_avg_days": 73.5,
+      "pipeline_aligned_net_per_month": 602,
+      "pipeline_aligned_sust": 0.82,
+      "pipeline_ref_net_per_month": 549,
+      "pipeline_ref_sust": 3.23,
+      "gate_fraction_removed_pct": 42.2,
+      "phase1_pf_ratio_ad_vs_bc": 1.48,
+      "phase1_go_threshold": 1.4,
+      "haircut": 200,
+      "tests_added": 7,
+      "total_tests_after": 698,
+      "note": "B42 Phase A (deployed, 42 passes) + B56-aligned Phase B (orb_reentry_after_stop=True, orb_r_multiple=2.5, orb_ifvg_alignment_required=True, risk=0.75%); 5y excl 2022 holdout; per-year equity stitch"
+    },
+    "verdict": "rejected",
+    "learned": "The ORB×iFVG alignment gate passes Phase 1 (PF ratio 1.48x, 5/5 years consistent) but fails Phase 2 via volume starvation. Removing 42.2% of ORB signals (groups B+C, PF=0.963) dramatically shortens funded account life (18.7d vs 73.5d baseline), causing 51/52 funded accounts to bust before payout. Pipeline sustainability = 0.82x (unsustainable: more busts than combine passes). The $/mo headline ($602) is misleading — accounts average only 18.7d before busting, so no payout is collected. Mechanism: ORB is already a sparse signal stream; the alignment gate cuts it to a level too thin for the XFA account to trade its way to payout. Same failure as B47 (Lesson 94) and B55 Silver Bullet (Lesson 105): Phase 1 quality improvements do not transfer to funded pipeline when they are purchased via volume reduction below the sustainability threshold. The orb_ifvg_alignment_required feature ships default-off (7 TDD tests, 698 total green).",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b56/orb_reentry_aligned_r0p75_{year}.csv",
+        "scripts/run_b56_pipeline.py"
+      ],
+      "src": "app/strategy/combined.py (gate_b56_orb_suppressed), app/strategy/orb.py (alignment_ctx), app/strategy/composer.py (alignment_ctx.record_ifvg_signal)"
+    }
+  },
+  {
     "ts": "2026-06-13T08:00:00Z",
     "session": "wk3-b56",
     "item": "B56",

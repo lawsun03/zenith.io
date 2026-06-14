@@ -74,9 +74,19 @@ class DailySessionContext:
             return False  # no ORB fired today → allow
         return ifvg_side != self._orb_direction
 
+    def gate_b56_orb_suppressed(self, et_date: date, orb_side: str) -> bool:
+        """B56: Return True if ORB should be suppressed (no prior same-direction iFVG today).
+
+        Groups suppressed: B (no prior iFVG, PF=0.990) and C (all opposite, PF=0.939).
+        Groups allowed:    A (any same-dir iFVG, PF=1.707) and D (mixed, PF=1.224).
+        """
+        self._reset_if_new_day(et_date)
+        return not any(s == orb_side for s in self._ifvg_sides)
+
 
 class CombinedRunner:
-    def __init__(self, primary, secondary, confluence_gate: bool = False) -> None:
+    def __init__(self, primary, secondary, confluence_gate: bool = False,
+                 alignment_gate: bool = False) -> None:
         self.primary = primary
         self.secondary = secondary
         # B47: inject shared cross-engine session context when confluence gate is enabled.
@@ -86,6 +96,13 @@ class CombinedRunner:
                 primary.composer.session_ctx = ctx
             if hasattr(secondary, "detector"):
                 secondary.detector.session_ctx = ctx
+        # B56: inject alignment context when alignment gate is enabled.
+        if alignment_gate:
+            actx = DailySessionContext()
+            if hasattr(primary, "composer"):
+                primary.composer.alignment_ctx = actx
+            if hasattr(secondary, "detector"):
+                secondary.detector.alignment_ctx = actx
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         sig_p = self.primary.on_bar(bar)

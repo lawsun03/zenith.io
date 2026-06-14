@@ -253,6 +253,8 @@ class SweepDisplacementComposer:
         self._bias_prior_close: Decimal | None = None
         # B47: injected by CombinedRunner when confluence_gate=True.
         self.session_ctx = None
+        # B56: injected by CombinedRunner when alignment_gate=True.
+        self.alignment_ctx = None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -500,6 +502,10 @@ class SweepDisplacementComposer:
                 self._daily_short_count += 1
             if signal is not None and self.session_ctx is not None:
                 self.session_ctx.record_ifvg_signal(
+                    bar.ts.astimezone(_ET).date(), sig_side
+                )
+            if signal is not None and self.alignment_ctx is not None:
+                self.alignment_ctx.record_ifvg_signal(
                     bar.ts.astimezone(_ET).date(), sig_side
                 )
             return signal
