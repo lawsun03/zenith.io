@@ -2840,3 +2840,42 @@ Displacement bar body/ATR: Q2(1.303) and Q3(1.336) outperform Q1(1.006) and Q5(1
 **Test suite:** 725 passed, 2 skipped, 0 failures (no code changes; scripts/analyze_wk5r3_displacement_body.py added as analysis script).
 
 **Next:** B75 (ORB flatten-time Phase 1 -- fastest, no code), or B77 (infrastructure -- small code change enabling future research).
+
+---
+
+## 2026-06-14T18:30Z -- session wk5-b75 -- B75 (ORB flatten-time Phase 1 -- REJECTED)
+
+- **Bot health:** /api/status OK -- XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Claimed:** B75 (top pending -- ORB 15:30 ET flatten vs 16:09 ET force-flatten, pure data analysis).
+- **No code:** pure data mining on mfe_mae_orb_clean.csv + bars_MNQ_dbv_2021_2026.csv.
+
+- **Method:**
+  1. Identified force-flatten convention: ORB processes 5-min bars labeled at last 1-min bar open time; the flatten fires on the first bar with ts >= 15:05 CT (16:05 ET), which is the bar ts=16:09 ET (opening at 16:05, labeled 16:09). Exit at 16:09 ET = 473 trades (not 16:00 as the spec assumed).
+  2. Cohort: 473 force-flattened (16:09 ET) + 30 pre-flatten (15:30-15:59 ET) = 503 trades open at 15:30.
+  3. Hypothetical exit = close of 1-min bar at ts=15:29 ET (opens 15:29, closes 15:30 ET).
+  4. Per-year comparison: actual P&L vs hypothetical P&L for each cohort trade.
+
+- **Results:**
+
+  | Year | n | Actual $ | Hyp 15:30 $ | Delta % | GO? |
+  |------|---|----------|-------------|---------|-----|
+  | 2021 | 94 | +8,256 | +6,070 | -7.7% | NO-GO |
+  | 2023 | 114 | +4,553 | +7,874 | +13.5% | NO-GO |
+  | 2024 | 107 | +1,231 | +9,970 | -4.0% | NO-GO |
+  | 2025 | 124 | +0,954 | +3,173 | +7.2% | NO-GO |
+  | 2026 | 64 | +3,620 | +4,082 | +3.4% | NO-GO |
+  | **ALL** | **503** | **+28,614** | **+31,169** | **+2.0%** | **NO-GO** |
+
+  GO criterion: aggregate >= 15% AND 3+/5 years. Actual: 2.0% (NOT MET), 0/5 years (NOT MET).
+
+- **Cohort selection note:** The 30-trade pre-flatten cohort (15:30-15:59 ET exits) showed 82.5% apparent improvement, which initially looked like a GO. This is selection bias: those 30 trades are the ones that hit stop/target IN the last 30 minutes -- atypically adverse relative to the 4h+ force-flattened winners. Including the 473 force-flattened trades (the actual EOD profit driver) flips the picture to +2.0%.
+
+- **Stop rule:** Not triggered (not 2 metrics worse -- only 1 objective). Phase 1 NO-GO by criterion (both thresholds unmet). Reject B75.
+
+- **Verdict:** REJECTED. Phase 1 NO-GO. The 16:09 ET force-flatten is not demonstrably worse than 15:30 ET. No earlier flatten variant for ORB is warranted by this data.
+
+- **What we learned:** The last 30 minutes of RTH do not systematically reverse against ORB EOD positions -- the year-to-year delta alternates +/- with no consistent direction (+13.5%, -4.0%, +7.2%, +3.4%, -7.7%). The selection-bias trap: testing only trades that resolved in the tested window picks the bad ones, overstating the benefit of earlier exit.
+
+- **Lesson 139 added.** No code changes. Script: scripts/run_b75_flatten_time_phase1.py. Test suite unchanged (725 passed, 2 skipped, 0 failures).
+
+- **Next:** B76 (skip-second-iFVG-after-loss day filter Phase 1) or B77 (deployed-config MFE/MAE dataset infrastructure). B77 requires code changes; B76 is pure data mining. B77 is the more strategically valuable infrastructure item.

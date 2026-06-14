@@ -3137,7 +3137,7 @@ body/ATR inverted + non-monotonic). 3 new backlog items: B75, B76, B77.
 
 ---
 
-## B75 -- ORB flatten-time Phase 1 sensitivity  [pending]
+## B75 -- ORB flatten-time Phase 1 sensitivity  [done -- rejected: Phase 1 NO-GO; 15:30 ET flatten saves +2.0% aggregate (threshold 15%), 0/5 years consistent; force-flatten at 16:09 ET is not demonstrably worse than 15:30 ET; 503 trades open at 15:30 ET tested]
 
 **Mechanism:** The ORB engine flattens all positions at 16:00 ET (RTH close). Lesson 88
 established the 4h+ EOD-flatten cohort (PF=4.129) is the profit driver (33.6% of ORB
