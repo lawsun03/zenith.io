@@ -2003,3 +2003,92 @@ different variable).
 Source: Lesson 88 (ORB value concentrated in EOD-flatten cohort; early 0-2h stop-outs are
 the dominant loss mechanism); B45 (Phase 1 falsification precedent for OR quality filters);
 wk2-r5 review. Next after B46 and B47.
+
+## B50 — Account-state dynamic risk sizing (varying risk, not constant)  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of the routine queue]
+Lawrence asked directly: "backtest with varying risk instead of keeping risk a
+constant variable." Every benchmark to date holds risk-pct constant within a run
+(B1 swept LEVELS, but each run was one fixed %). This item varies risk-pct
+WITHIN the attempt as a deterministic function of account state.
+
+READ FIRST -- the metric trap: scaling a fixed-edge process by a state function
+does NOT change per-trade expectancy or PF (it is a dimensionless rescale of
+each bet). It changes the PATH distribution -- Combine pass rate, XFA bust rate,
+drawdown depth, payout cadence. So this item is judged ONLY on the Combine and
+funded objectives, NEVER on PF. Do not report "PF unchanged" as a finding; that
+is expected by construction. The whole point is path/survival under the trailing
+MLL.
+
+Mechanism: a risk policy applied with knowledge of the running per-attempt
+equity (distance to the +$3k target; distance to the trailing MLL). Default-off
+flag `risk_policy: str = "constant"` (current behavior). Implementation decision
+the session must resolve: the policy needs RUNNING-STATE knowledge, so it must
+be applied inside the per-attempt simulation (the monthly-combine harness and
+funded_sim already track equity vs target and trailing MLL as they walk an
+attempt) -- re-size each trade there, rather than post-transforming a
+constant-risk equity curve from equity_export. If full state-coupling is too
+invasive for one session, the cheaper fallback is a PATH-ONLY policy (function of
+recent realized P&L / consecutive-loss count) which needs only the trade stream;
+implement that first, note the limitation.
+
+Two declared deterministic policies (NO tuning beyond these):
+- `risk_policy="combine_ramp"` (build-then-protect): risk 1.5% while cumulative
+  attempt gain < +$1,500; risk 0.75% once gain >= +$1,500 (protect the buffer to
+  +$3,000); risk 0.5% (survival) whenever equity is within $750 of the trailing
+  MLL, overriding the above.
+- `risk_policy="funded_survival"`: risk 0.75% base; risk 0.4% whenever within
+  $750 of the trailing MLL; back to 0.75% once clear. (Survival-first for XFA.)
+
+Defining-behavior tests (tests/test_risk_policy.py):
+1. risk_policy="constant" (default): sizing byte-identical to current behavior.
+2. combine_ramp: trade while gain < $1,500 sizes at 1.5%; after gain >= $1,500
+   sizes at 0.75%.
+3. combine_ramp: equity within $750 of trailing MLL → 0.5% regardless of gain.
+4. funded_survival: near-MLL trade sizes at 0.4%, normal trade at 0.75%.
+5. Risk policy reads running equity, not start equity (state-dependence proven).
+
+Benchmark (objective metrics ONLY):
+- Combine: run_monthly_combine with risk_policy=combine_ramp vs the deployed
+  constant-r baseline. Metric: pass rate + MLL-fail count (NOT PF).
+- Funded: funded_sim with risk_policy=funded_survival vs constant-r baseline.
+  Metric: XFA busts, $/month, sustainability ratio.
+Success: combine_ramp raises pass rate without raising MLL fails; OR
+funded_survival lowers bust rate enough to raise $/month or sustainability vs
+constant risk at the SAME average risk level. Stop rule: if a policy is worse on
+its objective than constant risk, reject it (no re-tuning of the ladders).
+
+Source: Lawrence direct request 2026-06-14. Distinct from B1 (which swept static
+risk levels). This is the one sanctioned dynamic-sizing search; the objective
+(survival under a trailing MLL) is exactly where path-dependent sizing can pay.
+
+## B51 — Setup-grade-scaled position sizing  [pending — Lawrence-requested 2026-06-14; rank with B50]
+A second "varying risk" axis: size by the existing SetupGrader grade instead of
+a flat size. UNLIKE B50, this CAN change expectancy (it concentrates risk on
+trades the grader rates higher) -- so PF IS a valid metric here, IF grade
+actually predicts outcome.
+
+PHASE 1 -- cheap falsification FIRST (no sizing code; go/no-go):
+From existing backtest trade lists that carry the grade (or re-run the control
+config capturing grade per trade), compute win-rate / PF / mean-R per grade
+bucket (A/B/C/D/F) over 2021/2023/2024/2025-26 (NOT 2022).
+GO/NO-GO: proceed ONLY if higher grades MATERIALLY outperform (monotonic-ish:
+A/B PF clearly > D/F PF, e.g., top-2 grades PF >= 1.3x bottom-2). If grade does
+not separate outcomes, REJECT here -- document that SetupGrader grade is not a
+sizing signal (joins the fib/OTE no-edge findings). Build nothing.
+
+PHASE 2 -- sizing (only if Phase 1 = GO):
+- `grade_sizing_enabled: bool = False` (default off).
+- size multiplier by grade (fixed ladder): A=1.5x, B=1.25x, C=1.0x, D=0.5x,
+  F=0 (skip). Applied to the per-trade risk-pct; total risk still capped at the
+  configured max per-trade risk so the A-grade up-size respects MLL.
+Defining-behavior tests (tests/test_grade_sizing.py):
+1. grade_sizing_enabled=False (default): sizing unchanged.
+2. A-grade trade sizes at 1.5x base; C-grade at 1.0x; F-grade skipped.
+3. Up-sized A-grade risk respects the per-trade risk cap (no MLL breach by sizing).
+
+Benchmark (BOTH objectives, parity flags `--partial-r 0 --set swing_stop_lookback=0`):
+- vs flat-size control. Success: improves the objective AND (since expectancy can
+  move) PF vs flat sizing. Stop rule: loses on both → reject.
+
+Source: Lawrence direct request 2026-06-14 (varying risk). Uses the existing
+SetupGrader; Phase 1 first because we have no evidence grade predicts outcome
+and several quality-score hypotheses have already failed (fib/OTE, OR width).
