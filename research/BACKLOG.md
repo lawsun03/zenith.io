@@ -3515,7 +3515,7 @@ scripts/funded_sim.py research/equity_b81.csv --haircut 200
 
 ---
 
-## B82 -- ORB pre-market break gate (Phase 2 code + benchmark)  [pending]
+## B82 -- ORB pre-market break gate (Phase 2 code + benchmark)  [in-progress — session 2026-06-15T00:00Z]
 
 **Hypothesis:** ORB signals that break through the pre-market (08:00-09:29 ET) high (for longs) or pre-market low (for shorts) are dramatically higher quality (PF=1.857) than those remaining within the pre-market range (PF=0.886). Gating the ORB on PM-break condition will improve funded pipeline.
 
@@ -3573,3 +3573,94 @@ scripts/run_monthly_combine.py --bars bars/bars_MNQ_dbv_2021_2026.csv --instrume
 **2022 holdout:** Required before deployment if Phase 2 passes.
 
 **Source:** wk6-r2 inline Probe B (scripts/_probe_wk6r2.py). Lesson 149.
+
+---
+
+## B83 -- News-event straddle (CPI / PPI / FOMC breakout)  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+
+**Hypothesis:** Scheduled macro releases (CPI, PPI, FOMC) inject a volatility
+burst at a KNOWN time. A pre-placed OCO straddle (buy-stop above / sell-stop
+below) captures the directional break without predicting the number. NOTE this is
+the OPPOSITE of the deployed `ifvg_macro_windows` blackout (which AVOIDS these
+windows) — so it is a genuinely new, event-driven mechanism, not setup-geometry.
+
+**Data dependency (build first, free — no Databento):** create
+`data/news_events.csv` with columns `event_type,ts_utc` for CPI, PPI, FOMC
+statement releases 2021-2026 from public BLS / Federal Reserve calendars
+(CPI/PPI ~08:30 ET monthly; FOMC 14:00 ET, 8/yr). Scheduled datetimes are known
+in advance — using them is NOT lookahead. The release VALUE is never used.
+
+**No-lookahead contract (non-negotiable):** every parameter (reference price,
+ATR, offset X, TP, stop) is computed from bars with `ts <= placement_time`
+(placement = `place_lead_min` before the event). The event datetime is the only
+forward-looking input and it is a published schedule. No per-event tuning — fixed
+pre-declared defaults only.
+
+**Parameters (all fixed defaults; ATR-normalized to avoid fixed-point fragility):**
+- `news_events`: subset of {CPI, PPI, FOMC} (default all three)
+- `place_lead_min` = 2 (place the OCO this many min before the release)
+- `entry_window_min` = 15 (cancel both stops if neither fills within this window)
+- `offset_atr_mult` = 0.5 ; `atr_period` = 14 (5min ATR pre-event) -> X = mult*ATR
+  (also expose `offset_pts` fixed-point override for sensitivity)
+- `tp_r` = 1.0 (take-profit = tp_r x entry-to-stop distance; SET BEFORE ENTRY)
+- `stop_mode` = "opposite_level" (protective stop = the other straddle leg;
+  risk ≈ 2X) | "atr" (`stop_atr_mult`)
+- `daily_profit_bracket_r` = 0 (0=off; >0 -> liquidate all when the day's realized
+  P&L in R reaches the bracket) — the "equity/daily target" liquidation rule
+- `max_hold_min` = 60 ; always EOD-flatten (Topstep)
+- Cost model: `slip_ticks_news` = 6 (stop fills are market; news slippage is large
+  — sensitivity-test 2/4/6/8), `spread_ticks` = 1
+- `both_trigger_rule` = "subbar_1min" | "whipsaw_loss" | "skip"
+
+**Entry/exit rules:**
+1. At `event_ts - place_lead_min`: ref = close of the last completed bar; place
+   buy-stop at ref+X and sell-stop at ref-X (OCO).
+2. First stop touched fills -> that is the trade; cancel the other (OCO).
+3. Fill model: fill = stop ± (slip_ticks_news + spread_ticks/2)*tick adverse; if
+   the trigger bar's open is already beyond the stop (gap), fill at bar.open ±
+   slip (the worse of the two).
+4. TP = entry ± tp_r * stop_dist. Protective stop per `stop_mode`.
+5. Liquidate if daily realized-R >= `daily_profit_bracket_r` (when >0), at
+   `max_hold_min`, or at EOD — whichever first.
+6. If neither stop fills within `entry_window_min`: cancel both, no trade.
+
+**Same-bar both-trigger (the dangerous case — release bar spans both legs):**
+resolve which leg filled FIRST using 1-min sub-bars within that 5-min bar
+(`bars_MNQ_dbv` has a 1-min sibling; reuse the intrabar approach). If 1-min
+unavailable -> `whipsaw_loss`: assume entered then immediately stopped at the
+opposite leg = realize -(2X + 2*slip)*tick. Never assume the favorable order.
+Report the same-bar rate — if it is high, the strategy is mostly whipsaw.
+
+**PHASE 1 -- cheap falsification FIRST (no engine; go/no-go):**
+Over the event set 2021/2023/2024/2025-26 (NOT 2022), simulate the straddle from
+the 1-min bars around each release with the cost model above. Compute: fill rate,
+same-bar/whipsaw rate, and net expectancy in R after `slip_ticks_news`. GO only
+if mean net expectancy > 0 at slip=4 ticks AND the whipsaw rate is tolerable
+(declare < 35%). If the post-release break does not clear realistic slippage, or
+whipsaws dominate -> REJECT (document: news is priced too efficiently at 5min /
+the release bar round-trips). Volume note: ~32 events/yr — too sparse for the
+Combine alone; route primarily as a funded-overlay / supplementary engine.
+
+**PHASE 2 -- engine (only if Phase 1 = GO):** standalone detector + runner shim
+(`engine="news_straddle"`, default-off), consuming `data/news_events.csv`.
+Deterministic Python only (Rule 5). Defining tests (tests/test_news_straddle.py):
+(1) buy-stop fills on up-break, sell cancelled; (2) sell-stop fills on down-break,
+buy cancelled; (3) gap-through fills at bar.open+slip; (4) both-trigger ->
+whipsaw_loss path realizes -(2X+2slip); (5) no fill in window -> no trade;
+(6) daily_profit_bracket liquidates; (7) no event today -> no orders; (8) all
+params from <= placement ts (no lookahead). Benchmark both objectives vs control
+AND as a funded-overlay on the B42 pipeline.
+
+**Success criteria:** positive net expectancy after slippage in Phase 1; in Phase
+2, improves the funded pipeline as an overlay (or stands alone with sust >= 1.0).
+**Stop rule:** Phase 1 negative expectancy at slip=4 OR whipsaw rate >= 35% ->
+reject, no tuning.
+
+**Prior / rejection probability:** HIGH (~70%). News straddles are a popular
+retail idea (external claims are >4-for-4 failures here); the 08:30/14:00 release
+bar frequently spikes both ways (whipsaw) and news slippage is brutal — both
+attack this directly. But event-driven vol expansion is real and the mechanism is
+genuinely different, so the cheap Phase-1 test is worth running to settle it.
+
+**Source:** Lawrence-requested 2026-06-14 (CPI straddle spec). Contrasts the
+deployed macro-blackout policy.
