@@ -3187,5 +3187,30 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T06:30Z",
+    "session": "wk4-b69",
+    "item": "B69",
+    "variant": "ifvg freshness (fvg age at inversion)",
+    "objective": "infra+combine",
+    "metrics": {
+      "fresh_n": 699,
+      "fresh_pf": 1.087,
+      "mid_n": 371,
+      "mid_pf": 1.176,
+      "stale_n": 206,
+      "stale_pf": 0.846,
+      "fresh_stale_ratio": 1.285,
+      "go_threshold": 1.3,
+      "consistent_years": "3/5"
+    },
+    "verdict": "rejected",
+    "learned": "FVG age at inversion (gap_bars = entry_ts - fvg.created_at) shows the right directional pattern (fresh better than stale), but the ratio 1.285 misses the pre-declared 1.30 threshold and the mid bucket (4-9 bars) outperforms fresh (1.176 vs 1.087) \u2014 the classic non-monotonic result. Instrumentation (displacement_ts field) is retained for future analysis; Phase 2 gate is blocked.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

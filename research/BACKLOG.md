@@ -2776,7 +2776,7 @@ Source: wk4-r3 data mining (2026-06-14); DOW analysis scripts/analyze_wk4r3_ifvg
 
 ---
 
-## B69 — iFVG setup freshness (displacement-to-inversion bar gap)  [pending]
+## B69 — iFVG setup freshness (displacement-to-inversion bar gap)  [done — REJECTED Phase 1 NO-GO]
 
 Untested structural characteristic: how many 5-min bars elapsed between the
 displacement bar (large bullish body that creates the FVG) and the inversion bar

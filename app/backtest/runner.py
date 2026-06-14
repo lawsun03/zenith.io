@@ -515,6 +515,8 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
             if open_entry.get("grade") is not None:
                 trade["grade"] = open_entry["grade"]
                 trade["criteria"] = open_entry["criteria"]
+            if open_entry.get("displacement_ts") is not None:
+                trade["displacement_ts"] = open_entry["displacement_ts"]
             trades.append(trade)
             open_entry = None
     if open_entry is not None:
@@ -564,6 +566,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     # retroactively to the already-captured entry fill dict via order_id lookup
     # before _reconstruct_trades runs.
     _order_grades: dict[str, dict] = {}
+    # B69: maps entry order_id → displacement_ts ISO string for freshness analysis.
+    _order_displacement_ts: dict[str, str] = {}
 
     def _kz_for_fill(broker_order_id: str | None) -> str:
         if not broker_order_id:
@@ -604,6 +608,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
                         "fib": str(g.fib_extension),
                     },
                 }
+            if signal.displacement_ts is not None:
+                _order_displacement_ts[outcome.broker_order_id] = signal.displacement_ts.isoformat()
 
     async def on_fill(fill: Fill) -> None:
         fill_dict: dict = {
@@ -678,13 +684,16 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     await engine.stop()
     await broker.disconnect()
 
-    # Retroactively attach grade to entry fill dicts now that on_signal has fired.
+    # Retroactively attach grade and displacement_ts to entry fill dicts now that on_signal has fired.
     for fill_dict in fills_captured:
         if fill_dict["is_entry"]:
             grade_info = _order_grades.get(fill_dict["order_id"])
             if grade_info:
                 fill_dict["grade"] = grade_info["grade"]
                 fill_dict["criteria"] = grade_info["criteria"]
+            d_ts = _order_displacement_ts.get(fill_dict["order_id"])
+            if d_ts:
+                fill_dict["displacement_ts"] = d_ts
     stats = _compute_stats(fills_captured, risk_state, cfg.starting_balance)
     trades = _reconstruct_trades(fills_captured)
 

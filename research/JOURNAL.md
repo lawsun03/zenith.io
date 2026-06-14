@@ -2482,3 +2482,34 @@ SMT divergence rate: 28.4% (NQ swept its level but ES did not on ~28% of trades)
 - **Learned:** (1) The DOW go criterion (PF < 1.0 in 3+/5 years AND overall < 0.90) fires even when ALL days are equally weak -- meeting the threshold does not imply the target DOW is specifically impaired. Must verify target DOW PF is WORSE than non-target DOW PF before proceeding to Phase 2. (2) Memory entries can carry stale parameter values -- always verify against live bot_config.json before scripting deployed-config analyses.
 
 - **Next:** B69 (setup freshness -- time-since-sweep gate, requires instrumentation).
+
+---
+
+## wk4-b69 — 2026-06-15T06:30Z — B69 iFVG Freshness Phase 1 — REJECTED
+
+**Health:** Bot unreachable (weekend, market closed). Shadow combine flat per prior check.
+
+**B69: iFVG setup freshness (FVG age at inversion)**
+
+Instrumented the backtest to log how long each FVG "aged" before being inverted (gap_bars = (entry_ts - fvg.created_at) / 300). Added `displacement_ts` field to Signal dataclass (stores fvg.created_at when available), threaded through runner.py into trade output. Ran over 5y excl 2022.
+
+Key correction during implementation: the B69 spec said "displacement_bar.ts," but that field is structurally always 1 bar before created_at (3-bar window guarantee) — giving gap_bars=1 for every trade. The meaningful measure is `event.fvg.created_at` (when the FVG zone was originally formed).
+
+Results (deployed iFVG config, close mode, long-only, 5y excl 2022, 1276 trades):
+
+| Bucket | n | WR% | PF |
+|--------|---|-----|----|
+| fresh (1-3 bars) | 699 | 26.6% | 1.087 |
+| mid (4-9 bars) | 371 | 28.8% | **1.176** |
+| stale (10+ bars) | 206 | 28.6% | 0.846 |
+
+Fresh/stale PF ratio: **1.285** (threshold 1.30) — MISSES by 0.015.
+Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗).
+
+**Verdict: REJECTED — Phase 1 NO-GO.** PF ratio misses the pre-declared threshold. Also, mid (4-9 bars) outperforms fresh (1.176 > 1.087), the classic non-monotonic pattern (Lessons 90/98/99). A "block stale" gate would improve things marginally but the ratio doesn't justify Phase 2 investment.
+
+**Learned:** (1) displacement_bar.ts in DisplacementEvent is always 1 bar before the inversion-confirmation bar — the FVG age metric requires fvg.created_at as the reference. (2) FVG age is directionally predictive (stale PF 0.846 is clearly the worst bucket), but not strongly enough to clear a 1.30 filter threshold at this sample size.
+
+**Retained:** displacement_ts field (stores fvg.created_at) remains in Signal and trade output — useful for future cross-cuts (e.g., combined with killzone or regime).
+
+**Next:** All B-items exhausted. Backlog is empty — next session must be a research/ideation run to replenish B70+.

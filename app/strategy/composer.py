@@ -92,6 +92,12 @@ class Signal:
     # Features: +1 long side, +1 rank-1 of day, +1 Silver Bullet hour, +1 combined-engine.
     # 0 = uncounted (non-iFVG engines, old signals). Default 0 is neutral (no up/down sizing).
     confluence_count: int = 0
+    # B69: timestamp of when the FVG zone was originally formed (bar that confirmed it).
+    # gap_bars = (created_at - displacement_ts) / timeframe = FVG age at inversion time.
+    # event.displacement_bar.ts is always 1 bar before created_at (structural), so
+    # event.fvg.created_at is the meaningful reference for how stale the FVG was.
+    # None for non-iFVG engines, hand-built signals, and displacement-only mode (no FVG).
+    displacement_ts: "datetime | None" = None
 
 
 @dataclass
@@ -738,4 +744,5 @@ class SweepDisplacementComposer:
             rationale=rationale,
             sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
             confluence_count=confluence_count,
+            displacement_ts=event.fvg.created_at if event.fvg is not None else None,
         )
