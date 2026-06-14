@@ -112,8 +112,8 @@ def simulate(b, zones, tp_r):
     return out
 
 
-def run():
-    b = load_tf("bars/bars_MNQ_dbv_2021_2026.csv")
+def run(bars_path="bars/bars_MNQ_dbv_2021_2026.csv"):
+    b = load_tf(bars_path)
     b = b[b.index.year != 2022]
     zones = detect_zones(b)
     nd = sum(1 for z in zones if z[1] == "demand"); ns = len(zones) - nd
@@ -136,4 +136,11 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bars", default="bars/bars_MNQ_dbv_2021_2026.csv")
+    ap.add_argument("--tick", type=float, default=0.25)  # MNQ .25, MGC .10, MCL .01
+    a = ap.parse_args()
+    TICK = a.tick
+    print(f"instrument bars: {a.bars}  | tick={TICK}")
+    run(a.bars)
