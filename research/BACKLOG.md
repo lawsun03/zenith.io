@@ -2905,7 +2905,7 @@ in close-mode). Highest-value pending benchmark.
 
 ---
 
-## B72 — iFVG rank-1-only Phase 1 data mining (daily signal cap = 1)  [pending]
+## B72 — iFVG rank-1-only Phase 1 data mining (daily signal cap = 1)  [done — rejected Phase 1 NO-GO: rank-1 LO PF=1.162 (need >=1.50); underperforms rank-2+ in 3/5 test years]
 
 Context: Non-first iFVG signals on multi-signal days have overall PF=0.981 (wk4-r3
 verification, n=1461 second+ signals, 5y excl 2022 — below breakeven). Rank-1 signals

@@ -2622,3 +2622,48 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 - **Lesson 130 added.** Test suite: 723 passed, 2 skipped, 0 failures (no code changes).
 
 - **Next:** B72 (iFVG rank-1-only Phase 1 data mining — low prior but fast Phase 1 check from existing B71 equity CSVs).
+
+---
+
+### wk5-b72 — 2026-06-14 — B72: iFVG Rank-1-Only Gate — Phase 1 NO-GO
+
+- **Bot health:** XFA shadow flat, healthy (per prior session check).
+- **Item:** B72 — iFVG rank-1-only gate (Phase 1 data mining, no code).
+- **Method:** Filtered `mfe_mae_ifvg_clean.csv` to long-only trades (LO deployed config);
+  re-ranked within each day by entry_ts; computed PF for rank-1 vs rank-2+ across 5y
+  (2021/2023/2024/2025/2026, holdout 2022 frozen).
+
+- **Results:**
+
+  | Slice | n | PF |
+  |-------|---|----|
+  | All longs (baseline) | 1226 | 1.136 |
+  | Rank-1 longs only | 778 | 1.162 |
+  | Rank-2+ longs | 448 | 1.091 |
+
+  Year-by-year rank-1 PF:
+  - 2021: 1.876 (GO) -- but n=107 small sample
+  - 2023: 0.932 (NO-GO) — rank-2+ better (1.112)
+  - 2024: 1.026 (NO-GO) — rank-2+ better (1.233)
+  - 2025: 0.968 (NO-GO) — rank-2+ better (1.155)
+  - 2026: 1.967 (GO) — n=91 too small, partial year
+  - Years meeting GO (PF>=1.50): 2/5
+
+- **GO criterion:** rank-1 PF >= 1.50. Actual = 1.162. **Phase 1 NO-GO.**
+
+- **Stop rule:** rank-1 PF (1.162) far below threshold AND rank-1 underperforms
+  rank-2+ in 3 of 5 years (all three test years 2023-2025). Stop rule fires.
+
+- **Volume impact:** Rank-1-only removes 37% of long signals (778 vs 1226/mo equiv).
+  At 13.0 signals/month for rank-1 vs 20.4 total, the throughput penalty alone
+  makes this unfavorable unless edge is very strong — and it isn't.
+
+- **What we learned:** The rank-1 signal in LO close-mode config shows no meaningful
+  advantage over rank-2+ signals in the test period. The two extreme years (2021,
+  2026) that pass are likely regime artifacts (2021 bull, 2026 partial YTD); in the
+  training + live test years 2023-2025, rank-1 consistently underperforms rank-2+,
+  reversing the expected ordering. This hypothesis is falsified.
+
+- **Lesson 131 added.** No code changes. Test suite unchanged (723 passed, 2 skipped).
+- **Next session:** Backlog fully exhausted (B72 was the last item). Next = research/ideation
+  session per every-3rd-session rule; replenish backlog with new hypotheses.

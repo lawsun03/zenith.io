@@ -3241,18 +3241,41 @@
     "variant": "orb-only phase B orb_r_multiple sweep {1.5, 2.0, 2.5, 3.0, 3.5}",
     "objective": "funded",
     "metrics": {
-      "r1p5_busts": 20, "r1p5_accounts": 21, "r1p5_net_per_acct": 2304, "r1p5_npm": 496, "r1p5_sust": 2.10,
-      "r2p0_busts": 21, "r2p0_accounts": 22, "r2p0_net_per_acct": 2336, "r2p0_npm": 520, "r2p0_sust": 2.00,
-      "r2p5_busts": 13, "r2p5_accounts": 14, "r2p5_net_per_acct": 3131, "r2p5_npm": 549, "r2p5_sust": 3.23,
-      "r3p0_busts": 19, "r3p0_accounts": 20, "r3p0_net_per_acct": 2395, "r3p0_npm": 505, "r3p0_sust": 2.21,
-      "r3p5_busts": 20, "r3p5_accounts": 21, "r3p5_net_per_acct": 2443, "r3p5_npm": 535, "r3p5_sust": 2.10,
-      "b42_baseline_npm": 549, "b42_baseline_sust": 3.23
+      "r1p5_busts": 20,
+      "r1p5_accounts": 21,
+      "r1p5_net_per_acct": 2304,
+      "r1p5_npm": 496,
+      "r1p5_sust": 2.1,
+      "r2p0_busts": 21,
+      "r2p0_accounts": 22,
+      "r2p0_net_per_acct": 2336,
+      "r2p0_npm": 520,
+      "r2p0_sust": 2.0,
+      "r2p5_busts": 13,
+      "r2p5_accounts": 14,
+      "r2p5_net_per_acct": 3131,
+      "r2p5_npm": 549,
+      "r2p5_sust": 3.23,
+      "r3p0_busts": 19,
+      "r3p0_accounts": 20,
+      "r3p0_net_per_acct": 2395,
+      "r3p0_npm": 505,
+      "r3p0_sust": 2.21,
+      "r3p5_busts": 20,
+      "r3p5_accounts": 21,
+      "r3p5_net_per_acct": 2443,
+      "r3p5_npm": 535,
+      "r3p5_sust": 2.1,
+      "b42_baseline_npm": 549,
+      "b42_baseline_sust": 3.23
     },
     "verdict": "rejected",
     "learned": "orb_r_multiple=2.5 in the ORB-only Phase B engine is already the natural optimum. All other r values tested (1.5, 2.0, 3.0, 3.5) produce worse $/mo AND worse sustainability vs the B42 baseline. The EOD-flatten exit mechanism (89% of ORB trades, Lesson 88) is unaffected by r_multiple; only the 11% that hit target before EOD are affected. Lowering r clips those winners; raising r reduces hit rate. The r=2.5 sweet spot coincides exactly with the original B21 baseline \u2014 confirming it emerged from natural data rather than overfitting.",
     "links": {
       "doc": null,
-      "runs": ["equity_b70"],
+      "runs": [
+        "equity_b70"
+      ],
       "src": null
     }
   },
@@ -3289,7 +3312,39 @@
     "learned": "LO+r=2.5 gives MIXED pipeline results: $/mo improves (+$22 vs B42, +$5 vs B57) but sustainability degrades (-0.15x vs B42, -0.46x vs B57). Root cause: removing iFVG shorts cuts total combine attempts 28% (115 vs 159) even though per-attempt pass rate improves (35% vs 26%). Fewer absolute passes (40 vs 42) reduce pipeline sustainability. B57 (both-sides r=2.5, $566/mo, sust 3.54x) remains the best candidate. The monthly combine harness (14/61 in wk5-r1) overstated the pipeline benefit because it normalizes by calendar month, not attempt count.",
     "links": {
       "doc": null,
-      "runs": ["equity_b71"],
+      "runs": [
+        "equity_b71"
+      ],
+      "src": null
+    }
+  },
+  {
+    "ts": "2026-06-14T15:00:00Z",
+    "session": "wk5-b72",
+    "item": "B72",
+    "variant": "iFVG rank-1-only gate (LO close-mode config)",
+    "objective": "combine",
+    "metrics": {
+      "rank1_pf": 1.162,
+      "rank2plus_pf": 1.091,
+      "all_longs_pf": 1.136,
+      "rank1_n": 778,
+      "rank2plus_n": 448,
+      "years_meeting_go": "2/5",
+      "volume_reduction": "-37%",
+      "rank1_pf_by_year": {
+        "2021": 1.876,
+        "2023": 0.932,
+        "2024": 1.026,
+        "2025": 0.968,
+        "2026": 1.967
+      }
+    },
+    "verdict": "rejected",
+    "learned": "Rank-1 longs PF=1.162 far below GO threshold of 1.50; only 2/5 years pass and both are small/edge samples (2021, 2026). In the 3 test years (2023-2025), rank-1 actually underperforms rank-2+ (0.93-1.03 vs 1.11-1.23), meaning the ordering signal reverses in the training + live period \u2014 no reliable edge.",
+    "links": {
+      "doc": null,
+      "runs": [],
       "src": null
     }
   }
