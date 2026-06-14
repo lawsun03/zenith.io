@@ -2559,7 +2559,7 @@ whether ES/MES show comparable per-year passes + sustainability >= 1.0. Defining
 tests: engine runs on ES bars; ATR-normalized thresholds reproduce NQ behavior at
 NQ price levels (parity check). Source: Lawrence 2026-06-14.
 
-## B61 — Excursion-ladder exit research (BE / partial variants)  [in-progress — session 2026-06-14T13:00Z]
+## B61 — Excursion-ladder exit research (BE / partial variants)  [done — REJECTED 2026-06-14]
 Lawrence-specified. Using the existing 5y MFE/MAE infrastructure (B2) and the
 `mfe_pts/mae_pts/r_mfe/r_mae` fields, mine excursion-ladder exit policies for
 ORB-reentry r0.75 and close-mode iFVG. Keep the initial swept-extreme stop; vary
@@ -2644,3 +2644,69 @@ volume-profile/VWAP/value-area = rejected VWAP-MR + kz_levels; break&retest =
 sweep_bos; order-flow/delta/Bookmap = B62 proxy. Round-number .20/.80 levels and
 ADR-target models noted as LOW-prior candidates, not queued. Only SMT divergence
 was novel + testable enough to queue.)
+
+## B65 — Markov 2.0 regime FILTER over iFVG + ORB  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+Apply the Markov 2.0 regime method (see skill `markov-2-hedge-fund-method`) as a
+daily-regime FILTER that gates the existing intraday engines. The method: label
+each day by its trailing 20-day cumulative return (>= +5% BULL, <= -5% BEAR, else
+SIDEWAYS), build a state-transition matrix, derive the daily regime signal
+`P(bull tomorrow) - P(bear tomorrow)`. As a filter: allow LONG entries only when
+signal > +thr, SHORT entries only when signal < -thr, flat in chop.
+
+NON-NEGOTIABLE method fixes (from the skill):
+- FIX 1 stride sampling: build the transition matrix from NON-overlapping 20-day
+  windows (stride=20), NOT overlapping rolling windows (which fake diagonal
+  persistence). Compute both, but the filter uses the stride-sampled matrix.
+- FIX 2 label self-check: programmatically verify BULL/BEAR mapping against known
+  NQ periods (e.g. 2021 run-up = BULL, 2022 selloff = BEAR, a flat stretch =
+  SIDEWAYS) before using the labels.
+- Walk-forward / point-in-time ONLY: recompute the matrix as you walk; the regime
+  signal on day D uses data through D-1 only. No lookahead (this is the whole game
+  — the method's own "proof not promises" rule).
+- Deterministic Python (numpy/pandas), CLAUDE.md Rule 5 — never LLM-estimated.
+Data: resample the local `bars/bars_MNQ_dbv_2021_2026.csv` to daily; NO new fetch.
+
+PHASE 1 -- cheap falsification FIRST (no engine; go/no-go):
+Label every historical iFVG/ORB trade with the prevailing point-in-time regime
+signal bucket (bull/sideways/bear) and compare forward PF / win-rate per bucket
+PER SIDE, over 2021/2023/2024/2025-26 (NOT 2022). GO only if the regime
+materially separates outcomes in the expected direction (longs in bull-regime PF
+>= 1.3x longs in bear-regime, and symmetric for shorts). If no separation, REJECT
+-- document that the Markov daily regime does not predict NQ 5min trade quality
+(joins B35 daily-bias gate + B5 prior-day-range in the failed daily-context set).
+
+PHASE 2 -- filter engine (only if Phase 1 = GO):
+- StrategyParams `markov_filter_enabled: bool = False` (+ `markov_signal_thr`,
+  fixed default e.g. 0.0). Suppress at signal emission per the regime gate; keep
+  detector state. Closed-bar only; the daily regime is fixed for the session.
+- Defining tests (tests/test_markov_filter.py): off=unchanged; bull-regime day
+  suppresses shorts, allows longs; bear-regime suppresses longs; chop suppresses
+  both; stride matrix used (not overlapping); label self-check passes.
+Benchmark BOTH objectives (parity `--partial-r 0 --set swing_stop_lookback=0`)
+vs control. Success: improves PF AND the objective vs filter-off. Stop rule:
+loses on both -> reject. Prior ~30% (daily-context gates have failed here, but the
+probabilistic stride-corrected matrix is a more principled test than B35).
+Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.
+
+## B66 — Markov 2.0 STANDALONE daily-directional engine (Topstep-compatible)  [pending — Lawrence-requested 2026-06-14; DEPENDS ON B65 signal infra; rank ahead of routine queue; model:opus]
+Markov STANDALONE mode, expressed within Topstep's intraday-flatten constraint
+(pure multi-day holds are impossible — accounts flatten EOD). Each session: the
+day's regime signal sets direction + conviction; enter at session open in the
+signal's direction, size scaled to `|signal|` with a fixed cap, flatten EOD.
+Reuses B65's walk-forward stride-sampled regime signal (do B65 first).
+
+Mechanism: new default-off engine `markov` (standalone detector + runner shim per
+the engine pattern). One position/day, opened at the configured session start in
+the regime direction when `|signal| >= thr`, sized to `|signal|` (cap at the
+configured max risk), stop = fixed ATR-multiple, exit = EOD flatten or fixed R.
+All the B65 fixes apply (stride, label self-check, walk-forward, deterministic).
+
+Defining tests (tests/test_markov_engine.py): off-by-default (engine!=markov ->
+no signal); bull-regime day -> one long at session open sized to |signal|;
+bear-regime -> short; chop (|signal|<thr) -> no trade; size respects the cap.
+Benchmark BOTH objectives vs control AND vs the B65 filter result. Success:
+beats control on an objective per stop rules. Prior ~20% (a daily-directional
+intraday bet is a coarse instrument vs the sweep/displacement engines; the value,
+if any, is likely as the B65 filter, not standalone -- but the user asked to test
+it on its own, so we do, honestly). Note in the writeup whether standalone adds
+anything the filter does not. Source: Lawrence 2026-06-14; skill markov-2-hedge-fund-method.

@@ -2857,5 +2857,46 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T13:00:00Z",
+    "session": "wk4-b61",
+    "item": "B61",
+    "hypothesis": "Excursion-ladder exits (BE@1.5R, partial@2.0R, partial@2.5R) improve funded PF or cut XFA busts vs fixed-target baseline",
+    "grid": {
+      "phase_a": ["control (partial@1.5R)", "BE@1.5R", "partial@2.0R", "partial@2.5R", "BE@1.5R+partial@2.0R"],
+      "phase_b": ["control (partial@0)", "BE@1.5R", "partial@2.0R", "BE@1.5R+partial@2.0R"]
+    },
+    "phase_a_results": {
+      "ctrl_partial15": {"passes": 42, "attempts": 159, "reset_per_funded": 568},
+      "be15": {"passes": 34, "attempts": 154, "reset_per_funded": 679},
+      "p20": {"passes": 41, "attempts": 159, "reset_per_funded": 582},
+      "p25": {"passes": 40, "attempts": 161, "reset_per_funded": 604},
+      "be15_p20": {"passes": 38, "attempts": 155, "reset_per_funded": 612}
+    },
+    "phase_b_results": {
+      "ctrl": {"xfa_busts": 13, "xfa_accounts": 14, "net_per_account": 3131, "avg_days": 73.5},
+      "be15": {"xfa_busts": 20, "xfa_accounts": 21, "net_per_account": 2270, "avg_days": 49.0},
+      "p20": {"xfa_busts": 19, "xfa_accounts": 20, "net_per_account": 2461, "avg_days": 51.5},
+      "be15_p20": {"xfa_busts": 24, "xfa_accounts": 25, "net_per_account": 2030, "avg_days": 41.2}
+    },
+    "best_variant": "A-ctrl -> B-ctrl (no exit ladder -- fixed target wins)",
+    "best_net_per_month": 549,
+    "best_sustainability": 3.23,
+    "b42_baseline_net_per_month": 549,
+    "b42_baseline_sustainability": 3.23,
+    "haircut": 200,
+    "bars_file": "bars/yearly/bars_MNQ_dbv_{2021,2023,2024,2025,2026}.csv",
+    "note": "2022 holdout excluded. Phase A uses deployed config (partial_r=1.5); Phase B uses ORB reentry r=0.75. All 20 exit variants are worse on both $/mo AND sustainability.",
+    "verdict": "REJECTED -- stop rule fires. Every exit ladder underperforms fixed-target baseline on BOTH metrics. BE@1.5R on ORB is the worst offender: XFA busts 13->20 (+54%), net/acct $3131->$2270 (-27%). Partial exits also hurt funded P&L because they reduce per-trade expectancy without improving bust probability enough to compensate. The BE@1.5R extends Lesson 20 (which rejected BE@1.0R): NQ ORB and iFVG winners need the full run to target.",
+    "learned": "BE-trail at 1.5R (vs the 1.0R rejected in B2) still kills NQ ORB funded accounts: XFA busts jump 54% (13->20). Partial exits at 2.0R on ORB reduce net/account by 21% ($3131->$2461) with only marginal bust reduction. The mechanism: ORB reentry trades already have tight risk (r=0.75) and the 2-leg structure (initial + reentry) compresses the average favorable excursion -- early exits remove the distribution tail that funds the pipeline. Fixed-target exits remain the optimal policy for this strategy.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/run_b61_exit_ladders.py",
+        "research/equity_b61/ (35 files)"
+      ],
+      "src": "tests/test_b61_exit_ladders.py"
+    }
   }
 ]

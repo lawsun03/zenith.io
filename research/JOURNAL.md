@@ -2223,3 +2223,15 @@ Two-phase MES pipeline sust (iFVG passes / ORB busts) = 9/83 = **0.11x** vs B42 
 - **Learned:** iFVG sweep+inversion patterns are NQ-specific: PF drops from 1.15→0.896 on ES (losing). ORB has structural but insufficient edge on ES (PF 1.075, sust 0.55x). Root cause: at 1-contract MES ($5/pt), funded account MLL triggers faster — 83 XFA busts vs 46 combine passes in 53 months. Do NOT expand funded accounts to MES without contract scaling (~3-5 MES/account to match MNQ dollar risk). The ATR-normalized pct thresholds work correctly and do not bottleneck trade frequency.
 
 - **Next:** B61 — Excursion-ladder exit research (BE / partial variants on ORB-reentry and iFVG).
+
+## 2026-06-14T15:30Z — session wk4-b61 — B61 Excursion-ladder exits
+
+- **Ran:** `scripts/run_b61_exit_ladders.py` — 35 equity CSVs generated (5 years × 4 Phase A variants + 5 years × 3 Phase B variants). Phase A: iFVG deployed config (partial@1.5R baseline) + BE@1.5R, partial@2.0R, partial@2.5R, BE+partial@2.0R. Phase B: ORB-reentry r=0.75 (control partial@0) + BE@1.5R, partial@2.0R, BE+partial@2.0R. All 20 pipeline combos evaluated vs B42 ($549/mo, sust 3.23x). Defining tests: 6 passing in tests/test_b61_exit_ladders.py.
+
+- **Numbers:** Phase A — BE@1.5R: 34/154 passes (vs 42/159 ctrl, -19%); partial@2.0R: 41/159 (−2%); partial@2.5R: 40/161 (−5%); BE+p20: 38/155 (−10%). Phase B XFA busts — ctrl: 13; BE@1.5R: 20 (+54%!); partial@2.0R: 19 (+46%); BE+p20: 24 (+85%). Best pipeline variant: A-ctrl → B-ctrl = $549/mo, sust 3.23x (unchanged baseline). All 20 exit variants: worse on BOTH $/mo AND sustainability vs B42.
+
+- **Verdict:** rejected — stop rule fires
+
+- **Learned:** BE-trail at 1.5R extends Lesson 20 to the 1.5R boundary: ORB funded XFA busts jump 54% (13→20) and net/account drops 27%. Partial exits at 2.0R on ORB reduce net/account 21% with only marginal bust improvement. The ORB reentry structure (tight r=0.75 + 2-leg entry) already compresses the favorable excursion distribution — early exits clip the winners that fund the pipeline. Fixed-target exits remain the optimal policy for both iFVG and ORB on NQ. Do not revisit BE/partial exits unless a fundamentally different stop mechanism (e.g., trailing ATR stop after 2.5R) is proposed.
+
+- **Next:** B62 — Orderflow-proxy confirmation for ORB (cum-delta + RVOL proxy from OHLCV).
