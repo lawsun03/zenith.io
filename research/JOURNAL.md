@@ -2345,3 +2345,28 @@ Year consistency (iFVG longs): 1/5 open years with BULL >= 1.3x BEAR.
 - **Lesson 120 added.** Test suite unchanged (no code path touched -- Phase 1 data mining only); verified green below.
 
 - **Next:** B64 (SMT divergence NQ vs ES -- Phase 1 data check; depends on B60 ES bars already on disk).
+
+## 2026-06-14T18:00Z — session wk4-b64 — B64 SMT Divergence (NQ vs ES) — REJECTED Phase 1 NO-GO
+
+- **Bot health:** Port 5175 reachable — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, market closed.
+- **Claimed:** B64 — SMT divergence (NQ vs ES) reversal filter (Lawrence-requested; B60 ES data unblocks this).
+- **Method:** Phase 1 data-mining only, no engine code. Script: `scripts/analyze_b64_smt.py`. Loaded NQ 5min (354,003 bars) + ES 5min (382,714 bars) resampled from 1min via replay.py bucket-floor logic. Labeled 2453/2477 iFVG trades (excl 2022, 24 skipped for insufficient lookback or missing ES timestamps). SMT-divergence definition: for each trade, find the sweep bar (argmin NQ.low in 20-bar pre-entry window for longs; argmax NQ.high for shorts); check if ES confirmed the same bar (ES made new 5-bar prior low/high). SMT-divergence = ES did NOT confirm.
+
+- **Numbers:**
+
+| Side | Divergent (n) | PF | Non-Divergent (n) | PF | Ratio | GO? |
+|------|--------------|-----|------------------|-----|-------|-----|
+| LONG | 324 | 1.278 | 886 | 1.096 | **1.166x** | NO-GO (<1.25x) |
+| SHORT | 372 | 1.236 | 871 | 0.860 | **1.436x** | GO — but long-only deployed |
+
+Long year consistency: 2/5 (only 2024 and 2026 show >= 1.25x ratio; 2021, 2023, 2025 fail).
+SMT divergence rate: 28.4% (NQ swept its level but ES did not on ~28% of trades).
+
+- **Verdict: PHASE 1 NO-GO → REJECTED. No engine built.**
+
+- **Learned:** SMT divergence is present on ~28% of iFVG trades and shows a slight lift for longs (ratio 1.166x) but falls short of the 1.25x GO threshold. The short cohort shows stronger separation (1.436x) but the deployed config is long-only (B15), and even the divergent-short PF (1.236) barely breaks even at full deployed risk. Year consistency for longs is 2/5 — not a reliable predictor. SMT divergence joins the failed external-signal list alongside the other TradeZella/ICT-sourced claims (B47, B49, B54, B57, B62). The cross-instrument non-confirmation idea is mechanically distinct from prior failures but does not produce actionable separation in NQ 5min iFVG data.
+
+- **Lesson 121 added.**
+- **Test suite:** No code changed — full suite green at 718 (last verified in B63 +5 tests). Verified pass below.
+- **Next:** Backlog is now exhausted (B58-B66 all resolved). Research/ideation session needed to replenish.
+

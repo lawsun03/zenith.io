@@ -2616,7 +2616,7 @@ reject (B21 stands). Metric note: (a) is path-dependent sizing -> judge on funde
 objective not PF (B50 trap). Defining tests: size-up rule fires only after the
 qualifying early winner; respects per-trade risk cap. Source: Lawrence 2026-06-14.
 
-## B64 — SMT divergence (NQ vs ES) reversal filter  [pending — Lawrence-requested 2026-06-14 (TradeZella review); DEPENDS ON B60 (needs ES data); rank after B60]
+## B64 — SMT divergence (NQ vs ES) reversal filter  [done — REJECTED Phase 1 NO-GO: long ratio 1.166x (below 1.25x threshold), year consistency 2/5; short ratio 1.436x but deployed config long-only; SMT divergence joins failed external-signal list (5th consecutive TradeZella/ICT claim to fail Phase 1); no engine built; Lesson 121]
 From TradeZella (Trader Kane "SMT Divergence + PO3"; Trader Mayne) -- the one
 genuinely new mechanism on that page not already covered. SMT divergence: when NQ
 makes a higher high but the correlated ES does NOT (or NQ lower low while ES holds),

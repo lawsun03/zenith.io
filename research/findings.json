@@ -3037,5 +3037,31 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T18:00:00Z",
+    "session": "wk4-b64",
+    "item": "B64",
+    "variant": "SMT divergence NQ vs ES Phase 1",
+    "objective": "combine",
+    "metrics": {
+      "long_div_pf": 1.278,
+      "long_nodiv_pf": 1.096,
+      "long_ratio": 1.166,
+      "short_div_pf": 1.236,
+      "short_nodiv_pf": 0.86,
+      "short_ratio": 1.436,
+      "n_labeled": 2453,
+      "divergence_rate": 0.284,
+      "year_consistency_longs": "2/5",
+      "go_threshold": 1.25
+    },
+    "verdict": "rejected",
+    "learned": "SMT divergence (NQ sweeps level, ES does not) labels 28% of iFVG trades. Long-side ratio 1.166x falls short of 1.25x GO threshold with 2/5 year consistency. Short-side ratio 1.436x passes but deployed config is long-only. No engine built; SMT joins the 5-for-5 failed external-signal list.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": "TradeZella / ICT SMT divergence concept"
+    }
   }
 ]
