@@ -2406,5 +2406,52 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T00:00:00Z",
+    "session": "wk3-b55",
+    "item": "B55",
+    "variant": "silver_bullet_only=True — iFVG emission gated to 10:00-11:00 ET only",
+    "objective": "combine+funded",
+    "metrics": {
+      "combine_sb_passes": 6,
+      "combine_sb_attempts": 61,
+      "combine_sb_pass_pct": 10.0,
+      "combine_sb_run_pf": 1.04,
+      "combine_baseline_passes": 9,
+      "combine_baseline_attempts": 61,
+      "combine_baseline_run_pf": 1.11,
+      "r125_pf": 1.060,
+      "r125_trades": 1545,
+      "r125_net_4y": 96891,
+      "r125_combine_passes": 33,
+      "r125_xfa_busts": 68,
+      "r125_sust": 0.485,
+      "r100_pf": 1.051,
+      "r100_trades": 1545,
+      "r100_net_4y": 80632,
+      "r100_combine_passes": 29,
+      "r100_xfa_busts": 69,
+      "r100_sust": 0.420,
+      "b19_baseline_r125_pf": 1.173,
+      "b19_baseline_r125_sust": 1.600,
+      "b24_baseline_pf": 1.167,
+      "b24_baseline_sust": 2.524,
+      "tests_added": 7,
+      "total_tests": 691,
+      "haircut": 200,
+      "parity_flags": "partial_r=0, swing_stop_lookback=0",
+      "bars": "bars_MNQ_dbv_2021_2026.csv (2021+2023-2026, excl 2022 holdout for funded)"
+    },
+    "verdict": "rejected",
+    "learned": "Silver Bullet hour concentration (10:00-11:00 ET only) fails on both objectives and both r-levels. Combine: 6/61 passes PF=1.04 vs 9/61 PF=1.11 baseline — worse on both. Funded r=1.25: PF=1.060 sust=0.485 vs B19 PF=1.173 sust=1.600 — worse on both. Root cause: volume starvation. Restricting to one 60-minute window yields ~5-10 signals/month, too sparse for the two-phase pipeline to sustain XFA account cycling. The wk1-r2 per-hour PF=1.235 finding for 10:xx ET does not transfer to funded pipeline improvement — Lesson 89 confirmed again: per-hour PF in the population-level data does not predict per-hour PF within the specific deployed config. Feature ships as code toggle (silver_bullet_only=False default) — flag available for combination testing but not routed to any account.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "research/equity_b55_sb/sb_r1p25.csv",
+        "research/equity_b55_sb/sb_r1p0.csv"
+      ],
+      "src": "tests/test_silver_bullet.py"
+    }
   }
 ]

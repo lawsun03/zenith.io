@@ -180,6 +180,11 @@ class ComposerConfig:
     # (rank-2+ short PF=0.858, loss-making over 5y). Long signals unaffected.
     max_short_rank: int = 0
 
+    # B55: ICT "Silver Bullet" hour gate. When True, iFVG signal emission is restricted
+    # to 10:00-11:00 ET only. Sweep state accumulates outside the window; only emission
+    # is gated. Data: 10:xx ET is the strongest NY-AM hour (PF=1.235 in research baseline).
+    silver_bullet_only: bool = False
+
 
 @dataclass
 class _Awaiting:
@@ -307,6 +312,12 @@ class SweepDisplacementComposer:
         if self.config.block_hours:
             et_hour = bar.ts.astimezone(_ET).hour
             if et_hour in self.config.block_hours:
+                return None
+
+        # B55: Silver Bullet hour gate — allow emission ONLY during 10:00-11:00 ET.
+        # Sweep state continues accumulating outside the window.
+        if self.config.silver_bullet_only:
+            if bar.ts.astimezone(_ET).hour != 10:
                 return None
 
         # B35: daily directional bias gate — suppress signals against prior-day bias

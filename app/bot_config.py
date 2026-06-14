@@ -201,6 +201,12 @@ class StrategyParams(BaseModel):
     # blocks 11:00:00-13:59:59 ET. Data: 11-13 ET costs -$12,268 over 5y (PF<1 in 4/5 years).
     ifvg_block_hours: list[int] = Field(default_factory=list)
 
+    # B55: ICT "Silver Bullet" hour gate. When True, iFVG signal emission is restricted to
+    # 10:00-11:00 ET (the single highest-PF NY-AM hour per wk1-r2: PF=1.235). Sweep state
+    # continues accumulating outside the window; only emission is gated (same pattern as
+    # ifvg_block_hours). Volume: ~5-10 signals/month — too sparse for Combine; route to funded.
+    silver_bullet_only: bool = False
+
     # B48: hybrid rank-aware short filter. 0 = disabled (all shorts allowed per allowed_sides).
     # 1 = allow only rank-1 short per ET calendar day (rank-1 PF positive; rank-2+ PF=0.858).
     # Rank-1 = first short signal emitted on the ET day; rank-2+ = subsequent shorts.

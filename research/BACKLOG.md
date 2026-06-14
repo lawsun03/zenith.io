@@ -2304,7 +2304,7 @@ Prior: ~40% that r=2.5 improves both combine AND funded. Shorter targets often h
 
 Source: MFE/MAE winner MFE distribution (wk1-r3); Lesson 50 config parity gap. iFVG r_multiple is the only unexplored primary StrategyParams field for the funded objective.
 
-## B55 — iFVG "Silver Bullet" window (10:00-11:00 AM ET only)  [pending — Lawrence-requested 2026-06-14 (Chermane Trades ICT video); rank ahead of routine queue]
+## B55 — iFVG "Silver Bullet" window (10:00-11:00 AM ET only)  [done — wk3-b55 2026-06-14; REJECTED both objectives]
 Source: Chermane Trades "This Trade Required PATIENCE / NQ ICT SMC" walkthrough
 (youtu.be/rj7B8bdFaLs). The video's mechanics are standard ICT (sweep ->
 displacement -> FVG/OB retracement in a killzone) = already covered by iFVG +

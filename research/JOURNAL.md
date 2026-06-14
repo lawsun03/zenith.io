@@ -1924,3 +1924,21 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** research — 3 backlog items appended (B55, B56, B57)
 - **Learned:** ORB trades preceded by any same-direction iFVG signal that day (57.8% of all ORB trades) have PF=1.427 — the remaining 42.2% are essentially breakeven or loss-making (PF=0.963). This 5-for-5 consistent pattern is the strongest cross-engine quality predictor found in this research program, and it passes Phase 1 GO criteria. The complementary volume mining found that iFVG inversion bar volume is non-monotonic (moderate volume best), consistent with the B45/B49/B51 pattern of non-monotonic ORB quality predictors.
 - **Next:** B55 — Phase A config-optimized full funded-pipeline benchmark (no code, run immediately; informs Lawrence's Monday config decision).
+
+## 2026-06-14T09:00Z — session wk3-b55 — B55 (Silver Bullet window)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat, no drift.
+- **Ran:**
+  1. Code: `silver_bullet_only: bool = False` added to `StrategyParams` (bot_config.py), `ComposerConfig` (composer.py), and emission gate `if bar.ts.astimezone(_ET).hour != 10: return None` wired in `on_displacement()`. Wired through `runner.py` and `main.py` (both ComposerConfig instantiation sites each). Pattern matches `block_hours`/`ifvg_block_hours` exactly.
+  2. Tests: 7 tests in `tests/test_silver_bullet.py` — default-off, fires at 10:30, suppressed at 09:45/11:15, boundary 10:00 fires/11:00 does not, sweep state preserved during suppressed period.
+  3. Full suite: `pytest tests -q` — **691 passed, 2 skipped** (7 new tests added, all green).
+  4. Combine benchmark: `run_monthly_combine.py --set silver_bullet_only=True --partial-r 0 --set swing_stop_lookback=0`.
+  5. Funded r=1.25 and r=1.0: `equity_export.py` + `funded_sim.py --haircut 200` on `bars_MNQ_dbv_2021_2026.csv` (excl 2022 holdout).
+- **Numbers:**
+  - Combine (silver_bullet_only=True): **6/61 passes (10%), PF=1.04** vs baseline 9/61 (15%), PF=1.11 → WORSE both.
+  - Funded r=1.25: equity PF=1.060, net=+$96,891; funded_sim 33 passes / 68 XFA busts, **sust=0.485** vs B19 PF=1.173, sust=1.600 → WORSE both.
+  - Funded r=1.0: equity PF=1.051, net=+$80,632; funded_sim 29 passes / 69 XFA busts, **sust=0.420** → WORSE both.
+  - Stop rule: loses on both objective metric AND PF vs baseline at both r-levels → REJECTED.
+- **Verdict:** rejected
+- **Learned:** Volume starvation kills the Silver Bullet hypothesis. Restricting to 10:00-11:00 ET (~20% of trading hours) cuts signal volume so severely that combine pass frequency cannot keep pace with XFA busts, making the pipeline net-drain (sust 0.42-0.49 vs baseline 1.6). The wk1-r2 per-hour PF=1.235 for 10:xx ET does not transfer to funded pipeline advantage — Lesson 89 confirmed: per-hour PF in population-level data does not predict per-hour PF within the specific deployed config, and volume is a prerequisite for pipeline sustainability regardless of hourly PF.
+- **Next:** B56 — SetupGrader audit + conditional refactor (Lawrence-requested); or wk3-r3 Phase A optimized pipeline benchmark (wk3-r2 B55 item).
