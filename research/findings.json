@@ -3638,5 +3638,32 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T22:30:00Z",
+    "session": "wk6-r2",
+    "item": "RESEARCH",
+    "variant": "direction-conflict-probe-and-pm-break-probe",
+    "objective": "research",
+    "metrics": {
+      "probe_a_continuation_pf": 0.785,
+      "probe_a_conflict_pf": 1.052,
+      "probe_a_ratio": 1.34,
+      "probe_a_years_consistent": 5,
+      "probe_a_short_short_pf": 0.666,
+      "probe_a_short_short_net": -90480,
+      "probe_b_pm_break_pf": 1.857,
+      "probe_b_within_pm_pf": 0.886,
+      "probe_b_ratio": 2.097,
+      "probe_b_years_consistent": 3,
+      "new_backlog_items": 2
+    },
+    "verdict": "dataset",
+    "learned": "Probe A: rank-2+ iFVG same-direction continuation signals are loss-making (PF=0.785 vs conflict PF=1.052, ratio=1.340, 5/5 years), driven primarily by short->short repeats (PF=0.666, net=-$90k). Probe B: ORB signals that break the pre-market (08:00-09:29 ET) high/low have PF=1.857 vs within-PM PF=0.886 (ratio 2.097), consistent in 3/5 years with 2024-2026 dominating. B81+B82 queued for Phase 2 benchmarks.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

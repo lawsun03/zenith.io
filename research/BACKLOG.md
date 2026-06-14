@@ -3456,3 +3456,120 @@ excursion analysis within 1 tick tolerance.
 **Prior:** N/A (infra/observability). No stop rule. Source: Rule 13; B77 dataset availability;
 wk6-r1 probe confirming excursion-data value for understanding trade quality.
 Tag: model:opus (code build requiring careful broker-state threading and SSE wiring).
+
+## RESEARCH -- Session wk6-r2  [done -- 2 items appended: B81 iFVG direction-continuation gate, B82 ORB pre-market break gate]
+
+---
+
+## B81 -- iFVG within-day direction-continuation gate (Phase 2 code + benchmark)  [pending]
+
+**Hypothesis:** After an iFVG signal fires in direction D, subsequent same-direction iFVG signals ("continuation") are loss-making (PF=0.785); opposite-direction signals ("conflict") are marginally profitable (PF=1.052). Suppressing continuation rank-2+ signals improves the deployed iFVG combine-phase PF.
+
+**Phase 1 data (done in wk6-r2):** 
+- Continuation (same dir as rank-1): n=633, PF=0.785, net=-$103,946 (5/5 years losing vs conflict)
+- Conflict (opposite dir): n=775, PF=1.052, net=+$28,013
+- Ratio conflict/continuation: 1.340 (> 1.30 GO threshold), consistent 5/5 years
+- Direction pair detail: short→short is dominant loss driver (PF=0.666, -$90k, 4/5 years); long→long also negative (PF=0.937, -$13k); short→long positive (PF=1.108, +$30k) but 2/5 years consistent
+- Volume impact: removing continuation rank-2+ removes 633/2376 = 26.6% of iFVG signals (similar to B71's 28%)
+
+**Mechanism:** Close-mode iFVG shorts are broadly loss-making (Lesson 96, PF=0.84 for rank-1). Repeating a short the same day (short→short) compounds this failure: after one short entry and exit (usually a loss), another supply zone appearing at a higher price means the first zone's supply was absorbed, making the repeat short structurally weaker. The long→long repeat is also loss-making: after a bullish iFVG fires and price moves up, a second long entry means price pulled back through the demand zone and found another demand zone at a LOWER price — the demand structure weakened. Conflict signals (e.g., short after prior long) represent a fresh, opposite institutional orderflow zone.
+
+**Exact deterministic rules:**
+- In `app/strategy/combined.py` (or the iFVG runner): maintain per-day dict `_last_ifvg_direction: dict[str, Optional[str]]` keyed by instrument.
+- On EACH iFVG signal emission: if `_last_ifvg_direction[instrument] == signal.side` AND `ifvg_suppress_same_direction_repeat=True` → DROP the signal (do not forward to the position manager).
+- Update `_last_ifvg_direction[instrument]` only when a signal is NOT dropped.
+- Reset `_last_ifvg_direction[instrument]` to None at each calendar-day reset (same mechanism as other per-day trackers).
+- ORB signals are NEVER gated by this flag.
+- Flag default: `False` (off by default, live bot unaffected).
+- Add `ifvg_suppress_same_direction_repeat: bool = False` to `StrategyParams`.
+
+**Defining-behavior tests (tests/test_b81_direction_gate.py):**
+1. If flag=True and rank-1 signal was LONG: second LONG signal is suppressed; second SHORT signal is not.
+2. If flag=True and rank-1 signal was SHORT: second SHORT signal is suppressed; second LONG signal is not.
+3. If flag=False: all signals pass (gate off by default).
+4. Per-day reset: after calendar-day boundary, the gate state clears and the next signal of any direction is accepted.
+5. ORB signals are never gated even when flag=True.
+
+**Phase 2 benchmark commands:**
+```
+# Phase A combine harness
+scripts/run_monthly_combine.py --bars bars/bars_MNQ_dbv_2021_2026.csv --instrument MNQ --timeframe 5min --risk-pct 1.0 --set r_multiple=2.5 --set ifvg_suppress_same_direction_repeat=True
+
+# Full funded-pipeline benchmark
+scripts/equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 1.0 --set r_multiple=2.5 --set ifvg_suppress_same_direction_repeat=True --out research/equity_b81.csv
+scripts/funded_sim.py research/equity_b81.csv --haircut 200
+```
+
+**Success criteria vs baselines:**
+- Primary: BOTH $/mo and sust > B42 ($549/mo, sust=3.23x)
+- Stretch: both > B57 ($566/mo, sust=3.54x)
+- Per-year combine pass rate >= B42 (10/61, 16%)
+
+**Stop rule:** If BOTH $/mo < $549 AND sust < 3.23x → REJECT. No parameter rescue.
+
+**Prior / rejection probability:** HIGH (~70%). B71 (allowed_sides=long, 28% volume cut) degraded sust 3.23x→3.08x on BOTH metrics despite improving per-attempt pass rate. This gate removes a similar volume fraction (26.6%) and will likely trigger the same throughput-starvation mechanism (Lessons 83/130). Expected outcome: marginally better PF per attempt, fewer total attempts, net degradation. Still worth running to close the hypothesis definitively. If both variants (full continuation gate AND shorts-only variant) fail, the short→short finding is still documented and closure is clean.
+
+**Optional Phase 2b:** If Phase 2 fails, run a shorts-only variant: `ifvg_suppress_same_direction_short_repeat=True` (only suppress short→short, not long→long). Volume impact: 346/2376 = 14.6%. Compare to B71's 28% — may stay above starvation threshold.
+
+**Source:** wk6-r2 inline probes (scripts/_probe_wk6r2.py, _probe_wk6r2b.py). Lesson 148.
+
+---
+
+## B82 -- ORB pre-market break gate (Phase 2 code + benchmark)  [pending]
+
+**Hypothesis:** ORB signals that break through the pre-market (08:00-09:29 ET) high (for longs) or pre-market low (for shorts) are dramatically higher quality (PF=1.857) than those remaining within the pre-market range (PF=0.886). Gating the ORB on PM-break condition will improve funded pipeline.
+
+**Phase 1 data (done in wk6-r2):**
+- PM break (n=599, 69.5%): PF=1.857, net=+$250,790
+- Within PM (n=263, 30.5%): PF=0.886, net=-$19,463
+- Overall ratio: 2.097 (>> 1.30 GO threshold)
+- Year consistency: 3/5 years (2024: 1.497, 2025: 3.386, 2026: 3.563 — GO; 2021: 0.975 INVERTED; 2023: 1.040 flat)
+- Volume impact: removes 263/862 = 30.5% of ORB signals
+
+**Mechanism:** An ORB breakout that also clears the 1.5-hour pre-market high or low represents a MORE SIGNIFICANT structural event than clearing only the 15-minute OR. Institutions who established directional positions during the pre-market session (8:00-9:30 ET) set structural reference levels at the PM high/low. When the ORB breakout violates these levels, those positions require repositioning — creating genuine sustained directional pressure. Within-PM ORB breakouts merely oscillate within the already-established structural band and represent lower-conviction institutional commitment. The 2021 inversion (within-PM outperformed) occurred during a powerful NQ bull market where ALL ORB signals captured the trend regardless of PM structure; in more mixed regimes (2024-2026), the PM break distinction becomes the quality separator.
+
+**Exact deterministic rules:**
+- Add `orb_require_pm_break: bool = False` to `StrategyParams` (default off).
+- In `app/strategy/orb.py` (ORBDetector), before emitting a signal: if `orb_require_pm_break=True`:
+  - Compute pre-market high and low from the 08:00-09:29 ET (13:00-14:29 UTC) bars of the current trading day.
+  - For LONG signal: require that signal_bar.close > pm_high.
+  - For SHORT signal: require that signal_bar.close < pm_low.
+  - If condition fails: suppress the signal (do not emit).
+- Pre-market range computation: maintain a rolling per-day accumulator `_pm_high`, `_pm_low` that resets at each calendar-day start and updates on every bar where bar.ts is within [08:00, 09:30) ET. At signal time (09:30+ ET), the accumulator is complete.
+- Edge case: if no pre-market bars exist for a day (e.g., early open, holiday schedule), fall back to allowing all signals for that day.
+- Flag default: `False` (off by default, live bot unaffected).
+
+**Defining-behavior tests (tests/test_b82_pm_break.py):**
+1. Long signal bar close > pm_high: allowed when flag=True.
+2. Long signal bar close <= pm_high: suppressed when flag=True.
+3. Short signal bar close < pm_low: allowed when flag=True.
+4. Short signal bar close >= pm_low: suppressed when flag=True.
+5. When flag=False: all signals pass regardless of PM relationship.
+6. No pre-market bars for day: signal allowed (graceful fallback).
+
+**Phase 2 benchmark commands:**
+```
+# Full funded-pipeline benchmark (Phase A: iFVG, Phase B: ORB with PM break gate)
+# Note: PM break gate applies to Phase B ORB signals
+scripts/equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 0.75 --set engine=orb --set r_multiple=2.5 --set orb_require_pm_break=True --out research/equity_b82_phb.csv
+scripts/funded_sim.py research/equity_b82_phb.csv --haircut 200
+
+# Phase A combine harness (no change — Phase A uses iFVG engine; PM break is Phase B only)
+# OR: run as combined engine with PM break on ORB component in Phase A
+scripts/run_monthly_combine.py --bars bars/bars_MNQ_dbv_2021_2026.csv --instrument MNQ --timeframe 5min --risk-pct 1.0 --set r_multiple=2.5 --set orb_require_pm_break=True
+```
+
+**Success criteria vs baselines:**
+- Primary: BOTH $/mo and sust > B42 ($549/mo, sust=3.23x)
+- Stretch: both > B57 ($566/mo, sust=3.54x)
+- Phase B specifically: ORB Phase B bust count <= 13 (B42 baseline) AND $/month (Phase B contribution) improves
+
+**Stop rule:** If BOTH $/mo < $549 AND sust < 3.23x → REJECT. No tuning.
+
+**Prior / rejection probability:** MEDIUM (~50%). The 2.097x Phase 1 ratio is the strongest ORB quality predictor found in this research program. However: (a) volume starvation risk (30.5% cut, less than B56's 42.2% but above the lower bound); (b) 2021/2023 inconsistency means the gate may cut good signals in trend-following years; (c) Lesson 109 shows that Phase B ORB can only sustain ~15 trades/account-lifecycle before MLL risk dominates — losing 30% of signals may push some accounts below the survival threshold.
+
+**Sensitivity requirement:** Phase 2 report must include sub-period breakdown: 2021+2023 combined vs 2024-2026 combined, to quantify regime dependence. If the gate hurts 2021+2023 and only helps 2024-2026, the result is regime-specific and should not be deployed.
+
+**2022 holdout:** Required before deployment if Phase 2 passes.
+
+**Source:** wk6-r2 inline Probe B (scripts/_probe_wk6r2.py). Lesson 149.

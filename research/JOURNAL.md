@@ -3150,3 +3150,57 @@ Phase B (B21 ORB-reentry r0.75): 13/14 busts, $3,131/acct, 73.5d/acct.
 **Learned:** The live broker tracks MFE/MAE via bar close (not intrabar H/L like the paper broker). This is correct for closed-bar confirmation but means the live excursion is slightly understated relative to intrabar extremes. For dashboard observability purposes (gauging trade quality vs the backtest r_mfe distribution) this is sufficient.
 
 **Next:** Research/ideation session or next pending backlog item (check every-3rd-session rule vs completed build count).
+
+---
+
+## wk6-r2 — 2026-06-14
+
+**Item:** RESEARCH — Session wk6-r2 (backlog exhausted; every-3rd-session rule: last 3 completed = B78 benchmark/rejected, B79 data-mining/rejected, B80 build/shipped)
+**Bot health:** Port :5175 live — XFA shadow, equity $152,227 at HWM, flat, 0 open contracts. Market closed (weekend). Databento: $3.87/$20.00.
+**Session type:** Research/ideation
+
+**What ran:**
+1. Read PROTOCOL.md, LESSONS.md (through L147), BACKLOG.md, last 3 JOURNAL entries.
+2. Probe A — iFVG within-day direction-conflict analysis on `mfe_mae_deployed_combined_clean.csv` (n=2376 iFVG trades, 5y excl 2022, scripts/_probe_wk6r2.py + _probe_wk6r2b.py).
+3. Probe B — ORB pre-market (08:00-09:29 ET) high/low break analysis (n=862 ORB trades + `bars_MNQ_dbv_2021_2026.csv`, same script).
+4. Probe C — iFVG entry-hour distribution (confirmatory, no new findings vs B74).
+5. Direction pair breakdown: long->long, long->short, short->long, short->short sub-groups within rank-2+ iFVG.
+6. WebSearch: NQ ORB pre-market filters; iFVG signal quality predictors — no novel mechanism class not already covered by LESSONS.md.
+
+**B57 Monday deployment status:** 2022 holdout ALREADY DONE in B57 session itself (Lesson 111: r=2.5 passes 25.8% vs r=3.5 24.6% in 2022). Safe to deploy: remove MNQ r_multiple=3.5 override from bot_config.json.strategy on Monday.
+
+**Probe A numbers — iFVG within-day direction-continuation:**
+| Group | n | PF | Net ($) |
+|---|---|---|---|
+| Continuation (same dir as rank-1) | 633 | 0.785 | -103,946 |
+| Conflict (opposite dir from rank-1) | 775 | 1.052 | +28,013 |
+| Ratio conflict/continuation | — | **1.340** | — |
+
+Direction pair detail:
+- long→long: n=287, PF=0.937, net=-$13k (4/5 years losing)
+- long→short: n=371, PF=0.994, net=-$2k (near breakeven)
+- short→long: n=404, PF=1.108, net=+$30k (2/5 years consistent)
+- **short→short: n=346, PF=0.666, net=-$90k (4/5 years — dominant loss driver)**
+
+Phase 1 verdict: GO (ratio 1.340 > 1.30, 5/5 years consistent). Dominant mechanism: short→short is the catastrophic repeater. B81 proposed.
+
+**Probe B numbers — ORB pre-market break:**
+| Group | n | % | PF | Net ($) |
+|---|---|---|---|---|
+| PM break (entry > PM_H or < PM_L) | 599 | 69.5% | 1.857 | +250,790 |
+| Within PM | 263 | 30.5% | 0.886 | -19,463 |
+| Ratio PM-break/within-PM | — | — | **2.097** | — |
+
+Per-year: 2021 ratio=0.975 (INVERTED), 2023=1.040 (flat), 2024=1.497 (GO), 2025=3.386 (GO), 2026=3.563 (GO).
+Year consistency: 3/5 (threshold: 3/5). Strong but concentrated in 2024-2026.
+Volume impact: removes 30.5% of ORB signals — less than B56's 42.2% but still near starvation threshold.
+
+Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-hour pre-market range is a more significant institutional structural event than just the 15-minute OR. B82 proposed.
+
+**New backlog items appended:** B81 (iFVG direction-continuation gate, Phase 2), B82 (ORB PM-break gate, Phase 2).
+
+**Verdict:** dataset (research session — probes only, no code changes, no benchmark runs)
+
+**Learned:** Within-day iFVG signal repetition in the same direction is loss-making, driven overwhelmingly by short→short repeats (PF=0.666); the close-mode short quality problem (Lesson 96) compounds when shorts are repeated the same day. ORB pre-market range break is the strongest single-dimension ORB quality predictor found in this research program (2.097x overall), but its recent-year concentration (2024-2026) makes it potentially regime-dependent — Phase 2 must test on the full 5y window and note the 2021/2023 sensitivity.
+
+**Next:** B81 (iFVG direction-continuation gate, Phase 2 code + benchmark) or B82 (ORB PM-break gate, Phase 2 code + benchmark). Both are Sonnet-appropriate moderate code changes.
