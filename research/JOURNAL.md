@@ -2066,3 +2066,49 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected (Phase 1 NO-GO)
 - **Learned:** Compositing validated contextual features through WoE does not break through the best single predictor (rank-1-only OOS PF 1.234). The composite score is non-monotone in OOS deciles (D2=1.296 outperforms D9=1.082). The hour_london WoE is NEGATIVE in the combined iFVG+ORB population because iFVG London shorts are loss-making, even though B19 showed long-only London iFVG is good — the composite can't capture this side-specific interaction cleanly. All "good signal" characteristics (long, rank-1, NY AM, ORB) co-occur, making them correlated rather than independent; WoE additivity assumes independence that doesn't hold.
 - **Next:** B58 (confluence-weighted sizing — Lawrence-requested, additive complement to B57's scoring approach). B57 r_multiple sensitivity (first pending B57 item) is also unaddressed.
+
+---
+
+## B57 — iFVG r_multiple sensitivity benchmark — 2026-06-14T08:00Z (wk3-b57-rmult)
+
+- **Bot health:** XFA shadow combine, equity $152,227.12 at high-water, flat, no drift, no lockout.
+- **Item claimed:** B57 (first pending B57) — iFVG r_multiple sensitivity benchmark.
+- **MNQ override verification:** CLI `--set r_multiple=X` is applied AFTER `strategy_for()` (which applies MNQ instrument overrides), so CLI wins. No need to modify the benchmark invocation.
+
+**Combine harness (run_monthly_combine.py, 61 months, full deployed config: combined+close+all-day+partial=1.5+r=1.0%, MNQ overrides body=5.0/stop=3.0, only r_multiple varied):**
+| r_multiple | Passes/61 | Pass Rate | Run PF | Long PF | Short PF |
+|-----------|-----------|-----------|--------|---------|---------|
+| 2.0 | 12 | 20% | 1.07 | 1.31 | 0.87 |
+| 2.5 | 11 | 18% | 1.05 | 1.29 | 0.86 |
+| 3.0 | 10 | 16% | 1.07 | 1.29 | 0.89 |
+| 3.5 (baseline) | 10 | 16% | 1.06 | 1.32 | 0.84 |
+
+**Two-phase funded pipeline (Phase A: equity_b57/ variants; Phase B: orb_reentry_r0p75 unchanged; haircut $200):**
+| r_multiple | A passes/att | Reset$/funded | $/mo | Sust | vs B42 |
+|-----------|-------------|--------------|------|------|--------|
+| 2.0 | 46/166 | $541 | **$567** | **3.54x** | +$18, +0.31x *** BEATS B42 |
+| 2.5 | 46/167 | $545 | **$566** | **3.54x** | +$17, +0.31x *** BEATS B42 |
+| 3.0 | 40/154 | $578 | $540 | 3.08x | -$9, -0.15x |
+| 3.5 (baseline) | 42/159 | $568 | $549 | 3.23x | — |
+
+**2022 confirmatory holdout (combine standalone, 6y incl 2022, r=2.5 equity generated):**
+- r=2.5: 50/194 passes (25.8%) — advantage over r=3.5 holds (46/187, 24.6%)
+- No blow-up in 2022 bear market; pass rate declines similarly for both variants
+
+**Stop rule:** r=2.5 and r=2.0 BOTH clear stop rule (win on combine AND funded metrics). r=3.0 loses on both.
+
+**Success criteria vs spec:**
+- Combine: r=2.5 achieves 11/61 (>= 11 threshold) ✓
+- Funded: r=2.5 achieves sust=3.54x (>= 3.23x) AND $/mo=$566 (>= $500) ✓
+
+**Verdict:** CANDIDATE — r=2.5 beats B42 baseline on both metrics.
+
+**Action needed:** Remove or lower `r_multiple` from `strategy_overrides.MNQ` in bot_config.json (currently "3.5" → recommend "2.5" or delete to inherit base). r=2.0 and r=2.5 give essentially identical pipeline results ($567/$566/mo, both 3.54x); recommend r=2.5 as it matches the base StrategyParams default, requiring only removal of the MNQ override.
+
+**Learned:** Shorter iFVG targets improve the Combine-phase throughput (more months reach $3k threshold) while barely changing the per-winner magnitude — the net effect is a lower reset cost per funded account ($545 vs $568), driving better pipeline economics. The deployed r=3.5 was set historically without a funded-pipeline sensitivity test; this is the first systematic sweep.
+
+**Lesson 111 added** (lower r_multiple improves Combine throughput without materially degrading XFA earnings per account).
+
+**Test suite:** 698 passed, 2 skipped, 0 failures (no code changes — all new files are analysis scripts).
+
+**Next:** B58 — confluence-weighted additive sizing (Lawrence-requested).

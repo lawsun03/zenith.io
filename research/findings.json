@@ -2629,5 +2629,30 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T08:00:00Z",
+    "session": "wk3-b57-rmult",
+    "item": "B57",
+    "variant": "r_multiple sensitivity: 2.0 / 2.5 / 3.0 vs 3.5 baseline",
+    "objective": "funded",
+    "metrics": {
+      "combine_r20": {"passes": 12, "of": 61, "pf": 1.07},
+      "combine_r25": {"passes": 11, "of": 61, "pf": 1.05},
+      "combine_r30": {"passes": 10, "of": 61, "pf": 1.07},
+      "combine_r35_baseline": {"passes": 10, "of": 61, "pf": 1.06},
+      "pipeline_r20": {"net_per_month": 567, "sustainability": 3.54},
+      "pipeline_r25": {"net_per_month": 566, "sustainability": 3.54},
+      "pipeline_r30": {"net_per_month": 540, "sustainability": 3.08},
+      "pipeline_r35_baseline": {"net_per_month": 549, "sustainability": 3.23},
+      "holdout_2022_r25": {"combine_pass_rate": 0.258, "compare_r35": 0.246}
+    },
+    "verdict": "candidate",
+    "learned": "Lowering iFVG r_multiple from deployed 3.5 to 2.5 improves both combine pass rate (11/61 vs 10/61) and funded pipeline economics ($566/mo, 3.54x sust vs $549/mo, 3.23x baseline), clearing both success criteria. The mechanism is structural: shorter targets produce more frequent Combine-phase wins, reducing reset cost per funded account by ~$23, which more than offsets any per-winner earning reduction. r=2.0 gives marginally identical results ($567/mo, 3.54x) — the pipeline is flat between 2.0 and 2.5; r=3.0 and r=3.5 are materially worse. 2022 holdout confirms: r=2.5 maintain its advantage in the 2022 bear market (25.8% vs 24.6% pass rate at r=3.5).",
+    "links": {
+      "doc": null,
+      "runs": ["b57_r20", "b57_r25", "b57_r30", "b57_r35_base"],
+      "src": null
+    }
   }
 ]

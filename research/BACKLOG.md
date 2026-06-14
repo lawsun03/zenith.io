@@ -2276,7 +2276,7 @@ Success criteria (vs B42: $549/mo, sust=3.23x):
 
 Source: wk3-r2 cross-engine confluence data mining (scripts/analyze_cross_engine_confluence.py). Lesson 103.
 
-## B57 — iFVG r_multiple sensitivity benchmark (funded + combine)  [pending]
+## B57 — iFVG r_multiple sensitivity benchmark (funded + combine)  [done — wk3-b57-rmult 2026-06-14; CANDIDATE: r=2.5 beats B42 baseline ($566/mo, 3.54x vs $549/mo, 3.23x); recommend remove MNQ r_multiple override 3.5→base 2.5]
 
 **Hypothesis:** The deployed iFVG r_multiple=3.5 has never been varied in funded benchmarks (all B1-B54 used the deployed MNQ instrument override of 3.5). A lower target (2.5R or 3.0R) increases WR by bringing target closer to entry — potentially improving combine pass rate (more months reach $3k threshold) and funded bust rate (more frequent exits reduce holding-period risk exposure).
 
