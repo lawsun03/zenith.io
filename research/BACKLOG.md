@@ -2823,6 +2823,119 @@ Source: wk4-r3 research session (2026-06-14); novel -- not found in prior sessio
 
 ---
 
+## B70 — Phase B ORB-only orb_r_multiple sweep (correct B57 analog)  [pending]
+
+Lesson 124 (B67) explicitly flags this as untested: B67 swept orb_r_multiple but used
+engine=combined (wrong) — the combined engine catastrophically busts funded accounts
+(B67: sust 0.59-0.64x). The correct analog to B57 (iFVG Phase A r_multiple sensitivity)
+for Phase B is a sweep of orb_r_multiple using the ORB-only engine (engine=orb,
+orb_reentry_after_stop=True, risk=0.75%), which is the same engine used in the
+B21/B42 baseline Phase B.
+
+Mechanism (B57 analog):
+- B57 showed lower iFVG r_multiple (3.5 → 2.5) improves Phase A throughput by hitting
+  the $3k combine target more often, reducing reset cost per funded account ($568→$545).
+- For Phase B, lower orb_r_multiple means ORB targets are hit more often (more trades
+  exit at target rather than EOD flatten), potentially increasing per-account net or
+  reducing account duration. Counter-risk: Lesson 88 shows ORB value is in 4h+ EOD
+  flattens (PF=4.129); hitting target EARLIER cuts the favorable-excursion tail.
+  Lower r may clip winners.
+
+Method (no code — orb_r_multiple already in StrategyParams):
+1. For each r in {1.5, 2.0, 2.5 (baseline), 3.0, 3.5}, run:
+   `equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 0.75
+    --set engine=orb --set orb_reentry_after_stop=True --set orb_r_multiple=<r>
+    --partial-r 0 --set swing_stop_lookback=0 --out research/equity_b70/orb_r<r>_<year>.csv`
+   for each year in {2021, 2023, 2024, 2025, 2026} (excl 2022 holdout).
+2. Run funded_sim on each: `funded_sim.py research/equity_b70/orb_r<r>_*.csv --haircut 200`
+3. Two-phase pipeline: Phase A = equity_b42/ (42 passes, $568 reset). Phase B = each r variant.
+
+Success criteria vs B42 ($549/mo, sust=3.23x): BOTH $/mo AND sust must improve.
+Stop rule: if ALL tested r values lose on both metrics vs B42, reject.
+
+Prior: ~30%. B57 mechanism (lower r → more target hits → lower reset cost) is clear for
+Phase A where the target is $3k combine profit. For Phase B (XFA funded), the target is
+a payout milestone; lower orb_r_multiple may EITHER improve throughput (more frequent
+payouts) OR clip the high-value EOD-flatten tail (reducing per-payout earnings). The
+Lesson 88 4h+ concentration means most ORB winners already flatten EOD regardless of
+r_multiple (only 11% hit target before EOD); changing r_multiple may have small marginal
+effect vs the EOD-flatten dominant regime. Medium-low prior.
+
+Source: Lesson 124 (B67); wk5-r1 research session (2026-06-15).
+
+---
+
+## B71 — Full pipeline: allowed_sides=long + r_multiple=2.5 (combining B15+B57)  [pending]
+
+Two independent improvements (B15 and B57) have never been tested TOGETHER in the full
+two-phase pipeline. wk5-r1 Phase 1 (combine harness): LO+r=2.5 achieves 14/61 monthly
+passes (23%, PF 1.19) — the highest Phase A pass rate ever recorded, vs B42 both-sides
+r=3.5: 10/61 (16%), PF 1.06. The +4 passes (+40%) come from removing loss-making iFVG
+shorts (Lesson 128) AND the +1 pass from lower r_multiple (B57).
+
+Current deployed config gaps:
+- `allowed_sides` not set in bot_config.json → defaults to "both" (Lesson 128)
+- MNQ strategy_override r_multiple="3.5" (B57 recommends removing this → base r=2.5)
+Both gaps work against the pipeline. This item tests the combined fix.
+
+Method (no code; equity_export + funded_sim):
+1. Generate 5 per-year Phase A equity CSVs (2021/2023/2024/2025/2026, excl 2022 holdout):
+   `equity_export.py --bars bars/bars_MNQ_dbv_2021_2026.csv --risk-pct 1.0
+    --set engine=combined --set ifvg_entry_mode=close --set enabled_killzones=all
+    --set swing_stop_lookback=30 --set allowed_sides=long --set r_multiple=2.5
+    --set stop_buffer=3.0 --set min_absolute_body=5.0 --partial-r 1.5
+    --out research/equity_b71/lo_r25_<year>.csv`
+2. Run funded_sim for two-phase pipeline: Phase B = equity_b21/orb_reentry_r0p75 (unchanged).
+3. Compare vs B42 ($549/mo, sust=3.23x) and vs B57 ($566/mo, sust=3.54x — current best candidate).
+4. 2022 holdout REQUIRED if result beats B57 on both metrics.
+
+Success criteria vs B57 ($566/mo, sust=3.54x): BOTH $/mo AND sust must improve.
+Stop rule vs B42 ($549/mo, sust=3.23x): if result is worse on both metrics, reject.
+(if beats B42 but not B57, declare "partial candidate" with B57 recommendation unchanged).
+
+Prior: ~65%. 14/61 Phase A passes projects to ~59 funded passes over 5y (vs B42's 42),
+which at B21 Phase B rate (13 busts) would give sust ~4.5x and $/mo ~$640+. The actual
+funded equity CSVs may diverge from the combine harness projection (Lesson 83 warning
+about decoupling), but the 40% combine improvement is strong enough to project meaningful
+pipeline improvement. The main risk: removing iFVG shorts with allowed_sides=long may also
+affect funded equity curves in years where iFVG shorts were the primary P&L driver.
+
+Source: Lesson 128 (wk5-r1); B57 candidate (lower r_multiple); B15/B96 (iFVG short losses
+in close-mode). Highest-value pending benchmark.
+
+---
+
+## B72 — iFVG rank-1-only Phase 1 data mining (daily signal cap = 1)  [pending]
+
+Context: Non-first iFVG signals on multi-signal days have overall PF=0.981 (wk4-r3
+verification, n=1461 second+ signals, 5y excl 2022 — below breakeven). Rank-1 signals
+drive the strategy's edge (B23, B57: rank-1 quality consistently higher). The question:
+if we hard-cap at 1 iFVG signal per day, does the pipeline improve?
+
+Phase 1 ONLY (data mining from existing trade data — no code until GO):
+- From B71 equity CSVs (or a new equity_export run with engine=ifvg, close, LO, all-day,
+  MNQ overrides, r=2.5), extract per-trade daily rank.
+- Compute PF for rank-1 vs rank-2+ signals in close-mode all-day long-only deployed config.
+- GO criterion: rank-1 PF >= 1.50 (high bar — volume starvation is the dominant risk;
+  restricting to rank-1 removes ~60% of long signals, so the remaining edge must be very
+  strong to offset the throughput penalty per Lessons 83/105/109).
+
+Phase 2 (only if Phase 1 GO):
+- Add `ifvg_daily_signal_cap: int = 0` (0 = unlimited) to StrategyParams.
+- Gate in SweepDisplacementComposer.on_displacement(): if cap>0 and daily_rank>cap: return None.
+- Defining tests: cap=0 no-op, cap=1 suppresses rank-2+, cap=2 allows rank-1 and rank-2.
+- Full equity_export + funded_sim pipeline benchmark vs B71 result.
+
+Prior: ~15%. Volume starvation is the dominant risk: capping to rank-1 removes ~60% of
+long signals (~7/month → ~4.5/month). Even with higher per-signal PF, the throughput
+reduction likely dominates (Lessons 83, 105 confirmed). The 1.50 GO threshold is high
+by design. If rank-1 PF exceeds 1.50 in close-mode, the mechanism is worth building.
+
+Source: wk5-r1 data mining (non-first iFVG signals PF=0.981); B23 rank sensitivity;
+Lessons 83/105/109 (volume starvation pattern).
+
+---
+
 ## B66 — Markov 2.0 STANDALONE daily-directional engine (Topstep-compatible)  [deferred — B65 Phase 1 NO-GO; Markov stride-sampled signal shows weak persistence + backward short direction; no directional edge at 5min level; re-evaluate only if a fundamentally different regime labeling method shows Phase 1 GO; model:opus]
 Markov STANDALONE mode, expressed within Topstep's intraday-flatten constraint
 (pure multi-day holds are impossible — accounts flatten EOD). Each session: the

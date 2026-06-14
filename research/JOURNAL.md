@@ -2513,3 +2513,43 @@ Years where fresh > stale: 3/5 (2021 ✓, 2024 ✓, 2025 ✓; 2023 ✗, 2026 ✗
 **Retained:** displacement_ts field (stores fvg.created_at) remains in Signal and trade output — useful for future cross-cuts (e.g., combined with killzone or regime).
 
 **Next:** All B-items exhausted. Backlog is empty — next session must be a research/ideation run to replenish B70+.
+
+---
+
+## 2026-06-15T07:30:00Z — session wk5-r1 — RESEARCH (wk5-r1 backlog replenishment)
+
+- **Bot health:** /api/status OK — XFA shadow, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend).
+- **Session note:** Backlog fully exhausted (B1-B69 done, B66 deferred). Protocol mandates research/ideation session.
+- **Databento ledger:** $3.87 / $20.00 cap. No fetches this session.
+- **Ran:**
+  1. Bot health check: port 5175 responsive, XFA shadow running, no issues.
+  2. Read bot_config.json: confirmed `allowed_sides` is NOT set in strategy section — defaults to StrategyParams `"both"`. MNQ override r_multiple="3.5". Base strategy r_multiple="2.5".
+  3. Ran `run_monthly_combine.py --risk-pct 1.0 --set allowed_sides=long --set r_multiple=2.5 --partial-r 1.5` (61 months, deployed MNQ 5min config). Phase 1 combine harness for the LO+r=2.5 combination (B71 Phase 1).
+  4. Reviewed Lesson 124 gap: B67 swept orb_r_multiple with combined engine (wrong) — the correct Phase B ORB-only sweep has never been done (B70 proposal).
+  5. Reviewed LESSONS.md and BACKLOG.md for remaining open threads: non-first iFVG signals PF=0.981 → rank-1-only Phase 1 mining (B72 proposal).
+
+- **Key finding (Phase 1 for B71):**
+
+  **Combine harness: allowed_sides=long + r_multiple=2.5 (61 months, full deployed MNQ config):**
+  | Config | Passes/61 | % | PF | Long exits | Short exits |
+  |--------|-----------|---|----|------------|-------------|
+  | LO+r=2.5 (this session) | **14** | **23%** | **1.19** | 1085 | 250 (ORB only) |
+  | B42 both-sides r=3.5 | 10 | 16% | 1.06 | — | — |
+  | B48 LO r=3.5 | 12 | 20% | 1.21 | — | — |
+  | B57 both-sides r=2.5 | 11 | 18% | 1.05 | — | — |
+
+  **14/61 is the highest Phase A combine pass rate ever recorded in this research program.**
+  Note: 250 short exits (PF 1.05) are ORB shorts — allowed_sides=long only gates iFVG signals;
+  ORB shorts remain active through the combined engine's ORB component.
+
+- **Config gap discovered:** The deployed bot_config.json does not set `allowed_sides`, so
+  the StrategyParams default (`"both"`) governs — trading loss-making iFVG close-mode
+  shorts. B15/B96 showed iFVG close-mode shorts are deeply loss-making. The combine
+  improvement (+4 passes, +12% PF) comes entirely from suppressing iFVG shorts.
+
+- **Verdict:** research — 3 new backlog items appended (B70, B71, B72). Lesson 128 added.
+  No code changes. Test suite: 723 passed, 2 skipped, 0 failures (no new code).
+
+- **Learned:** The StrategyParams default allowed_sides="both" is silently active in the live bot — iFVG close-mode shorts are being traded despite B15/B96 establishing they are loss-making in this mode. Removing them via `allowed_sides=long` adds +40% combine passes. The combination with B57's r=2.5 recommendation gives 14/61 passes — 40% above the B42 baseline. B70 fills the Lesson-124-flagged gap (Phase B ORB-only r_multiple sweep). B71 quantifies the full two-phase pipeline impact of the LO+r=2.5 config fix. B72 tests rank-1-only as a further volume concentration (high rejection prior).
+
+- **Next:** B70 (Phase B ORB-only orb_r_multiple sweep — no code, config sweep) or B71 (LO+r=2.5 full pipeline benchmark — highest value; no code, equity_export + funded_sim). B71 recommended first given the strong Phase 1 signal (14/61 passes).

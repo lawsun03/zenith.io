@@ -3212,5 +3212,26 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T07:30:00Z",
+    "session": "wk5-r1",
+    "item": "wk5-r1",
+    "variant": "research/ideation \u2014 B70/B71/B72",
+    "objective": "dataset",
+    "metrics": {
+      "lo_r25_combine_passes": "14/61",
+      "lo_r25_pf": 1.19,
+      "vs_b42_passes": "10/61",
+      "vs_b42_pf": 1.06,
+      "databento_spend": 0.0
+    },
+    "verdict": "dataset",
+    "learned": "LO+r=2.5 in deployed close-mode all-day config achieves 14/61 monthly combine passes (23%, PF 1.19) \u2014 new Phase A record, combining B15 and B57 improvements. Phase B ORB-only r_multiple sweep (B70) was never tested (B67 used combined engine). Three new backlog items queued.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
