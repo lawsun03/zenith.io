@@ -2453,3 +2453,48 @@ expected failure); never change live grading without Lawrence (default-off +
 recommendation). Source: Lawrence direct request 2026-06-14; builds on B51/B56
 grader findings + the full validated-predictor set from B5/B15/B18/B23/B34/B40/
 B45/B49/B53/B55.
+
+## B58 — Confluence-weighted sizing (additive, not a gate) incl. Silver Bullet  [pending — Lawrence-requested 2026-06-14; do AFTER B50 + B55 (+ ideally B57); rank ahead of routine queue]
+Lawrence asked: can B55 (Silver Bullet 10-11 ET window) be used in confluence
+with other strats? Landscape: HARD confluence gates already failed -- B47
+(iFVGxORB must-agree) lost on both metrics by removing trades. SOFT scoring
+confluence is B57 (the new grader scores hour+side+rank+engine together). The
+remaining untested angle is ADDITIVE confluence: do not drop any trade -- SIZE UP
+when multiple validated edges align. This sidesteps the volume-cut failure mode
+that killed B47/B19/B48 (all subtractive).
+
+Hypothesis: a trade where several independent validated edges stack is higher
+conviction and deserves more size; sizing the high-confluence cohort up (and the
+low-confluence cohort down) improves the funded objective without cutting volume.
+Confluence count uses ONLY validated predictors: +1 long side (B15), +1 rank-1 of
+day (B23), +1 inside 10-11 ET Silver Bullet (B55/B18), +1 combined-engine context
+(B40). EXCLUDE the 6 failed predictors per B57. If B57 ships a numeric score,
+reuse it as the confluence measure instead of a hand-rolled count.
+
+Mechanism: reuse B50's dynamic-sizing hook (this is a sizing policy, not a new
+engine). Default-off `risk_policy="confluence"`: size = base x multiplier(count),
+fixed ladder (NO tuning): count>=3 -> 1.5x, count==2 -> 1.0x, count<=1 -> 0.5x.
+Total risk still capped at the configured per-trade max (respects MLL). All
+signals still TAKEN (additive -- no gate).
+
+Depends on: B50 (sizing hook), B55 (confirms the window cohort), ideally B57
+(score). If B50/B57 not done, implement the simple count inline.
+
+Defining-behavior tests (tests/test_confluence_sizing.py):
+1. risk_policy != "confluence" (default): sizing unchanged.
+2. count>=3 trade sizes at 1.5x base; count==2 at 1.0x; count<=1 at 0.5x.
+3. No trade is suppressed (additive -- assert trade COUNT equals baseline; only
+   sizes differ).
+4. 1.5x up-sized trade respects the per-trade risk cap (no MLL breach).
+
+Benchmark (objective metrics; sizing rescales bets so judge on the objectives,
+NOT PF -- see B50 metric-trap note): funded_sim + run_monthly_combine,
+confluence-sizing vs flat-size control AND vs the best single filter.
+Success: improves the funded objective (busts / $-per-month / sustainability) vs
+flat sizing at the SAME average risk. Stop rule: worse than flat on its objective
+-> reject (confluence carries conviction info but not tradable edge; document
+alongside B47).
+
+Source: Lawrence 2026-06-14 (B55 confluence question). The additive complement to
+B57's scoring and B50's dynamic risk; the one confluence form (size, not gate)
+not yet tested.
