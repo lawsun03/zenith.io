@@ -2559,7 +2559,7 @@ whether ES/MES show comparable per-year passes + sustainability >= 1.0. Defining
 tests: engine runs on ES bars; ATR-normalized thresholds reproduce NQ behavior at
 NQ price levels (parity check). Source: Lawrence 2026-06-14.
 
-## B61 — Excursion-ladder exit research (BE / partial variants)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+## B61 — Excursion-ladder exit research (BE / partial variants)  [in-progress — session 2026-06-14T13:00Z]
 Lawrence-specified. Using the existing 5y MFE/MAE infrastructure (B2) and the
 `mfe_pts/mae_pts/r_mfe/r_mae` fields, mine excursion-ladder exit policies for
 ORB-reentry r0.75 and close-mode iFVG. Keep the initial swept-extreme stop; vary
@@ -2577,7 +2577,7 @@ finding that NQ winners need to run, exits don't help). Defining tests: each exi
 mode triggers BE/partial at the specified R; off-by-default unchanged.
 Source: Lawrence 2026-06-14; extends B2.
 
-## B62 — Orderflow-proxy confirmation + veto for ORB (cum-delta + RVOL)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue]
+## B62 — Orderflow-proxy confirmation + veto for ORB (cum-delta + RVOL)  [pending — Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
 Lawrence-specified. Extend the NQ 5min ORB engine with bar-derived orderflow-style
 filters (we have no tick/L2 data, so APPROXIMATE from OHLCV):
 - Cumulative delta proxy: per bar, approximate up-tick vs down-tick volume (e.g.,

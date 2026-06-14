@@ -136,7 +136,21 @@ the funded-objective frontier, the excursion dataset, live-parity forensics,
 and the occasional structural win (ORB-class). Honesty over optimism: report
 numbers that embarrass the hypothesis.
 
-Note: the wrapper (`scripts/research_loop.ps1`) picks your model per session —
-sonnet by default, opus when the usage window is near reset with quota likely
-left (Lawrence's adaptive-model instruction, 2026-06-12). Not your concern
-in-session; just do the work.
+## Model tagging (targeted-Opus, Lawrence 2026-06-14)
+
+The wrapper picks the model per session from the top `[pending]` backlog item's
+header: a `model:opus` tag runs that session on Opus 4.8, otherwise Sonnet.
+Sonnet keeps quota plentiful (~17 sessions/window vs ~3-4 on Opus), so reserve
+Opus for work where its extra reasoning actually pays.
+
+When you CREATE backlog items (ideation sessions), tag the hard ones. Append
+`model:opus` inside the header's status bracket, e.g.
+`## B## — Title  [pending — model:opus]`. Tag an item Opus only if its execution
+includes BUILDING or REFACTORING a real engine / scoring / sizing code path, a
+cross-instrument port, or multi-feature OOS-validated modeling. Do NOT tag:
+Phase-1 data-mining gates, no-code/benchmark items, config sweeps, or items with
+a high prior of clean rejection — those are Sonnet work. When in doubt, leave it
+untagged (Sonnet). The tag drives only model choice, never correctness; a
+mistag just means one item runs on the wrong-sized model.
+
+Otherwise the model is not your concern in-session — just do the work.

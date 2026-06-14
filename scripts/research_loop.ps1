@@ -11,15 +11,18 @@ $stopFile = Join-Path $root "research\STOP"
 $promptFile = Join-Path $root "research\SESSION_PROMPT.md"
 $sessionNum = 0
 
-# Adaptive model policy (Lawrence, 2026-06-12): sonnet by default — the work
-# is protocol-following execution and a cheaper model multiplies sessions per
-# usage window. But "if the session is nearing the end and there's still a
-# good % left, go ahead and use fable 5 or opus 4.8": when the usage window is
-# close to its reset AND few sessions have consumed it (quota likely
-# plentiful), escalate to opus — the window resets soon anyway, so a big-model
-# session costs nothing in lost future sessions. The CLI exposes no quota %,
-# so the window is tracked heuristically: 5h from the first session after loop
-# start or after a limit-sleep.
+# Targeted-Opus model policy (Lawrence, 2026-06-14, "option 1"): hard BUILD /
+# refactor items run on Opus 4.8; everything else (Phase-1 data-mining gates,
+# benchmarks, likely-rejections) runs on Sonnet, which keeps quota plentiful
+# (~17 sessions/window vs ~3-4 on Opus). Selection is per-session from the top
+# `[pending]` backlog item's header tag `model:opus` (see research/PROTOCOL.md
+# for the tagging convention). Secondary, dormant in practice: near a window
+# reset with quota likely left a Sonnet item may still use Opus (honors the
+# earlier "use the big model when the window is ending with quota left"
+# instruction; rarely fires since windows run ~17 sessions). The usage window
+# is tracked heuristically: 5h from the first session after loop start or after
+# a limit-sleep.
+$backlogFile = Join-Path $root "research\BACKLOG.md"
 $windowHours = 5
 $windowStart = $null
 $windowSessions = 0
@@ -41,12 +44,17 @@ while ($true) {
         (Get-Date -Format 'yyyyMMdd_HHmmss'), $sessionNum)
     New-Item -ItemType Directory -Force -Path (Join-Path $root "research\sessions") | Out-Null
 
+    # Pick the model for the item the next session will claim (top `[pending`).
+    # `model:opus` in that item's header -> Opus; otherwise Sonnet.
+    $model = 'sonnet'
+    $topPending = Select-String -Path $backlogFile -Pattern '^##\s+B\d+.*\[pending' |
+        Select-Object -First 1
+    if ($topPending -and $topPending.Line -match 'model:\s*opus') { $model = 'opus' }
     if ($null -eq $windowStart -or (Get-Date) -ge $windowStart.AddHours($windowHours)) {
         $windowStart = Get-Date; $windowSessions = 0
     }
     $minsLeft = [int](($windowStart.AddHours($windowHours) - (Get-Date)).TotalMinutes)
-    $model = 'sonnet'
-    if ($minsLeft -le 75 -and $windowSessions -le 5) { $model = 'opus' }
+    if ($model -eq 'sonnet' -and $minsLeft -le 75 -and $windowSessions -le 5) { $model = 'opus' }
     $windowSessions++
 
     Log "session #$sessionNum starting (model $model, ~${minsLeft}m left in est. window, $windowSessions sessions this window) -> $sessionLog"
