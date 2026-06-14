@@ -1961,3 +1961,30 @@ Additional note (Lesson 95): the combined engine baseline at sust=0.79x (<1.0) c
 - **Verdict:** rejected — B55 worse than B42 on both primary criteria
 - **Learned:** B52's combine-harness improvement (9/61 vs 6/61) does not transfer to pipeline economics. target_clarity=reject reduces signal count, cutting combine attempts from 159 to 69 over 5y, reducing absolute passes from 42 to 26 despite higher per-attempt rate (38% vs 26%). The pipeline sim (continuous attempts) diverges from the combine harness (61 monthly slots) when frequency changes: harness normalizes by time; pipeline rewards throughput — Lesson 106. 2022 holdout regime-robustness advantage (B55 positive vs B42 loss-making) is real but insufficient to compensate for 5y throughput penalty. Monday action: do NOT change deployed config. Keep swing_stop_lookback=30, target_clarity_mode=off.
 - **Next:** B56 — ORB x iFVG alignment gate Phase 2 (build + benchmark under deployed config).
+
+## 2026-06-13T08:00Z — session wk3-b56 — B56 SetupGrader per-component audit
+
+- **Bot health:** /api/status OK at session start — XFA shadow, equity at HWM, flat, market closed (weekend). No drift.
+- **Session note:** Naming collision in BACKLOG.md: "B56" appears twice — once from the wk3-r2 research session (ORB×iFVG alignment gate) and once from Lawrence's direct request (SetupGrader audit). Claimed the Lawrence-requested B56 per protocol (PRIORITY rank). The wk3-r2 B56 remains pending in the queue after this.
+- **Ran:** `scripts/audit_grader.py` — per-component isolation analysis. Config: engine=ifvg, close mode, all-day KZ, MNQ overrides (stop_buffer=3.0, min_abs_body=5.0, r=3.5), allowed_sides=long, swing_stop_lookback=0, target_clarity_mode=off, grader_min_grade=F (audit all trades). Years: 2021/2023/2024/2025/2026 (excl 2022 holdout). Criteria extracted from existing `t.get("criteria")` dict in BacktestResult.trades (no new instrumentation needed).
+- **Numbers (n=1276 graded iFVG trades, 5y excl 2022):**
+
+  | Component | True n | True PF | False n | False PF | Ratio | Verdict |
+  |-----------|--------|---------|---------|----------|-------|---------|
+  | mom (body_to_atr>=1.0) | 1276 | 1.074 | 0 | N/A | N/A | VACUOUS — engine min_abs_body=5.0 pre-filters; 100% True |
+  | pd (premium/discount ok) | 0 | N/A | 1276 | 1.074 | N/A | VACUOUS — never fires in deployed long-only config; 100% False |
+  | tgt (target clear) | 159 | 1.248 | 1117 | 1.050 | 1.189 | NOISE (< 1.2 threshold) |
+  | fvg (FVG singular) | 478 | 0.962 | 798 | 1.145 | 0.840 | **INVERTED BUG** — singular=True is worse; grader rewards it |
+  | del (delivery FVG) | 503 | 1.015 | 773 | 1.113 | 0.912 | NOISE (mildly inverted, within noise band) |
+
+  | Fib tier | n | PF | Verdict |
+  |----------|---|----|---------|
+  | <1.0 (grader: 0 pts) | 667 | 1.106 | BEST bucket |
+  | [1.0,1.5) (grader: 15 pts) | 327 | 1.017 | WORST |
+  | >=1.5 (grader: 30 pts) | 282 | 1.066 | Middle |
+  | Monotone: False | — | — | NON-MONOTONE/NOISE |
+
+- **Decision:** Outcome (b)+(c) — both bug found AND no component reliably predicts outcome. The fvg_singular inversion is a genuine miscalibration (grader gives positive points for the worse-performing configuration). However, since (1) grader_min_grade=F means ZERO current P&L impact, and (2) B57 is already queued to replace the grader from scratch, patching the old grader's fvg_singular scoring would be immediately overwritten. The correct action is outcome (b): document, keep gate at F, proceed to B57. Do NOT raise grader_min_grade above F with the current grader.
+- **Verdict:** informational / infra — grader is miscalibrated, zero current impact, B57 to replace
+- **Learned:** The SetupGrader's fvg_singular criterion is INVERTED — stacked/multi-FVG zones (singular=False) outperform singular clean gaps by a clear margin (PF 1.145 vs 0.962). The grader currently rewards the wrong configuration. Additionally, two criteria (mom/pd) are structurally vacuous under the deployed config — the engine's body filter and long-only restriction make these gates 100% one-sided before the grader even runs, so their scoring contributions are dead weight. Taken together, no grader component predicts iFVG trade outcome; the grade ordering (A>B>C>D>F by PF) seen in B51 is a score-composition artifact rather than structural quality discrimination.
+- **Next:** B57 — new lessons-based trade-quality grader (Lawrence-requested, do after B56); then wk3-r2 B56 (ORB×iFVG alignment gate, Lesson 103).

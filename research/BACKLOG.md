@@ -2344,7 +2344,7 @@ time-windowing does not add value). Prior ~30% (concentration into a known
 high-PF hour is evidence-backed, but the volume cut is brutal and prior
 time-window items have failed).
 
-## B56 — SetupGrader audit + conditional refactor  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue]
+## B56 — SetupGrader audit + conditional refactor  [done — informational; grader miscalibrated (fvg_singular INVERTED, mom/pd vacuous, no component predicts outcome); grader_min_grade=F currently; zero P&L impact; B57 to replace grader from scratch]
 Lawrence: "the grader might need to get refactored, I'm not sure it's working
 well." B51 already produced strong evidence he is RIGHT: grade does not predict
 outcome monotonically (A+B PF 1.286 vs D+F 1.080, ratio 1.190; and C PF 0.996 is

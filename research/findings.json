@@ -2495,5 +2495,31 @@
       ],
       "src": "scripts/run_b55_pipeline.py"
     }
+  },
+  {
+    "ts": "2026-06-13T08:00:00Z",
+    "session": "wk3-b56",
+    "item": "B56",
+    "variant": "SetupGrader per-component audit (5y iFVG, close mode, grader_min_grade=F)",
+    "objective": "infra",
+    "metrics": {
+      "total_trades": 1276,
+      "years": "2021/2023/2024/2025/2026 excl 2022",
+      "mom_true_n": 1276, "mom_false_n": 0, "mom_verdict": "VACUOUS (100% True; engine pre-filters all weak-body signals)",
+      "pd_true_n": 0, "pd_false_n": 1276, "pd_verdict": "VACUOUS (100% False; premium_discount_ok never fires in deployed long-only config)",
+      "tgt_true_pf": 1.248, "tgt_true_n": 159, "tgt_false_pf": 1.050, "tgt_false_n": 1117, "tgt_ratio": 1.189, "tgt_verdict": "NOISE (below 1.2 threshold)",
+      "fvg_true_pf": 0.962, "fvg_true_n": 478, "fvg_false_pf": 1.145, "fvg_false_n": 798, "fvg_ratio": 0.840, "fvg_verdict": "INVERTED BUG (singular=True is the WORSE bucket; grader rewards it)",
+      "del_true_pf": 1.015, "del_true_n": 503, "del_false_pf": 1.113, "del_false_n": 773, "del_ratio": 0.912, "del_verdict": "NOISE (mildly inverted but within noise band)",
+      "fib_lt1_pf": 1.106, "fib_lt1_n": 667, "fib_1to15_pf": 1.017, "fib_1to15_n": 327, "fib_ge15_pf": 1.066, "fib_ge15_n": 282, "fib_verdict": "NON-MONOTONE (lowest tier outperforms highest; grader scoring is inverted direction)",
+      "deployed_grader_min_grade": "F",
+      "current_p_and_l_impact": "zero (grader_min_grade=F means no signals are blocked)"
+    },
+    "verdict": "rejected",
+    "learned": "The SetupGrader is miscalibrated on every component: fvg_singular is the worst offender (INVERTED BUG — singular=True PF=0.962 vs False PF=1.145, ratio=0.840; grader rewards singularity but stacked/multi-FVG zones outperform), mom and pd are vacuous (100%-one-sided; engine pre-filters handle this before the grader runs), tgt/del/fib are noise. Current P&L impact is zero (grader_min_grade=F = no filtering). Keep grader_min_grade=F until B57 builds a replacement grader from empirically-validated predictors. Do NOT raise the grade floor with the current grader.",
+    "links": {
+      "doc": null,
+      "runs": ["scripts/audit_grader.py"],
+      "src": null
+    }
   }
 ]
