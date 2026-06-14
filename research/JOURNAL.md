@@ -2879,3 +2879,50 @@ Displacement bar body/ATR: Q2(1.303) and Q3(1.336) outperform Q1(1.006) and Q5(1
 - **Lesson 139 added.** No code changes. Script: scripts/run_b75_flatten_time_phase1.py. Test suite unchanged (725 passed, 2 skipped, 0 failures).
 
 - **Next:** B76 (skip-second-iFVG-after-loss day filter Phase 1) or B77 (deployed-config MFE/MAE dataset infrastructure). B77 requires code changes; B76 is pure data mining. B77 is the more strategically valuable infrastructure item.
+
+---
+
+## 2026-06-14T17:00Z -- session wk5-b76 -- B76 (Skip-second-iFVG-after-loss day filter -- REJECTED)
+
+- **Bot health:** /api/status OK -- XFA shadow combine, equity $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches this session.
+- **Claimed:** B76 (top pending -- skip-second-iFVG-after-loss Phase 1 data mining).
+- **No code changes:** Phase 1 is pure data mining on existing mfe_mae_ifvg_clean.csv. New script: scripts/run_b76_phase1.py.
+
+- **Phase 1 analysis (n=1226 LO long trades, 5y excl 2022):**
+
+  Filter: for each ET date, skip rank-2+ iFVG signals if rank-1 iFVG signal lost.
+
+  | Metric | Unfiltered | B76 Filtered | Change |
+  |--------|-----------|--------------|--------|
+  | Trades | 1,226 | 898 | -328 (-26.8%) |
+  | PF | 1.1365 | 1.1892 | +4.6% |
+  | Gross wins | $456,169 | $348,709 | -23.6% |
+  | Gross losses | $401,391 | $293,228 | -26.9% |
+
+  Removed trades (n=328): PF=0.9935, WR=33.2%. Per-year PF of removed:
+  - 2021: 1.064 (POSITIVE -- removing profitable trades)
+  - 2023: 1.488 (POSITIVE -- removing profitable trades)
+  - 2024: 1.101 (POSITIVE -- removing profitable trades)
+  - 2025: 0.874 (negative -- justifying removal)
+  - 2026: 0.499 (negative -- sparse n=43)
+
+- **Phase A combine simulation (r=1.0% scale, haircut=$200):**
+
+  | Config | Passes | Busts | Sust estimate | vs B42 3.23x |
+  |--------|--------|-------|---------------|--------------|
+  | Unfiltered | 20 | 54 | 1.54x | BELOW |
+  | B76 filtered | 17 | 40 | 1.31x | BELOW |
+
+  Note: these are standalone funded_sim numbers using the research-baseline data (r=1.25%, not B42's deployed config). B42 generates 42 Phase A passes via deployed combined+close+all-day config which has 4x more trades/month. Scaling the relative B76 impact (17/20 = -15%) to B42's passes: ~35 passes, sust=2.69x -- well below B42 3.23x threshold.
+
+- **Stop rule:** filtered sust (2.69x scaled from B42) < B42 3.23x threshold -- stop rule fires. Phase 1 rejected.
+
+- **Root cause of failure:** The B63(a) finding (second-iFVG-after-loss PF=0.946 on exactly-2-trade days) generalizes to the research baseline data (removed trades PF=0.9935 aggregate), but the removed trades are near-breakeven, not net-negative. In 3/5 years (2021, 2023, 2024), the removed trades are PROFITABLE. Only 2025 and 2026 show the expected negative character. The aggregate near-breakeven means: (1) the signal quality discrimination is real but insufficient (PF 0.9935 vs 1.1365 base = marginal advantage to skipping); (2) the 26.8% volume cut creates exactly the pipeline starvation pattern documented in Lessons 94/105/109/134. This is the pure-skip version of B63's size-boost test; both fail for the same volume-starvation reason.
+
+- **Verdict:** REJECTED. Do NOT implement skip_ifvg_after_daily_loss. Phase 2 not required.
+
+- **Learned:** The after-win/after-loss discriminator (1.473x, B63) is a real outcome predictor but the removed cohort is near-breakeven in aggregate -- removing near-breakeven trades cuts 27% of volume for minimal quality gain. The year-by-year PF of removed trades is noisy (profitable in 3/5 years), confirming the aggregate PF is not actionable as a skip signal. Volume starvation is the dominant failure mechanism for any subtractive Phase A gate.
+
+- **Lesson 140 added.** Test suite: 725 passed, 2 skipped, 0 failures (no code changes). Script: scripts/run_b76_phase1.py.
+
+- **Next:** B77 -- Deployed-config MFE/MAE dataset infrastructure (add r_mfe/r_mae/mfe_pts/mae_pts to equity_export --trade-csv output, generate deployed-close-mode excursion dataset).

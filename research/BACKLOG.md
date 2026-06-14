@@ -3182,7 +3182,7 @@ window is small relative to the 4h+ trade duration). Tag: Sonnet.
 
 ---
 
-## B76 -- Skip-second-iFVG-after-loss day filter -- Phase 1 data mining  [pending]
+## B76 -- Skip-second-iFVG-after-loss day filter -- Phase 1 data mining  [done -- rejected: Phase 1 stop rule fires; 26.8% volume cut (328/1226 trades removed), PF +4.6% (1.137->1.189), removed trades PF=0.9935 (near-breakeven, positive in 3/5 years); Phase A passes -15% (20->17), scaled sust=2.69x vs B42 3.23x threshold; volume starvation confirmed per Lessons 94/105/109/134]
 
 **Mechanism:** B63(a) found that on exactly-2-trade days, the second iFVG signal after a
 first-iFVG LOSS has PF=0.946 (slightly negative), while after a first WIN it is PF=1.394

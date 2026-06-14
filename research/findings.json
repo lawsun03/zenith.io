@@ -3477,5 +3477,32 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-14T17:00Z",
+    "session": "wk5-b76",
+    "item": "B76",
+    "variant": "skip-second-ifvg-after-loss",
+    "objective": "combine",
+    "metrics": {
+      "n_all": 1226,
+      "n_removed": 328,
+      "pct_removed": 26.8,
+      "pf_unfiltered": 1.1365,
+      "pf_filtered": 1.1892,
+      "pf_improvement_pct": 4.6,
+      "removed_pf": 0.9935,
+      "phase_a_passes_unfiltered": 20,
+      "phase_a_passes_filtered": 17,
+      "sust_adj_b42": 2.69,
+      "sust_adj_b57": 3.0
+    },
+    "verdict": "rejected",
+    "learned": "Skipping rank-2+ iFVG signals on days where rank-1 lost removes 26.8% of trades for only +4.6% PF improvement; the removed trades are near-breakeven (PF=0.9935), positive in 3/5 years (2021/2023/2024 show removed PF > 1). Phase A passes fall 15% (20->17 in simulation), scaling B42 sust from 3.23x to ~2.69x -- well below the 3.23x stop-rule threshold. The B63(a) after-win/after-loss PF discriminator (1.473x) is a real outcome predictor but not a useful skip mechanism because the removed cohort is near-breakeven on aggregate, not net-negative.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
