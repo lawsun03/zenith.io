@@ -4232,22 +4232,7 @@ because the framing differs slightly and the check is nearly free.
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
 
-## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [pending]
-
-Spun out of B99 secondary. Lawrence's live wide-OR trade (OR 133.75pt, 2.5R target=447pt)
-is exactly the case where the target balloons past NQ's realistic daily range. B99 showed
-r2.5 hits target only 11.2% of trades; wide-OR days likely concentrate the never-reached
-targets. CHEAP Phase-1 cut FIRST (no engine build): tag the existing B99 ORB per-trade
-CSVs (research/equity_b99/trades_r2p5.csv etc.) with each trade's OR width (recompute from
-bars or expose via runner) and run edge_diagnostics.localize on pnl across OR-width
-buckets (e.g. quartiles, or OR/ATR ratio). Question: is there a robust width threshold
-(PF>=1.2, n>=30, +ve in >=60% of years) above which ORB trades are net-negative? If YES ->
-queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't predict
-trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
-the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
-**Source:** B99 secondary (2026-06-15).
-
-## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [pending -- Lawrence-requested 2026-06-15; model:opus]
+## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [pending -- Lawrence-requested 2026-06-15 (BUMPED ahead of B100); model:opus]
 
 Lawrence: test Fib EXTENSION levels as the take-profit TARGET (a measured-move target that
 scales with the entry leg), see if profitable, then whether it helps the funded (combine
@@ -4280,3 +4265,18 @@ year-stable. "Fixed-R still best / Fib-target adds nothing" is a valid result (m
 Fib-filter prior). Deliverable: per-ext table per engine, trade_analysis doc, findings.
 Build a default-off knob ONLY if it wins.
 **Source:** Lawrence-requested 2026-06-15 (Fib levels as a target).
+
+## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [pending]
+
+Spun out of B99 secondary. Lawrence's live wide-OR trade (OR 133.75pt, 2.5R target=447pt)
+is exactly the case where the target balloons past NQ's realistic daily range. B99 showed
+r2.5 hits target only 11.2% of trades; wide-OR days likely concentrate the never-reached
+targets. CHEAP Phase-1 cut FIRST (no engine build): tag the existing B99 ORB per-trade
+CSVs (research/equity_b99/trades_r2p5.csv etc.) with each trade's OR width (recompute from
+bars or expose via runner) and run edge_diagnostics.localize on pnl across OR-width
+buckets (e.g. quartiles, or OR/ATR ratio). Question: is there a robust width threshold
+(PF>=1.2, n>=30, +ve in >=60% of years) above which ORB trades are net-negative? If YES ->
+queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't predict
+trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
+the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
+**Source:** B99 secondary (2026-06-15).
