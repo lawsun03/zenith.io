@@ -196,6 +196,7 @@ def _build_runner(
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
             require_pm_break=s.orb_require_pm_break,
+            fib_target_ext=s.orb_fib_target_ext,
         ))
         _sr_det = SweepReentryDetector(SweepReentryConfig(
             instrument=instrument,
@@ -262,6 +263,7 @@ def _build_runner(
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
             require_pm_break=s.orb_require_pm_break,
+            fib_target_ext=s.orb_fib_target_ext,
         ))
         return ORBRunner(
             instrument=instrument,
@@ -315,10 +317,20 @@ def _build_runner(
                 max_short_rank=s.ifvg_max_short_rank,
                 silver_bullet_only=s.silver_bullet_only,
                 suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                fib_target_ext=s.ifvg_fib_target_ext,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,
             zones=kz_zones,
+            signal_instrument=signal_instrument or "",
+        )
+    if s.engine == "forbes":
+        from app.strategy.forbes import ForbesConfig, ForbesDetector, ForbesRunner
+        return ForbesRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=ForbesDetector(ForbesConfig.from_params(instrument, s)),
+            strategy_cfg=s,
             signal_instrument=signal_instrument or "",
         )
     return StrategyRunner(
@@ -362,6 +374,7 @@ def _build_runner(
             max_short_rank=s.ifvg_max_short_rank,
             silver_bullet_only=s.silver_bullet_only,
             suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+            fib_target_ext=s.ifvg_fib_target_ext,
         )),
         grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,

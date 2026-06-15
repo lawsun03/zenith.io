@@ -187,3 +187,10 @@ def test_on_bar_stands_aside_when_no_or_fvg():
             out.append(sig)
     assert d._or_fvg_count == 0
     assert out == []
+
+
+def test_build_runner_dispatches_forbes():
+    from app.main import _build_runner
+    r = _build_runner("MNQ", StrategyParams(engine="forbes"), None, "1min", None)
+    assert r.__class__.__name__ == "ForbesRunner"
+    assert r.instrument == "MNQ"

@@ -5,7 +5,7 @@ docs/superpowers/specs/2026-06-15-forbes-model-design.md."""
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from datetime import time as _time
 from decimal import Decimal
@@ -20,6 +20,7 @@ from app.strategy.killzone import ET, Killzone, asia, london_open, ny_am, ny_pm
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 from app.strategy.kz_levels import KillzoneLevelTracker
+from app.strategy.grader import SetupGrader
 
 
 def _zones_for_forbes() -> "list[Killzone]":
@@ -326,3 +327,36 @@ class ForbesDetector:
         if sig is not None:
             self._trades_today += 1
         return sig
+
+
+@dataclass
+class _ForbesComposer:
+    """No-op stop-fill hook. Forbes has no intraday re-arm; the engine still calls
+    composer.on_stop_loss() on every stop fill, so we must expose a no-op."""
+
+    def on_stop_loss(self) -> None:
+        return None
+
+
+@dataclass
+class ForbesRunner:
+    """Duck-type of the StrategyRunner surface ExecutionEngine touches — mirrors
+    ORBRunner so engine="forbes" plugs into ExecutionEngine/run_backtest unchanged."""
+
+    instrument: str
+    timeframe: str
+    detector: "ForbesDetector"
+    strategy_cfg: StrategyParams
+    vp: None = None                       # engine skips VP when None
+    signal_instrument: str = ""
+    last_reject: None = field(default=None, init=False)
+    composer: _ForbesComposer = field(default_factory=_ForbesComposer)
+    grader: SetupGrader = field(default_factory=SetupGrader)  # empty swings → no TP1
+
+    @property
+    def displacement(self) -> DisplacementDetector:
+        # Forming-bar poll path reads runner.displacement.peek_displacement().
+        return self.detector.displacement
+
+    def on_bar(self, bar: Bar) -> Optional[Signal]:
+        return self.detector.on_bar(bar)
