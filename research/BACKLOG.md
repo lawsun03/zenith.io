@@ -4305,7 +4305,7 @@ Add a firm-rule shock grid (CLI flags on scripts/funded_sim.py): sweep payout_ca
 profit-share; back-test the realized cap cut as a proof-of-concept. Success: a table of $/mo +
 sust vs each rule shock = the counterparty tail quantified. **Source:** external review 2026-06-15.
 
-## B105 -- Report lived variance, not just the headline mean  [pending]
+## B105 -- Report lived variance, not just the headline mean  [done -- SHIPPED (wk7-b105 2026-06-16): pipeline_variance_summary() in funded_sim.py; per_account_net_payouts + monthly_net_payouts + series_start/end_month added to simulate_xfa_chain; --monthly-cost CLI flag in scripts/funded_sim.py; 18 defining-behavior tests. Key numbers on ORB-reentry r0.75 (B21 per-year h200): mean $3,131 vs median $2,114 vs p25 $0/acct; 61% zero-payout months; max real dry spell 7mo (2025-06 to 2025-12); reserve rec 8mo; $200/mo fixed cost reduces 5y net 28% ($43,835->$31,635). Lessons 178-180.]
 Review #9: Phase-B has ~33% flat/negative months + multi-month dry spells; mean $/account
 $3,131 vs median ~$2,114; no recurring subscription/fixed cost modeled (only $150/attempt reset).
 Add to pipeline summaries: median + p25 $/account, dry-spell cadence, a ~3mo cash-reserve figure,

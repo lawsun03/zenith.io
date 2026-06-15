@@ -3980,3 +3980,45 @@ Added `--dll DOLLARS` flag to `scripts/funded_sim.py`. Backward-compatible: `--d
 - **Learned:** Counterparty risk is not symmetric across rule dimensions: XFA MLL tightening is structurally dangerous (direct path to bust rate increase), while payout cap cuts are self-limiting (smaller payouts retain balance, reducing subsequent busts). Profit share cuts are the clearest financial signal and the easiest to hedge against (pure linear reduction in net).
 - **Tests:** full suite **862 passed, 3 skipped, 0 failures** (+8 new B104 tests). findings.json #123. Databento untouched.
 - **Next:** B105 (report lived variance, pending) or B106 (iFVGxORB ALIGNMENT benchmark-gated) or B107 (walk-forward degenerate fix).
+
+---
+
+## 2026-06-16T00:30Z -- session wk7-b105 -- B105 (Lived-variance reporting -- SHIPPED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B105 (top pending item; no orphan in-progress).
+
+**Method (TDD):** Wrote 18 defining-behavior tests first (red), then implemented:
+1. Extended `simulate_xfa_chain` in `app/backtest/funded_sim.py` to also return:
+   - `per_account_net_payouts: list[float]` -- cumulative net payout per funded-account lifetime (0.0 for accounts that bust before any payout; right-skew distributes mean above median)
+   - `monthly_net_payouts: dict[str,float]` -- YYYY-MM -> net payouts schedule (months absent = $0)
+   - `series_start_month / series_end_month` -- YYYY-MM of first/last daily_pnl entry
+2. Added three new pure helpers: `_calendar_months()`, `_month_sequence()`, `pipeline_variance_summary()`.
+   - `pipeline_variance_summary(xfa_result, monthly_fixed_cost=0.0)` computes: median/p25 $/account, dry-spell runs + max length, cash-reserve recommendation (max_dry_spell + 1 months), and net_after_monthly_costs.
+3. Added `--monthly-cost DOLLARS` flag to `scripts/funded_sim.py`. CLI output now includes a VARIANCE line showing mean/median/p25 per-account and the dry-spell/reserve summary.
+
+**Analysis on canonical data (ORB-reentry r0.75, B21 per-year h200, 2021/23-26 excl. 2022 holdout):**
+
+| Metric | Value |
+|--------|-------|
+| Accounts | 14 |
+| XFA busts | 13 |
+| Net payouts | $43,835 |
+| Mean $/acct | $3,131 |
+| Median $/acct | $2,114 |
+| P25 $/acct | $0 (6 of 14 bust before any payout) |
+| Calendar months | 61 |
+| Months with payouts | 24 (39%) |
+| Zero-payout months | 37 (61%) |
+| Dry spell runs | 10 |
+| Max dry spell (excl. 2022 holdout gap) | 7 months (2025-06 -- 2025-12) |
+| Cash reserve recommendation | 8 months |
+| Net at $200/mo fixed cost | $31,635 (-28%) |
+
+Note: the 12-month "dry spell" shown in the raw dry-spell list (2022-01--2022-12) is the holdout exclusion gap, not a real trading dry spell. Real max dry spell = 7 months (2025-H2).
+
+**Verdict: SHIPPED.** `pipeline_variance_summary()` + `_calendar_months()` + `_month_sequence()` in funded_sim.py; per_account_net_payouts + monthly_net_payouts + series_start/end_month added to simulate_xfa_chain; `--monthly-cost` in scripts/funded_sim.py; analysis in scripts/_b105_analyze.py. 18 defining-behavior tests.
+
+- **Learned:** The mean $/account ($3,131) meaningfully overstates the typical experience: 43% of accounts produce $0 and pull the median to $2,114. The strategy has multi-month dry spells (real max 7 months) requiring ~8 months of operating-cost cash reserves to avoid abandoning a statistically-working strategy. A $200/mo fixed cost, if honest, removes 28% of the 5-year net -- this is the "honest net" the external reviewer requested.
+- **Tests:** full suite **880 passed, 3 skipped, 0 failures** (+18 new B105 tests). findings.json #124.
+- **Next:** B106 (iFVGxORB ALIGNMENT benchmark -- benchmark-gated, gate file exists) or B107 (walk-forward degenerate fix -- small). B106 is now unlocked.

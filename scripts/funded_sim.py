@@ -20,6 +20,7 @@ from app.backtest.funded_sim import (
     cap_daily_pnls_at_dll,
     daily_pnls_from_equity,
     daily_pnls_with_low,
+    pipeline_variance_summary,
     simulate_combines,
     simulate_xfa_chain,
 )
@@ -67,6 +68,12 @@ def main() -> None:
                     help="Override XfaRules.mll_distance in $ (default 2000).")
     ap.add_argument("--combine-mll-distance", default=None, metavar="DOLLARS",
                     help="Override CombineRules.mll_distance in $ (default 2000).")
+    # B105: recurring monthly fixed cost (software, data, subscriptions) that
+    # reduces true net return. Subtracted from every calendar month in the window.
+    ap.add_argument("--monthly-cost", default="0", metavar="DOLLARS",
+                    help="Recurring monthly fixed cost to subtract from every month "
+                         "in the backtest window (incl. idle months with no payouts). "
+                         "Yields net_after_costs for honest comparison. Default 0.")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
@@ -95,6 +102,8 @@ def main() -> None:
     if args.combine_mll_distance is not None:
         combine_rules = replace(combine_rules, mll_distance=Decimal(args.combine_mll_distance))
 
+    monthly_cost = float(args.monthly_cost)
+
     c = simulate_combines(daily, rules=combine_rules, haircut=haircut)
     x = simulate_xfa_chain(daily, rules=xfa_rules, haircut=haircut, combine_gap_days=args.combine_gap_days)
 
@@ -115,8 +124,30 @@ def main() -> None:
         f"busts {c['busts']} | median days-to-pass {c['median_days_to_pass']}\n"
         f"XFA:     accounts {x['accounts']} | busts {x['busts']} | "
         f"payouts ${x['gross_payouts']:.0f} gross / ${x['net_payouts']:.0f} net (90%)\n"
-        f"(daily granularity — intraday MLL touches understated{haircut_note}{dll_note}{rule_note})"
+        f"(daily granularity -- intraday MLL touches understated{haircut_note}{dll_note}{rule_note})"
     )
+
+    # B105: variance report
+    v = pipeline_variance_summary(x, monthly_fixed_cost=monthly_cost)
+    per_acct_n = x["accounts"]
+    mean_net = float(x["net_payouts"]) / per_acct_n if per_acct_n else 0.0
+    print(
+        f"VARIANCE: mean ${mean_net:,.0f}/acct | "
+        f"median ${v['median_net_per_account']:,.0f}/acct | "
+        f"p25 ${v['p25_net_per_account']:,.0f}/acct\n"
+        f"          dry spells: {len(v['dry_spells'])} runs | "
+        f"max {v['max_dry_spell_months']}mo | "
+        f"recommend {v['reserve_months']}mo cash reserve"
+        + (
+            f" (${v['reserve_needed']:,.0f} @ ${monthly_cost:.0f}/mo)"
+            if monthly_cost else ""
+        )
+    )
+    if monthly_cost:
+        print(
+            f"          net after ${monthly_cost:.0f}/mo x {v['total_months']}mo costs: "
+            f"${v['net_after_monthly_costs']:,.0f}"
+        )
 
     if args.bootstrap > 0:
         print(f"\nBootstrap CIs ({args.bootstrap} resamples, block={args.block_len}d):")

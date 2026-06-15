@@ -186,6 +186,13 @@ def simulate_xfa_chain(
     combine_gap_days: trading days to skip after each bust before starting the
     next account. Models the real combine-gap (re-running Phase A before a new
     funded account can start). Default 0 preserves the existing behavior.
+
+    B105 additions — also returns:
+      per_account_net_payouts: cumulative net payout per account lifetime
+        (0.0 for accounts that bust before any payout; right-skew reveals
+        the gap between mean and median $/account)
+      monthly_net_payouts: {YYYY-MM: net_$} schedule of when payouts occurred
+      series_start_month / series_end_month: YYYY-MM of first/last daily_pnl entry
     """
     rules = rules or XfaRules()
     accounts = busts = 0
@@ -195,6 +202,16 @@ def simulate_xfa_chain(
     days_in_account = 0
     had_payout = False
     gap_remaining = 0
+    # B105: per-account and monthly payout tracking
+    per_account_net: list[Decimal] = []
+    _acct_net: Decimal = Decimal("0")
+    monthly_net: dict[str, Decimal] = {}
+    series_start_month: str | None = (
+        daily_pnl[0][0].strftime("%Y-%m") if daily_pnl else None
+    )
+    series_end_month: str | None = (
+        daily_pnl[-1][0].strftime("%Y-%m") if daily_pnl else None
+    )
     for ts, pnl in daily_pnl:
         if gap_remaining > 0:
             gap_remaining -= 1
@@ -204,6 +221,7 @@ def simulate_xfa_chain(
             accounts += 1
             days_in_account = 0
             had_payout = False
+            _acct_net = Decimal("0")
         if risk_policy == "funded_survival":
             mult = funded_survival_multiplier(tracker.balance, tracker.mll, base_risk_pct)
         else:
@@ -212,20 +230,34 @@ def simulate_xfa_chain(
         days_in_account += 1
         if _dead_with_haircut(tracker, haircut * mult):
             busts += 1
+            per_account_net.append(_acct_net)
             tracker = None
             gap_remaining = combine_gap_days
             continue
         tracker.roll_day(ts)
         if tracker.payout_eligible():
-            gross_payouts += tracker.request_payout()
+            raw = tracker.request_payout()
+            gross_payouts += raw
+            net_this = raw * rules.trader_profit_share
+            _acct_net += net_this
+            mk = ts.strftime("%Y-%m")
+            monthly_net[mk] = monthly_net.get(mk, Decimal("0")) + net_this
             if not had_payout:
                 first_payout_days.append(days_in_account)
                 had_payout = True
+    # Record any account still active at end of series
+    if tracker is not None:
+        per_account_net.append(_acct_net)
     return {
         "accounts": accounts, "busts": busts,
         "gross_payouts": gross_payouts,
         "net_payouts": gross_payouts * rules.trader_profit_share,
         "median_days_to_first_payout": (median(first_payout_days) if first_payout_days else None),
+        # B105
+        "per_account_net_payouts": [float(p) for p in per_account_net],
+        "monthly_net_payouts": {k: float(v) for k, v in monthly_net.items()},
+        "series_start_month": series_start_month,
+        "series_end_month": series_end_month,
     }
 
 
@@ -239,6 +271,92 @@ def _pct(samples: list[float], p: int) -> float:
     lo = int(pos)
     hi = min(lo + 1, n - 1)
     return s[lo] + (pos - lo) * (s[hi] - s[lo])
+
+
+def _calendar_months(start_month: str | None, end_month: str | None) -> int:
+    """Count calendar months inclusive between two YYYY-MM strings."""
+    if not start_month or not end_month:
+        return 0
+    sy, sm = int(start_month[:4]), int(start_month[5:])
+    ey, em = int(end_month[:4]), int(end_month[5:])
+    return (ey - sy) * 12 + (em - sm) + 1
+
+
+def _month_sequence(start_month: str | None, end_month: str | None) -> list[str]:
+    """List of YYYY-MM strings from start to end inclusive."""
+    if not start_month or not end_month:
+        return []
+    sy, sm = int(start_month[:4]), int(start_month[5:])
+    ey, em = int(end_month[:4]), int(end_month[5:])
+    months: list[str] = []
+    y, m = sy, sm
+    while (y, m) <= (ey, em):
+        months.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return months
+
+
+def pipeline_variance_summary(
+    xfa_result: dict,
+    monthly_fixed_cost: float = 0.0,
+) -> dict:
+    """Compute lived-variance stats from simulate_xfa_chain output (B105).
+
+    Reports the distribution of per-account net payouts (median, p25), dry-spell
+    cadence (consecutive months with $0 payouts), a cash-reserve recommendation,
+    and net payouts after subtracting a recurring monthly fixed cost.
+
+    Per-account payouts include accounts that busted without a payout ($0).
+    This gives the honest per-attempt return distribution, not just survivor stats.
+    """
+    per_account = xfa_result.get("per_account_net_payouts", [])
+    monthly = xfa_result.get("monthly_net_payouts", {})
+    start_m = xfa_result.get("series_start_month")
+    end_m = xfa_result.get("series_end_month")
+    net_total = float(xfa_result.get("net_payouts", 0))
+
+    median_net = round(_pct(per_account, 50), 2)
+    p25_net = round(_pct(per_account, 25), 2)
+
+    total_months = _calendar_months(start_m, end_m)
+    all_months = _month_sequence(start_m, end_m)
+
+    # Identify consecutive dry-spell runs (months with $0 net payouts)
+    dry_spells: list[dict] = []
+    spell_start: str | None = None
+    spell_len = 0
+    for mo in all_months:
+        if monthly.get(mo, 0.0) == 0.0:
+            if spell_start is None:
+                spell_start = mo
+            spell_len += 1
+        else:
+            if spell_start is not None:
+                dry_spells.append({"start": spell_start, "length_months": spell_len})
+            spell_start = None
+            spell_len = 0
+    if spell_start is not None:
+        dry_spells.append({"start": spell_start, "length_months": spell_len})
+
+    max_dry = max((d["length_months"] for d in dry_spells), default=0)
+    reserve_months = max_dry + 1
+    reserve_needed = round(monthly_fixed_cost * reserve_months, 2)
+    net_after = round(net_total - monthly_fixed_cost * total_months, 2)
+
+    return {
+        "median_net_per_account": median_net,
+        "p25_net_per_account": p25_net,
+        "total_months": total_months,
+        "dry_spells": dry_spells,
+        "max_dry_spell_months": max_dry,
+        "reserve_months": reserve_months,
+        "reserve_needed": reserve_needed,
+        "monthly_fixed_cost": monthly_fixed_cost,
+        "net_after_monthly_costs": net_after,
+    }
 
 
 def bootstrap_pipeline(
