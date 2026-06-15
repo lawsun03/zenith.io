@@ -76,7 +76,10 @@ while ($true) {
         Add-Content -Path $loopLog -Value ("--- session #$sessionNum tail ---`r`n" + $tail) -Encoding utf8
     }
 
-    if ($tail -match 'session limit|usage limit|rate limit|weekly limit|limit reached|overloaded|429|out of credit|exceeded') {
+    # Anchor on the actual CLI limit message ("You've hit your <weekly|usage|5-hour>
+    # limit · resets ..."), NOT loose substrings like "weekly limit"/"exceeded" — those
+    # appear in research output (and in backlog notes) and caused false limit-blocks.
+    if ($tail -match "you'?ve hit your[\w\s-]*limit|usage limit reached|claude usage limit|rate_limit_error|overloaded_error|\bAPI Error:\s*429\b|out of credit") {
         # Sleep until the stated reset time when present ("resets 4:30pm"),
         # else fall back to 40 min. +3 min cushion past the reset.
         $sleepSec = 2400
