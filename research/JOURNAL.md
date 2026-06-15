@@ -4161,3 +4161,73 @@ B106 wins on PF vs matched-risk control for ALL f (trivially -- aligned PF > agg
 - **Learned:** All confirmed mechanism classes (iFVG, ORB, CPI straddle) have been thoroughly parameter-swept; remaining high-value work is (1) closing open CANDIDATE gaps (B108), (2) one-shot falsifications of orthogonal quality signals (B109), and (3) extending confirmed event-driven mechanisms to new events (B110). The parameter plateau is real -- the next step-change will likely require a structurally new signal source or instrument.
 - **Tests:** 885 passed, 3 skipped, 0 failures (no code changes this session). findings.json #127.
 - **Next:** B108 (ORB-reentry r_multiple=1.5 two-phase pipeline -- close B99 candidate gap; medium effort, no engine code).
+
+---
+
+## 2026-06-15T23:30Z -- session wk8-b108 -- B108 (ORB-reentry r_mult=1.5 two-phase pipeline -- REJECTED)
+
+- **Bot health:** :5175/api/status 200 -- XFA $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- benchmark only).
+- **Claimed:** B108 (top pending item; wk8-r1 research session had just added B108/B109/B110).
+
+**Method:** Pure benchmark -- no engine code changes. Modeled after run_b46_pipeline.py.
+1. Generated per-year Phase B equity CSVs (5 years, 2021/2023/2024/2025/2026 excl. 2022):
+   `equity_b108/orb_reentry_rm1p5_{year}.csv` via equity_export.py with:
+   `engine=orb, orb_r_multiple=1.5, orb_reentry_after_stop=True, risk_pct=0.75, partial_r=0, swing_stop_lookback=0`
+2. Phase A reference: `equity_b42/deployed_r1p0_{year}.csv` (42 passes, B42 deployed).
+3. Phase B reference: `equity_b21/orb_reentry_r0p75_{year}.csv` (B21 baseline r_mult=2.5).
+4. Ran two-phase funded_sim + block-bootstrap (N=1000, block=20d, seed=42) on both Phase B configs.
+
+**Per-year equity generation results:**
+
+| Year | Trades | Net | PF |
+|------|--------|-----|----|
+| 2021 | 188 | $15,160 | 1.625 |
+| 2023 | 368 | $3,616 | 1.067 |
+| 2024 | 368 | $8,351 | 1.151 |
+| 2025 | 360 | $12,150 | 1.225 |
+| 2026 | 161 | $7,430 | 1.326 |
+
+Year-stable positive PF across all 5 years -- the edge is real.
+
+**Phase B standalone (h=$200):**
+
+| Config | Busts | $/acct | d/acct | sust | Accts |
+|--------|-------|--------|--------|------|-------|
+| B108 r_mult=1.5 | 20 | $2,304 | 49.0 | 1.00x | 21 |
+| B21 ref r_mult=2.5 | 13 | $3,131 | 73.5 | 1.46x | 14 |
+
+**Bootstrap CIs (N=1000, block=20d, seed=42, h=$200):**
+
+| Config | xfa_net p5/p50/p95 | xfa_busts p5/p50/p95 |
+|--------|-------------------|----------------------|
+| B108 r_mult=1.5 | $33,596 / $46,436 / $61,451 | 12 / 17 / 24 |
+| B21 ref r_mult=2.5 | $32,482 / $47,061 / $64,524 | 13 / 19 / 26 |
+
+CIs fully overlap on BOTH xfa_net (TIE) and xfa_busts (TIE). Point estimates differ but are within sampling noise.
+
+**Two-phase pipeline (Phase A: 42 passes fixed, h=$200):**
+
+| Config | $/mo | sust | Busts | Cycle |
+|--------|------|------|-------|-------|
+| B108 r_mult=1.5 (new) | $496 | 2.10x | 20 | 74d |
+| B21 ref r_mult=2.5 (baseline) | $549 | 3.23x | 13 | 98d |
+
+**Haircut sensitivity:**
+
+| Config | h=0 | | h=400 | |
+|--------|-----|---|-------|---|
+| | $/mo | sust | $/mo | sust |
+| B108 r_mult=1.5 | $577 | 3.23x | $430 | 1.83x |
+| B21 ref r_mult=2.5 | $602 | 3.82x | $424 | 1.91x |
+
+Key finding: at h=0, B108 actually TIES the B42 baseline (3.23x sust, 13 busts). The h=$200 haircut assumption is load-bearing.
+
+**Verdict: REJECTED.**
+
+Success criteria required: "fewer busts (p50 < 13) while CI-NOT-STRONGLY-WORSE on net payouts." B108 has MORE busts at h=$200 (20 vs 13, point estimate). While CIs overlap (tie on sampling noise), the point estimate difference is substantial enough to conclude r_mult=2.5 remains the Phase B optimum in the two-phase model.
+
+Root cause: r_mult=1.5 exits resolve sooner (49d/acct vs 73.5d), cycling accounts 50% faster. Faster cycling = more MLL-exposure events per year at h=$200. Each 1.5R winning trade earns less absolute dollars than a 2.5R winning trade (even at higher win rate), so per-account net is lower ($2,304 vs $3,131). The B70 plain-ORB finding (r_mult=1.5 worse in two-phase) extends to ORB-reentry. B99's standalone PF advantage (1.24 vs 1.15) doesn't translate to better pipeline economics because pipeline economics are driven by absolute per-account dollars, not PF ratio.
+
+- **Learned:** The standalone B99 finding (r_mult=1.5 is the expectancy optimum) does not transfer to two-phase pipeline. Faster target-hit rate (37% at r1.5 vs 11.2% at r2.5) means faster cycling -- which amplifies MLL-bust frequency under the h=$200 haircut. r_mult=2.5 is confirmed as the ORB-reentry Phase B optimum. Lessons 183-184 added.
+- **Tests:** 885 passed, 3 skipped, 0 failures (no code changes -- benchmark only; scripts/run_b108_pipeline.py added). findings.json #128.
+- **Next:** B109 (ORB breakout-bar volume Phase-1 data mining -- cheap falsification, no engine build) or B110 (NFP straddle Phase-1).

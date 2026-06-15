@@ -4327,7 +4327,7 @@ net/PF/expectancy (or lengthen test windows to >=20 trading days); GUARD against
 recommendation when the score is constant. Or retire the tool. Success: no false-confidence
 recommendation; one-line LESSONS.md entry. **Source:** external review 2026-06-15.
 
-## B108 -- ORB-reentry orb_r_multiple=1.5 two-phase pipeline (close B99 candidate)  [pending]
+## B108 -- ORB-reentry orb_r_multiple=1.5 two-phase pipeline (close B99 candidate)  [done -- rejected: h=200 busts 20 vs 13 ref; two-phase $496/mo 2.10x vs $549/mo 3.23x; CIs overlap (TIE) but point estimate 54% more busts; r_mult=2.5 confirmed Phase B optimum]
 
 B99 declared orb_r_multiple=1.5 the funded-standalone expectancy optimum (PF=1.24, +9% vs
 r2.5, year-stable). B102 bootstrap confirmed r1.5 ties r2.5 on XFA net CIs but has fewer

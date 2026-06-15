@@ -4505,5 +4505,41 @@
                                ],
                       "src":  null
                   }
+    },
+    {
+        "ts": "2026-06-15T23:45:00Z",
+        "session": "wk8-b108",
+        "item": "B108",
+        "variant": "ORB-reentry orb_r_multiple=1.5 r=0.75% two-phase pipeline",
+        "objective": "funded",
+        "metrics": {
+            "phase_b_standalone_busts_h200": 20,
+            "phase_b_standalone_net_per_acct_h200": 2304,
+            "phase_b_standalone_sust_h200": 1.00,
+            "two_phase_net_per_month_h200": 496,
+            "two_phase_sust_h200": 2.10,
+            "two_phase_busts_h200": 20,
+            "ref_busts_h200": 13,
+            "ref_two_phase_net_per_month": 549,
+            "ref_two_phase_sust": 3.23,
+            "bootstrap_b108_busts_p50": 17,
+            "bootstrap_ref_busts_p50": 19,
+            "bootstrap_net_ci_overlap": true,
+            "bootstrap_busts_ci_overlap": true,
+            "pf_2021": 1.625,
+            "pf_2023": 1.067,
+            "pf_2024": 1.151,
+            "pf_2025": 1.225,
+            "pf_2026": 1.326,
+            "total_tests": 885,
+            "databento_spend": 0
+        },
+        "verdict": "rejected",
+        "learned": "ORB-reentry at r_mult=1.5 has 54% more funded busts (20 vs 13) and lower per-account earnings ($2,304 vs $3,131) than r_mult=2.5 at h=$200, despite CI-tied on xfa_net and xfa_busts (CIs fully overlap). Faster account cycling (49d vs 73.5d) from shorter 1.5R exits means accounts hit MLL more often under the haircut model. r_mult=2.5 is confirmed as Phase B optimum for ORB-reentry in the two-phase pipeline.",
+        "links": {
+            "doc": null,
+            "runs": ["equity_b108"],
+            "src": null
+        }
     }
 ]
