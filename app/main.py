@@ -333,6 +333,11 @@ def _build_runner(
             strategy_cfg=s,
             signal_instrument=signal_instrument or "",
         )
+    if s.engine != "ifvg":
+        raise ValueError(
+            f"_build_runner: unknown engine {s.engine!r} — no dispatch branch matched. "
+            "Refusing to silently fall back to iFVG (Rule 12)."
+        )
     return StrategyRunner(
         instrument=instrument,
         timeframe=timeframe,

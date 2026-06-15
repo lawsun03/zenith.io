@@ -11,11 +11,14 @@ Changes take effect on the next run.
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+log = logging.getLogger(__name__)
 
 
 class StrategyParams(BaseModel):
@@ -379,12 +382,20 @@ def strategy_for(config: BotConfig, instrument: str) -> StrategyParams:
     return StrategyParams(**{**config.strategy.model_dump(), **overrides})
 
 
-def load_bot_config(path: Path) -> BotConfig:
+def load_bot_config(path: Path, strict: bool = False) -> BotConfig:
     if not path.exists():
         return BotConfig()
     try:
         return BotConfig.model_validate(json.loads(path.read_text(encoding="utf-8-sig")))
     except Exception:
+        # Rule 12: never SILENTLY substitute the default config — defaults are a
+        # different strategy entirely. strict=True (startup) re-raises so the bot won't
+        # run the wrong strategy for a whole session; runtime callers log loud + fall back.
+        log.error("bot_config.json at %s failed to parse — %s", path,
+                  "RAISING (startup)" if strict else "falling back to DEFAULTS (WRONG strategy!)",
+                  exc_info=True)
+        if strict:
+            raise
         return BotConfig()
 
 
@@ -409,6 +420,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "flatten_enabled": config.flatten_enabled,
         "flatten_time_ct": config.flatten_time_ct,
         "entry_cutoff_time_ct": config.entry_cutoff_time_ct,
+        "commission_per_contract": config.commission_per_contract,
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
         "strategy_overrides": {
