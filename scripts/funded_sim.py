@@ -15,6 +15,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from app.backtest.funded_sim import (
+    bootstrap_pipeline,
     daily_pnls_from_equity,
     simulate_combines,
     simulate_xfa_chain,
@@ -39,6 +40,13 @@ def main() -> None:
                     help="Trading days skipped after each XFA bust before starting the "
                          "next account (models the real combine re-attempt gap; "
                          "default 0 = existing behavior)")
+    ap.add_argument("--bootstrap", type=int, default=0, metavar="N",
+                    help="Run N-resample block-bootstrap to produce 5/25/50/75/95 "
+                         "CIs on xfa_net, xfa_busts, combine_passes (default 0 = off). "
+                         "Use 1000 for publication; 100 for a quick check.")
+    ap.add_argument("--block-len", type=int, default=20, metavar="DAYS",
+                    help="Block length in trading days for the bootstrap (default 20 = ~1 month). "
+                         "Must be shorter than the series length.")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
@@ -59,6 +67,26 @@ def main() -> None:
         f"payouts ${x['gross_payouts']:.0f} gross / ${x['net_payouts']:.0f} net (90%)\n"
         f"(daily granularity — intraday MLL touches understated{haircut_note})"
     )
+
+    if args.bootstrap > 0:
+        print(f"\nBootstrap CIs ({args.bootstrap} resamples, block={args.block_len}d):")
+        bs = bootstrap_pipeline(
+            daily,
+            n_resamples=args.bootstrap,
+            block_len=args.block_len,
+            haircut=haircut,
+            combine_gap_days=args.combine_gap_days,
+        )
+        for metric, cis in [
+            ("xfa_net ($)", bs["xfa_net"]),
+            ("xfa_busts   ", bs["xfa_busts"]),
+            ("comb_passes  ", bs["combine_passes"]),
+        ]:
+            print(
+                f"  {metric}: "
+                f"p5={cis[5]:.0f}  p25={cis[25]:.0f}  p50={cis[50]:.0f}"
+                f"  p75={cis[75]:.0f}  p95={cis[95]:.0f}"
+            )
 
     if args.save_id:
         _save_funded_result(Path(args.equity_csv), curve, args, c, x, haircut)

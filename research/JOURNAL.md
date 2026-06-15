@@ -3872,3 +3872,30 @@ The r1.5 target (B99 candidate) already handles Lawrence's wide-OR concern bette
 - **Learned:** Wide opening-range width does not robustly predict ORB trade failure on NQ 5min -- the widest-OR quartile is mildly positive (PF 1.19) and the signal weakens year-to-year without crossing below 1.0 in the aggregate. The practical fix for the "OR too wide, target unreachable" concern is a tighter R-multiple (r1.5 from B99), not a skip gate.
 - **Tests:** 837 passed, 3 skipped, 0 failures (no code change -- analysis only). findings.json #120.
 - **Next:** B102 (funded_sim bootstrap CIs -- infra, pending) or B103 (intraday DLL-bust modeling -- infra, pending) are next non-gated items.
+
+---
+
+## 2026-06-15T22:30Z -- session wk7-b102 -- B102 (funded_sim bootstrap CIs -- SHIPPED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- analysis-only).
+- **Claimed:** B102 (top pending item; no orphan in-progress).
+
+**Method:** Implemented seeded block-bootstrap (1000 resamples, block_len=20d=~1mo, seed=42) wrapping both simulate_combines and simulate_xfa_chain. Block length 20d preserves intramonth loss-clustering (the dominant source of bust correlation). Reports p5/p25/p50/p75/p95 CI for xfa_net, xfa_busts, combine_passes. CLI: `funded_sim.py --bootstrap 1000 --block-len 20`. Added bootstrap_pipeline() to app/backtest/funded_sim.py (stdlib only -- random + statistics). 6 defining-behavior tests: CI ordering, reproducibility, different-seeds differ, tight CIs for constant series, too-short raises, result keys.
+
+**Re-scored candidate stack (B99 r1.0/1.5/2.0/2.5, h200, 1029 trading days excl 2022):**
+
+| Config | Point net | p5 | p50 | p95 | Busts (pt) | Busts p50 |
+|---|---|---|---|---|---|---|
+| r1.0 | $31,800 | $19,182 | $31,626 | $44,944 | 10 | 12 |
+| r1.5 (CANDIDATE) | $56,269 | $38,023 | $53,672 | $71,364 | 25 | 24 |
+| r2.0 | $53,140 | $39,903 | $54,001 | $70,747 | 33 | 30 |
+| r2.5 (deployed) | $55,775 | $43,060 | $59,238 | $78,445 | 34 | 33 |
+
+**Key finding:** r1.5 vs r2.5 xfa_net 90% CIs FULLY OVERLAP (r1.5: [$38k,$71k] vs r2.5: [$43k,$78k]). The $494 point-estimate advantage for r1.5 is sampling noise. Bootstrap medians actually REVERSE: r2.5 p50=$59k > r1.5 p50=$53k -- the fat-tail advantage of r2.5 shows up when path-dependence is averaged out. The correct reason to prefer r1.5 over r2.5 is the bust-count advantage (p50=24 vs 33 busts -- structurally fewer busts = better pipeline sustainability), not the net-payout point estimate.
+
+r1.5 vs r2.0 and r1.5 vs r2.5 both tie on net payouts under CIs. r1.0 is cleanly inferior (p50=$32k vs others at $53-59k, CI barely overlaps r2.5 at the margins only).
+
+- **Verdict: SHIPPED.** bootstrap_pipeline() in funded_sim.py; --bootstrap/--block-len flags in scripts/funded_sim.py; CI rule added to PROTOCOL.md; 6 tests (all pass); Lessons 171-172.
+- **Learned:** The one deterministic funded_sim path is too short (1030 trading days) to reliably separate competing configs by less than ~20% in net payouts -- CIs span ~$35k for every ORB variant. Use block-bootstrap before calling a funded winner; overlapping 90% CIs = declare a tie and pick the config with lower bust-count variance (lower p95 busts) instead.
+- **Tests:** full suite **843 passed, 3 skipped, 0 failures** (+6 new B102 tests). findings.json #121.
+- **Next:** B103 (funded_sim intraday DLL-bust modeling, infra, pending) or B104 (firm-rule shock grid, pending).

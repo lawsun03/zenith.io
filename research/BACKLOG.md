@@ -4281,7 +4281,7 @@ trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair t
 the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
 **Source:** B99 secondary (2026-06-15).
 
-## B102 -- funded_sim: bootstrap confidence intervals on every headline number  [pending]
+## B102 -- funded_sim: bootstrap confidence intervals on every headline number  [done -- shipped: bootstrap_pipeline in funded_sim.py; --bootstrap flag in scripts/funded_sim.py; B99 r1.5 vs r2.5 = CI TIE (CIs fully overlap); CIs required in PROTOCOL before calling a winner; Lessons 171-172]
 Review #5: funded_sim.py:80,131 replays ONE deterministic P&L path; decisions get made on
 13-vs-14-bust deltas with NO CI anywhere -> we may be chasing noise. Wrap the pure
 simulate_combines/simulate_xfa_chain in a seeded BLOCK-bootstrap (~1000 resamples, block

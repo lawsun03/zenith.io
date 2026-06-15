@@ -162,6 +162,91 @@ def simulate_xfa_chain(
     }
 
 
+def _pct(samples: list[float], p: int) -> float:
+    """Linear-interpolation percentile; p in 0–100."""
+    if not samples:
+        return 0.0
+    s = sorted(samples)
+    n = len(s)
+    pos = p * (n - 1) / 100.0
+    lo = int(pos)
+    hi = min(lo + 1, n - 1)
+    return s[lo] + (pos - lo) * (s[hi] - s[lo])
+
+
+def bootstrap_pipeline(
+    daily_pnl: list[tuple[datetime, Decimal]],
+    n_resamples: int = 1000,
+    block_len: int = 20,
+    seed: int = 42,
+    haircut: Decimal = Decimal("0"),
+    combine_gap_days: int = 0,
+) -> dict:
+    """Block-bootstrap CIs for funded-pipeline headline metrics.
+
+    Resamples the daily P&L sequence in blocks of `block_len` consecutive
+    trading days (preserving intramonth clustering) and runs the full
+    simulate_combines + simulate_xfa_chain on each resample.
+
+    Returns 5/25/50/75/95 percentile CIs for:
+      xfa_net       — total net payouts ($)
+      xfa_busts     — total funded-account busts
+      combine_passes — total Combine passes
+
+    Interpretation: two configs' 90% CIs (p5–p95) on xfa_net must NOT OVERLAP
+    to call one a clear winner over the other. Overlapping CIs indicate the
+    observed difference is within sampling noise.
+    """
+    import random as _rnd
+
+    n = len(daily_pnl)
+    if n < block_len:
+        raise ValueError(f"Series too short ({n} days) for block_len={block_len}")
+
+    timestamps = [ts for ts, _ in daily_pnl]
+    pnl_vals = [p for _, p in daily_pnl]
+    n_blocks = n // block_len  # number of complete blocks
+
+    rng = _rnd.Random(seed)
+
+    xfa_net: list[float] = []
+    xfa_busts_s: list[float] = []
+    combine_passes_s: list[float] = []
+
+    for _ in range(n_resamples):
+        # Draw blocks with replacement until we have enough source indices.
+        src: list[int] = []
+        while len(src) < n:
+            b = rng.randrange(n_blocks)
+            src.extend(range(b * block_len, b * block_len + block_len))
+        src = src[:n]
+
+        # Original timestamps, resampled P&L values — preserves calendar shape.
+        resampled = [(timestamps[i], pnl_vals[src[i]]) for i in range(n)]
+
+        c = simulate_combines(resampled, haircut=haircut)
+        x = simulate_xfa_chain(
+            resampled, haircut=haircut, combine_gap_days=combine_gap_days
+        )
+        xfa_net.append(float(x["net_payouts"]))
+        xfa_busts_s.append(float(x["busts"]))
+        combine_passes_s.append(float(c["passes"]))
+
+    pct_keys = [5, 25, 50, 75, 95]
+
+    def ci(samples: list[float]) -> dict:
+        return {p: round(_pct(samples, p), 1) for p in pct_keys}
+
+    return {
+        "xfa_net": ci(xfa_net),
+        "xfa_busts": ci(xfa_busts_s),
+        "combine_passes": ci(combine_passes_s),
+        "n_resamples": n_resamples,
+        "block_len": block_len,
+        "series_len": n,
+    }
+
+
 def format_pipeline_summary(
     equity_curve: list[tuple[datetime, Decimal]],
     haircut: Decimal = Decimal("0"),
