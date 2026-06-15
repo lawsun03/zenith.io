@@ -30,6 +30,7 @@ _POINT_VALUE: dict[str, Decimal] = {
     "ES":   Decimal("50"),    # E-mini S&P 500
     "MCL":  Decimal("100"),   # Micro WTI Crude Oil
     "CL":   Decimal("1000"),  # WTI Crude Oil
+    "MBT":  Decimal("0.10"),  # Micro Bitcoin: 0.1 BTC, so $1/BTC move = $0.10/contract
     "M2K":  Decimal("5"),     # Micro Russell 2000
     "RTY":  Decimal("50"),    # Russell 2000
 }

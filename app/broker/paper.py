@@ -76,14 +76,14 @@ class _OpenBracket:
 #   /MGC (micro gold):     tick = $0.10, tick value = $1   → $10/point
 #   /MNQ (micro Nasdaq):   tick = 0.25,  tick value = $0.50 → $2/point
 #   /MCL (micro crude):    tick = $0.01, tick value = $1   → $100/point
-#   /MBT (micro Bitcoin):  tick = $5,    tick value = $0.10
+#   /MBT (micro Bitcoin):  tick = 5.0,   tick value = $0.50  → $0.10/point (0.1 BTC)
 #   /GC  (full gold):      tick = $0.10, tick value = $10  → $100/point
 TICK_VALUE = {
     "MGC": Decimal("1"),     # micro gold
     "MNQ": Decimal("0.5"),   # micro Nasdaq
     "MES": Decimal("1.25"),  # micro S&P 500
     "MCL": Decimal("1"),     # micro crude
-    "MBT": Decimal("0.10"),  # micro Bitcoin
+    "MBT": Decimal("0.50"),  # micro Bitcoin (0.1 BTC × $5 tick)
     "GC":  Decimal("10"),    # full gold contract
 }
 
@@ -611,7 +611,7 @@ class PaperBroker:
             "MNQ": Decimal("4"),
             "MES": Decimal("4"),    # tick = 0.25
             "MCL": Decimal("100"),  # tick = 0.01
-            "MBT": Decimal("20"),   # tick = 5 on a $100k+ contract
+            "MBT": Decimal("0.2"),  # tick = 5.0 price units → 0.2 ticks per point
         }.get(instrument, Decimal("1"))
 
     def _unrealized_for(self, b: _OpenBracket) -> Decimal:
