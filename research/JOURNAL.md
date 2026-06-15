@@ -3564,3 +3564,55 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Next:** B88 (FVG zone-width quality gate -- Phase 0 infra + Phase 1 data mining). First geometry-based FVG predictor not yet tested.
 
 - **Next:** B87 (Phase B funded_survival dynamic risk policy). B88 (FVG zone-width quality gate). B92 (live resting-OCO build for straddle).
+
+---
+
+## 2026-06-15T01:30Z -- session wk7-b88 -- B88 (FVG zone-width quality gate -- REJECTED Phase 1)
+
+- **Bot health:** /api/status OK -- XFA shadow, $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento: $3.87/$20.00 cap. No fetches.
+- **Claimed:** B88 (top pending item -- FVG zone-width quality gate, Phase 0 + Phase 1 data mining).
+
+**Ran:**
+1. TDD: wrote `tests/test_b88_fvg_zone_width.py` (4 defining-behavior tests) BEFORE implementation. Tests: (a) composer builds signal with fvg_zone_pts = fvg_high - fvg_low when FVG present, (b) composer sets fvg_zone_pts = None for displacement-only (no FVG), (c) --trade-csv has fvg_zone_pts column, non-empty for iFVG trade, (d) --trade-csv has empty fvg_zone_pts for ORB trade. All 4 RED pre-implementation.
+2. Implementation:
+   - `app/strategy/composer.py`: added `fvg_zone_pts: Decimal | None = None` to `Signal` dataclass; set `fvg_zone_pts = zone_high - zone_low if both present else None` in `_build_signal`.
+   - `app/backtest/runner.py`: added `_order_fvg_zone_pts` dict; populated in `on_signal`; retroactively attached to entry fill dicts; passed through `_reconstruct_trades`.
+   - `scripts/equity_export.py`: added `fvg_zone_pts` column to `--trade-csv` output.
+3. All 4 tests GREEN. Full suite: **771 passed, 2 skipped, 0 failures**.
+4. Generated `research/mfe_mae_deployed_b88.csv` (3238 trades: 2376 iFVG with fvg_zone_pts, 862 ORB).
+5. Phase 1 analysis: `scripts/analyze_b88_fvg_zone_width.py`.
+
+**Numbers (Phase 1, n=2376 iFVG trades, deployed close-mode r=2.5, 5y excl 2022):**
+
+| Bucket | n | Zone range (pts) | PF | Net$ |
+|--------|---|------------------|----|------|
+| Q1 (narrow) | 536 | 0.25-1.25 | 0.918 | -27,795 |
+| Q2 (mid-narrow) | 474 | 1.50-2.75 | **1.282** | +80,377 |
+| Q3 | 423 | 3.00-4.75 | 0.817 | -53,394 |
+| Q4 | 471 | 5.00-9.25 | 0.980 | -7,010 |
+| Q5 (wide) | 472 | 9.50-131.75 | 0.916 | -33,769 |
+
+- Narrow (Q1) PF: 0.918 vs Wide (Q5) PF: 0.916 -- ratio = **1.002** (threshold 1.25 -- NOT MET)
+- Year consistency: 4/5 years Q1 > Q5 (threshold met)
+- Monotone: NO (Q2 wins, not Q1 -- V-shape)
+
+**Stop rule:** ratio 1.002 << 1.25 AND non-monotonic quintiles -- stop rule fires. Phase 2 not built.
+
+**Verdict:** REJECTED (Phase 1 NO-GO). fvg_zone_pts infrastructure ships as default addition to Signal + equity_export (useful for future analyses). The gate itself is not recommended.
+
+**Root cause:** FVG zone width is a V-shaped non-monotonic predictor (Q2 mid-narrow wins at PF=1.282; both Q1 narrowest and Q5 widest lose). The hypothesis that "narrow FVG = concentrated institutional imbalance = better quality" is falsified. This is the same V-shape pattern documented in Lessons 90/99/117/122/138. The Q2 anomaly (1.5-2.75pts, PF=1.282, +$80k) is a hindsight-selected mid-range bucket -- not the hypothesized directional edge, and requires a separate out-of-sample test to be actionable.
+
+**Learned:** FVG zone width joins the geometry-predictor graveyard (Lessons 90/99/117/122/138): OHLCV-derived zone geometry is non-monotonic relative to iFVG trade quality. Unlike MFE/MAE (which cleanly separate winners from losers by adverse excursion), pre-trade zone dimensions do not predict post-entry delivery. The V-shape with mid-range winning is the defining non-signal (it's the natural baseline when the predictor is independent of outcome).
+
+**Lesson 160 added.** Databento: $3.87/$20 (no spend). findings.json #112.
+
+**Infrastructure shipped:**
+- `app/strategy/composer.py`: `Signal.fvg_zone_pts` field (Decimal | None)
+- `app/backtest/runner.py`: _order_fvg_zone_pts pipeline
+- `scripts/equity_export.py`: fvg_zone_pts column in --trade-csv
+- `tests/test_b88_fvg_zone_width.py`: 4 defining-behavior tests
+- `scripts/analyze_b88_fvg_zone_width.py`: Phase 1 analysis script
+- `research/mfe_mae_deployed_b88.csv`: 3238-trade deployed-config dataset with fvg_zone_pts
+- `research/equity_b88/deployed_r1p0_excl2022.csv`: equity curve
+
+**Next:** B92 (news_straddle LIVE resting-OCO build, model:opus) or B93 (CPI-straddle funded-overlay framing). B92 is the highest-priority build item (Lawrence-requested live path).

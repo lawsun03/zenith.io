@@ -539,6 +539,8 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 trade["criteria"] = open_entry["criteria"]
             if open_entry.get("displacement_ts") is not None:
                 trade["displacement_ts"] = open_entry["displacement_ts"]
+            if open_entry.get("fvg_zone_pts") is not None:
+                trade["fvg_zone_pts"] = open_entry["fvg_zone_pts"]
             trades.append(trade)
             open_entry = None
     if open_entry is not None:
@@ -590,6 +592,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     _order_grades: dict[str, dict] = {}
     # B69: maps entry order_id → displacement_ts ISO string for freshness analysis.
     _order_displacement_ts: dict[str, str] = {}
+    # B88: maps entry order_id → fvg_zone_pts string for zone-width analysis.
+    _order_fvg_zone_pts: dict[str, str] = {}
 
     def _kz_for_fill(broker_order_id: str | None) -> str:
         if not broker_order_id:
@@ -632,6 +636,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
                 }
             if signal.displacement_ts is not None:
                 _order_displacement_ts[outcome.broker_order_id] = signal.displacement_ts.isoformat()
+            if signal.fvg_zone_pts is not None:
+                _order_fvg_zone_pts[outcome.broker_order_id] = str(signal.fvg_zone_pts)
 
     async def on_fill(fill: Fill) -> None:
         fill_dict: dict = {
@@ -706,7 +712,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     await engine.stop()
     await broker.disconnect()
 
-    # Retroactively attach grade and displacement_ts to entry fill dicts now that on_signal has fired.
+    # Retroactively attach grade, displacement_ts, and fvg_zone_pts to entry fill dicts.
     for fill_dict in fills_captured:
         if fill_dict["is_entry"]:
             grade_info = _order_grades.get(fill_dict["order_id"])
@@ -716,6 +722,9 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             d_ts = _order_displacement_ts.get(fill_dict["order_id"])
             if d_ts:
                 fill_dict["displacement_ts"] = d_ts
+            z = _order_fvg_zone_pts.get(fill_dict["order_id"])
+            if z:
+                fill_dict["fvg_zone_pts"] = z
     stats = _compute_stats(fills_captured, risk_state, cfg.starting_balance)
     trades = _reconstruct_trades(fills_captured)
 

@@ -3927,5 +3927,27 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T01:30:00Z",
+    "session": "wk7-b88",
+    "item": "B88",
+    "variant": "fvg_zone_pts quintile Phase 1",
+    "objective": "dataset",
+    "metrics": {
+      "narrow_q1_pf": 0.918,
+      "wide_q5_pf": 0.916,
+      "ratio": 1.002,
+      "years_q1_gt_q5": "4/5",
+      "q2_mid_pf": 1.282,
+      "n_ifvg_trades": 2376
+    },
+    "verdict": "rejected",
+    "learned": "FVG zone width is a non-monotonic predictor of iFVG quality: narrow (Q1) PF=0.918 vs wide (Q5) PF=0.916, ratio=1.002 -- essentially zero edge. Q2 mid-narrow (1.5-2.75pts) is the anomalous winner at PF=1.282 but this is a hindsight-selected bucket. The zone-width hypothesis is falsified, extending the geometry predictor graveyard.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

@@ -3875,7 +3875,7 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 
 ---
 
-## B88 -- FVG zone-width quality gate (Phase 0 + Phase 1 data mining)  [pending]
+## B88 -- FVG zone-width quality gate (Phase 0 + Phase 1 data mining)  [done -- REJECTED: Phase 1 NO-GO; narrow Q1 PF=0.918 vs wide Q5 PF=0.916, ratio=1.002 (threshold 1.25); non-monotonic V-shape (Q2 mid-narrow wins at PF=1.282); fvg_zone_pts infra shipped (Signal + runner + equity_export); 4 defining-behavior tests; 771 tests green; Lesson 160]
 
 **Hypothesis:** The width of the FVG gap (distal edge minus proximal edge, in points) normalized by the ATR at the time of displacement measures the "concentration" of the institutional imbalance. A NARROW FVG (small gap relative to ATR) indicates a precise, clean displacement where institutional flow is compressed into a tight price range. A WIDE FVG indicates a messier, more diffuse imbalance. Narrow FVGs should predict higher follow-through (better inversion quality) because the institutional order cluster is concentrated at a known price level. This is distinct from B16 (inversion bar body shape), wk5-r3 (displacement bar body/ATR), and B74 (hour blocking) -- it measures ZONE GEOMETRY, not bar geometry.
 

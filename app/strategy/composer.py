@@ -98,6 +98,9 @@ class Signal:
     # event.fvg.created_at is the meaningful reference for how stale the FVG was.
     # None for non-iFVG engines, hand-built signals, and displacement-only mode (no FVG).
     displacement_ts: "datetime | None" = None
+    # B88: width of the inverted FVG zone (fvg_high - fvg_low) in price points.
+    # None for non-iFVG engines, displacement-only signals, and hand-built signals.
+    fvg_zone_pts: "Decimal | None" = None
 
 
 @dataclass
@@ -755,6 +758,9 @@ class SweepDisplacementComposer:
             f"{fvg_desc}"
         )
 
+        fvg_zone_pts = (zone_high - zone_low
+                        if zone_low is not None and zone_high is not None
+                        else None)
         return Signal(
             instrument=cfg.instrument,
             side=side,
@@ -771,4 +777,5 @@ class SweepDisplacementComposer:
             sweep_bar_range=awaiting.sweep.sweep_bar.high - awaiting.sweep.sweep_bar.low,
             confluence_count=confluence_count,
             displacement_ts=event.fvg.created_at if event.fvg is not None else None,
+            fvg_zone_pts=fvg_zone_pts,
         )

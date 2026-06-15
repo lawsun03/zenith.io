@@ -114,7 +114,8 @@ def main() -> int:
         with tpath.open("w", newline="", encoding="utf-8") as tf:
             tw = csv.writer(tf)
             tw.writerow(["entry_ts", "exit_ts", "side", "pnl_usd", "engine_type",
-                         "r_mfe", "r_mae", "mfe_pts", "mae_pts", "displacement_ts"])
+                         "r_mfe", "r_mae", "mfe_pts", "mae_pts", "displacement_ts",
+                         "fvg_zone_pts"])
             for t in result.trades:
                 engine_type = "ifvg" if t.get("grade") else "orb"
                 tw.writerow([
@@ -123,6 +124,7 @@ def main() -> int:
                     t.get("r_mfe", ""), t.get("r_mae", ""),
                     t.get("mfe_pts", ""), t.get("mae_pts", ""),
                     t.get("displacement_ts", ""),
+                    t.get("fvg_zone_pts", ""),
                 ])
         print(f"wrote {len(result.trades)} trades -> {tpath}")
     return 0
