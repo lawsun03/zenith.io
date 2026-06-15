@@ -850,6 +850,9 @@ async def test_engine_blocks_base_entry_on_cpi_day():
 
     outcome = await engine._act_on_signal(_signal("1900", "1895", "1910", side="long"))
     assert outcome.placed is False
+    # Assert the CPI gate fired specifically — not some other denial path
+    # (lockout, max-contracts, feed health). placed=False alone is ambiguous.
+    assert outcome.reason == "CPI_DAY_BLOCK"
 
 
 @pytest.mark.asyncio
