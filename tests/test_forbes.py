@@ -45,3 +45,12 @@ def test_poi_map_mark_swept_when_price_trades_through():
     m.add(_Level(price=Decimal("110"), kind="session_high", swept=False))
     m.update_swept(bar_high=Decimal("111"), bar_low=Decimal("108"))
     assert m.nearest_unswept_opposing(side="long", price=Decimal("100")) is None  # 110 now swept
+
+
+from app.strategy.kz_levels import KillzoneLevelTracker
+
+
+def test_kz_tracker_exposes_locked_session_ranges():
+    t = KillzoneLevelTracker()
+    assert hasattr(t, "locked_ranges")
+    assert t.locked_ranges() == {}   # empty before any session locks

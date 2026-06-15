@@ -59,6 +59,10 @@ class KillzoneLevelTracker:
     # Public interface
     # ------------------------------------------------------------------
 
+    def locked_ranges(self) -> "dict[str, tuple[Decimal, Decimal]]":
+        """Session ranges that have closed/locked this day. {name: (high, low)}. Pure read."""
+        return dict(self._kz_ranges)
+
     def on_bar(
         self,
         bar: Bar,
