@@ -509,6 +509,18 @@ def _compute_stats(
     )
 
 
+def _merge_excursion(trade: dict, exc: tuple) -> None:
+    """Attach MFE/MAE/stop_dist (raw points) and R-normalised excursions to a
+    trade dict. stop_dist is the entry-to-initial-stop distance — exposed raw so
+    downstream analysis can recover per-trade realised R without re-deriving it."""
+    mfe, mae, stop_dist = exc
+    trade["mfe_pts"] = str(mfe)
+    trade["mae_pts"] = str(mae)
+    trade["stop_dist"] = str(stop_dist)
+    trade["r_mfe"] = round(float(mfe / stop_dist), 4) if stop_dist else 0.0
+    trade["r_mae"] = round(float(mae / stop_dist), 4) if stop_dist else 0.0
+
+
 def _reconstruct_trades(fills: list[dict]) -> list[dict]:
     """Pair entry fills with exit fills. hold_seconds uses fill timestamps (bar time)."""
     # Assumes strict alternation: entry fill followed by exit fill.
@@ -734,11 +746,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         oid = trade.pop("_entry_order_id", "")
         exc = excursions.get(oid)
         if exc is not None:
-            mfe, mae, stop_dist = exc
-            trade["mfe_pts"] = str(mfe)
-            trade["mae_pts"] = str(mae)
-            trade["r_mfe"] = round(float(mfe / stop_dist), 4) if stop_dist else 0.0
-            trade["r_mae"] = round(float(mae / stop_dist), 4) if stop_dist else 0.0
+            _merge_excursion(trade, exc)
 
     return BacktestResult(
         config=cfg,

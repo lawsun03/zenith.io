@@ -3735,3 +3735,31 @@ Gold-FOMC additive Î”$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **â
 - **Tests:** full suite green (no code change -- analysis-only; verified below). findings.json #116. Databento untouched.
 
 - **Next:** B99 (ORB target-R sweep 1.0/1.5/2.0/2.5R, model:opus, Lawrence-requested -- live ORB trade review) or B97 (MGC+MES instrument-transfer re-run, model:opus).
+
+---
+
+## 2026-06-15T17:45Z -- session wk7-b99 -- B99 (ORB target-R sweep 1.0/1.5/2.0/2.5R -- CANDIDATE: r1.5 for funded)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,226.50 (HWM $152,227.12), 1 open contract, no drift, no lockout, last reconcile clean. Market closed (weekend). Databento $11.20/$20 (NO fetch -- on-disk data only).
+- **Claimed:** B99 (top item, model:opus, Lawrence-requested). RECLAIMED ORPHAN (crashed session #2): a prior session had generated the 4 per-R equity CSVs but (a) used no `--trade-csv` so had no target-hit/stop/EOD classification, and (b) overwrote its funded/combine stdout down to only the last R. It also left an uncommitted, tested refactor (`_merge_excursion` + `stop_dist` on trade dicts in runner.py + test_mfe_mae.py) -- legitimate, kept, included in this commit. I re-ran the full sweep cleanly (`research/_b99_run.sh`, per-R logs, trade CSVs) and wrote `scripts/_b99_analyze.py` for the per-trade table.
+
+**Method:** engine=orb, 9:30+15min OR, MNQ 5min, `bars/bars_MNQ_dbv_2021_2026.csv`, 2022 EXCLUDED (1030 trades). Per R: equity_export (risk 0.75, partial_r=0) -> funded_sim h0/200/400; run_monthly_combine (risk 1.25). Per-trade stats + per-year overfit guard from trade CSVs.
+
+**Headline (PRIMARY, trade economics):**
+| R | win% | PF | exp$/tr | target% | stop% | EOD% | net$ |
+|---|---|---|---|---|---|---|---|
+| 1.0 | 54.0 | 1.21 | 31.7 | 44.7 | 36.6 | 18.7 | 32,699 |
+| **1.5** | **48.9** | **1.24** | **47.9** | 29.2 | 40.4 | 30.4 | **49,355** |
+| 2.0 | 46.0 | 1.20 | 43.4 | 17.5 | 42.5 | 40.0 | 44,670 |
+| 2.5 | 45.0 | 1.19 | 43.8 | **11.2** | 43.2 | 45.6 | 45,097 |
+
+**Lawrence's intuition CONFIRMED:** shipped r2.5 hits target on only 11.2% of trades (43% stop, 46% EOD-flatten) -- matches the ~12% intuition sim. **r1.5 is the expectancy optimum** (+9% $/trade vs r2.5, highest PF/mean-R, positive every year PF 1.04-1.60). The fat tail does NOT win. r1.0 over-shoots (54% win but tiny +1R wins -> worst expectancy).
+
+**FUNDED (XFA net):** r1.5 ties r2.5 (~$56k h200) while halving worst-month drawdown ($2.4k vs $4.1k); r2.5 only pulls ahead at the pessimistic h400 haircut (fat-tail robustness). **COMBINE:** no R clears 13/61 (r1.0/r2.0=11, r2.5=10, r1.5=8); risk-limited harness flips the ranking (r1.0 PF 1.13 best) per Lesson 2.
+
+**SECONDARY (boundary stop-entry; OR-width filter):** both need real engine/detector builds -> flagged + SKIPPED per spec. OR-width is the direct fix for the live wide-OR trade and is worth a dedicated cheap Phase-1 cut (queued as B100).
+
+- **Verdict: CANDIDATE (r1.5, funded phase only).** Recommendation for Monday: funded `orb_r_multiple=1.5` = dollar-neutral, lower-variance, higher-win-rate vs shipped 2.5; keep combine at 2.5 (none clear the bar). Analysis-only -- nothing enabled, bot_config.json/.env untouched.
+- **Learned:** A higher target-R is not free fat-tail upside -- past r1.5 the extra distance is reached too rarely to pay for the lower win rate; and the combine's risk-limited harness can FLIP the standalone expectancy ranking (volume, not PF, binds). Lesson 166 added.
+- **Tests:** full suite **816 passed, 3 skipped, 0 failures**. findings.json #117.
+- **Next:** B97 (full strategy re-run on MGC+MES, model:opus, Lawrence-requested) or B100 (ORB OR-width Phase-1 cut, cheap).

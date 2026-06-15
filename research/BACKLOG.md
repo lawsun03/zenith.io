@@ -4148,7 +4148,7 @@ deployed-combined dataset or an equity_export --trade-csv):
 2. **RSI-pullback-in-uptrend**: within price>200-SMA, does short-RSI(2/14) oversold-
    then-recover precede better long outcomes? Same localize() pass.
 
-## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [pending -- Lawrence-requested 2026-06-15; model:opus]
+## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [done -- CANDIDATE (r1.5 funded): r2.5 hits target only 11.2% of trades (Lawrence intuition confirmed); r1.5 is expectancy optimum (PF 1.24, $47.9/tr +9%, year-stable), ties r2.5 on funded payouts while halving maxDD; no R clears 13/61 combine so combine stays r2.5. Secondary entry/OR-width variants flagged+skipped (need builds) -> B100. doc: trade_analysis/2026-06-15_B99_orb_target_r_sweep.md]
 
 Lawrence reviewed a LIVE wide-OR ORB trade (long MNQ, OR=30601.75-30735.5=133.75pt,
 entry=30780.5 breakout CLOSE, stop=OR low 30601.75=178.75pt, target=2.5R=447pt) and
@@ -4231,3 +4231,18 @@ because the framing differs slightly and the check is nearly free.
 
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
+
+## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [pending]
+
+Spun out of B99 secondary. Lawrence's live wide-OR trade (OR 133.75pt, 2.5R target=447pt)
+is exactly the case where the target balloons past NQ's realistic daily range. B99 showed
+r2.5 hits target only 11.2% of trades; wide-OR days likely concentrate the never-reached
+targets. CHEAP Phase-1 cut FIRST (no engine build): tag the existing B99 ORB per-trade
+CSVs (research/equity_b99/trades_r2p5.csv etc.) with each trade's OR width (recompute from
+bars or expose via runner) and run edge_diagnostics.localize on pnl across OR-width
+buckets (e.g. quartiles, or OR/ATR ratio). Question: is there a robust width threshold
+(PF>=1.2, n>=30, +ve in >=60% of years) above which ORB trades are net-negative? If YES ->
+queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't predict
+trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
+the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
+**Source:** B99 secondary (2026-06-15).

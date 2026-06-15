@@ -228,6 +228,25 @@ class TestMfeMaeAccumulation:
         assert r_mfe > 0
         assert r_mae >= 0
 
+    def test_merge_excursion_exposes_stop_dist(self):
+        """_merge_excursion attaches raw stop_dist alongside R-normalised fields.
+
+        B99: per-trade realised R is computed downstream as
+        realised_points / stop_dist; exposing stop_dist raw (not just r_mfe/r_mae)
+        lets the ORB target-R sweep classify each trade's outcome without
+        re-deriving the stop distance from MFE. A regression that drops stop_dist
+        would silently break that analysis.
+        """
+        from app.backtest.runner import _merge_excursion
+
+        trade: dict = {}
+        _merge_excursion(trade, (Decimal("10"), Decimal("4"), Decimal("5")))
+        assert trade["stop_dist"] == "5"
+        assert trade["mfe_pts"] == "10"
+        assert trade["mae_pts"] == "4"
+        assert trade["r_mfe"] == 2.0
+        assert trade["r_mae"] == 0.8
+
 
 class TestBeTrailR:
     """BE-trail: move stop to entry when MFE >= be_trail_r × initial_stop_dist."""
