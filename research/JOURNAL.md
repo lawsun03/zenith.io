@@ -4129,3 +4129,35 @@ B106 wins on PF vs matched-risk control for ALL f (trivially -- aligned PF > agg
 - **Learned:** A tool's "recommendation" output is only meaningful when the scores that drive it are differentiated. With constant scores (all INCOMPLETE windows), any recommendation is arbitrary -- just iteration order masquerading as analysis. Guard this pattern anywhere a ranking is emitted from a potentially-constant scoring function.
 - **Tests:** full suite **885 passed, 3 skipped, 0 failures** (+5 new B107 tests). findings.json #126. Lesson 182 added.
 - **Next:** Backlog is now clear (B107 was the last pending item). Session exits. Next session should run a research/ideation pass to replenish the backlog.
+
+---
+
+## 2026-06-16T02:00Z -- session wk8-r1 -- RESEARCH/IDEATION (backlog replenishment -- 3 items added)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no lockout, no drift. Market closed (weekend). Databento $11.20/$20 (no fetch -- analysis-only ideation session).
+- **Claimed:** No pending item (backlog empty per B107 exit). Protocol mandates a research/ideation session to replenish. Last 6 sessions were all builds/analyses (B102-B107).
+
+**Research sources reviewed:** Full LESSONS.md (Lessons 1-182), all prior backlog items (B1-B107), per-year equity_b21/ directory (confirmed r_multiple=1.5 data gap), funded_sim bootstrap results (B102), B70 plain-ORB r_multiple sweep.
+
+**Gaps identified and their evidence:**
+
+**Gap 1 (B108):** ORB-reentry at orb_r_multiple=1.5 has NEVER been tested in the two-phase pipeline. B99 found r_multiple=1.5 is the standalone funded expectancy optimum (PF=1.24, +9% vs r2.5, year-stable). B102 bootstrap showed r1.5 ties r2.5 on XFA net CIs but has fewer busts (p50=24 vs 33). The equity_b21/ directory has per-year files for risk_pct=0.75/1.0/1.25, all at r_multiple=2.5 -- r_multiple=1.5 files do not exist. B70 tested PLAIN ORB (no reentry) at r_multiple=1.5 and found it worse ($496/mo, sust=2.10x vs baseline 3.23x), but the reentry mechanism may benefit more from a reachable 1.5R target. This is the highest-priority item -- closes the B99 CANDIDATE gap.
+
+**Gap 2 (B109):** The ORB quality-predictor rejection series tested geometry metrics (B45 OR-width, B49 breakout extension, B62 CLV proxy, B100 OR/ATR ratio) -- all non-monotonic and rejected. Raw VOLUME at the breakout bar has not been tested. Orthogonal to geometry: volume measures economic participation, not price displacement. Prior is LOW (non-monotonic V-shape pattern has appeared in every ORB quality metric tested; Lesson 88 establishes quality lives in the 4h+ cohort, not signal-bar characteristics). Cheap falsification -- no engine build unless Phase-1 GO (PF ratio >= 1.40, n >= 30, 3+/5 years).
+
+**Gap 3 (B110):** NFP (Non-Farm Payrolls, first Friday 8:30 ET, ~12/yr) was NOT in B83's 124-event test set (which covered CPI/PPI/FOMC only). B85/B89 confirmed the CPI 8:30 ET straddle (PF=5.99, 67% WR, 5/5 years, 3R target). The identical mechanism applies to NFP. Risk: NFP reactions may be more complex (headline + revisions + wage growth simultaneous) and NFP whipsaw rate might be higher (market often more one-sided pre-NFP). Prior ~35%. This is the natural mechanism-extension test -- not an external claim, but a gap in our event coverage.
+
+**Items ruled out and why:**
+- B70 r_multiple variants on PLAIN ORB Phase B: all tested (r1.5/2.0/3.0/3.5), r2.5 confirmed optimal.
+- iFVG long-only with r_multiple=1.5: B71 established LO+r=2.5 degrades pipeline throughput (40 vs 42 passes); r1.5 would further hurt the combine-target hit rate. Ruled out.
+- DOW filters: B30/B68 both rejected; ORB Friday concentration (Lesson 66) doesn't survive pipeline test at <5 signals/month.
+- "Repeat short-short" gate: B81 tested and rejected at 26.6% volume cut (sust 3.54x -> 3.31x).
+- Pre-market break gate for Phase A combined: B73 rejected (8% ORB cut degraded sust 3.54x->3.15x; 30.5% PM-break cut would be far worse).
+- Walk-forward re-validation: B107 shipped the fix; this is an operational task for Lawrence, not a research item.
+- NFP via B83 extension: B83 already found CPI is the ONLY 8:30 ET release with a positive straddle mechanism at 1:1 RR; B110 must first test NFP at 3R (the confirmed extension that worked for CPI).
+
+**New BACKLOG items added:** B108 (ORB-reentry r_mult=1.5 two-phase pipeline), B109 (ORB breakout-bar volume Phase-1), B110 (NFP straddle Phase-1). Ranked in priority order: B108 highest (closes candidate), B109 middle (quick falsification), B110 third (mechanism extension with moderate prior).
+
+- **Learned:** All confirmed mechanism classes (iFVG, ORB, CPI straddle) have been thoroughly parameter-swept; remaining high-value work is (1) closing open CANDIDATE gaps (B108), (2) one-shot falsifications of orthogonal quality signals (B109), and (3) extending confirmed event-driven mechanisms to new events (B110). The parameter plateau is real -- the next step-change will likely require a structurally new signal source or instrument.
+- **Tests:** 885 passed, 3 skipped, 0 failures (no code changes this session). findings.json #127.
+- **Next:** B108 (ORB-reentry r_multiple=1.5 two-phase pipeline -- close B99 candidate gap; medium effort, no engine code).

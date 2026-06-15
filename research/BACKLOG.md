@@ -4326,3 +4326,112 @@ score 0.000 and "RECOMMENDED CONFIG" is just grid order (false confidence). Scor
 net/PF/expectancy (or lengthen test windows to >=20 trading days); GUARD against emitting a
 recommendation when the score is constant. Or retire the tool. Success: no false-confidence
 recommendation; one-line LESSONS.md entry. **Source:** external review 2026-06-15.
+
+## B108 -- ORB-reentry orb_r_multiple=1.5 two-phase pipeline (close B99 candidate)  [pending]
+
+B99 declared orb_r_multiple=1.5 the funded-standalone expectancy optimum (PF=1.24, +9% vs
+r2.5, year-stable). B102 bootstrap confirmed r1.5 ties r2.5 on XFA net CIs but has fewer
+funded busts (p50=24 vs 33). B70 tested plain-ORB Phase B at r_multiple=1.5 and rejected
+it ($496/mo, sust=2.10x) -- but B70 used PLAIN ORB (no reentry). ORB-REENTRY at
+r_multiple=1.5 has never been run in the two-phase pipeline. equity_b21/ has r0.75/r1.0/r1.25
+(all at r_multiple=2.5); r_multiple=1.5 files do not exist. This item closes the B99
+candidate gap.
+
+Mechanism: same as B21 (ORB-reentry Phase B, risk_pct=0.75%) but with orb_r_multiple=1.5
+instead of 2.5. At r_multiple=1.5, the exit target is 1.5R from the stop (reached on ~37%
+of trades per B99, vs 11.2% at r_multiple=2.5). The reentry mechanism fires after the first
+ORB stop-out (same as B21). Both signals use r_multiple=1.5.
+
+Method (no new engine code -- benchmark only):
+1. Generate per-year equity CSVs: run equity_export.py with engine=orb orb_r_multiple=1.5
+   orb_reentry=true risk_pct=0.75 partial_profit_r=0 swing_stop_lookback=0 for years
+   {2021, 2023, 2024, 2025, 2026} (EXCLUDE 2022 holdout) using the B21/B99 override set.
+   Save to research/equity_b108/orb_reentry_rm1p5_YYYY.csv.
+2. Run two-phase funded_sim with Phase A reference from B42 (deployed Phase A, 42 passes):
+   funded_sim.py research/equity_b108/*.csv --haircut 200 --bootstrap 1000 --block-len 20
+   Also run haircut 0 and 400 for sensitivity.
+3. Report: $/mo, sust, XFA busts (point + 90% CI), per-year breakdown.
+
+Success criteria: B108 (r_mult=1.5) improves on B21 r_mult=2.5 baseline ($549/mo, 3.23x
+sust, 13 busts p50 via bootstrap) on sustainability (fewer busts OR lower bust variance,
+i.e., lower p95 busts) while CIs do NOT strongly favor r2.5 on net payouts. "Fewer busts +
+CI-tied on net" => r1.5 is the new Phase B optimum. "Both worse OR higher busts" => B70
+plain-ORB finding extends to reentry, r2.5 confirmed as Phase B optimum.
+
+Priors: B99 r1.5 has lower busts standalone (p50=24 vs 33 at r2.5); the two-phase model
+may amplify the bust difference (per-year stitching restores within-year path-dependence).
+B70 plain-ORB r1.5 was worse ($496/mo, sust=2.10x), but plain ORB has no reentry and
+depends more on 2.5R targets for full P&L -- the reentry mechanism adds a second entry that
+benefits from a reachable 1.5R target more than plain ORB does. MODERATE prior (~50%)
+that r1.5 reentry improves sust; uncertain direction on $/mo.
+Source: B99 candidate gap + B102 bootstrap finding (r1.5 has lower bust variance; 2026-06-16).
+
+## B109 -- ORB breakout-bar volume Phase-1 data mining  [pending]
+
+The ORB quality-predictor rejection series (B45 OR width, B49 breakout extension, B62
+CLV orderflow proxy, B100 OR/ATR) has tested geometry-based single-bar metrics but NOT
+raw trading volume. Volume is orthogonal to price geometry: a strong-conviction ORB
+breakout may be accompanied by above-average participation regardless of OR width or
+extension magnitude. This Phase-1 cut checks if breakout-bar volume predicts ORB quality
+before committing to an engine build.
+
+Mechanism: for each ORB trade in the deployed MFE/MAE dataset
+(research/mfe_mae_deployed_combined_clean.csv, n=862 ORB trades, 5y excl 2022), extract
+the 5-min bar volume at the signal timestamp from bars/bars_MNQ_dbv_2021_2026.csv (join
+on ts). Compute vol_ratio = bar_volume / 20-day rolling median of "ORB signal-bar volume"
+(rolling over only bars where ORB signals fire, to control for time-of-day effects; ORB
+fires ~9:30-10:30 ET). Quartile-bin trades on vol_ratio; run edge_diagnostics.localize
+across {Q1_low, Q2, Q3, Q4_high} dimensions, plus side x vol_quartile cross-cut.
+
+GO/NO-GO gate (from edge_diagnostics robust bar):
+- PF ratio top-40% vs bottom-40% >= 1.40, BOTH groups n >= 30, consistent >= 3/5 years.
+If GO -> queue Phase-2 ORB engine gate as new B111.
+If NO-GO -> REJECT (extends the ORB quality predictor rejection class); log lesson.
+
+No engine code either way -- Phase-1 analysis only.
+
+Defining-behavior test (if Phase-2 ever builds): that a high-volume breakout bar is
+correctly recognized and suppresses/keeps the trade per the threshold.
+
+Priors: LOW (~15%). B45/B49/B62/B100 all failed with non-monotonic patterns. Lesson 88
+established that ORB quality lives in the 4h+ EOD-flatten cohort, not in breakout-bar
+characteristics. The EOD-flatten mechanism dominates any single-bar attribute at signal
+time. Expect non-monotonic PF pattern (same V-shape as prior rejections).
+Source: natural gap in ORB quality-predictor series (2026-06-16 research session).
+
+## B110 -- NFP 8:30 ET straddle Phase-1 (Non-Farm Payrolls)  [pending]
+
+B85/B89/B92 confirmed the CPI 8:30 ET straddle mechanism: resting stop entries
++/-0.5*ATR5 above/below pre-release price, 3R target, tight stop at opposite leg's
+strike, 100% fill rate, PF=5.99, 67% WR, 5/5 years on MNQ. B83 originally tested a
+1:1 RR straddle across 124 CPI/PPI/FOMC events and found CPI "least bad" (weakly
+negative at 1:1 but the only event worth extending to 3R). NFP (Non-Farm Payrolls,
+first Friday of each month, 8:30 ET) was NOT in B83's event list. ~12 events/year =
+~55-60 events over 2021 H2 + 2023-2026 (excl 2022 holdout).
+
+NFP vs CPI structural comparison:
+- Same release time (8:30 ET), same exchange reaction mechanism (directional spike)
+- NFP is arguably the most-anticipated US macro release; moves are often larger
+- Key risk: NFP can be "buy the rumor sell the news" -- market may be more one-sided
+  going into NFP, increasing whipsaw vs CPI (where analysts are genuinely uncertain)
+- CPI's PF=5.99 is partly from its clean binary (inflation up/down); NFP reaction
+  depends on headline + revisions + wage growth + participation rate simultaneously
+
+Method:
+1. Compile NFP release dates for 2021 H2, 2023, 2024, 2025, 2026 from BLS calendar.
+   (Note: may need to exclude early-close Fridays or holiday-adjacent events.)
+2. Run the 1-min oracle analysis (identical to scripts/news_straddle_cpi_1s.py but
+   parameterized for NFP date list): offset=0.5*ATR5 pre-release, tp_r=3.0, arm
+   window=15min before 8:30 ET, cancel loser on first fill. Report at 1R, 2R, 3R.
+3. Per-year breakdown: 2021 H2, 2023, 2024, 2025, 2026 separate PF and WR.
+4. Report: fill rate, whipsaw rate, WR at 3R, PF at 3R, net expectancy R/event.
+
+Success gate (same as B85 CPI gate): PF >= 3.0 at 3R, whipsaw <= 30%, positive in
+>= 4/5 years, n >= 25. If all cleared -> estimate pipeline overlay (same method as B93;
+use the B42 baseline Phase A + B21 ORB-reentry Phase B with additive straddle). Queue
+a B92-style broker build item. If any gate fails -> REJECT; lesson added; no NFP engine.
+
+Note: 2022 holdout applies (exclude 2022 NFP dates per protocol). This is Phase-1 only;
+the 2022 holdout run happens if and only if this item produces a candidate.
+Source: natural extension of confirmed B85 mechanism to untested 8:30 ET event type;
+B83 data gap confirmed (NFP not in the 124-event B83 list). (2026-06-16 research session.)
