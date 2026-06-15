@@ -4123,7 +4123,7 @@ for the live path).
 
 ---
 
-## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [pending — Lawrence-requested 2026-06-15; CHEAP Phase-1 only, NO build unless GO; model:sonnet]
+## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [in-progress — session 2026-06-15T13:30Z]
 
 Lawrence sent a batch of MA/EMA/RSI/Bollinger ideas. MOST map to mechanism classes
 this program has ALREADY rejected — do NOT build systems from them. Receipts:
@@ -4166,7 +4166,7 @@ Success: any MGC/MES config with materially positive net payouts + sustainable b
 rate. A confirmatory REJECT is a valid, publishable outcome — say so plainly.
 Deliverable: per-instrument payout table, trade_analysis doc, findings entries.
 
-## B98 -- BTC (MBT) session-engine test: iFVG + ORB on a 24h crypto tape  [pending — Lawrence-requested 2026-06-15; needs SESSION REDEFINITION first; model:opus]
+## B98 -- BTC (MBT) session-engine test: iFVG + ORB on a 24h crypto tape  [DROPPED — Lawrence 2026-06-15: pause BTC, keep research on MNQ/MGC/MES. Do NOT claim. Prereqs stay on disk if revisited: MBT specs fixed (03f2d3f), data bars/bars_MBT_dbv_2021_2026.csv.]
 
 Test the base session engines (iFVG + ORB) on Micro Bitcoin. Lawrence's call;
 controller prior is LOW — these engines are anchored to the equity RTH session,
