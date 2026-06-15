@@ -3906,7 +3906,7 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 
 ---
 
-## B90 -- CPI-day mode switch vs standalone CPI straddle (pipeline evaluation)  [pending — PRIORITY: Lawrence-requested 2026-06-14; DEPENDS ON B89; rank ahead of routine queue; model:opus]
+## B90 -- CPI-day mode switch vs standalone CPI straddle (pipeline evaluation)  [in-progress — session 2026-06-15T00:40:00Z]
 
 Once B89 makes the CPI straddle simulatable in the pipeline, evaluate the two
 deployment shapes Lawrence wants, on BOTH objectives, vs the base-only baseline:
@@ -4037,3 +4037,51 @@ question is whether 9 high-PF days/yr meaningfully shift a pipeline dominated by
 ~60-90 trades/month from the base engine.
 
 **Source:** B89 framing; Lawrence-requested funded-overlay evaluation 2026-06-14.
+
+---
+
+## B94 -- Event-calendar router: stack base + CPI straddle + gold-FOMC straddle, toggled by day type  [pending — PRIORITY: Lawrence-requested 2026-06-15; DEPENDS ON B89 (done, extend to gold-FOMC) + B90 + B93; model:opus]
+
+Lawrence: stack the three confirmed pieces and turn each on/off by DAY TYPE.
+A calendar router keyed to `data/news_events.csv` classifies each trading day and
+activates strategies accordingly:
+- **Normal day** -> base engine only (deployed combined iFVG+ORB on MNQ).
+- **CPI day** -> CPI straddle ON (NQ; optionally the ES/gold basket per B91). Test
+  BOTH shapes: (a) ADDITIVE = base engine ALSO runs that day (base + straddle), and
+  (b) MODE-SWITCH = base OFF, straddle only (= B90). Additive is the likely winner:
+  B84 showed SUPPRESSING the base on event days hurts (volume starvation), whereas
+  additive just adds a high-PF trade.
+- **FOMC day** -> gold-FOMC straddle ON (MGC), base engine ADDITIVE (keep base — B84
+  found ORB is actually strong on FOMC). Gold-FOMC is confirmed 1s (PF ~2.0, 4/5,
+  both sides — B91).
+- **CPI+FOMC same day** (rare) -> both straddles active.
+
+**Build:** extend the B89 `news_straddle` engine to be event+instrument-parameterized
+so it emits the CPI straddle (NQ/ES/gold) and the gold-FOMC straddle (MGC). Then a
+day-type router selects which strategies are live each day. Default-off; never
+auto-enable live.
+
+**Pipeline eval (the point):** the three strategies trade mostly DISJOINT days/times
+(base daily; CPI straddle ~9 days/yr at 08:30; gold-FOMC ~8 days/yr at 14:00), so
+combine their per-strategy equity into ONE account equity stream (note: gold-FOMC is
+a DIFFERENT instrument -> the funded account trades MNQ + MGC; the combined-equity sim
+must handle multi-instrument). Run funded_sim + combine harness on the stacked curve.
+
+**Compare:** (1) base-only (B42 baseline $549/mo, 3.23x); (2) base + CPI-straddle
+additive; (3) base + gold-FOMC additive; (4) FULL STACK (base + CPI + gold-FOMC,
+day-gated); (5) the mode-switch variant on CPI days. Attribute which pieces add value.
+
+**Success:** the full stack raises funded $/mo and/or sustainability vs base-only
+WITHOUT raising busts (the straddles are tight-stop, high-PF, few trades/yr -> low
+marginal bust risk, so additive should help or be neutral). **Stop rule:** any piece
+that doesn't improve the stack vs base-only on either objective is dropped from the
+router. Report per-piece attribution either way.
+
+**Prior:** ~55% the additive stack modestly improves $/mo (high-PF event days added on
+top), lower that it moves sustainability much (event trades are sparse). The on/off-by-
+day-type routing is deterministic and cheap; the real question is multi-instrument
+equity combination + whether ~17 event days/yr shift a pipeline dominated by the base.
+
+**Source:** Lawrence-requested 2026-06-15 (stack the three; each on/off by CPI/FOMC/
+none). Generalizes B90 (CPI mode-switch) + B93 (CPI overlay) to the full 3-strategy
+day-type router incl. the confirmed gold-FOMC straddle.
