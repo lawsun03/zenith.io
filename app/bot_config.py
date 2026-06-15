@@ -124,6 +124,14 @@ class StrategyParams(BaseModel):
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")
 
+    # news_straddle engine (B89, default-off; engine="news_straddle" to select).
+    # CPI breakout-straddle confirmed on 1s data (B85). Resting OCO stop entries
+    # at range±offset; TIGHT stop at the broken range boundary (R=offset); TP=tp_r×R.
+    news_straddle_offset_ticks: int = 60
+    news_straddle_tp_r: Decimal = Decimal("3.0")
+    news_straddle_event_type: str = "CPI"          # filters data/news_events.csv
+    news_straddle_events_path: str = "data/news_events.csv"
+
     # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
     cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"
     cb_compression_lookback: int = 20

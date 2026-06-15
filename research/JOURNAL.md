@@ -3417,3 +3417,36 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Next:** B85 (Lawrence-priority CPI straddle 1s confirmation, model:opus). Then B86, B87, B88.
 
 ---
+
+---
+
+## 2026-06-15T00:30Z -- session wk7-b89 -- B89 (news_straddle engine build + oracle parity -- SHIPPED Phase 1)
+
+- **Bot health:** :5175 healthy -- XFA shadow, $152,227.12 at HWM, 0 open contracts, no drift, no lockout, last_reconcile clean. Market closed (weekend). No restart needed.
+
+- **Claimed:** B89 (top pending, Lawrence-PRIORITY, model:opus -- ran on Opus 4.8). Ranked ahead of routine queue; overrides the every-3rd research rule. B85 already CONFIRMED the CPI straddle on 1s data; B89 = "build it".
+
+- **Scope decision (documented, autonomous):** B89 has two phases -- (1) build + backtest-validate the engine, (2) live resting-OCO order routing. Phase 2 touches real-money order placement (place_oco_stop_entries + scheduler + cancel-sibling-on-fill); per CLAUDE.md Rule 1/8 that needs full SDK call-chain tracing and is its own substantial, risk-sensitive unit. Delivered Phase 1 this session (one clean testable unit); queued Phase 2 as B92 and the funded-overlay framing as B93.
+
+- **Built:** default-off `news_straddle` engine.
+  - `app/strategy/news_straddle.py`: NewsStraddleDetector (15-min pre-range, OCO buy_stop=high+60t / sell_stop=low-60t, first-leg-fires + sibling-cancel, stop=broken boundary R=60t, target=tp_r*R, whipsaw detection, max-hold flatten via exit_request, state() for Rule 13), NewsStraddleRunner (duck-types engine surface), NewsStraddleComposer (no-op on_stop_loss), load_event_times().
+  - Wired engine="news_straddle" into BOTH _build_runner (app/main.py + app/backtest/runner.py).
+  - StrategyParams: news_straddle_offset_ticks=60, tp_r=3.0, event_type="CPI", events_path -- all default-off (engine default "ifvg").
+  - TDD: tests/test_news_straddle.py (12 tests) + scripts/news_straddle_engine_parity.py.
+
+- **Architecture conflict surfaced (Rule 7, NOT blended):** the entry is a RESTING STOP order that fills AT the stop level, but PaperBroker fills entries at market/last-bar-close (the stale-FVG fix, paper.py:236). So run_backtest cannot faithfully price this strategy. Resolution: the 1s oracle (scripts/news_straddle_cpi_1s.py, B85) stays the expectancy source of truth; the engine carries the SIGNAL logic, validated by geometry parity, NOT by the combine/funded harness. Lessons 155-156 added.
+
+- **Validation (scripts/news_straddle_engine_parity.py over bars/bars_NQ_1s_cpi_windows.csv, 47 CPI events excl 2022):**
+  ```
+  Parity: 47 agree / 0 mismatch
+  Oracle headline (tp_r=3.0): n=46 win%=67 PF=5.99 R/trade=+1.680 totR=+77.3
+  ```
+  46/46 directional events: engine fires the same side the oracle traded. 2/2 whipsaws flagged. 1 benign nuance (2026-04-10: oracle nofill vs engine whipsaw, both = no directional trade). The 1s headline (67%/PF 5.99) BEATS the 1-min spec estimate (63%/PF 5.0) -- the entry-bar intra-minute path did NOT eat the edge (B85's open question, closed for the engine too).
+
+- **Verdict:** SHIPPED (Phase 1, default-off). bot_config.json + .env untouched; nothing enabled live. findings.json #108. Doc: trade_analysis/2026-06-15_B89_news_straddle_engine.md. Lessons 155-156.
+
+- **Learned:** A resting stop-entry strategy is structurally outside the PaperBroker market-fill model; validate such engines by oracle signal-geometry parity, not pipeline P&L, until/unless the broker learns fill-on-touch (which would risk the stale-FVG regression). The CPI straddle engine reproduces the B85 1s oracle exactly (47/47), and 1s resolution improves rather than erodes the edge.
+
+- **Tests:** 763 passed, 2 skipped, 0 failures (full suite; +12 news_straddle, +1 wiring). Green.
+
+- **Next:** B92 (live resting-OCO build: scheduler + place_oco_stop_entries + cancel-sibling-on-fill, real-money path -> trace SDK chain, TDD, Rule-13 UI, default-off). Then B93 (funded-overlay framing from the oracle per-event R). Routine queue: B86/B87/B88 still pending.

@@ -229,6 +229,25 @@ def _build_runner(
             strategy_cfg=s,
             signal_instrument=signal_instrument or "",
         )
+    if s.engine == "news_straddle":
+        from app.broker.paper import TICK_SIZE
+        from app.strategy.news_straddle import (
+            NewsStraddleConfig, NewsStraddleDetector, NewsStraddleRunner,
+            load_event_times)
+        return NewsStraddleRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=NewsStraddleDetector(NewsStraddleConfig(
+                instrument=instrument,
+                event_times=load_event_times(
+                    s.news_straddle_events_path, s.news_straddle_event_type),
+                offset_ticks=s.news_straddle_offset_ticks,
+                tp_r=s.news_straddle_tp_r,
+                tick=TICK_SIZE.get(instrument, Decimal("0.25")),
+            )),
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
     if s.engine == "orb":
         from app.strategy.orb import ORBComposer, ORBConfig, ORBDetector, ORBRunner
         _det = ORBDetector(ORBConfig(

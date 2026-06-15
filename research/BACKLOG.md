@@ -3722,7 +3722,7 @@ via a news-day mode switch).
 
 ## B85 -- CPI straddle TICK/1s confirmation of the entry-bar path  [done — CONFIRMED 2026-06-14: 1s replay PF 5.99/67% win/+1.68R 3R, 5.88/61%/+1.97R 4R, 5/5 yrs, 7% same-second whipsaw; slippage-immune (PF 5.43 at 10t); entry-bar concern resolved. Data $1.06 (ledger $8.74). FOLLOW-ON -> B86 engine build. doc: trade_analysis/2026-06-14_news_straddle_userspec.md]
 
-## B89 -- CPI breakout-straddle: pipeline integration + resting-OCO live design  [pending — PRIORITY: Lawrence-requested 2026-06-14; rank ahead of routine queue; model:opus]
+## B89 -- CPI breakout-straddle: pipeline integration + resting-OCO live design  [done — Phase 1 SHIPPED: news_straddle engine built + 47/47 oracle parity; default-off. Live OCO build → B92, funded-overlay → B93. Session wk7-b89 2026-06-15. See trade_analysis/2026-06-15_B89_news_straddle_engine.md]
 (Renumbered from a duplicate B86; the loop's B86/B87/B88 are separate items below.
 The stray B85 spec text further down is historical — the live spec is here + in
 trade_analysis/2026-06-14_news_straddle_userspec.md.)
@@ -3968,3 +3968,72 @@ year-consistency is dropped. Oil and the fade are already rejected — do not re
 
 **Source:** Lawrence-requested 2026-06-14 (test straddle + fade on MGC/oil/MES).
 Result: CPI straddle generalizes; gold adds FOMC; oil + fade rejected.
+
+---
+
+## B92 -- news_straddle LIVE resting-OCO build (broker + scheduler)  [pending — DEPENDS ON B89 (done); model:opus]
+
+**Goal:** Deploy the B89-validated news_straddle engine live for CPI, using
+RESTING EXCHANGE stop entries (Lawrence-approved design). Default-off; never
+auto-enable. The engine's signal logic is already built and oracle-parity-tested
+(B89, scripts/news_straddle_engine_parity.py 47/47); this item adds the live
+order-routing + scheduling that the PaperBroker pipeline cannot model.
+
+**Mechanism (Lawrence-approved 2026-06-14):**
+- A wall-clock scheduler arms ~2 min before each CPI release (from
+  data/news_events.csv), computes the 15-min pre-range from the bot's existing
+  1-min bars (ample), and places TWO resting stop entry orders via a new
+  `place_oco_stop_entries(instrument, buy_stop, sell_stop, size)`:
+  buy_stop = range_high + 60t, sell_stop = range_low - 60t.
+- On a fill of either leg: cancel the sibling (OCO) and reuse the EXISTING
+  `_pending_brackets` / `_place_bracket_after_fill` to attach stop (= broken
+  range boundary, R = 60t) + target (= 3R). Flatten EOD (global behavior).
+- New pieces ONLY: the scheduler, `place_oco_stop_entries`, and
+  cancel-sibling-on-fill. Everything downstream reuses the proven bracket path.
+
+**Guardrails (real-money order path — CLAUDE.md Rule 1/8):**
+- Trace the FULL call chain before placing any order. Read project_x_py SDK
+  source for the stop-order placement primitive (do NOT assume a convenience
+  wrapper; the place_bracket_order 60s-wait trap is documented).
+- TDD: defining tests for OCO placement, cancel-sibling-on-fill, bracket-after-fill
+  prices/sizes, EOD flatten, arm/disarm scheduling, off-by-default.
+- Rule 13: log arm/fill/cancel transitions; add news_straddle state to the
+  strategy_state SSE event; render in StrategyDebug. Verify visible in a paper run.
+- Spot-check the open-realism item from B89: live stop-order fill on the 08:30
+  print (B85 modeled up to 10t adverse and it held).
+
+**Success:** paper-mode run on a CPI day shows: scheduler arms ~2 min pre-release,
+OCO placed, one leg fills, sibling cancelled, bracket (stop+target) attached,
+flat EOD — all visible in the dashboard, no restart needed. bot_config.json
+untouched; Lawrence decides go-live.
+
+**Source:** B89 follow-on; Lawrence-approved live design 2026-06-14.
+
+---
+
+## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [pending]
+
+**Hypothesis:** ~9 CPI/yr is too sparse for the Combine alone, but adding
+CPI-straddle days ON TOP of the B42/B57 funded pipeline may raise $/mo without
+increasing bust frequency (same instrument MNQ, different trigger, runs in the
+same process). B89 confirmed the per-event expectancy (1s oracle: +1.68R/trade
+at 3R, PF 5.99, 67% win, years-consistent).
+
+**Method (no new engine — reuse existing P&L):**
+- Take the oracle per-event R series (scripts/news_straddle_cpi_1s.py / the B85
+  per-CPI outcomes) and convert to per-event $ at the funded sizing (r0.75 etc.).
+- Inject CPI-straddle P&L into the funded equity stream on each CPI date and
+  re-run funded_sim (with the B86 combine-gap correction once that lands).
+- Report: $/mo and bust delta vs the B57 baseline WITHOUT the overlay, at h0/200/400.
+- Also report standalone CPI-straddle combine numbers for completeness (expect
+  too-sparse: ~9 trades/yr cannot compound to $3k/mo alone — Lesson 2 volume).
+
+**Success / GO:** overlay raises funded $/mo by a material margin (>5%) AND does
+not increase XFA busts (the straddle's +EV days should reduce, not add, busts).
+**Reject:** if the sparse straddle days don't move $/mo or add bust risk.
+
+**Prior:** ~60%. The straddle is strongly +EV per event but very sparse; the
+question is whether 9 high-PF days/yr meaningfully shift a pipeline dominated by
+~60-90 trades/month from the base engine.
+
+**Source:** B89 framing; Lawrence-requested funded-overlay evaluation 2026-06-14.
