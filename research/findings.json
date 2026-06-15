@@ -4541,5 +4541,40 @@
             "runs": ["equity_b108"],
             "src": null
         }
+    },
+    {
+        "ts": "2026-06-15T23:55:00Z",
+        "session": "wk8-b109",
+        "item": "B109",
+        "variant": "ORB breakout-bar vol_ratio quartiles (20-trade rolling median)",
+        "objective": "dataset",
+        "metrics": {
+            "n_orb_trades": 862,
+            "vol_ratio_q25": 0.794,
+            "vol_ratio_q50": 1.012,
+            "vol_ratio_q75": 1.228,
+            "pf_Q1_low": 1.175,
+            "pf_Q2": 1.724,
+            "pf_Q3": 1.568,
+            "pf_Q4_high": 1.561,
+            "pf_top40pct": 1.678,
+            "pf_bot40pct": 1.397,
+            "pf_ratio_top_bot": 1.201,
+            "gate_pf_ratio_pass": false,
+            "gate_n_pass": true,
+            "gate_years_pass": true,
+            "pattern": "non-monotonic V-shape (Q2>Q3>Q4>Q1)",
+            "short_Q1_low_pf": 0.98,
+            "long_Q4_high_pf": 1.94,
+            "total_tests": 885,
+            "databento_spend": 0
+        },
+        "verdict": "rejected",
+        "learned": "Breakout-bar volume does not predict ORB trade quality in a monotonic or gatable way. The PF ratio top-40%/bottom-40% is 1.201, below the 1.40 gate. The non-monotonic V-shape (Q2 best at PF=1.724, Q4_high third at PF=1.561, Q1_low worst at PF=1.175) is identical to B45/B49/B62/B100. Lesson 88 is confirmed: ORB quality lives in the 4h+ EOD-flatten cohort, not in breakout-bar characteristics at signal time.",
+        "links": {
+            "doc": null,
+            "runs": [],
+            "src": null
+        }
     }
 ]

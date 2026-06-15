@@ -4231,3 +4231,48 @@ Root cause: r_mult=1.5 exits resolve sooner (49d/acct vs 73.5d), cycling account
 - **Learned:** The standalone B99 finding (r_mult=1.5 is the expectancy optimum) does not transfer to two-phase pipeline. Faster target-hit rate (37% at r1.5 vs 11.2% at r2.5) means faster cycling -- which amplifies MLL-bust frequency under the h=$200 haircut. r_mult=2.5 is confirmed as the ORB-reentry Phase B optimum. Lessons 183-184 added.
 - **Tests:** 885 passed, 3 skipped, 0 failures (no code changes -- benchmark only; scripts/run_b108_pipeline.py added). findings.json #128.
 - **Next:** B109 (ORB breakout-bar volume Phase-1 data mining -- cheap falsification, no engine build) or B110 (NFP straddle Phase-1).
+
+---
+
+## 2026-06-15T23:55Z -- session wk8-b109 -- B109 (ORB breakout-bar volume Phase-1 -- REJECTED)
+
+- **Bot health:** :5175/api/status 200 -- XFA $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- analysis-only).
+- **Claimed:** B109 (top pending item; B108 just rejected in previous session).
+
+**Method:** Phase-1 data mining only -- no engine code. Analyzed whether 5-min signal-bar volume predicts ORB trade quality.
+
+1. Loaded all 862 ORB trades from `research/mfe_mae_deployed_combined_clean.csv` (5y excl 2022).
+2. Aggregated 1-min bars from `bars/bars_MNQ_dbv_2021_2026.csv` to 5-min bars (sum volume, offset=4min to match ORB bar-close convention). Join hit rate: 100% (862/862 trades matched).
+3. Computed `vol_ratio = bar_volume / 20-trade rolling median of ORB signal-bar volume` (rolling over ORB signal bars only, controls time-of-day effects). Fallback for first <5 trades: global median.
+4. Quartile-binned; ran edge_diagnostics.localize on {vol_quartile, side x vol_quartile, year}.
+5. GO/NO-GO gate: PF(top-40%) / PF(bottom-40%) >= 1.40, both n >= 30, top-40% positive >= 3/5 years.
+
+**Results:**
+
+| Group | n | PF | WR | Pattern |
+|-------|---|----|----|---------|
+| Q1_low (vol_ratio <= 0.794) | 216 | 1.175 | 44.9% | weakest |
+| Q2 (0.794 to 1.012) | 215 | 1.724 | 46.0% | BEST |
+| Q3 (1.012 to 1.228) | 215 | 1.568 | 48.4% | |
+| Q4_high (vol_ratio > 1.228) | 216 | 1.561 | 46.8% | |
+
+GO/NO-GO gate:
+- Top-40% (vol_ratio > p60=1.079): n=345 PF=1.678 yrs+=5/5
+- Bot-40% (vol_ratio <= p40=0.943): n=345 PF=1.397 yrs+=4/5
+- PF ratio: **1.201** (gate = 1.40) -- **FAIL**
+
+Side x vol_quartile notable sub-finding:
+- `short_Q1_low`: n=81 PF=0.98 WR=36% 2/5 years -- only loss-making bucket
+- `long_Q4_high`: n=92 PF=1.94 5/5 years -- strongest bucket but n<100, insufficient for a gating rule (already below Q2 longs at n=125 PF=1.73)
+
+**Verdict: REJECTED.**
+
+The non-monotonic V-shape (Q2 best, Q4_high third) is identical to B45 (OR width), B49 (breakout extension), B62 (CLV proxy), and B100 (OR/ATR ratio). High volume at the breakout bar does not separate winners from losers -- it may simply reflect liquidity/market-hours, not conviction. Q4_high (above-avg volume) includes both strong trending days AND high-activity reversals, so it spans high-quality and low-quality ORB setups equally.
+
+The PF ratio top-40%/bottom-40% = 1.201 is directionally positive (volume does weakly predict quality) but below the phase-1 gate by 17%. This confirms the gate was correctly calibrated -- anything below 1.40 is within the noise range for a single continuous feature.
+
+Lesson 88 stands: ORB quality is driven by how far price travels AFTER entry (4h+ EOD-flatten cohort), not by what the breakout bar looks like at signal time. All single-bar quality-predictor hypotheses have now failed (5 independent mechanisms tested). This class is exhausted.
+
+- **What we learned:** Volume at the ORB breakout bar has a non-monotonic relationship with trade quality -- the V-shape (Q2 best, not Q4_high) suggests medium-volume breakouts are cleanest. But the effect is too weak (PF ratio 1.20x) to gate on. Volume as an ORB quality signal joins OR-width, extension, CLV, and OR/ATR ratio as rejected predictors.
+- **Next:** B110 (NFP 8:30 ET straddle Phase-1 -- natural extension of confirmed CPI mechanism to untested event type).
+- **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes -- analysis script only). findings.json #129. Lesson 185 added.

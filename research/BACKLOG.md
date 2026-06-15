@@ -4366,7 +4366,7 @@ benefits from a reachable 1.5R target more than plain ORB does. MODERATE prior (
 that r1.5 reentry improves sust; uncertain direction on $/mo.
 Source: B99 candidate gap + B102 bootstrap finding (r1.5 has lower bust variance; 2026-06-16).
 
-## B109 -- ORB breakout-bar volume Phase-1 data mining  [pending]
+## B109 -- ORB breakout-bar volume Phase-1 data mining  [done -- REJECTED (PF ratio 1.201 < 1.40 gate; non-monotonic V-shape, extends quality-predictor rejection series)]
 
 The ORB quality-predictor rejection series (B45 OR width, B49 breakout extension, B62
 CLV orderflow proxy, B100 OR/ATR) has tested geometry-based single-bar metrics but NOT
