@@ -23,9 +23,12 @@ def load_1s(path):
     return pd.read_csv(path, parse_dates=["ts"]).set_index("ts").sort_index()
 
 
-def simulate(df, ts, offset_ticks, tp_r):
+def simulate(df, ts, offset_ticks, tp_r, arm_lead_sec=0):
     offset = offset_ticks * TICK; slip = SLIP_TICKS * TICK; hs = (SPREAD_TICKS / 2) * TICK
-    rng = df.loc[ts - timedelta(minutes=RANGE_MIN): ts - timedelta(seconds=1)]
+    # B95: live scheduler locks the pre-range at arm = release - arm_lead_sec.
+    # Range/stops use data through `arm`; the break is still detected from release.
+    arm = ts - timedelta(seconds=arm_lead_sec)
+    rng = df.loc[arm - timedelta(minutes=RANGE_MIN): arm - timedelta(seconds=1)]
     if len(rng) < 60:                       # need real pre-range coverage in 1s bars
         return None
     rhigh, rlow = float(rng["high"].max()), float(rng["low"].min())

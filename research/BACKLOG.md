@@ -4040,7 +4040,7 @@ question is whether 9 high-PF days/yr meaningfully shift a pipeline dominated by
 
 ---
 
-## B94 -- Event-calendar router: stack base + CPI straddle + gold-FOMC straddle, toggled by day type  [pending — PRIORITY: Lawrence-requested 2026-06-15; DEPENDS ON B89 (done, extend to gold-FOMC) + B90 + B93; model:opus]
+## B94 -- Event-calendar router: stack base + CPI straddle + gold-FOMC straddle, toggled by day type  [in-progress — session wk7-b94 2026-06-15T04:00Z; model:opus]
 
 Lawrence: stack the three confirmed pieces and turn each on/off by DAY TYPE.
 A calendar router keyed to `data/news_events.csv` classifies each trading day and
@@ -4089,7 +4089,7 @@ day-type router incl. the confirmed gold-FOMC straddle.
 
 ---
 
-## B95 -- news_straddle live-window P&L re-validation (shifted pre-range)  [pending]
+## B95 -- news_straddle live-window P&L re-validation (shifted pre-range)  [done — IMMATERIAL 2026-06-15: 120s-shifted live pre-range vs oracle = PF 5.60 vs 5.99 (3R), 5.56 vs 5.88 (4R), both 5/5 yrs. The release-120s arm window does NOT break the edge. Only remaining unvalidated gap = the actual live stop-fill on the 08:30 print. scripts/news_straddle_cpi_1s.py --arm-lead-sec]
 
 **Why:** B92's live scheduler places the resting OCO at arm_time = release - arm_lead
 (default 120s), so it locks the pre-range over [arm_time-15min, arm_time) -- a
