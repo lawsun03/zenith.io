@@ -4011,7 +4011,7 @@ untouched; Lawrence decides go-live.
 
 ---
 
-## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [in-progress — session 2026-06-15T02:30Z]
+## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [done -- CANDIDATE: additive overlay +$304/mo (+55%) at h200/gap0; sust 3.23x->2.80x (+2 busts); at gap=24 realistic model +$327/mo sust unchanged 3.50x; oracle 46/47 fills 67% win PF=5.99 mean=+1.68R; script scripts/b93_cpi_overlay.py; Lesson 162; 2026-06-15]
 
 **Hypothesis:** ~9 CPI/yr is too sparse for the Combine alone, but adding
 CPI-straddle days ON TOP of the B42/B57 funded pipeline may raise $/mo without

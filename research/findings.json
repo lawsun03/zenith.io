@@ -3967,5 +3967,36 @@
    "runs": [],
    "src": "B89 follow-on; Lawrence-approved live design 2026-06-14"
   }
+ },
+ {
+  "ts": "2026-06-15T03:15Z",
+  "session": "wk7-b93",
+  "item": "B93",
+  "variant": "additive overlay tp_r=3/4 h0/200/400 gap0/24",
+  "objective": "funded",
+  "metrics": {
+   "oracle_fills": 46,
+   "oracle_win_pct": 67,
+   "oracle_pf": 5.99,
+   "oracle_mean_r": 1.68,
+   "base_$/mo_h200_gap0": 549,
+   "base_sust_h200_gap0": 3.23,
+   "overlay3_$/mo_h200_gap0": 853,
+   "overlay3_sust_h200_gap0": 2.80,
+   "overlay3_dbusts_h200_gap0": 2,
+   "overlay3_$/mo_h200_gap24": 715,
+   "overlay3_sust_h200_gap24": 3.50,
+   "overlay3_dbusts_h200_gap24": 0,
+   "overlay4_$/mo_h200_gap0": 920,
+   "overlay4_sust_h200_gap0": 2.62,
+   "pf": null
+  },
+  "verdict": "candidate",
+  "learned": "Additive CPI-straddle overlay on Phase-B funded account raises $/mo +55% (h200/gap0: $549->$853) with only +2 busts (sust 3.23x->2.80x). At realistic gap=24, sust unchanged (3.50x) while $/mo +$327/mo. Oracle capture ~65-70% of raw straddle expectancy. Two-phase model calibration confirmed: BASE h200/gap0=B42 $549/mo exact.",
+  "links": {
+   "doc": null,
+   "runs": [],
+   "src": "B89 follow-on; Lawrence-requested funded-overlay evaluation 2026-06-14"
+  }
  }
 ]

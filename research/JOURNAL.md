@@ -3643,3 +3643,42 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Remaining (manual, Lawrence):** "paper run on a real CPI day" needs an actual 08:30 print -- not executable this weekend (market closed). Chain proven in tests. Lesson 161 added. BACKLOG: B92 -> done; B95 (shifted-window P&L re-validation) appended.
 
 - **Next:** B93 (CPI-straddle funded-overlay framing -- Sonnet) or B94 (event-calendar router, model:opus, Lawrence PRIORITY -- now unblocked on the live-build side; still depends on B93).
+
+---
+
+## 2026-06-15T03:15Z -- session wk7-b93 -- B93 (CPI-straddle funded-overlay framing -- CANDIDATE)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch this session).
+- **Claimed:** B93 (top pending item). No orphan in-progress.
+
+**Method:**
+Used the two-phase pipeline model (from run_b42_pipeline.py): Phase A = equity_b42/deployed_r1p0 (iFVG+ORB combine), Phase B = equity_b21/orb_reentry_r0p75 (ORB-reentry funded). The `stitch()` offset correction (curve[-1][1] - BASELINE applied to each subsequent year) properly handles the per-year $50k restart discontinuity. Oracle per-event R series extracted by running the existing `scripts/news_straddle_cpi_1s.py` simulate() on `bars/bars_NQ_1s_cpi_windows.csv`. Straddle sized at R_FIXED = $375 (= 0.75% x $50k starting balance). Straddle P&L injected into Phase-B daily P&L before funded_sim; Phase A unchanged.
+
+**Oracle (offset=60t, tp_r=3):** 46/47 events filled | 31/46 wins (67%) | PF=5.99 | mean=+1.68R/event | 5/5 years positive. Year totals: 2021 +13.9R, 2023 +15.9R, 2024 +15.7R, 2025 +20.8R, 2026 +10.9R. 44/46 CPI trades overlap with Phase-B base-engine trade days; 2 injected as standalone days.
+
+**Model calibration confirmed:** BASE at h200/gap0 = $549/mo, sust=3.23x -- EXACT match to B42 reference baseline.
+
+**Results (h200 canonical; gap=0 / gap=24):**
+
+| Variant | gap=0 $/mo | gap=0 sust | gap=0 dbusts | gap=24 $/mo | gap=24 sust | gap=24 dbusts |
+|---------|------------|------------|--------------|-------------|-------------|---------------|
+| BASE    | $549       | 3.23x      | --           | $387        | 3.50x       | --            |
+| OV-3R   | $853       | 2.80x      | +2           | $715        | 3.50x       | 0             |
+| OV-4R   | $920       | 2.62x      | +3           | $815        | 3.50x       | 0             |
+
+**Sensitivity (h0 / h400, gap=0):**
+
+| Variant | h0 $/mo | h0 sust | h400 $/mo | h400 sust |
+|---------|---------|---------|-----------|-----------|
+| BASE    | $601    | 3.64x   | $405      | 1.86x     |
+| OV-3R   | $974    | 3.64x   | $779      | 2.41x     |
+
+Notable: at h400 (pessimistic), OV-3R REDUCES busts by 5 (22->17) -- the straddle's high-PF days provide a cushion on bad-haircut scenarios.
+
+**Verdict: CANDIDATE.** Success criterion met: overlay raises $/mo by >5% (actual: +55%) at h200/gap0. The sust decrease (+2 busts at gap=0, sust 3.23x->2.80x) is mild and disappears at gap=24 (realistic model). The tp_r=3 variant is recommended (better sust than tp_r=4 at all gap/haircut settings). The additive overlay beats the B90a mode-switch ($853 vs $565/mo) because base-engine CPI-day P&L is not discarded.
+
+**Oracle capture efficiency:** raw straddle expectancy ≈ $29,016 over 5y; pipeline capture ≈ $23,085 (79%) -- some gains trapped in busted accounts.
+
+**Learned:** The gap model matters for the sust verdict: at gap=0 (optimistic), the occasional bad CPI day (base loses + straddle loses) adds 2 busts; at gap=24 (realistic post-B86), sust is neutral because the bust boundary falls differently. For funded-overlay analysis, always report both gap=0 (parity with historical references) and gap=24 (realistic). Lesson 162 added. BACKLOG: B93 -> done; B94 now fully unblocked (B89 + B90 + B93 all done). 782 tests green.
+
+- **Next:** B94 (event-calendar router, model:opus, Lawrence PRIORITY -- stack base + CPI straddle + gold-FOMC straddle by day type). B94 is the full three-engine stack that B93 + B90 + B91 motivated.
