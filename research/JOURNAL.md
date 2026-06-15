@@ -4022,3 +4022,79 @@ Note: the 12-month "dry spell" shown in the raw dry-spell list (2022-01--2022-12
 - **Learned:** The mean $/account ($3,131) meaningfully overstates the typical experience: 43% of accounts produce $0 and pull the median to $2,114. The strategy has multi-month dry spells (real max 7 months) requiring ~8 months of operating-cost cash reserves to avoid abandoning a statistically-working strategy. A $200/mo fixed cost, if honest, removes 28% of the 5-year net -- this is the "honest net" the external reviewer requested.
 - **Tests:** full suite **880 passed, 3 skipped, 0 failures** (+18 new B105 tests). findings.json #124.
 - **Next:** B106 (iFVGxORB ALIGNMENT benchmark -- benchmark-gated, gate file exists) or B107 (walk-forward degenerate fix -- small). B106 is now unlocked.
+
+---
+
+## 2026-06-16T00:30Z -- session wk7-b106 -- B106 (iFVGxORB ALIGNMENT up-only sizing -- REJECTED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed. Databento $11.20/$20 (no fetch).
+- **Claimed:** B106 (top pending item, benchmark-gated). Gate file `research/mfe_mae_deployed_combined_clean.csv` exists.
+
+**Method:** Pure-analysis benchmark. No engine code changes.
+1. Phase 1: Computed iFVG-ORB alignment for each ORB trade in the gate file (same-day same-direction iFVG fired before ORB).
+2. Phase 2: Year-by-year robustness check (aligned PF vs all-ORB PF per year).
+3. Phase 3: f-sweep PF benchmark for f in {1.25, 1.5, 2.0} vs matched-risk control (all trades at avg = p_aligned*f + (1-p_aligned)*1.0).
+4. Phase 4: funded_sim using Phase B equity_b21 (orb_reentry_r0p75) with per-day alignment scaling applied to daily P&Ls.
+
+**Phase 1 -- Gate:**
+
+| Group | n | PF | WR | r_mfe |
+|-------|---|----|----|-------|
+| aligned | 496 | 1.730 | 48.6% | 1.005 |
+| opposed | 224 | 1.250 | 45.5% | 0.954 |
+| neutral | 142 | 1.196 | 40.8% | 0.924 |
+| all_orb | 862 | 1.500 | 46.5% | 0.979 |
+
+Gate PASS. p_aligned = 57.5% (496/862). Phase B has 486/1029 trade days classified as aligned (47.2%).
+
+**Phase 2 -- Year-by-year robustness:**
+
+| Year | Aligned PF | Control PF | Beat? |
+|------|-----------|-----------|-------|
+| 2021 | 2.617 | 2.048 | YES |
+| 2023 | 1.116 | 1.191 | no |
+| 2024 | 1.751 | 1.668 | YES |
+| 2025 | 1.977 | 1.680 | YES |
+| 2026 | 1.599 | 1.166 | YES |
+
+4/5 years aligned PF beats control. 2023 is the exception.
+
+**Phase 3 -- f-sweep (PF only):**
+
+| f | avg_mult | B106_PF | ctrl_PF | d_PF |
+|---|---------|---------|---------|------|
+| 1.25 | 1.144 | 1.527 | 1.500 | +0.027 |
+| 1.50 | 1.288 | 1.549 | 1.500 | +0.049 |
+| 2.00 | 1.575 | 1.581 | 1.500 | +0.081 |
+
+B106 wins on PF vs matched-risk control for ALL f (trivially -- aligned PF > aggregate).
+
+**Phase 4 -- funded_sim (h=0 / h=200):**
+
+| Config | h=0 net | h=0 busts | h=200 net | h=200 busts | h=200 $/mo |
+|--------|---------|-----------|-----------|-------------|------------|
+| baseline f=1.0 | $44,800 | 11 | $43,834 | 13 | $719 |
+| B106 f=1.25 | $57,589 | 19 | $54,986 | 24 | $901 |
+| ctrl avg=1.144 | $50,979 | 14 | $52,174 | 21 | $855 |
+| B106 f=1.50 | $64,995 | 21 | $63,640 | 24 | $1,043 |
+| ctrl avg=1.288 | $62,598 | 18 | $65,402 | 30 | $1,072 |
+
+**Sustainability (Phase A 42 passes / Phase B busts):**
+- Baseline: 42/13 = 3.23x
+- B106 f=1.25: 42/24 = 1.75x; ctrl avg=1.144: 42/21 = 2.0x
+- B106 f=1.50: 42/24 = 1.75x; ctrl avg=1.288: 42/30 = 1.40x
+
+**Stop rule check:**
+- f=1.25: B106 wins net ($54,986 vs $52,174) but loses busts (24 vs 21 ctrl). Mixed -- no clean win.
+- f=1.50: B106 wins busts (24 vs 30 ctrl) but loses net ($63,640 vs $65,402). Mixed -- no clean win.
+- Success criterion: "+0.2-0.5x sustainability improvement" -- ALL variants FAIL (sust drops from 3.23x baseline to <=1.75x for all B106 variants).
+
+- **Verdict: REJECTED.** No f-value beats matched-risk control on BOTH net and busts. All variants dramatically worse than baseline sustainability (3.23x -> 1.75x at best). The PF advantage of aligned ORB trades (1.73 vs 1.50 aggregate, 4/5 yrs) does NOT translate to funded-pipeline improvement.
+
+- **Root cause:** Aligned ORB trades have 51.4% loss rate (100%-48.6% WR). Up-sizing loss days at f>1 concentrates variance on aligned dates (57.5% of trade days), pushing accounts over MLL more often than the larger wins protect. The MLL threshold is nonlinear -- a loss magnitude increase (from f*loss vs loss) more easily breaches the $2k MLL floor than a win magnitude increase (from f*win vs win) prevents it. Uniform scaling at the same average risk distributes variance more evenly, hitting MLL less often. The B63a confound ("more risk -> more busts") persists even when extra risk is applied only to aligned trades, because the aligned loss rate is still ~51%.
+
+- **Learned:** For MLL-constrained funded accounts, selective risk up-sizing (even of better-PF trades) can increase bust frequency vs flat risk at the same average, when the selected trades have a high loss rate (~50%). The alignment gate that was rejected in B56 (volume starvation) and B47 (over-filtering) now also fails as an up-sizing vehicle (bust amplification). iFVG-ORB alignment is a real predictive feature (PF=1.730, causal, 4/5 yrs) but no standard risk-shaping application of it improves the funded pipeline. Lesson 181 added.
+
+- **Tests:** 880 passed, 3 skipped, 0 failures (analysis-only -- no code changes to production; scripts/_b106_analyze.py added). findings.json #125.
+
+- **Next:** B107 (walk-forward optimizer is statistically degenerate -- fix or retire; small item, last remaining pending).

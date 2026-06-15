@@ -4312,7 +4312,7 @@ Add to pipeline summaries: median + p25 $/account, dry-spell cadence, a ~3mo cas
 and subtract a recurring monthly fixed cost from EVERY month incl. idle. Success: honest net +
 drought map so a working strategy isn't abandoned mid-dry-spell. **Source:** external review 2026-06-15.
 
-## B106 -- iFVGxORB ALIGNMENT as up-only sizing (matched-risk benchmark)  [pending -- benchmark-gated]
+## B106 -- iFVGxORB ALIGNMENT as up-only sizing (matched-risk benchmark)  [done -- REJECTED (2026-06-16): gate PASS (aligned PF=1.730 WR=48.6% 4/5 yrs), but funded_sim REJECTED -- no variant beats matched-risk control on BOTH metrics; all variants worse sust than baseline (3.23x->1.75x at best); selective up-sizing concentrates loss variance on aligned days, increasing MLL busts vs uniform risk at same average. Lesson 181.]
 Review #10: the ONE untested variant. mfe_mae_deployed_combined_clean.csv: ORB trades ALIGNED
 with iFVG show PF 1.73 / WR 48.6% vs 1.25/1.20 unaligned; causal (Lesson 92), >1.0 PF all 5 yrs.
 Distinct from B58 (which DOWN-sized correlated features). Benchmark up-sizing aligned setups at
