@@ -15,13 +15,24 @@ Test surface:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
 import pytest
 
-from app.broker.events import BrokerPosition
+from app.broker.events import Bar, BrokerPosition, ExitCoverage
 from app.broker.paper import PaperBroker
+
+
+def _seed_bar(price: str = "2400") -> Bar:
+    """Give the PaperBroker a market price — fills anchor to last close and
+    flatten() needs it to price exits."""
+    return Bar(
+        instrument="MGC", timeframe="1min",
+        ts=datetime(2026, 1, 2, 10, 0, tzinfo=timezone.utc),
+        open=Decimal(price), high=Decimal(price), low=Decimal(price),
+        close=Decimal(price), volume=1,
+    )
 from app.execution.reconciler import (
     ReconcileReport,
     Reconciler,
@@ -169,6 +180,7 @@ async def test_contract_drift_locks_and_flattens():
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     await broker.connect()
+    await broker.inject_bar(_seed_bar())
     # Three open contracts the bot doesn't know about.
     await broker.place_bracket(
         instrument="MGC",
@@ -220,14 +232,58 @@ async def test_contract_drift_other_direction():
     assert state.locked_out is not None
 
 
+async def test_sign_flipped_position_is_drift():
+    """
+    Regression for the 2026-06-07 orphan: internal short 3, broker long 3.
+    Same magnitude, opposite sign. The old magnitude-only comparison
+    (abs(-3) == 3 == broker 3) reported NO drift, so a real orphaned/
+    sign-flipped position sat open and unprotected on a live account and
+    the reconciler never flattened it. Signed comparison must flag it.
+    """
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    await broker.connect()
+    await broker.inject_bar(_seed_bar())
+    # Broker is actually LONG 3.
+    await broker.place_bracket(
+        instrument="MGC",
+        side="long",
+        size=3,
+        entry=Decimal("2400"),
+        stop=Decimal("2390"),
+        target=Decimal("2410"),
+    )
+    state = fresh_state()
+    # Internal thinks we are SHORT 3 — opposite sign, same magnitude.
+    state.record_fill(
+        realized_pnl_delta=Decimal("0"),
+        contracts_delta=-3,
+        ts=datetime.now(timezone.utc),
+    )
+
+    rec = Reconciler(broker, state, no_grace())
+    report = await rec.tick()
+
+    assert report.drift_detected is True
+    assert report.drift_kind == "contract_count"
+    assert report.broker_open_contracts == 3   # signed: long 3 = +3
+    assert report.internal_open_contracts == -3
+    assert state.locked_out is not None
+    assert state.locked_out.code == "RECONCILE_DRIFT"
+    # The orphan must be gone after the emergency flatten.
+    assert await broker.get_positions() == []
+
+
 # =====================================================================
 # Balance drift
 # =====================================================================
 
-async def test_large_balance_drift_locks_and_adopts_broker_truth():
+async def test_large_balance_drift_adopts_broker_truth_without_lockout():
     """
-    Balance off by more than tolerance and no positions to explain it.
-    Almost certainly a missed fill. Adopt broker, lock out.
+    Balance off by more than tolerance: adopt broker truth, do NOT lock out.
+    Policy (2026): broker REST balance lags ~30s after every exit fill, so a
+    balance-only delta is a timing artifact — a lockout here fired falsely on
+    every losing trade. The contract-count check covers the dangerous case
+    (missed fill = contracts mismatch), which still locks elsewhere.
     """
     broker = PaperBroker(starting_balance=Decimal("50300"))  # +$300 vs internal
     await broker.connect()
@@ -243,23 +299,22 @@ async def test_large_balance_drift_locks_and_adopts_broker_truth():
 
     assert report.drift_detected is True
     assert report.drift_kind == "balance"
-    assert state.realized_balance == Decimal("50300")
-    assert state.locked_out is not None
-    assert state.locked_out.code == "RECONCILE_DRIFT"
+    assert state.realized_balance == Decimal("50300")  # broker truth adopted
+    assert state.locked_out is None                    # and trading continues
 
 
-async def test_lockout_message_explains_drift():
-    """The lockout message should be specific enough to debug from."""
+async def test_negative_balance_drift_also_adopts_without_lockout():
+    """Same policy for downward drift — adopt the broker's lower balance."""
     broker = PaperBroker(starting_balance=Decimal("49000"))  # -$1,000
     await broker.connect()
     state = fresh_state()
 
     rec = Reconciler(broker, state, no_grace())
-    await rec.tick()
+    report = await rec.tick()
 
-    msg = state.locked_out.message
-    assert "Balance drift" in msg or "balance" in msg.lower()
-    assert "tolerance" in msg.lower() or "manual review" in msg.lower()
+    assert report.drift_detected is True
+    assert state.realized_balance == Decimal("49000")
+    assert state.locked_out is None
 
 
 # =====================================================================
@@ -530,3 +585,222 @@ async def test_failed_tick_does_not_kill_loop():
 
     # We should have made it past the failure.
     assert call_count >= 2
+
+
+# =====================================================================
+# Exit-coverage / naked-position detection
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_first_naked_tick_is_grace_no_action():
+    from unittest.mock import AsyncMock, MagicMock
+
+    pos = BrokerPosition(
+        instrument="MGC", side="long", size=2,
+        average_price=Decimal("2400.0"), unrealized_pnl=Decimal("0"),
+    )
+    # covered_stop=0: stop is missing; covered_target=2: target is present.
+    # fully_covered is False (stop missing).
+    cov = ExitCoverage("MGC", 2, "long", Decimal("2400.0"), covered_stop=0, covered_target=2)
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[pos])
+    broker.account_balance = AsyncMock(return_value=Decimal("50000"))
+    broker.exit_coverage = AsyncMock(return_value=cov)
+    broker.place_protective_stop = AsyncMock(return_value=True)
+    broker.place_protective_target = AsyncMock(return_value=True)
+    broker.flatten = AsyncMock(return_value=True)
+
+    risk = RiskState(config=fifty_k_combine())
+    risk.realized_balance = Decimal("50000")
+    risk.open_contracts = 2
+
+    rec = Reconciler(
+        broker=broker, risk_state=risk,
+        config=ReconcilerConfig(
+            grace_first_tick=False, grace_period_after_order_seconds=0,
+            naked_grace_seconds=15.0,
+            emergency_stop_distance={"MGC": Decimal("3.0")},
+            emergency_target_r=Decimal("2.0"),
+        ),
+    )
+    rec._first_tick_done = True
+    report = await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.flatten.assert_not_called()
+    assert "MGC" in rec._naked_since
+    assert report.drift_kind != "naked_position"
+
+
+@pytest.mark.asyncio
+async def test_naked_since_pruned_when_position_closes():
+    from app.broker.events import BrokerPosition, ExitCoverage
+    from app.execution.reconciler import Reconciler, ReconcilerConfig
+    from app.risk.state import RiskState
+    from app.risk.config import fifty_k_combine
+    from unittest.mock import AsyncMock, MagicMock
+
+    broker = MagicMock()
+    broker.account_balance = AsyncMock(return_value=Decimal("50000"))
+    broker.exit_coverage = AsyncMock(return_value=ExitCoverage("MGC", 2, "long", Decimal("2400.0"), 0, 2))
+    risk = RiskState(config=fifty_k_combine())
+    risk.realized_balance = Decimal("50000")
+
+    rec = Reconciler(broker=broker, risk_state=risk,
+                     config=ReconcilerConfig(grace_first_tick=False, grace_period_after_order_seconds=0,
+                                             naked_grace_seconds=15.0))
+    rec._first_tick_done = True
+    # Seed a stale naked timestamp, then tick with NO open positions.
+    from datetime import datetime, timezone
+    rec._naked_since["MGC"] = datetime.now(timezone.utc)
+    broker.get_positions = AsyncMock(return_value=[])
+    risk.open_contracts = 0
+    await rec.tick()
+    assert "MGC" not in rec._naked_since, "stale naked entry must be pruned when position is gone"
+
+
+# =====================================================================
+# Escalating naked-position remediation
+# =====================================================================
+
+def _naked_reconciler_multi(instrument, avg, stop_dist, side, position_size,
+                            covered_stop, covered_target,
+                            stop_ok=True, target_ok=True):
+    from app.broker.events import BrokerPosition, ExitCoverage
+    from app.execution.reconciler import Reconciler, ReconcilerConfig
+    from app.risk.state import RiskState
+    from app.risk.config import fifty_k_combine
+    from unittest.mock import AsyncMock, MagicMock
+    from datetime import datetime, timezone, timedelta
+
+    pos = BrokerPosition(
+        instrument=instrument, side=side, size=position_size,
+        average_price=avg, unrealized_pnl=Decimal("0"),
+    )
+    cov = ExitCoverage(instrument, position_size, side, avg, covered_stop, covered_target)
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[pos])
+    broker.account_balance = AsyncMock(return_value=Decimal("50000"))
+    broker.exit_coverage = AsyncMock(return_value=cov)
+    broker.place_protective_stop = AsyncMock(return_value=stop_ok)
+    broker.place_protective_target = AsyncMock(return_value=target_ok)
+    broker.flatten = AsyncMock(return_value=True)
+
+    risk = RiskState(config=fifty_k_combine())
+    risk.realized_balance = Decimal("50000")
+    risk.open_contracts = position_size if side == "long" else -position_size
+
+    rec = Reconciler(
+        broker=broker, risk_state=risk,
+        config=ReconcilerConfig(
+            grace_first_tick=False, grace_period_after_order_seconds=0,
+            naked_grace_seconds=15.0,
+            emergency_stop_distance={instrument: stop_dist},
+            emergency_target_r=Decimal("2.0"),
+        ),
+    )
+    rec._first_tick_done = True
+    rec._naked_since[instrument] = datetime.now(timezone.utc) - timedelta(seconds=60)
+    return rec, broker, cov
+
+
+@pytest.mark.parametrize("instrument,avg,stop_dist,side", [
+    ("MGC", Decimal("2400.0"), Decimal("3.0"), "long"),
+    ("MNQ", Decimal("20000.0"), Decimal("40.0"), "short"),
+    ("MES", Decimal("5300.0"), Decimal("5.0"), "long"),
+])
+@pytest.mark.asyncio
+async def test_reattach_missing_stop_at_emergency_distance(instrument, avg, stop_dist, side):
+    rec, broker, _ = _naked_reconciler_multi(
+        instrument, avg, stop_dist, side, position_size=2,
+        covered_stop=0, covered_target=2,
+    )
+    report = await rec.tick()
+    broker.place_protective_stop.assert_awaited_once()
+    args = broker.place_protective_stop.call_args.args
+    assert args[0] == instrument
+    assert args[1] == 2
+    expected_stop = avg - stop_dist if side == "long" else avg + stop_dist
+    assert args[2] == expected_stop
+    broker.place_protective_target.assert_not_called()
+    broker.flatten.assert_not_called()
+    assert report.drift_kind == "naked_position"
+    assert instrument in report.naked_instruments
+
+
+@pytest.mark.parametrize("instrument,avg,stop_dist,side", [
+    ("MGC", Decimal("2400.0"), Decimal("3.0"), "long"),
+    ("MNQ", Decimal("20000.0"), Decimal("40.0"), "short"),
+    ("MES", Decimal("5300.0"), Decimal("5.0"), "long"),
+])
+@pytest.mark.asyncio
+async def test_reattach_missing_target_only(instrument, avg, stop_dist, side):
+    rec, broker, _ = _naked_reconciler_multi(
+        instrument, avg, stop_dist, side, position_size=2,
+        covered_stop=2, covered_target=0,
+    )
+    await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.place_protective_target.assert_awaited_once()
+    args = broker.place_protective_target.call_args.args
+    expected_target = (avg + Decimal("2.0") * stop_dist) if side == "long" \
+        else (avg - Decimal("2.0") * stop_dist)
+    assert args[2] == expected_target
+    broker.flatten.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stop_reattach_failure_triggers_flatten():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=0, covered_target=2, stop_ok=False,
+    )
+    await rec.tick()
+    broker.place_protective_stop.assert_awaited_once()
+    broker.flatten.assert_awaited_once_with("MGC")
+
+
+@pytest.mark.asyncio
+async def test_target_reattach_failure_does_not_flatten():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=2, covered_target=0, target_ok=False,
+    )
+    await rec.tick()
+    broker.flatten.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_no_emergency_distance_configured_flattens():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=0, covered_target=2,
+    )
+    rec.config.emergency_stop_distance = {}
+    await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.flatten.assert_awaited_once_with("MGC")
+
+
+@pytest.mark.asyncio
+async def test_contract_drift_takes_precedence_over_naked():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=0, covered_target=0,
+    )
+    rec.risk_state.open_contracts = 0  # internal disagrees with broker (2)
+    report = await rec.tick()
+    assert report.drift_kind == "contract_count"
+    broker.place_protective_stop.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_missing_target_no_distance_does_not_flatten_or_place():
+    rec, broker, _ = _naked_reconciler_multi(
+        "MGC", Decimal("2400.0"), Decimal("3.0"), "long", position_size=2,
+        covered_stop=2, covered_target=0,
+    )
+    rec.config.emergency_stop_distance = {}   # no distance for MGC
+    await rec.tick()
+    broker.place_protective_stop.assert_not_called()
+    broker.place_protective_target.assert_not_called()
+    broker.flatten.assert_not_called()   # missing target alone is not a capital risk

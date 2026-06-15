@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 from .protocol import BarHandler, EquityHandler, FillHandler
 
 log = logging.getLogger(__name__)
@@ -60,20 +60,30 @@ class _OpenBracket:
     partial_target: Decimal | None = None  # price to take partial profit
     partial_size: int = 0                  # contracts to exit at partial_target
     partial_filled: bool = False           # True once the partial fill has been emitted
+    entry_time: float = 0.0               # Unix timestamp of fill, for chart marker
+    # Trail-1R mode (ablation T4): R distance at entry; ratchet level reached.
+    trail_r: Decimal | None = None
+    trail_level: int = 0
+    # MFE/MAE excursion tracking (price points from slipped entry, always >= 0)
+    mfe_pts: Decimal = field(default_factory=lambda: Decimal("0"))
+    mae_pts: Decimal = field(default_factory=lambda: Decimal("0"))
+    initial_stop_dist: Decimal = field(default_factory=lambda: Decimal("0"))
+    # BE-trail: once triggered, stop is already at entry; don't trigger again.
+    be_trail_triggered: bool = False
 
 
 # Per-instrument tick value. Verified against CME contract specs:
 #   /MGC (micro gold):     tick = $0.10, tick value = $1   → $10/point
 #   /MNQ (micro Nasdaq):   tick = 0.25,  tick value = $0.50 → $2/point
 #   /MCL (micro crude):    tick = $0.01, tick value = $1   → $100/point
-#   /MBT (micro Bitcoin):  tick = $5,    tick value = $0.10
+#   /MBT (micro Bitcoin):  tick = 5.0,   tick value = $0.50  → $0.10/point (0.1 BTC)
 #   /GC  (full gold):      tick = $0.10, tick value = $10  → $100/point
 TICK_VALUE = {
     "MGC": Decimal("1"),     # micro gold
     "MNQ": Decimal("0.5"),   # micro Nasdaq
     "MES": Decimal("1.25"),  # micro S&P 500
     "MCL": Decimal("1"),     # micro crude
-    "MBT": Decimal("0.10"),  # micro Bitcoin
+    "MBT": Decimal("0.50"),  # micro Bitcoin (0.1 BTC × $5 tick)
     "GC":  Decimal("10"),    # full gold contract
 }
 
@@ -115,6 +125,8 @@ class PaperBroker:
         slippage_ticks_market: int = 1,
         commission_per_side: Decimal | None = None,  # None = use DEFAULT_COMMISSION table
         partial_profit_r: Decimal = Decimal("0"),    # 0 = disabled; 1.0 = take half at 1R
+        max_entry_slippage_frac: Decimal = Decimal("0"),  # 0 = disabled; refuse entry if |entry−market| > frac × stop distance
+        trail_1r: bool = False,  # ablation T4: no TP, stop ratchets +1R per +1R MFE
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
@@ -122,6 +134,9 @@ class PaperBroker:
         self._slippage_ticks_market = slippage_ticks_market
         self._commission_per_side = commission_per_side
         self._partial_profit_r = partial_profit_r
+        self._max_entry_slippage_frac = max_entry_slippage_frac
+        self._trail_1r = trail_1r
+        self._be_trail_r = Decimal("0")   # set by run_backtest via strategy_params
         self._connected = False
 
         self._open: dict[str, _OpenBracket] = {}  # order_id → bracket
@@ -132,6 +147,8 @@ class PaperBroker:
         self._bar_handlers: list[BarHandler] = []
         self._fill_handlers: list[FillHandler] = []
         self._equity_handlers: list[EquityHandler] = []
+        # Keyed by entry order_id: (mfe_pts, mae_pts, initial_stop_dist)
+        self._closed_excursions: dict[str, tuple[Decimal, Decimal, Decimal]] = {}
 
     # ------------------------------------------------------------------
     # Connection
@@ -165,6 +182,31 @@ class PaperBroker:
             for b in self._open.values()
         ]
 
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        """Paper positions carry simulated brackets — always fully covered."""
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return ExitCoverage(
+                instrument=instrument, position_size=0, side="",
+                avg_price=Decimal("0"), covered_stop=0, covered_target=0,
+            )
+        size = int(pos.size)
+        return ExitCoverage(
+            instrument=instrument, position_size=size, side=pos.side,
+            avg_price=pos.average_price, covered_stop=size, covered_target=size,
+        )
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        return True
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        return True
+
     # ------------------------------------------------------------------
     # Order placement
     # ------------------------------------------------------------------
@@ -177,6 +219,9 @@ class PaperBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         if not self._connected:
             return BracketResult(False, None, None, None, error="not connected")
@@ -184,10 +229,36 @@ class PaperBroker:
         order_id = f"PAPER-{self._next_order_id}"
         self._next_order_id += 1
 
-        # Apply market-order slippage: shift entry price against the trader.
+        # Market-order semantics: fill at the current market (last bar close),
+        # NOT at the signal's entry price — stale iFVG signals carry entries far
+        # off-market and used to "fill" there, then instantly "win" (2026-06-10
+        # parity post-mortem). Falls back to `entry` before any bar is seen.
+        market = self._last_bar_close.get(instrument, entry)
+
+        # Stale-signal guard (mirrors live's max_entry_slippage_frac, but on
+        # absolute distance: in replay a stale signal can sit FAVORABLY
+        # off-market and mint fantasy P&L, not just chase adversely). The
+        # graded setup no longer exists at this price — refuse, don't re-anchor.
+        if self._max_entry_slippage_frac > 0:
+            stop_dist = abs(entry - stop)
+            gap = abs(entry - market)
+            if stop_dist > 0 and gap > self._max_entry_slippage_frac * stop_dist:
+                msg = (
+                    f"signal entry {entry} is {gap} from market {market} "
+                    f"(> {self._max_entry_slippage_frac} × stop distance {stop_dist}) — stale signal refused"
+                )
+                log.error("place_bracket rejected: %s %s — %s", instrument, side, msg)
+                return BracketResult(False, None, None, None, error=msg)
+
+        # Apply market-order slippage: shift fill price against the trader.
         tick = TICK_SIZE.get(instrument, Decimal("0.10"))
         slip = tick * self._slippage_ticks_market
-        slipped_entry = entry + slip if side == "long" else entry - slip
+        slipped_entry = market + slip if side == "long" else market - slip
+
+        # Re-anchor stop/target as signal-relative offsets from the actual fill,
+        # matching the live broker's _place_bracket_after_fill (fill + offset).
+        stop = slipped_entry + (stop - entry)
+        target = slipped_entry + (target - entry)
 
         commission = self._commission_for(instrument)
 
@@ -199,9 +270,12 @@ class PaperBroker:
             entry=slipped_entry,  # record slipped price as the true entry for P&L
             stop=stop,
             target=target,
+            initial_stop_dist=abs(slipped_entry - stop),
         )
 
-        if self._partial_profit_r > 0 and size >= 2:
+        if self._trail_1r:
+            bracket.trail_r = abs(slipped_entry - stop)
+        elif self._partial_profit_r > 0 and size >= 2:
             r = abs(slipped_entry - stop)
             if side == "long":
                 pt = slipped_entry + r * self._partial_profit_r
@@ -210,9 +284,10 @@ class PaperBroker:
             bracket.partial_target = pt
             bracket.partial_size = size // 2
 
+        fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
+        bracket.entry_time = fill_ts.timestamp()
         self._open[order_id] = bracket
 
-        fill_ts = (self._current_bar_ts or datetime.now(timezone.utc)).replace(microsecond=0)
         await self._fanout(
             self._fill_handlers,
             Fill(
@@ -236,6 +311,22 @@ class PaperBroker:
             target_order_id=f"{order_id}-T",
         )
 
+    def open_brackets(self) -> list[dict]:
+        """Return live open positions with entry/stop/target for the dashboard."""
+        result = []
+        for b in self._open.values():
+            result.append({
+                "instrument": b.instrument,
+                "side": b.side,
+                "size": b.size,
+                "entry": str(b.entry),
+                "stop": str(b.stop),
+                "target": str(b.target),
+                "partial": str(b.partial_target) if b.partial_target else None,
+                "entry_time": b.entry_time or None,
+            })
+        return result
+
     async def flatten(self, instrument: str) -> bool:
         """Close all open brackets in `instrument` at last bar close."""
         if not self._connected:
@@ -255,13 +346,13 @@ class PaperBroker:
         return True
 
     async def cancel_all(self, instrument: str | None = None) -> int:
-        """In paper, cancel = drop the bracket without filling. No fees."""
-        ids = list(self._open.keys())
-        if instrument:
-            ids = [i for i in ids if self._open[i].instrument == instrument]
-        for oid in ids:
-            del self._open[oid]
-        return len(ids)
+        """No-op in paper. Live cancel_all cancels resting protective ORDERS;
+        the position survives until flatten() closes it with a real exit fill.
+        Paper entries fill instantly, so every open bracket IS a position —
+        dropping it here destroyed positions without exit fills and leaked
+        RiskState contracts (2.5y MNQ run deadlocked at MAX_CONTRACTS after
+        the first reversal flatten)."""
+        return 0
 
     # ------------------------------------------------------------------
     # Handler registration
@@ -295,6 +386,14 @@ class PaperBroker:
         self._next_order_id = 1
         self._last_bar_close.clear()
         self._current_bar_ts = None
+        self._closed_excursions.clear()
+
+    def excursions_by_order_id(self) -> dict[str, tuple[Decimal, Decimal, Decimal]]:
+        """Return closed-bracket excursions keyed by entry order_id.
+
+        Each value is (mfe_pts, mae_pts, initial_stop_dist) in price points.
+        """
+        return dict(self._closed_excursions)
 
     async def inject_bar(self, bar: Bar) -> None:
         """
@@ -309,6 +408,36 @@ class PaperBroker:
             bracket = self._open.get(oid)
             if bracket is None or bracket.instrument != bar.instrument:
                 continue
+
+            # MFE/MAE: update before stop/target check so the favorable leg of
+            # a whipsaw bar is captured even when the bracket closes this bar.
+            if bracket.side == "long":
+                fav = bar.high - bracket.entry
+                adv = bracket.entry - bar.low
+            else:
+                fav = bracket.entry - bar.low
+                adv = bar.high - bracket.entry
+            if fav > bracket.mfe_pts:
+                bracket.mfe_pts = fav
+            if adv > bracket.mae_pts:
+                bracket.mae_pts = adv
+
+            # BE trail: once MFE exceeds be_trail_r × initial stop distance,
+            # move the stop to break-even (entry). Fires once; independent of
+            # trail_1r (don't enable both simultaneously).
+            if (
+                self._be_trail_r > 0
+                and not bracket.be_trail_triggered
+                and bracket.initial_stop_dist > 0
+                and bracket.mfe_pts >= self._be_trail_r * bracket.initial_stop_dist
+            ):
+                bracket.stop = bracket.entry
+                bracket.be_trail_triggered = True
+                log.info(
+                    "BE trail triggered: %s stop -> BE=%s (mfe=%.2f >= %.2f×R)",
+                    bracket.order_id, bracket.entry,
+                    float(bracket.mfe_pts), float(self._be_trail_r),
+                )
 
             # Partial profit: if partial_target touched and not yet filled,
             # close partial_size contracts and move the stop to break-even.
@@ -333,7 +462,7 @@ class PaperBroker:
                 (bracket.side == "long" and bar.low <= bracket.stop)
                 or (bracket.side == "short" and bar.high >= bracket.stop)
             )
-            target_hit = (
+            target_hit = bracket.trail_r is None and (
                 (bracket.side == "long" and bar.high >= bracket.target)
                 or (bracket.side == "short" and bar.low <= bracket.target)
             )
@@ -348,6 +477,26 @@ class PaperBroker:
                 exit_price = bracket.target
                 reason = "target"
             else:
+                # Trail ratchet applies on bar CLOSE — the raised stop is live
+                # from the next bar. Raising intra-bar from this bar's high and
+                # then stopping on this bar's low would assume the high printed
+                # first (lookahead).
+                if bracket.trail_r:
+                    fav = (bar.high - bracket.entry if bracket.side == "long"
+                           else bracket.entry - bar.low)
+                    levels = int(fav / bracket.trail_r)
+                    if levels > bracket.trail_level:
+                        bracket.trail_level = levels
+                        if bracket.side == "long":
+                            new_stop = bracket.entry + bracket.trail_r * (levels - 1)
+                            if new_stop > bracket.stop:
+                                bracket.stop = new_stop
+                        else:
+                            new_stop = bracket.entry - bracket.trail_r * (levels - 1)
+                            if new_stop < bracket.stop:
+                                bracket.stop = new_stop
+                        log.info("Trail ratchet: %s stop -> %s (level %d)",
+                                 bracket.order_id, bracket.stop, levels)
                 continue
 
             is_stop_exit = "stop" in reason  # covers "stop" and "stop (whipsaw)"
@@ -421,6 +570,9 @@ class PaperBroker:
         pnl -= commission * bracket.size
         self._balance += pnl
 
+        self._closed_excursions[bracket.order_id] = (
+            bracket.mfe_pts, bracket.mae_pts, bracket.initial_stop_dist
+        )
         del self._open[bracket.order_id]
 
         await self._fanout(
@@ -459,7 +611,7 @@ class PaperBroker:
             "MNQ": Decimal("4"),
             "MES": Decimal("4"),    # tick = 0.25
             "MCL": Decimal("100"),  # tick = 0.01
-            "MBT": Decimal("20"),   # tick = 5 on a $100k+ contract
+            "MBT": Decimal("0.2"),  # tick = 5.0 price units → 0.2 ticks per point
         }.get(instrument, Decimal("1"))
 
     def _unrealized_for(self, b: _OpenBracket) -> Decimal:

@@ -237,36 +237,17 @@ async def test_journal_caps_at_max_signals():
 
 
 async def test_journal_subscriber_drops_old_under_backpressure():
-    """If a subscriber doesn't drain, new entries displace old."""
+    """If a subscriber doesn't drain, new entries displace old (queue stays
+    bounded at the subscribe() maxsize — 2000, sized for replay streaming)."""
     j = Journal()
     q = j.subscribe()
+    cap = q.maxsize
     sig = make_signal()
     out = OrderOutcome(placed=True, reason="allowed", allowed_size=1, broker_order_id="x")
 
-    # Fill the queue past its limit (100).
-    for _ in range(150):
+    # Fill the queue past its cap.
+    for _ in range(cap + 50):
         await j.record_signal(sig, out)
 
-    # Queue size must be capped at maxsize.
-    assert q.qsize() <= 100
-
-
-# =====================================================================
-# /api/bars
-# =====================================================================
-
-async def test_bars_accepts_timeframe_param():
-    """
-    /api/bars must accept a ?timeframe= query param.
-    In paper/non-live mode the broker is None so bars is always [].
-    The test confirms the param is wired (no 422 Unprocessable Entity)
-    and the response shape is correct regardless of TF.
-    """
-    app, _, _, _, _ = await make_app_with_state()
-    client = TestClient(app)
-    for tf in ["1min", "5min", "15min", "1h"]:
-        r = client.get(f"/api/bars?timeframe={tf}&limit=10")
-        assert r.status_code == 200, f"Expected 200 for timeframe={tf}, got {r.status_code}"
-        body = r.json()
-        assert "bars" in body, f"Missing 'bars' key for timeframe={tf}"
-        assert isinstance(body["bars"], list)
+    # Bounded, and the overflow displaced old entries instead of raising.
+    assert q.qsize() == cap

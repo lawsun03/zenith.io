@@ -67,6 +67,12 @@ class TopstepAccountConfig:
     # None means no cap (practice/express).
     daily_profit_limit: Optional[Money] = None
 
+    # Risk sizing equity offset. When non-zero, the engine subtracts this from
+    # current equity before computing position size. Express/XFA accounts set this
+    # to starting_balance so that risk sizing is based on profit above the base
+    # capital (i.e. you only risk what you've made, not the initial $50k).
+    risk_sizing_equity_offset: Money = Decimal("0")
+
     # Trading day boundary. Topstep resets at 5:00 PM CT (America/Chicago).
     # We store the timezone name; conversion to UTC happens in state.py.
     trading_day_reset_hour_ct: int = 17  # 5 PM Central
@@ -137,6 +143,8 @@ def config_for_account(
 
     # Practice / Express / unknown — use actual balance, wide limits.
     # 4% trailing drawdown, 1% daily loss limit.
+    # Risk sizing uses profit-above-base only: offset = starting_balance so
+    # the engine sees (equity - starting_balance) as the risked capital.
     bal = broker_balance if broker_balance > 0 else Decimal("50000")
     return TopstepAccountConfig(
         account_type="xfa",
@@ -147,4 +155,5 @@ def config_for_account(
         profit_target=bal,  # no profit target for practice/express
         max_contracts=20,
         soft_buffer=soft_buffer,
+        risk_sizing_equity_offset=bal,
     )

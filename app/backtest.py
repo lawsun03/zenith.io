@@ -8,7 +8,7 @@ to run as a subprocess so backtests are fully isolated from the live bot.
 Usage:
     python -m app.backtest \\
         --config bot_config.json \\
-        --bars bars_MGC.csv \\
+        --bars bars/bars_MGC.csv \\
         --instrument MGC \\
         --out-dir backtests \\
         [--id custom-name]
@@ -38,10 +38,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from app.bot_config import BotConfig, load_bot_config
+from app.bot_config import BotConfig, StrategyParams, load_bot_config
 from app.broker.events import Fill
 from app.broker.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
+from app.strategy.grader import SetupGrader
 from app.replay import load_bars_csv
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
@@ -59,8 +60,10 @@ log = logging.getLogger("topstep_bot.backtest")
 
 def _build_runner(instrument: str, s, enabled_killzones: list[str] | None = None) -> StrategyRunner:
     zones = killzones_from_names(enabled_killzones) if enabled_killzones else default_killzones()
+    strategy_params = s if isinstance(s, StrategyParams) else StrategyParams()
     return StrategyRunner(
         instrument=instrument,
+        timeframe="1min",
         liquidity=LiquidityTracker(LiquidityConfig(
             swing_lookback=s.swing_lookback,
             min_penetration=s.min_penetration,
@@ -80,6 +83,8 @@ def _build_runner(instrument: str, s, enabled_killzones: list[str] | None = None
             r_multiple=s.r_multiple,
             killzones=zones,
         )),
+        grader=SetupGrader(),
+        strategy_cfg=strategy_params,
     )
 
 

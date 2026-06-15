@@ -29,117 +29,95 @@ Bias = Literal["bullish", "bearish", "neutral"]
 
 
 class HTFBiasTracker:
-    """4h swing structure → directional bias.
+    """4h FVG inversion (IFVG) → directional bias.
 
-    bullish = most recent confirmed structure is higher-high AND higher-low.
-    bearish = lower-high AND lower-low. Anything else (mixed, or fewer than
-    two confirmed swings of each kind) is neutral — fail-open so the gate is
-    inert until real structure exists.
+    Scans bars chronologically for 3-bar Fair Value Gaps. Tracks the most
+    recent FVG. When a bar closes through the far edge of that FVG (inversion),
+    flips bias:
+      - Bearish FVG inversed (close > fvg.high) → bullish
+      - Bullish FVG inversed (close < fvg.low)  → bearish
+
+    Bias persists at the last inversion until the next inversion. Starts
+    neutral until the first inversion is observed.
+
+    FVG definition (3-bar pattern, bars b1/b2/b3 in order):
+      - Bearish: b1.low > b3.high  → gap zone [b3.high, b1.low]
+      - Bullish: b1.high < b3.low  → gap zone [b1.high, b3.low]
     """
 
     def __init__(self, lookback: int = 3) -> None:
-        self._lookback = lookback
+        # lookback retained for API compatibility; unused in IFVG logic.
         self._bias: Bias = "neutral"
-        # Most recently computed swings, kept for diagnostics. Refreshed
-        # every rebuild(). Empty until rebuild() has been called once.
-        self._recent_highs: list = []   # list[Swing], avoid forward ref
-        self._recent_lows: list = []
-        # Last-known bar count fed to rebuild(). 0 means the REST fetch
-        # returned nothing — distinguishes "no swings due to no data" from
-        # "no swings due to chop".
         self._last_bar_count: int = 0
-        # PERSISTENT swing tracker — swings accumulate across rebuild() calls
-        # so a contract with short per-call history (e.g. days after a futures
-        # roll) can still build structure over a session. Without this, every
-        # refresh started from scratch and a short fetch produced zero swings.
-        self._tracker = LiquidityTracker(LiquidityConfig(
-            swing_lookback=self._lookback, max_swings=50,
-        ))
-        # Largest bar ts seen so far — used to feed only NEW bars on rebuild,
-        # avoiding double-counting when the broker returns overlapping windows.
-        self._last_seen_ts = None  # type: ignore[assignment]
+        self._tracked_fvg: "_Gap | None" = None
+        self._last_inversion_ts = None  # datetime | None
 
     def rebuild(self, bars: list[Bar]) -> None:
-        """Feed new bars into the persistent swing tracker, recompute bias.
-
-        Idempotent on the bars already seen: bars with ts <= last_seen are
-        skipped. Safe to call on every refresh with the broker's full window.
-        """
+        """Scan bars chronologically for FVG inversions; update bias."""
         old = self._bias
         self._last_bar_count = len(bars)
 
-        # Bars should arrive in chronological order from the broker; sort
-        # defensively in case the SDK ever returns them out of order.
-        for bar in sorted(bars, key=lambda b: b.ts):
-            if self._last_seen_ts is not None and bar.ts <= self._last_seen_ts:
-                continue
-            self._tracker.on_bar(bar)
-            self._last_seen_ts = bar.ts
+        if len(bars) < 3:
+            self._bias = "neutral"
+            self._tracked_fvg = None
+            self._last_inversion_ts = None
+            return
 
-        highs = self._tracker.recent_high_swings
-        lows = self._tracker.recent_low_swings
-        # Snapshot for /api/htf_diagnostic.
-        self._recent_highs = list(highs)
-        self._recent_lows = list(lows)
+        ordered = sorted(bars, key=lambda b: b.ts)
+        bias: Bias = "neutral"
+        tracked: "_Gap | None" = None
+        last_inv_ts = None
 
-        new_bias: Bias = "neutral"
+        for i, bar in enumerate(ordered):
+            # 1. Check if this bar inverts the tracked FVG (close through far edge).
+            if tracked is not None:
+                if tracked.side == "bearish" and bar.close > tracked.high:
+                    bias = "bullish"
+                    last_inv_ts = bar.ts
+                    log.debug(
+                        "IFVG: bearish [%s-%s] inversed at %s -> bullish",
+                        tracked.low, tracked.high, bar.ts,
+                    )
+                    tracked = None
+                elif tracked.side == "bullish" and bar.close < tracked.low:
+                    bias = "bearish"
+                    last_inv_ts = bar.ts
+                    log.debug(
+                        "IFVG: bullish [%s-%s] inversed at %s -> bearish",
+                        tracked.low, tracked.high, bar.ts,
+                    )
+                    tracked = None
 
-        # Primary rule: HH+HL vs LH+LL (strict, accurate when we have ≥2 of each).
-        if len(highs) >= 2 and len(lows) >= 2:
-            hh = highs[-1].price > highs[-2].price
-            hl = lows[-1].price > lows[-2].price
-            lh = highs[-1].price < highs[-2].price
-            ll = lows[-1].price < lows[-2].price
+            # 2. Check if bar i completes a new 3-bar FVG.
+            if i >= 2:
+                b1, b3 = ordered[i - 2], bar
+                if b3.low > b1.high:       # bullish FVG: gap between b1.high and b3.low
+                    tracked = _Gap("bullish", b1.high, b3.low)
+                elif b3.high < b1.low:     # bearish FVG: gap between b3.high and b1.low
+                    tracked = _Gap("bearish", b3.high, b1.low)
 
-            if hh and hl:
-                new_bias = "bullish"
-            elif lh and ll:
-                new_bias = "bearish"
-            # else neutral — already the default
-
-        # Fallback for data-limited cases (e.g. a recent futures roll where
-        # only ~3 days of bars exist on the new contract). With ≥1 of each
-        # we can still read the most-recent leg by time order: if the latest
-        # confirmed extreme is a LOW that came AFTER the latest HIGH, the
-        # market most-recently took out a low (bearish leg). Mirror for
-        # bullish. Stays neutral only when we have zero of either kind.
-        elif highs and lows:
-            most_recent_high_ts = highs[-1].bar_ts
-            most_recent_low_ts = lows[-1].bar_ts
-            if most_recent_low_ts > most_recent_high_ts:
-                new_bias = "bearish"
-            elif most_recent_high_ts > most_recent_low_ts:
-                new_bias = "bullish"
-            # equal ts (same bar somehow) → neutral
-
-        if new_bias != old:
-            log.info("HTFBias: %s -> %s", old, new_bias)
-        self._bias = new_bias
+        if bias != old:
+            log.info("HTFBias (IFVG): %s -> %s", old, bias)
+        self._bias = bias
+        self._tracked_fvg = tracked
+        self._last_inversion_ts = last_inv_ts
 
     def bias(self) -> Bias:
         return self._bias
 
     def diagnostics(self) -> dict:
-        """Return the swing data the last rebuild() saw — used by
-        /api/htf_diagnostic so the operator can verify the bias decision
-        against the actual chart. Returns the most recent up-to-10 swings
-        of each kind so the user can eyeball the comparison the tracker
-        used (highs[-1] vs highs[-2], lows[-1] vs lows[-2]).
-        """
         return {
             "bias": self._bias,
-            "lookback": self._lookback,
             "bars_fed": self._last_bar_count,
-            "high_count": len(self._recent_highs),
-            "low_count":  len(self._recent_lows),
-            "recent_high_swings": [
-                {"ts": s.bar_ts.isoformat(), "price": str(s.price)}
-                for s in self._recent_highs[-10:]
-            ],
-            "recent_low_swings": [
-                {"ts": s.bar_ts.isoformat(), "price": str(s.price)}
-                for s in self._recent_lows[-10:]
-            ],
+            "tracked_fvg": {
+                "side": self._tracked_fvg.side,
+                "low": str(self._tracked_fvg.low),
+                "high": str(self._tracked_fvg.high),
+            } if self._tracked_fvg else None,
+            "last_inversion_ts": (
+                self._last_inversion_ts.isoformat()
+                if self._last_inversion_ts else None
+            ),
         }
 
 
@@ -174,6 +152,14 @@ class HTFLevelFinder:
             tracker.on_bar(bar)
         self._swing_highs = [s.price for s in tracker.recent_high_swings]
         self._swing_lows = [s.price for s in tracker.recent_low_swings]
+
+    @property
+    def swing_highs(self) -> list[Decimal]:
+        return list(self._swing_highs)
+
+    @property
+    def swing_lows(self) -> list[Decimal]:
+        return list(self._swing_lows)
 
     @staticmethod
     def _compute_unmitigated_gaps(bars: list[Bar]) -> list[_Gap]:

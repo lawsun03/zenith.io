@@ -7,16 +7,18 @@ export interface ChartCallbacks {
   onBar?: (bar: BarEvent) => void
   onFillMarker?: (time: number, isEntry: boolean, side: 'long' | 'short', pnl: number) => void
   onReset?: () => void
-  onVpUpdate?: () => void
 }
 
-export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
+export function useStream(
+  chartCbRef?: React.MutableRefObject<ChartCallbacks>,
+  activeSymbolRef?: React.MutableRefObject<string>,
+) {
   const [status, setStatus] = useState<StatusPayload | null>(null)
   const [signals, setSignals] = useState<JournalItem[]>([])
   const [fills, setFills] = useState<JournalItem[]>([])
   const [reconciles, setReconciles] = useState<JournalItem[]>([])
-  const [connState, setConnState] = useState<ConnState>('connecting')
   const [strategyState, setStrategyState] = useState<StrategyStatePayload | null>(null)
+  const [connState, setConnState] = useState<ConnState>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -48,8 +50,6 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
       const ws = new WebSocket(`${proto}//${window.location.host}/api/stream`)
       wsRef.current = ws
 
-      let lastBarUtcDate: string | null = null
-
       ws.onopen = () => setConnState('connected')
       ws.onclose = () => {
         wsRef.current = null
@@ -67,27 +67,20 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
           setSignals([])
           setFills([])
           setReconciles([])
-          setStrategyState(null)
           chartCbRef?.current?.onReset?.()
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
           return
         }
         if (msg.kind === 'bar') {
           const p = msg.payload
-          const barUtcDate = msg.ts.slice(0, 10)
-          if (lastBarUtcDate !== null && barUtcDate !== lastBarUtcDate) {
-            chartCbRef?.current?.onVpUpdate?.()
+          if (activeSymbolRef?.current && p.instrument && p.instrument !== activeSymbolRef.current) {
+            return
           }
-          lastBarUtcDate = barUtcDate
           chartCbRef?.current?.onBar?.({
             time: Math.floor(new Date(msg.ts).getTime() / 1000),
             open: Number(p.open), high: Number(p.high),
             low: Number(p.low),  close: Number(p.close),
           })
-          return
-        }
-        if (msg.kind === 'strategy_state') {
-          setStrategyState(msg.payload as StrategyStatePayload)
           return
         }
         const item: JournalItem = { ts: msg.ts, kind: msg.kind, payload: msg.payload }
@@ -96,16 +89,31 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
         } else if (msg.kind === 'fill') {
           setFills(prev => [item, ...prev].slice(0, 50))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
-          const p = msg.payload as { is_entry: boolean; side: 'long' | 'short'; realized_pnl_delta: string }
-          chartCbRef?.current?.onFillMarker?.(
-            Math.floor(new Date(msg.ts).getTime() / 1000),
-            p.is_entry,
-            p.side,
-            Number(p.realized_pnl_delta),
-          )
+          const p = msg.payload as { is_entry: boolean; side: 'long' | 'short'; realized_pnl_delta: string; instrument?: string }
+          const fillIsActiveSymbol = !activeSymbolRef?.current || !p.instrument || p.instrument === activeSymbolRef.current
+          if (fillIsActiveSymbol) {
+            chartCbRef?.current?.onFillMarker?.(
+              Math.floor(new Date(msg.ts).getTime() / 1000),
+              p.is_entry,
+              p.side,
+              Number(p.realized_pnl_delta),
+            )
+          }
         } else if (msg.kind === 'reconcile') {
           setReconciles(prev => [item, ...prev].slice(0, 20))
           fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
+        } else if (msg.kind === 'strategy_state') {
+          const p = msg.payload as StrategyStatePayload
+          if (!activeSymbolRef?.current || !p.instrument || p.instrument === activeSymbolRef.current) {
+            setStrategyState(p)
+          } else {
+            // The phase block is account-level, not per-instrument — it must
+            // update even when the chart shows a different symbol (e.g. chart
+            // on MGC while the MNQ runner emits strategy_state).
+            setStrategyState(prev =>
+              prev ? { ...prev, phase: p.phase } : ({ instrument: p.instrument, phase: p.phase } as StrategyStatePayload))
+          }
+          return
         }
       }
     }
@@ -119,5 +127,5 @@ export function useStream(chartCbRef?: React.MutableRefObject<ChartCallbacks>) {
     }
   }, [])
 
-  return { status, signals, fills, reconciles, connState, strategyState }
+  return { status, signals, fills, reconciles, strategyState, connState }
 }

@@ -9,15 +9,18 @@ _ROOT = Path(__file__).parent.parent.parent  # project root
 
 
 def load_all_trades() -> list[dict]:
-    """Merge all trades*.csv files from project root."""
+    """Merge all trades*.csv files from the trades/ directory."""
     rows: list[dict] = []
-    for path in sorted(_ROOT.glob("trades*.csv")):
+    for path in sorted((_ROOT / "trades").glob("trades*.csv")):
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                raw_instr = row.get("instrument", "")
+                parts = raw_instr.split(".")
+                short_instr = parts[-2] if len(parts) >= 2 else raw_instr
                 rows.append({
                     "ts": row.get("ts", ""),
-                    "instrument": row.get("instrument", ""),
+                    "instrument": short_instr,
                     "side": row.get("side", ""),
                     "type": row.get("type", ""),
                     "fill_price": _float(row.get("fill_price")),
@@ -65,7 +68,8 @@ def load_log_events(days: int = 2) -> list[dict]:
 
 def load_config() -> dict:
     p = _ROOT / "bot_config.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    # utf-8-sig: tolerate a BOM (PowerShell edits write one by default).
+    return json.loads(p.read_text(encoding="utf-8-sig")) if p.exists() else {}
 
 
 # ---------------------------------------------------------------------------

@@ -29,86 +29,26 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
+from .pricing import (
+    SIDE_BUY,
+    SIDE_SELL,
+    _partial_plan,
+    _point_value,
+    _to_internal_side,
+    _to_sdk_side,
+)
 from .protocol import BarHandler, EquityHandler, FillHandler
 
 log = logging.getLogger(__name__)
 
-
-# project-x-py side encoding. Centralize so the rest of the file stays clean.
-SIDE_BUY = 0
-SIDE_SELL = 1
-
-# Dollar P&L per 1-point (1 dollar) price move per contract.
-# Used to convert (exit_price - entry_price) → realized dollars.
-_POINT_VALUE: dict[str, Decimal] = {
-    "MGC":  Decimal("10"),    # Micro Gold: 10 oz
-    "GC":   Decimal("100"),   # Gold: 100 oz
-    "MNQ":  Decimal("2"),     # Micro Nasdaq-100
-    "NQ":   Decimal("20"),    # Nasdaq-100
-    "MES":  Decimal("5"),     # Micro E-mini S&P 500
-    "ES":   Decimal("50"),    # E-mini S&P 500
-    "MCL":  Decimal("100"),   # Micro WTI Crude Oil
-    "CL":   Decimal("1000"),  # WTI Crude Oil
-    "M2K":  Decimal("5"),     # Micro Russell 2000
-    "RTY":  Decimal("50"),    # Russell 2000
-}
-
-
-def _point_value(instrument: str) -> Decimal:
-    """Return the dollar value of a 1-point price move for this instrument."""
-    # Strip SDK contract suffix: "CON.F.US.MGC.M26" → "MGC"
-    sym = instrument.split(".")[-2] if "." in instrument else instrument.upper()
-    val = _POINT_VALUE.get(sym)
-    if val is None:
-        log.warning("Unknown instrument %r — P&L will be in price units, not dollars", sym)
-        return Decimal("1")
-    return val
-
-
-@dataclass(frozen=True)
-class PartialPlan:
-    """How a partial-profit / BE entry is split. Pure data, no SDK."""
-    partial_price: Decimal   # the R-multiple level (scale-out price; also the BE trigger for 1-lots)
-    partial_size: int        # contracts to scale out (0 when entry size == 1)
-    remaining_size: int      # contracts left after the partial
-    be_price: Decimal        # break-even = the actual entry fill price
-
-
-def _partial_plan(
-    entry_price: Decimal,
-    stop: Decimal,
-    size: int,
-    partial_r: Decimal,
-) -> "PartialPlan | None":
-    """Compute the partial/BE plan, or None when partials are disabled.
-
-    partial_price = entry ± R*partial_r (R = |entry-stop|); + for long, - for short.
-    Long vs short is inferred from stop position: stop below entry → long.
-    partial_size = size // 2 (0 for a 1-lot). be_price = entry_price.
-    """
-    if partial_r <= 0:
-        return None
-    r = abs(entry_price - stop)
-    is_long = stop < entry_price
-    partial_price = entry_price + r * partial_r if is_long else entry_price - r * partial_r
-    partial_size = size // 2
-    return PartialPlan(
-        partial_price=partial_price,
-        partial_size=partial_size,
-        remaining_size=size - partial_size,
-        be_price=entry_price,
-    )
-
-
-def _to_internal_side(sdk_side: int) -> Side:
-    return "long" if sdk_side == SIDE_BUY else "short"
-
-
-def _to_sdk_side(side: Side) -> int:
-    return SIDE_BUY if side == "long" else SIDE_SELL
+# SDK OrderType codes: 1=Limit, 2=Market, 3=StopLimit, 4=Stop, 5=TrailingStop.
+# Any stop variant protects the downside; a plain limit is a take-profit.
+_STOP_ORDER_TYPES = frozenset({3, 4, 5})
+_LIMIT_ORDER_TYPE = 1
+_OPEN_ORDER_STATUS = 1  # SDK OrderStatus.OPEN
 
 
 def _utcnow() -> datetime:
@@ -179,11 +119,13 @@ class TopstepXBroker:
         await broker.disconnect()
     """
 
-    def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0")) -> None:
+    def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0"), max_entry_slippage_frac: Decimal = Decimal("0")) -> None:
         self._suite = None  # project_x_py.TradingSuite, lazily imported
+        self._extra_suites: dict[str, Any] = {}  # secondary instrument suites
         self._account_name = account_name
         self.entry_mode = entry_mode  # "market" or "limit"
         self.partial_profit_r = partial_profit_r  # 0 = disabled; >0 = take half at NxR then BE (hot-applied via PATCH /api/config)
+        self.max_entry_slippage_frac = max_entry_slippage_frac  # 0 = disabled; >0 = abort entry if adverse slip > frac × stop distance (hot-applied)
         self._bar_handlers: list[BarHandler] = []
         self._fill_handlers: list[FillHandler] = []
         self._equity_handlers: list[EquityHandler] = []
@@ -193,6 +135,9 @@ class TopstepXBroker:
         self._pending_brackets: dict[str, dict] = {}
         # OCO pairs: stop_id ↔ target_id. When either fills, the other is cancelled.
         self._exit_pairs: dict[str, str] = {}
+        # OCO ENTRY pairs (B92 news_straddle): buy_stop_id ↔ sell_stop_id. When one
+        # resting entry leg fills, the other is cancelled so only one direction opens.
+        self._oco_entry_siblings: dict[str, str] = {}
         # Partials path (only used when partial_profit_r > 0). Each leg order_id
         # maps to the same shared group dict. Kept separate from _exit_pairs so the
         # disabled path is byte-for-byte unchanged.
@@ -200,6 +145,10 @@ class TopstepXBroker:
         # Break-even watches for 1-lot entries, keyed by instrument. The quote
         # handler moves the stop to BE once price crosses trigger_price.
         self._be_watches: dict[str, dict] = {}
+        # Live MFE/MAE tracker: instrument → {entry_price, entry_side,
+        # initial_risk_pts, mfe_pts, mae_pts, _mfe_1r, _mfe_2r, _mae_1r, _mae_2r}.
+        # Updated on each bar close; cleared on exit fill or cancel_all.
+        self._mfe_tracker: dict[str, dict] = {}
         # Market orders fill in microseconds — the ORDER_FILLED event can arrive via
         # WebSocket before the HTTP response returns and we store the order_id in
         # _pending_brackets. Buffer those early fills here and replay them once the
@@ -217,10 +166,10 @@ class TopstepXBroker:
         # The engine checks this before placing orders — a disconnected feed means fill
         # events won't arrive, which causes reconcile drift on every entry.
         self._feed_connected: bool = False
-        # Tick-aggregated forming bar: accumulates quote mid-prices within the current
-        # minute. Updated by the QUOTE_UPDATE handler registered in subscribe().
-        self._forming_bar: Bar | None = None
-        self._forming_bar_minute: datetime | None = None
+        # Tick-aggregated forming bars per instrument: accumulates quote mid-prices
+        # within the current minute. Updated by QUOTE_UPDATE handlers in subscribe().
+        self._forming_bars: dict[str, Bar | None] = {}
+        self._forming_bar_minutes: dict[str, datetime | None] = {}
         # Background task that snapshots the forming bar to intrabar_<instr>.csv.
         # Started at the end of subscribe(), cancelled in disconnect().
         self._intrabar_task: asyncio.Task | None = None
@@ -253,6 +202,12 @@ class TopstepXBroker:
             except asyncio.CancelledError:
                 pass
             self._intrabar_task = None
+        for _instr, _es in list(self._extra_suites.items()):
+            try:
+                await _es.disconnect()
+            except Exception as e:
+                log.warning("Error during secondary disconnect (%s): %s", _instr, e)
+        self._extra_suites.clear()
         if self._suite is not None:
             try:
                 await self._suite.disconnect()
@@ -261,18 +216,19 @@ class TopstepXBroker:
             self._suite = None
 
     async def _intrabar_sampler_loop(self) -> None:
-        """Every _INTRABAR_SAMPLE_SECONDS, snapshot the forming bar to CSV.
+        """Every _INTRABAR_SAMPLE_SECONDS, snapshot all forming bars to CSV.
 
-        Pure observer: reads self._forming_bar only. A disk/serialization error
+        Pure observer: reads self._forming_bars only. A disk/serialization error
         is logged at ERROR and the loop continues — it never crashes the broker
         and never dies silently (Rule 12). CancelledError exits cleanly.
         """
         while True:
             try:
                 await asyncio.sleep(_INTRABAR_SAMPLE_SECONDS)
-                bar = self._forming_bar
-                if bar is not None:
-                    _append_intrabar_csv(bar, _utcnow())
+                now = _utcnow()
+                for bar in list(self._forming_bars.values()):
+                    if bar is not None:
+                        _append_intrabar_csv(bar, now)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -282,9 +238,30 @@ class TopstepXBroker:
     # Account info
     # ------------------------------------------------------------------
 
+    def _get_suite_for(self, instrument: str) -> Any:
+        """Return the TradingSuite for `instrument`; falls back to primary suite."""
+        return self._extra_suites.get(instrument, self._suite)
+
     async def account_balance(self) -> Decimal:
         self._require_connected()
-        # SDK returns a float — convert at the boundary.
+        # account_info.balance is set once at auth time and never updated by the SDK.
+        # Fetch fresh from the REST API so equity reflects closed trades and account
+        # switches (via hot-apply) correctly.
+        try:
+            accounts = await self._suite.client.list_accounts()
+            # Prefer the currently-configured account name; fall back to the
+            # account the broker originally connected with.
+            target = self._account_name or (
+                self._suite.client.account_info.name
+                if self._suite.client.account_info else None
+            )
+            acct = next((a for a in accounts if a.name == target), None) if target else None
+            if acct is None and accounts:
+                acct = accounts[0]
+            if acct is not None:
+                return Decimal(str(acct.balance))
+        except Exception as e:
+            log.warning("account_balance REST refresh failed, falling back to cached: %s", e)
         return Decimal(str(self._suite.client.account_info.balance))
 
     async def get_positions(self) -> list[BrokerPosition]:
@@ -294,6 +271,11 @@ class TopstepXBroker:
         # endpoint directly via the authenticated HTTP client.
         raw = await self._raw_positions()
         primary = self._instruments[0] if self._instruments else ""
+        # Build contractId → symbol reverse map so multi-instrument positions
+        # are resolved to the correct symbol instead of always using the primary.
+        id_to_symbol: dict[str, str] = {self._suite.instrument_id: primary}
+        for sym, es in self._extra_suites.items():
+            id_to_symbol[es.instrument_id] = sym
         positions = []
         for p in raw:
             size = int(p.get("size", 0) or 0)
@@ -307,14 +289,114 @@ class TopstepXBroker:
                 side = "short"
             else:
                 continue
+            contract_id = str(p.get("contractId", ""))
+            instrument = id_to_symbol.get(contract_id, primary)
             positions.append(BrokerPosition(
-                instrument=primary,
+                instrument=instrument,
                 side=side,
                 size=size,
                 average_price=Decimal(str(p.get("averagePrice") or 0)),
                 unrealized_pnl=Decimal(str(p.get("unrealizedPnl") or 0)),
             ))
         return positions
+
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        self._require_connected()
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return ExitCoverage(
+                instrument=instrument, position_size=0, side="",
+                avg_price=Decimal("0"), covered_stop=0, covered_target=0,
+            )
+
+        # Closing side: a long is closed by SELL, a short by BUY. Working
+        # exit orders must be on that side to actually protect the position.
+        close_sdk_side = SIDE_SELL if pos.side == "long" else SIDE_BUY
+
+        suite = self._get_suite_for(instrument)
+        orders = await suite.orders.search_open_orders(
+            contract_id=suite.instrument_id
+        )
+
+        covered_stop = 0
+        covered_target = 0
+        for o in orders:
+            if getattr(o, "status", None) != _OPEN_ORDER_STATUS:
+                continue
+            if getattr(o, "side", None) != close_sdk_side:
+                continue
+            otype = getattr(o, "type", None)
+            osize = int(getattr(o, "size", 0) or 0)
+            if otype in _STOP_ORDER_TYPES:
+                covered_stop += osize
+            elif otype == _LIMIT_ORDER_TYPE:
+                covered_target += osize
+
+        return ExitCoverage(
+            instrument=instrument,
+            position_size=int(pos.size),
+            side=pos.side,
+            avg_price=pos.average_price,
+            covered_stop=covered_stop,
+            covered_target=covered_target,
+        )
+
+    async def _close_side_for(self, instrument: str) -> "int | None":
+        """SDK side that CLOSES the current position, or None if flat."""
+        positions = await self.get_positions()
+        pos = next((p for p in positions if p.instrument == instrument), None)
+        if pos is None or pos.size == 0:
+            return None
+        return SIDE_SELL if pos.side == "long" else SIDE_BUY
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        self._require_connected()
+        close_sdk_side = await self._close_side_for(instrument)
+        if close_sdk_side is None:
+            log.info("place_protective_stop(%s): position flat — no-op", instrument)
+            return True
+        suite = self._get_suite_for(instrument)
+        oid = await self._place_stop(
+            close_sdk_side, size, price, self._get_account_id(), suite=suite
+        )
+        if oid is None:
+            log.error(
+                "place_protective_stop(%s): stop REJECTED size=%d price=%s",
+                instrument, size, price,
+            )
+            return False
+        log.error(
+            "EMERGENCY protective stop placed on %s: order=%s size=%d price=%s",
+            instrument, oid, size, price,
+        )
+        return True
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        self._require_connected()
+        close_sdk_side = await self._close_side_for(instrument)
+        if close_sdk_side is None:
+            log.info("place_protective_target(%s): position flat — no-op", instrument)
+            return True
+        suite = self._get_suite_for(instrument)
+        oid = await self._place_limit(
+            close_sdk_side, size, price, self._get_account_id(), suite=suite
+        )
+        if oid is None:
+            log.error(
+                "place_protective_target(%s): target REJECTED size=%d price=%s",
+                instrument, size, price,
+            )
+            return False
+        log.error(
+            "EMERGENCY protective target placed on %s: order=%s size=%d price=%s",
+            instrument, oid, size, price,
+        )
+        return True
 
     async def _raw_positions(self) -> list[dict]:
         """Call the positions API directly, tolerating extra fields the SDK rejects.
@@ -353,6 +435,93 @@ class TopstepXBroker:
         except Exception:
             return None
 
+    def open_brackets(self) -> list[dict]:
+        """Return live open positions with entry/stop/target for the dashboard."""
+        result = []
+        seen_pairs: set[int] = set()
+        for ctx in self._exit_pairs.values():
+            cid = id(ctx)
+            if cid in seen_pairs:
+                continue
+            seen_pairs.add(cid)
+            result.append({
+                "instrument": ctx["instrument"],
+                "side": ctx["entry_side"],
+                "size": ctx["size"],
+                "entry": str(ctx["entry_price"]),
+                "stop": str(ctx.get("stop_price", "")),
+                "target": str(ctx.get("target_price", "")),
+                "partial": None,
+                "entry_time": ctx.get("entry_time"),
+                **self.live_excursion(ctx["instrument"]),
+            })
+        seen_groups: set[int] = set()
+        for group in self._exit_groups.values():
+            gid = id(group)
+            if gid in seen_groups:
+                continue
+            seen_groups.add(gid)
+            total = group.get("partial_size", 0) + group.get("remaining_size", 0)
+            pp = group.get("partial_price")
+            result.append({
+                "instrument": group["instrument"],
+                "side": group["entry_side"],
+                "size": total,
+                "entry": str(group["entry_price"]),
+                "stop": str(group.get("stop_price", "")),
+                "target": str(group.get("target_price", "")),
+                "partial": str(pp) if pp else None,
+                "entry_time": group.get("entry_time"),
+                **self.live_excursion(group["instrument"]),
+            })
+        return result
+
+    def live_excursion(self, instrument: str) -> dict:
+        """Current trade's MFE/MAE in R-units and points. Returns zeros when flat."""
+        t = self._mfe_tracker.get(instrument)
+        if t is None or t["initial_risk_pts"] == Decimal("0"):
+            return {"mfe_r": 0.0, "mae_r": 0.0, "mfe_pts": 0.0, "mae_pts": 0.0}
+        r = t["initial_risk_pts"]
+        return {
+            "mfe_r":  float(t["mfe_pts"] / r),
+            "mae_r":  float(t["mae_pts"] / r),
+            "mfe_pts": float(t["mfe_pts"]),
+            "mae_pts": float(t["mae_pts"]),
+        }
+
+    def _update_mfe_mae(self, bar: "Bar") -> None:
+        """Update peak favorable/adverse excursion from bar close for any open position."""
+        t = self._mfe_tracker.get(bar.instrument)
+        if t is None:
+            return
+        price = bar.close
+        entry = t["entry_price"]
+        if t["entry_side"] == "long":
+            favorable = price - entry
+            adverse   = entry - price
+        else:
+            favorable = entry - price
+            adverse   = price - entry
+        r = t["initial_risk_pts"]
+        if favorable > t["mfe_pts"]:
+            t["mfe_pts"] = favorable
+            mfe_r = float(favorable / r) if r else 0.0
+            if mfe_r >= 2.0 and not t.get("_mfe_2r"):
+                log.debug("MFE/MAE %s: crossed 2R MFE (%.2f pts)", bar.instrument, float(favorable))
+                t["_mfe_2r"] = True
+            elif mfe_r >= 1.0 and not t.get("_mfe_1r"):
+                log.debug("MFE/MAE %s: crossed 1R MFE (%.2f pts)", bar.instrument, float(favorable))
+                t["_mfe_1r"] = True
+        if adverse > t["mae_pts"]:
+            t["mae_pts"] = adverse
+            mae_r = float(adverse / r) if r else 0.0
+            if mae_r >= 2.0 and not t.get("_mae_2r"):
+                log.debug("MFE/MAE %s: crossed 2R MAE (%.2f pts)", bar.instrument, float(adverse))
+                t["_mae_2r"] = True
+            elif mae_r >= 1.0 and not t.get("_mae_1r"):
+                log.debug("MFE/MAE %s: crossed 1R MAE (%.2f pts)", bar.instrument, float(adverse))
+                t["_mae_1r"] = True
+
     async def place_bracket(
         self,
         instrument: str,
@@ -361,14 +530,123 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         self._require_connected()
         # Dispatch based on self.entry_mode (set from config), fall back to env var.
         mode = self.entry_mode or os.environ.get("TOPSTEP_BOT_ENTRY_MODE", "market")
         if mode.lower() == "limit":
-            return await self.place_limit_bracket(instrument, side, size, entry, stop, target)
+            return await self.place_limit_bracket(
+                instrument, side, size, entry, stop, target,
+                tp1_price=tp1_price, tp1_fraction=tp1_fraction, be_after_tp1=be_after_tp1,
+            )
         # Default: market fill + stop/target placed after fill confirmed.
-        return await self.place_market_bracket(instrument, side, size, entry, stop, target)
+        return await self.place_market_bracket(
+            instrument, side, size, entry, stop, target,
+            tp1_price=tp1_price, tp1_fraction=tp1_fraction, be_after_tp1=be_after_tp1,
+        )
+
+    async def place_oco_stop_entries(
+        self,
+        instrument: str,
+        buy_stop: Decimal,
+        sell_stop: Decimal,
+        *,
+        stop_r: Decimal,
+        tp_r: Decimal,
+        size: int,
+    ) -> "tuple[str | None, str | None]":
+        """Place a resting OCO stop-entry straddle (B92 news_straddle live path).
+
+        buy_stop fills LONG on an upside break; sell_stop fills SHORT on a
+        downside break (SDK place_stop_order = a market order triggered at the
+        stop price; direction-agnostic, no place_bracket_order 60s-wait trap).
+        R = stop_r — the offset past the range, i.e. a TIGHT stop at the broken
+        boundary. target = tp_r × R. Each leg registers in _pending_brackets so
+        the proven _place_bracket_after_fill path attaches stop+target on fill;
+        the two legs link as OCO siblings so the first fill cancels the other
+        (see _cancel_oco_sibling, invoked from the fill handler). partial_r is
+        forced to 0 — the validated straddle (B89) takes the full tp_r target.
+
+        Returns (buy_id, sell_id); (None, None) if either leg could not be placed
+        (the surviving leg is cancelled so a single naked resting entry never
+        opens an un-bracketed directional position).
+        """
+        self._require_connected()
+        account_id = self._get_account_id()
+        suite = self._get_suite_for(instrument)
+
+        async def _place_leg(side_sdk, price, entry_side, stop_offset, target_offset):
+            try:
+                resp = await suite.orders.place_stop_order(
+                    suite.instrument_id, side_sdk, size, float(price), account_id,
+                )
+            except Exception:
+                log.exception("place_oco_stop_entries: %s leg failed for %s",
+                              entry_side, instrument)
+                return None
+            if not getattr(resp, "success", False):
+                log.error("place_oco_stop_entries: %s leg rejected: %s",
+                          entry_side, getattr(resp, "errorMessage", "rejected"))
+                return None
+            oid = self._safe_str(getattr(resp, "orderId", None))
+            if not oid:
+                log.error("place_oco_stop_entries: %s leg returned no order id", entry_side)
+                return None
+            close_sdk_side = SIDE_SELL if side_sdk == SIDE_BUY else SIDE_BUY
+            self._pending_brackets[oid] = {
+                "stop_offset": stop_offset,
+                "target_offset": target_offset,
+                "close_sdk_side": close_sdk_side,
+                "size": size,
+                "account_id": account_id,
+                "partial_r": Decimal("0"),
+                "entry_side": entry_side,
+                "instrument": instrument,
+                "tp1_price": None,
+                "tp1_fraction": Decimal("0.5"),
+                "be_after_tp1": True,
+                "signal_entry": price,
+            }
+            self._known_order_ids.add(oid)
+            return oid
+
+        # Long leg: stop = entry - R (the range high); target = entry + tp_r·R.
+        buy_id = await _place_leg(SIDE_BUY, buy_stop, "long", -stop_r, stop_r * tp_r)
+        # Short leg: stop = entry + R (the range low); target = entry - tp_r·R.
+        sell_id = await _place_leg(SIDE_SELL, sell_stop, "short", stop_r, -stop_r * tp_r)
+
+        if not (buy_id and sell_id):
+            for oid in (buy_id, sell_id):
+                if oid:
+                    self._pending_brackets.pop(oid, None)
+                    asyncio.create_task(self._cancel_order(oid))
+            log.error("news_straddle OCO incomplete (buy=%s sell=%s) — surviving leg cancelled",
+                      buy_id, sell_id)
+            return None, None
+
+        self._oco_entry_siblings[buy_id] = sell_id
+        self._oco_entry_siblings[sell_id] = buy_id
+        log.info(
+            "news_straddle OCO armed %s: buy_stop=%s (%s) sell_stop=%s (%s) R=%s tp=%sR size=%d",
+            instrument, buy_stop, buy_id, sell_stop, sell_id, stop_r, tp_r, size,
+        )
+        return buy_id, sell_id
+
+    def _cancel_oco_sibling(self, order_id: str) -> None:
+        """OCO entry: the first straddle leg to fill cancels its resting sibling so
+        only one direction is ever opened (B92). De-registers the sibling's pending
+        bracket so a late/raced sibling fill can never attach a second bracket."""
+        sibling_id = self._oco_entry_siblings.pop(order_id, None)
+        if sibling_id is None:
+            return
+        self._oco_entry_siblings.pop(sibling_id, None)
+        self._pending_brackets.pop(sibling_id, None)
+        log.info("OCO entry: leg %s filled — cancelling resting sibling %s",
+                 order_id, sibling_id)
+        asyncio.create_task(self._cancel_order(sibling_id))
 
     async def place_market_bracket(
         self,
@@ -378,6 +656,9 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Market fill + bracket after fill. Submits a market entry order for
@@ -391,9 +672,10 @@ class TopstepXBroker:
         close_sdk_side = SIDE_SELL if sdk_side == SIDE_BUY else SIDE_BUY
         account_id = self._get_account_id()
 
+        suite = self._get_suite_for(instrument)
         try:
-            resp = await self._suite.orders.place_market_order(
-                self._suite.instrument_id,
+            resp = await suite.orders.place_market_order(
+                suite.instrument_id,
                 sdk_side,
                 size,
                 account_id,
@@ -441,6 +723,10 @@ class TopstepXBroker:
             "partial_r": self.partial_profit_r,
             "entry_side": side,
             "instrument": instrument,
+            "tp1_price": tp1_price,
+            "tp1_fraction": tp1_fraction,
+            "be_after_tp1": be_after_tp1,
+            "signal_entry": entry,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -458,7 +744,7 @@ class TopstepXBroker:
                 "Replaying early entry fill order=%s @ %s — placing stop+target",
                 entry_order_id, early.fill_price,
             )
-            if bracket_data.get("partial_r", Decimal("0")) > 0:
+            if bracket_data.get("partial_r", Decimal("0")) > 0 or bracket_data.get("tp1_price") is not None:
                 asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
             else:
                 asyncio.create_task(self._place_bracket_after_fill(bracket_data))
@@ -497,6 +783,9 @@ class TopstepXBroker:
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Place a standalone limit entry at the FVG level. When the SDK fires a
@@ -509,9 +798,10 @@ class TopstepXBroker:
         close_sdk_side = SIDE_SELL if sdk_side == SIDE_BUY else SIDE_BUY
         account_id = self._get_account_id()
 
+        suite = self._get_suite_for(instrument)
         try:
-            resp = await self._suite.orders.place_limit_order(
-                self._suite.instrument_id,
+            resp = await suite.orders.place_limit_order(
+                suite.instrument_id,
                 sdk_side,
                 size,
                 float(entry),
@@ -557,6 +847,10 @@ class TopstepXBroker:
             "partial_r": self.partial_profit_r,
             "entry_side": side,
             "instrument": instrument,
+            "tp1_price": tp1_price,
+            "tp1_fraction": tp1_fraction,
+            "be_after_tp1": be_after_tp1,
+            "signal_entry": entry,
         }
         self._known_order_ids.add(entry_order_id)
         log.info(
@@ -571,6 +865,56 @@ class TopstepXBroker:
             target_order_id=None,
             error=None,
         )
+
+    async def _abort_if_slipped(self, bracket: dict, fill_price: Decimal) -> bool:
+        """Slippage guard (abort mode). Returns True if the entry was flattened.
+
+        If the fill chased more than max_entry_slippage_frac × planned stop
+        distance beyond the signal entry, the fill-relative stop would land
+        inside the retrace zone the setup expects price to pass through
+        (2026-06-10 MNQ post-mortem: 13pt chase on a 9.8pt stop → stopped in
+        4s). The graded setup no longer exists at this price — flatten at
+        market instead of bracketing a broken trade.
+
+        Fail-safe: if the flatten order fails, returns False so the caller
+        proceeds to place brackets — never leave the position naked.
+        """
+        frac = self.max_entry_slippage_frac
+        signal_entry = bracket.get("signal_entry")
+        stop_dist = abs(bracket["stop_offset"])
+        if frac <= 0 or signal_entry is None or stop_dist <= 0:
+            return False
+        is_long = bracket["close_sdk_side"] == SIDE_SELL
+        adverse = (fill_price - signal_entry) if is_long else (signal_entry - fill_price)
+        if adverse <= stop_dist * frac:
+            return False
+        log.warning(
+            "SLIPPAGE ABORT: %s %s planned_entry=%s fill=%s adverse=%s "
+            "(%.0f%% of stop dist %s, max %.0f%%) — flattening instead of bracketing",
+            bracket.get("instrument", "?"), "long" if is_long else "short",
+            signal_entry, fill_price, adverse,
+            float(adverse / stop_dist * 100), stop_dist, float(frac * 100),
+        )
+        suite = self._get_suite_for(bracket.get("instrument", ""))
+        try:
+            resp = await suite.orders.place_market_order(
+                suite.instrument_id,
+                bracket["close_sdk_side"],
+                bracket["size"],
+                bracket["account_id"],
+            )
+            if not getattr(resp, "success", False):
+                log.error(
+                    "SLIPPAGE ABORT: flatten order rejected resp=%s — "
+                    "falling back to bracket placement so position is protected", resp,
+                )
+                return False
+        except Exception:
+            log.exception(
+                "SLIPPAGE ABORT: flatten failed — falling back to bracket placement"
+            )
+            return False
+        return True
 
     async def _place_bracket_after_fill(self, bracket: dict) -> None:
         """Invoked via create_task when a pending entry fills."""
@@ -601,11 +945,15 @@ class TopstepXBroker:
                 )
                 return
 
+        if await self._abort_if_slipped(bracket, fill_price):
+            return
+
         stop = fill_price + bracket["stop_offset"]
         target = fill_price + bracket["target_offset"]
         close_sdk_side = bracket["close_sdk_side"]
         size = bracket["size"]
         account_id = bracket["account_id"]
+        _suite = self._get_suite_for(bracket.get("instrument", ""))
         log.info(
             "_place_bracket_after_fill: fill=%s stop=%s target=%s",
             fill_price, stop, target,
@@ -613,8 +961,8 @@ class TopstepXBroker:
 
         async def _place_stop() -> str | None:
             try:
-                resp = await self._suite.orders.place_stop_order(
-                    self._suite.instrument_id,
+                resp = await _suite.orders.place_stop_order(
+                    _suite.instrument_id,
                     close_sdk_side,
                     size,
                     float(stop),
@@ -631,8 +979,8 @@ class TopstepXBroker:
 
         async def _place_target() -> str | None:
             try:
-                resp = await self._suite.orders.place_limit_order(
-                    self._suite.instrument_id,
+                resp = await _suite.orders.place_limit_order(
+                    _suite.instrument_id,
                     close_sdk_side,
                     size,
                     float(target),
@@ -658,11 +1006,28 @@ class TopstepXBroker:
                 "entry_price": fill_price,
                 "entry_side": entry_side,
                 "size": size,
+                "instrument": bracket.get("instrument", ""),
+                "stop_price": stop,
+                "target_price": target,
+                "entry_time": bracket.get("entry_time"),
             }
             self._exit_pairs[stop_id]   = {**ctx, "paired_id": target_id}
             self._exit_pairs[target_id] = {**ctx, "paired_id": stop_id}
             log.info("OCO pair registered: stop=%s target=%s entry=%s side=%s",
                      stop_id, target_id, fill_price, entry_side)
+
+            _instr = bracket.get("instrument", "")
+            if _instr:
+                _risk = abs(fill_price - stop)
+                self._mfe_tracker[_instr] = {
+                    "entry_price": fill_price,
+                    "entry_side": entry_side,
+                    "initial_risk_pts": _risk if _risk > Decimal("0") else Decimal("1"),
+                    "mfe_pts": Decimal("0"),
+                    "mae_pts": Decimal("0"),
+                }
+                log.debug("MFE/MAE tracker init: %s entry=%s side=%s risk=%.2f",
+                          _instr, fill_price, entry_side, float(_risk))
 
             # Stop or target may have filled before this registration completed
             # (SDK fires ORDER_FILLED while we were awaiting asyncio.gather above).
@@ -698,6 +1063,9 @@ class TopstepXBroker:
                 await self._place_bracket_after_fill(bracket)
                 return
 
+        if await self._abort_if_slipped(bracket, fill_price):
+            return
+
         stop = fill_price + bracket["stop_offset"]
         target = fill_price + bracket["target_offset"]
         close_sdk_side = bracket["close_sdk_side"]
@@ -706,30 +1074,52 @@ class TopstepXBroker:
         instrument = bracket["instrument"]
         entry_side = bracket["entry_side"]
 
-        plan = _partial_plan(fill_price, stop, size, bracket["partial_r"])
+        plan = _partial_plan(
+            fill_price, stop, size, bracket["partial_r"],
+            tp1_price=bracket.get("tp1_price"),
+            tp1_fraction=bracket.get("tp1_fraction", Decimal("0.5")),
+        )
         if plan is None:
             await self._place_bracket_after_fill(bracket)
             return
 
+        # Guard: partial_price must be between entry and target. If the signal
+        # target is closer than partial_price (target_r < partial_r), the target
+        # leg fires first, cancels the stop and partial, and orphans the
+        # partial-size contracts with no protection. Fall back to plain bracket.
+        partial_beyond_target = (
+            (entry_side == "long" and plan.partial_price >= target)
+            or (entry_side != "long" and plan.partial_price <= target)
+        )
+        if partial_beyond_target:
+            log.info(
+                "partial_price %s is beyond target %s (%s) — falling back to plain bracket",
+                plan.partial_price, target, entry_side,
+            )
+            await self._place_bracket_after_fill(bracket)
+            return
+
+        _suite = self._get_suite_for(instrument)
+
         # 1) Stop (full size) FIRST.
-        stop_id = await self._place_stop(close_sdk_side, size, stop, account_id)
+        stop_id = await self._place_stop(close_sdk_side, size, stop, account_id, suite=_suite)
         if stop_id is None:
             log.error("_place_partial_bracket_after_fill: stop placement failed — position UNPROTECTED")
             return
 
         # 2) Final target at remaining size.
-        target_id = await self._place_limit(close_sdk_side, plan.remaining_size, target, account_id)
+        target_id = await self._place_limit(close_sdk_side, plan.remaining_size, target, account_id, suite=_suite)
 
         # 3) Partial-target leg (size>=2 only).
         partial_id = None
         if plan.partial_size > 0:
-            partial_id = await self._place_limit(close_sdk_side, plan.partial_size, plan.partial_price, account_id)
+            partial_id = await self._place_limit(close_sdk_side, plan.partial_size, plan.partial_price, account_id, suite=_suite)
             if partial_id is None:
                 # Degrade to a full-size 2-leg bracket: bump target back to full size.
                 log.error("partial-target placement failed — degrading to plain bracket")
                 if target_id is not None:
                     await self._cancel_order(target_id)
-                target_id = await self._place_limit(close_sdk_side, size, target, account_id)
+                target_id = await self._place_limit(close_sdk_side, size, target, account_id, suite=_suite)
                 plan = None  # signal: no partial this trade
 
         if target_id is None:
@@ -749,6 +1139,11 @@ class TopstepXBroker:
             "partial_filled": False,
             "close_sdk_side": close_sdk_side,
             "account_id": account_id,
+            "be_after_tp1": bracket.get("be_after_tp1", True),
+            "stop_price": stop,
+            "target_price": target,
+            "partial_price": plan.partial_price if plan else None,
+            "entry_time": bracket.get("entry_time"),
         }
         for oid in (stop_id, partial_id, target_id):
             if oid is not None:
@@ -758,8 +1153,21 @@ class TopstepXBroker:
             stop_id, partial_id, target_id, fill_price, entry_side,
         )
 
+        if instrument:
+            _risk = abs(fill_price - stop)
+            self._mfe_tracker[instrument] = {
+                "entry_price": fill_price,
+                "entry_side": entry_side,
+                "initial_risk_pts": _risk if _risk > Decimal("0") else Decimal("1"),
+                "mfe_pts": Decimal("0"),
+                "mae_pts": Decimal("0"),
+            }
+            log.debug("MFE/MAE tracker init (partial): %s entry=%s side=%s risk=%.2f",
+                      instrument, fill_price, entry_side, float(_risk))
+
         # size==1: no partial leg — arm a BE-watch on the quote stream.
-        if plan and plan.partial_size == 0:
+        # Only arm when be_after_tp1 is True (default); skip if caller opted out.
+        if plan and plan.partial_size == 0 and bracket.get("be_after_tp1", True):
             self._be_watches[instrument] = {
                 "instrument": instrument,
                 "side": entry_side,
@@ -778,10 +1186,11 @@ class TopstepXBroker:
                 log.info("Replaying early group-leg fill: order=%s", oid)
                 asyncio.create_task(self._handle_group_fill(early))
 
-    async def _place_stop(self, close_sdk_side, size, price, account_id) -> "str | None":
+    async def _place_stop(self, close_sdk_side, size, price, account_id, suite=None) -> "str | None":
+        s = suite or self._suite
         try:
-            resp = await self._suite.orders.place_stop_order(
-                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            resp = await s.orders.place_stop_order(
+                s.instrument_id, close_sdk_side, size, float(price), account_id)
             if getattr(resp, "success", False):
                 oid = str(resp.orderId)
                 log.info("Stop placed: order=%s @ %s size=%d", oid, price, size)
@@ -791,10 +1200,11 @@ class TopstepXBroker:
             log.exception("_place_stop failed")
         return None
 
-    async def _place_limit(self, close_sdk_side, size, price, account_id) -> "str | None":
+    async def _place_limit(self, close_sdk_side, size, price, account_id, suite=None) -> "str | None":
+        s = suite or self._suite
         try:
-            resp = await self._suite.orders.place_limit_order(
-                self._suite.instrument_id, close_sdk_side, size, float(price), account_id)
+            resp = await s.orders.place_limit_order(
+                s.instrument_id, close_sdk_side, size, float(price), account_id)
             if getattr(resp, "success", False):
                 oid = str(resp.orderId)
                 log.info("Limit (exit) placed: order=%s @ %s size=%d", oid, price, size)
@@ -830,13 +1240,14 @@ class TopstepXBroker:
         is_target = (order_id == group["target_id"])
 
         if is_partial:
-            # Scale-out filled → move stop to BE + resize to remaining.
+            # Scale-out filled → move stop to BE + resize to remaining (when be_after_tp1 is True).
             qty = group["partial_size"]
             await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
             group["partial_filled"] = True
             del self._exit_groups[order_id]   # partial leg is one-shot
             group["partial_id"] = None
-            await self._modify_stop_to_be(group)
+            if group.get("be_after_tp1", True):
+                await self._modify_stop_to_be(group)
             return
 
         if is_stop:
@@ -850,8 +1261,19 @@ class TopstepXBroker:
         if is_target:
             qty = group["remaining_size"]
             await self._emit_group_exit(fill, _pnl(fill.fill_price, qty), qty, is_stop=False)
+            # If partial never filled, target fired first (partial_price was beyond target).
+            # Cancel siblings (oversized stop + partial) then flatten the stranded contracts.
+            partial_still_open = not group["partial_filled"] and group.get("partial_size", 0) > 0
+            if partial_still_open:
+                log.error(
+                    "Target filled before partial on %s — partial_price likely beyond target. "
+                    "Flattening %d stranded contracts.",
+                    fill.instrument, group["partial_size"],
+                )
             await self._cancel_group_siblings(group, filled_id=order_id)
             self._clear_group(group)
+            if partial_still_open:
+                asyncio.create_task(self.flatten(fill.instrument))
             return
 
     async def _emit_group_exit(self, fill: Fill, pnl: Decimal, qty: int, is_stop: bool) -> None:
@@ -881,6 +1303,7 @@ class TopstepXBroker:
             if oid is not None:
                 self._exit_groups.pop(oid, None)
         self._be_watches.pop(group["instrument"], None)
+        self._mfe_tracker.pop(group["instrument"], None)
 
     async def _modify_stop_to_be(self, group: dict) -> None:
         """Move the stop to break-even and resize to remaining. The invariant
@@ -894,10 +1317,11 @@ class TopstepXBroker:
         stop_id = group["stop_id"]
         be = float(group["be_price"])
         remaining = group["remaining_size"]
+        _suite = self._get_suite_for(group.get("instrument", ""))
 
         for attempt in (1, 2):
             try:
-                ok = await self._suite.orders.modify_order(
+                ok = await _suite.orders.modify_order(
                     order_id=stop_id, stop_price=be, size=remaining)
                 if ok:
                     log.info("Stop moved to BE: order=%s be=%s size=%d", stop_id, be, remaining)
@@ -914,7 +1338,8 @@ class TopstepXBroker:
             log.exception("cancel of oversized stop failed: %s", stop_id)
 
         new_id = await self._place_stop(
-            group["close_sdk_side"], remaining, group["be_price"], group["account_id"])
+            group["close_sdk_side"], remaining, group["be_price"], group["account_id"],
+            suite=self._get_suite_for(group.get("instrument", "")))
         if new_id is not None:
             # Re-register: drop old stop id, add the new one to the group.
             self._exit_groups.pop(stop_id, None)
@@ -944,8 +1369,9 @@ class TopstepXBroker:
         if not crossed:
             return
         watch["armed"] = False
+        _suite = self._get_suite_for(instrument)
         try:
-            ok = await self._suite.orders.modify_order(
+            ok = await _suite.orders.modify_order(
                 order_id=watch["stop_id"], stop_price=float(watch["be_price"]))
             if ok:
                 log.info("BE move (1-lot): stop=%s -> %s", watch["stop_id"], watch["be_price"])
@@ -1004,7 +1430,9 @@ class TopstepXBroker:
         """Cancel a single order by ID. Used for OCO cancellation."""
         try:
             resp = await self._suite.orders.cancel_order(int(order_id))
-            if getattr(resp, "success", False):
+            # SDK returns True (bool) on success in some versions; others return an
+            # object with .success. Accept either.
+            if resp is True or getattr(resp, "success", False):
                 log.info("OCO cancel confirmed: order=%s", order_id)
             else:
                 log.error("OCO cancel rejected: order=%s resp=%s", order_id, resp)
@@ -1129,13 +1557,14 @@ class TopstepXBroker:
             ))
         return bars
 
-    async def get_forming_bar(self, timeframe: str = "1min") -> Bar | None:
+    async def get_forming_bar(self, timeframe: str = "1min", instrument: str = "") -> Bar | None:
         """
-        Return the current forming bar, built by aggregating live quote mid-prices
-        tick-by-tick within the current minute. Returns None until the first quote
-        arrives after subscribe() completes.
+        Return the current forming bar for the given instrument, built by
+        aggregating live quote mid-prices tick-by-tick within the current minute.
+        Returns None until the first quote arrives after subscribe() completes.
         """
-        return self._forming_bar
+        key = instrument or (self._instruments[0] if self._instruments else "")
+        return self._forming_bars.get(key)
 
     async def place_market_order(self, side: Side, size: int = 1) -> bool:
         """Place a market order. Used for test trades and emergency entries."""
@@ -1153,15 +1582,20 @@ class TopstepXBroker:
 
     async def flatten(self, instrument: str) -> bool:
         """
-        Close all open positions at market.
+        Close the open position for `instrument` at market.
 
-        Reads positions directly from the SDK (which uses contract IDs, not
-        symbol names) so the instrument string is only used for logging —
-        no name-matching that can silently miss positions.
+        Filters by contract_id so that flatten("MGC") never touches
+        MNQ/MES positions (multi-instrument safety).
         """
         self._require_connected()
         raw = await self._raw_positions()
-        open_positions = [p for p in raw if int(p.get("size", 0) or 0) > 0]
+        _suite = self._get_suite_for(instrument)
+        target_contract_id = _suite.instrument_id
+        open_positions = [
+            p for p in raw
+            if int(p.get("size", 0) or 0) > 0
+            and str(p.get("contractId", "")) == target_contract_id
+        ]
         if not open_positions:
             return True
 
@@ -1187,8 +1621,8 @@ class TopstepXBroker:
             # type=1 LONG → close with SELL; type=2 SHORT → close with BUY
             close_side = SIDE_SELL if ptype == 1 else SIDE_BUY
             try:
-                response = await self._suite.orders.place_market_order(
-                    contract_id=self._suite.instrument_id,
+                response = await _suite.orders.place_market_order(
+                    contract_id=_suite.instrument_id,
                     side=close_side,
                     size=size,
                 )
@@ -1208,13 +1642,42 @@ class TopstepXBroker:
 
     async def cancel_all(self, instrument: str | None = None) -> int:
         self._require_connected()
-        try:
-            # SDK signature varies; this is the common shape.
-            result = await self._suite.orders.cancel_all_orders()
-            return int(getattr(result, "cancelled_count", 0))
-        except Exception as e:
-            log.exception("cancel_all failed: %s", e)
-            return 0
+        if instrument is None:
+            # Account-wide cancel (engine.stop() / lockout across all instruments).
+            self._be_watches.clear()
+            try:
+                result = await self._suite.orders.cancel_all_orders()
+                return int(getattr(result, "cancelled_count", 0))
+            except Exception as e:
+                log.exception("cancel_all failed: %s", e)
+                return 0
+
+        # Per-instrument cancel: only touch orders belonging to `instrument`.
+        # account-wide cancel_all_orders() is NOT safe here — it also cancels
+        # brackets on other open positions (e.g. cancelling MNQ orders when
+        # reversing MGC; 2026-06-08 incident where both TP and SL disappeared).
+        order_ids: set[str] = set()
+        for oid, group in list(self._exit_groups.items()):
+            if group.get("instrument") == instrument:
+                order_ids.add(oid)
+        for oid, pair_info in list(self._exit_pairs.items()):
+            if pair_info.get("instrument") == instrument:
+                order_ids.add(oid)
+        for oid, bracket in list(self._pending_brackets.items()):
+            if bracket.get("instrument") == instrument:
+                order_ids.add(oid)
+
+        for oid in order_ids:
+            await self._cancel_order(oid)
+        for oid in order_ids:
+            self._exit_groups.pop(oid, None)
+            self._exit_pairs.pop(oid, None)
+            self._pending_brackets.pop(oid, None)
+        self._be_watches.pop(instrument, None)
+        self._mfe_tracker.pop(instrument, None)
+
+        log.info("cancel_all(%s): cancelled %d orders", instrument, len(order_ids))
+        return len(order_ids)
 
     # ------------------------------------------------------------------
     # Handler registration
@@ -1238,15 +1701,6 @@ class TopstepXBroker:
         instr_list = list(instruments)
         if not instr_list:
             raise ValueError("Must subscribe to at least one instrument")
-        if len(instr_list) > 1:
-            # Multi-instrument requires one suite per symbol or the SDK's
-            # multi-instrument suite (depends on version). Out of scope
-            # for first ship; flag explicitly so it doesn't silently break.
-            raise NotImplementedError(
-                "Multi-instrument subscription not yet implemented. "
-                "Use one TopstepXBroker per instrument for now."
-            )
-
         primary = instr_list[0]
         tf_list = list(timeframes)
 
@@ -1261,6 +1715,14 @@ class TopstepXBroker:
             timeframes=tf_list,
         )
         self._instruments = instr_list
+
+        # Create one suite per secondary instrument for bar events.
+        for _sec_instr in instr_list[1:]:
+            self._extra_suites[_sec_instr] = await self._TradingSuite.create(
+                instrument=_sec_instr,
+                timeframes=tf_list,
+            )
+            log.info("TopstepXBroker: secondary suite created for %s", _sec_instr)
 
         # Wire SDK events → our handlers.
         # events.on(event_type, handler) — NOT a decorator factory.
@@ -1310,6 +1772,7 @@ class TopstepXBroker:
                 to_send.sort(key=lambda b: b.ts)
 
                 for bar in to_send:
+                    self._update_mfe_mae(bar)
                     await self._fanout(self._bar_handlers, bar)
                     _last_bar_ts = bar.ts
 
@@ -1348,8 +1811,8 @@ class TopstepXBroker:
             await self._maybe_move_stop_to_be(primary, price)
             now = _utcnow()
             minute_start = now.replace(second=0, microsecond=0)
-            if self._forming_bar_minute != minute_start:
-                self._forming_bar = Bar(
+            if self._forming_bar_minutes.get(primary) != minute_start:
+                self._forming_bars[primary] = Bar(
                     instrument=primary,
                     timeframe=tf_list[0],
                     ts=minute_start,
@@ -1359,10 +1822,10 @@ class TopstepXBroker:
                     close=price,
                     volume=1,
                 )
-                self._forming_bar_minute = minute_start
-            elif self._forming_bar is not None:
-                fb = self._forming_bar
-                self._forming_bar = Bar(
+                self._forming_bar_minutes[primary] = minute_start
+            elif self._forming_bars.get(primary) is not None:
+                fb = self._forming_bars[primary]
+                self._forming_bars[primary] = Bar(
                     instrument=fb.instrument,
                     timeframe=fb.timeframe,
                     ts=fb.ts,
@@ -1442,12 +1905,16 @@ class TopstepXBroker:
                 if order_id and order_id in self._pending_brackets:
                     # Definitive entry fill — bracket registered, place stop+target.
                     bracket_data = self._pending_brackets.pop(order_id)
+                    # OCO entry (news_straddle): if this is one leg of a resting
+                    # stop straddle, cancel the other leg before it can also fill.
+                    self._cancel_oco_sibling(order_id)
                     bracket_data["fill_price"] = fill.fill_price
+                    bracket_data["entry_time"] = fill.ts.timestamp()
                     log.info(
                         "Entry fill confirmed order=%s @ %s — placing stop+target",
                         order_id, fill.fill_price,
                     )
-                    if bracket_data.get("partial_r", Decimal("0")) > 0:
+                    if bracket_data.get("partial_r", Decimal("0")) > 0 or bracket_data.get("tp1_price") is not None:
                         asyncio.create_task(self._place_partial_bracket_after_fill(bracket_data))
                     else:
                         asyncio.create_task(self._place_bracket_after_fill(bracket_data))
@@ -1462,6 +1929,7 @@ class TopstepXBroker:
                         order_id, paired_id,
                     )
                     asyncio.create_task(self._cancel_order(paired_id))
+                    self._mfe_tracker.pop(pair_info.get("instrument", fill.instrument), None)
 
                     # Compute realized P&L from price delta × contract multiplier.
                     entry_price = pair_info["entry_price"]
@@ -1555,6 +2023,98 @@ class TopstepXBroker:
                 await self._emit_equity_snapshot(fill.ts)
 
             await self._suite.events.on(event_type, _on_fill_event)
+
+        # Wire bar events for each secondary instrument.
+        # Fills stay wired to the primary suite only (account-level; dedup handles
+        # any cross-suite duplicates via _processed_fill_ids).
+        for _ei in instr_list[1:]:
+            _es = self._extra_suites[_ei]
+            _last_ts: list = [None]  # mutable ref; one per instrument per loop iteration
+
+            async def _on_sec_bar(event, _ei=_ei, _last_ts=_last_ts):
+                data = event.data
+                inner = data.get("data") or data
+                ts_raw = (
+                    data.get("bar_time")
+                    or inner.get("timestamp")
+                    or data.get("t")
+                    or data.get("timestamp")
+                )
+                ts = self._coerce_ts(ts_raw)
+                try:
+                    window_start = ts - timedelta(minutes=60)
+                    recent = await self.get_historical_bars(
+                        timeframe=tf_list[0],
+                        start_time=window_start,
+                        end_time=ts,
+                        instrument=_ei,
+                    )
+                    to_send = [
+                        b for b in recent
+                        if b.ts < ts and (_last_ts[0] is None or b.ts > _last_ts[0])
+                    ]
+                    to_send.sort(key=lambda b: b.ts)
+                    for bar in to_send:
+                        await self._fanout(self._bar_handlers, bar)
+                        _last_ts[0] = bar.ts
+                    if to_send:
+                        log.info(
+                            "_on_new_bar(%s): sent %d bars (%s..%s)",
+                            _ei, len(to_send),
+                            to_send[0].ts.isoformat(), to_send[-1].ts.isoformat(),
+                        )
+                    else:
+                        log.info("_on_new_bar(%s): no new bars (event=%s)", _ei, ts.isoformat())
+                except Exception:
+                    log.exception("_on_new_bar(%s) failed", _ei)
+                await self._emit_equity_snapshot(ts)
+
+            async def _on_sec_quote(event, _ei=_ei):
+                data = event.data
+                bid, ask = data.get("bid"), data.get("ask")
+                if bid is None or ask is None:
+                    return
+                try:
+                    price = Decimal(str((float(bid) + float(ask)) / 2))
+                except (ValueError, TypeError):
+                    return
+                await self._maybe_move_stop_to_be(_ei, price)
+                now = _utcnow()
+                minute_start = now.replace(second=0, microsecond=0)
+                if self._forming_bar_minutes.get(_ei) != minute_start:
+                    self._forming_bars[_ei] = Bar(
+                        instrument=_ei,
+                        timeframe=tf_list[0],
+                        ts=minute_start,
+                        open=price,
+                        high=price,
+                        low=price,
+                        close=price,
+                        volume=1,
+                    )
+                    self._forming_bar_minutes[_ei] = minute_start
+                elif self._forming_bars.get(_ei) is not None:
+                    fb = self._forming_bars[_ei]
+                    self._forming_bars[_ei] = Bar(
+                        instrument=fb.instrument,
+                        timeframe=fb.timeframe,
+                        ts=fb.ts,
+                        open=fb.open,
+                        high=max(fb.high, price),
+                        low=min(fb.low, price),
+                        close=price,
+                        volume=fb.volume + 1,
+                    )
+
+            await _es.events.on(EventType.NEW_BAR, _on_sec_bar)
+            await _es.events.on(EventType.QUOTE_UPDATE, _on_sec_quote)
+            for _conn_event in ("CONNECTED", "DISCONNECTED"):
+                try:
+                    _conn_type = getattr(EventType, _conn_event)
+                    _handler = _on_feed_connected if _conn_event == "CONNECTED" else _on_feed_disconnected
+                    await _es.events.on(_conn_type, _handler)
+                except AttributeError:
+                    pass
 
         log.info("Subscribed: instruments=%s timeframes=%s", instr_list, tf_list)
 

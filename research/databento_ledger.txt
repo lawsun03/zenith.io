@@ -1,0 +1,9 @@
+CAP: $20.00 (weekend research loop — hard limit, estimate-only before any fetch)
+TOTAL SPENT: $11.20
+--- entries below: YYYY-MM-DD $X.XX <symbol> <range> ---
+2026-06-14 $3.87 ES.v.0 2021-01-01->2024-01-01 (B60: MES/ES 5y expansion — 2024-2026 already on disk)
+2026-06-14 $3.81 GC.v.0 2021-01-01->2024-01-01 (supply/demand gold pre-2024 regime test — Lawrence-requested; 2024-2026 already on disk)
+2026-06-14 $1.06 NQ.v.0 ohlcv-1s 47 CPI windows [-30m,+90m] (B85: CPI straddle entry-bar 1s confirmation — Lawrence-requested)
+2026-06-14 $1.01 ES.v.0 ohlcv-1s 47 CPI windows (B91: ES CPI straddle 1s confirmation — Lawrence-requested)
+2026-06-14 $0.94 GC.v.0 ohlcv-1s 47 CPI windows (B91: gold CPI straddle 1s confirmation)
+2026-06-14 $0.52 GC.v.0 ohlcv-1s 32 FOMC windows (B91: gold FOMC straddle 1s confirmation)

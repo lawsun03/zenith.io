@@ -11,12 +11,13 @@ Two layers:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.bot_config import StrategyParams
 from app.broker.events import Bar, MarkToMarket
 from app.broker.paper import PaperBroker
 from app.execution.engine import (
@@ -24,12 +25,12 @@ from app.execution.engine import (
     OrderOutcome,
     SignalEmitted,
     StrategyRunner,
-    _snapshot_strategy_state,
 )
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
+from app.strategy.grader import SetupGrader
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 
 ET = ZoneInfo("America/New_York")
@@ -56,7 +57,48 @@ def in_ny_am(minute_offset: int) -> datetime:
 
 
 def make_runner(instrument: str = "MGC") -> StrategyRunner:
-    """Default-config runner matching the strategy test settings."""
+    """Default-config runner matching the strategy test settings.
+
+    Session filter is disabled (empty list) so the hand-crafted bar timestamps
+    always pass. Grader is seeded with HTF swings that bracket the test price
+    range so target clarity passes — the engine tests verify plumbing, not
+    grader quality criteria.
+    """
+    grader = SetupGrader()
+    # Seed HTF swings around the test price range (~2392–2404) so the grader's
+    # target-clarity and premium/discount checks can resolve. Without these the
+    # grader grades every test signal "B" (no target) and blocks it, which would
+    # break all engine tests that rely on signals reaching the broker.
+    grader.update_htf_swings(
+        highs=[Decimal("2410"), Decimal("2405")],
+        lows=[Decimal("2385"), Decimal("2390")],  # max(lows_below ~2399.5) = 2390 → htf_mid=(2405+2390)/2=2397.5
+    )
+    # Seed a session range for "NY AM" so P/D check has a midpoint.
+    # Short signal entry is ~2399.5. Session low set to 2385 → sess_mid=(2410+2385)/2=2397.5.
+    # Entry 2399.5 > 2397.5 (sess_mid) AND > 2397.5 (htf_mid) → short is in premium. Passes P/D.
+    from app.broker.events import Bar as _Bar
+    _seed_bar = _Bar(
+        instrument=instrument, timeframe="1min", ts=in_ny_am(0),
+        open=Decimal("2400"), high=Decimal("2410"), low=Decimal("2385"), close=Decimal("2400"),
+        volume=100,
+    )
+    grader.update_session_range(_seed_bar, "NY AM")
+    # Seed a synthetic 30min bearish FVG covering [2398.0, 2401.5] so the grader's
+    # _htf_singularity_rescue can contain the gapping-sack cluster.
+    # SHORT_SIGNAL_BARS at bar 15 produces: signal iFVG [2400.2, 2400.5] and a
+    # same-side bearish overlap [2398.3, 2400.8] → cluster [2398.3, 2400.8].
+    # The rescue FVG must satisfy: low <= 2398.3 and high >= 2400.8.
+    # Bearish 3-bar FVG: b1.low > 2400.8, b3.high < 2398.3.
+    _b1 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(0),
+               open=Decimal("2403"), high=Decimal("2405"), low=Decimal("2402"), close=Decimal("2402"),
+               volume=100)
+    _b2 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(30),
+               open=Decimal("2401"), high=Decimal("2401"), low=Decimal("2399"), close=Decimal("2400"),
+               volume=100)
+    _b3 = _Bar(instrument=instrument, timeframe="30min", ts=in_ny_am(60),
+               open=Decimal("2398"), high=Decimal("2398.0"), low=Decimal("2396"), close=Decimal("2397"),
+               volume=100)
+    grader.update_delivery_fvgs([_b1, _b2, _b3])
     return StrategyRunner(
         instrument=instrument,
         timeframe="1min",
@@ -75,29 +117,41 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
             stop_buffer=Decimal("0.30"),
             r_multiple=Decimal("2.0"),
         )),
+        grader=grader,
+        strategy_cfg=StrategyParams(ifvg_session_windows=[], ifvg_entry_mode="close"),
     )
 
 
 # Bar sequence designed to fire a SHORT signal in NY AM.
 # Same scenario as test_strategy.py but reused here for the engine.
+# Includes a prior bullish FVG [2399.0, 2399.5] (bars 5-7) so the
+# bearish displacement bar (bar 14, close=2398.5 < fvg.low=2400.2) can
+# perform an iFVG inversion and emit a signal via the composer.
 SHORT_SIGNAL_BARS = [
     # Warmup (5 bars) — quiet, builds ATR.
-    ("2400", "2400.4", "2399.6", "2400.1"),
-    ("2400.1", "2400.5", "2399.8", "2400.2"),
-    ("2400.2", "2400.6", "2399.9", "2400.3"),
-    ("2400.3", "2400.7", "2400", "2400.4"),
-    ("2400.4", "2400.8", "2400.1", "2400.5"),
+    ("2400", "2400.4", "2399.6", "2400.1"),    # 0
+    ("2400.1", "2400.5", "2399.8", "2400.2"),  # 1
+    ("2400.2", "2400.6", "2399.9", "2400.3"),  # 2
+    ("2400.3", "2400.7", "2400", "2400.4"),    # 3
+    ("2400.4", "2400.8", "2400.1", "2400.5"),  # 4
+    # 3 bars forming a prior bullish FVG [2399.0, 2399.5].
+    # All subsequent bars have low > 2399.0 until the displacement bar,
+    # so this FVG accumulates more bullish FVGs without being mitigated.
+    ("2399.5", "2399.0", "2398.5", "2398.8"),  # 5 b1: high=2399.0
+    ("2398.8", "2399.2", "2398.7", "2399.0"),  # 6 middle
+    ("2399.0", "2400.2", "2399.5", "2400.0"),  # 7 b3: low=2399.5 > 2399.0 → bullish FVG
     # Build swing high.
-    ("2400.5", "2401", "2400.3", "2400.8"),
-    ("2400.8", "2403", "2400.5", "2402.5"),
-    ("2402.5", "2402.8", "2401.5", "2401.8"),
-    ("2401.8", "2402.5", "2401", "2401.5"),
+    ("2400.5", "2401", "2400.3", "2400.8"),    # 8
+    ("2400.8", "2403", "2400.5", "2402.5"),    # 9 SWING HIGH candidate
+    ("2402.5", "2402.8", "2401.5", "2401.8"),  # 10
+    ("2401.8", "2402.5", "2401", "2401.5"),    # 11 confirms swing high
     # Pattern B sweep of 2403.
-    ("2401.5", "2403.5", "2401", "2401.5"),
-    # FVG window: b1, b2 (displacement), b3 (gaps down) → bearish FVG.
-    ("2401.5", "2401.7", "2400.8", "2401"),
-    ("2401", "2401.2", "2398.4", "2398.5"),
-    ("2398.5", "2398.3", "2397", "2397.5"),
+    ("2401.5", "2403.5", "2401", "2401.5"),    # 12 SWEEP
+    # Displacement window: b1, b2 (displacement), b3.
+    ("2401.5", "2401.7", "2400.8", "2401"),    # 13 b1
+    # Bearish displacement (b2): close=2398.5 < fvg.low of most recent bullish FVG → iFVG.
+    ("2401", "2401.2", "2398.4", "2398.5"),    # 14 DISPLACE
+    ("2398.5", "2398.3", "2397", "2397.5"),    # 15 b3
 ]
 
 
@@ -131,6 +185,45 @@ async def test_engine_idempotent_start():
     await engine.start()
     assert len(broker._bar_handlers) == 1
     await engine.stop()
+
+
+def test_runner_records_grader_b_rejection():
+    """An unseeded grader grades the test short 'B' (no structural target); the
+    runner records it as last_reject on the rejecting bar so the engine can surface
+    it to the rejection ledger. last_reject is cleared each bar — capture per-bar,
+    exactly as ExecutionEngine._handle_bar reads it right after on_bar()."""
+    runner = make_runner()
+    runner.grader = SetupGrader()  # fresh/unseeded -> grader-B (no target) -> reject
+    rejects = []
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        runner.on_bar(bar(in_ny_am(i), o, h, l, c))
+        if runner.last_reject is not None:
+            rejects.append(runner.last_reject)
+    assert rejects, "expected a grader-B rejection to be recorded"
+    assert rejects[-1].reason.startswith("grader_")
+    assert rejects[-1].side == "short"
+
+
+async def test_engine_invokes_on_reject_on_grader_b():
+    """A runner-internal rejection (grader-B) with no placed signal is surfaced
+    to the engine's on_reject callback (replay_mode keeps is_stale False)."""
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    runner = make_runner()
+    runner.grader = SetupGrader()  # unseeded -> grader-B
+    captured: list[tuple[str, str, str]] = []
+
+    async def on_reject(info, instrument: str) -> None:
+        captured.append((instrument, info.reason, info.side))
+
+    engine = ExecutionEngine(broker, state, [runner], on_reject=on_reject, replay_mode=True)
+    await broker.connect()
+    await engine.start()
+    for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
+        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await asyncio.sleep(0)
+    await engine.stop()
+    assert any(r.startswith("grader_") for _, r, _ in captured), captured
 
 
 # =====================================================================
@@ -172,9 +265,10 @@ async def test_full_replay_short_signal_to_target_hit():
     assert captured_outcomes[0].placed is True
     assert captured_outcomes[0].reason == "allowed"
 
-    # We're SHORT now. Feed a bar that hits the target.
-    sig = captured_signals[0]
-    target = sig.target
+    # We're SHORT now. Feed a bar that hits the target. The broker fills at
+    # market (last close) and re-anchors the bracket to the fill, so read the
+    # actual placed target rather than the signal's.
+    target = Decimal(str(broker.open_brackets()[0]["target"]))
     # Bar that prints below target → take-profit fills.
     target_hit_bar = bar(
         in_ny_am(len(SHORT_SIGNAL_BARS)),
@@ -263,7 +357,9 @@ async def test_lockout_mid_position_triggers_flatten():
     )
     await asyncio.sleep(0)
 
-    # Manually open a position via the broker.
+    # Seed a bar so the broker has a market price (fills anchor to last close,
+    # and flatten() needs it to price the exit), then open a position.
+    await broker.inject_bar(bar(in_ny_am(0), "2400", "2401", "2399", "2400"))
     await broker.place_bracket(
         instrument="MGC",
         side="long",
@@ -294,9 +390,12 @@ async def test_lockout_mid_position_triggers_flatten():
 
 async def test_signal_denied_when_already_at_max_contracts():
     """
-    If we've already opened a position elsewhere (max_contracts reached
-    via direct broker calls), a new signal hits the gate at MAX_CONTRACTS
-    and is denied — the broker is NEVER asked to place.
+    If we're already at max contracts in the SAME direction as the signal,
+    the gate denies with MAX_CONTRACTS and the broker is never asked to place.
+
+    When the new signal is OPPOSITE to the open position (which is what
+    SHORT_SIGNAL_BARS produces against a long position), the engine instead
+    initiates a reversal flatten — verified in the reversal path test.
     """
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())  # max=30
@@ -305,10 +404,11 @@ async def test_signal_denied_when_already_at_max_contracts():
     await broker.connect()
     await engine.start()
 
-    # Pre-fill state to 30 open contracts (max for $50K Combine).
+    # Pre-fill state to 30 short contracts — same direction as the SHORT signal.
+    # With 30 shorts open, any additional short is denied by MAX_CONTRACTS.
     state.record_fill(
         realized_pnl_delta=Decimal("0"),
-        contracts_delta=30,
+        contracts_delta=-30,
         ts=in_ny_am(0),
     )
 
@@ -317,7 +417,7 @@ async def test_signal_denied_when_already_at_max_contracts():
         captured.append(out)
     engine.on_signal = cap
 
-    # Drive bars; signal will fire but gate denies.
+    # Drive bars; signal will fire but gate denies (same-side at max).
     for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
         await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
         await asyncio.sleep(0)
@@ -325,6 +425,50 @@ async def test_signal_denied_when_already_at_max_contracts():
     assert len(captured) == 1
     assert captured[0].placed is False
     assert captured[0].reason == "MAX_CONTRACTS"
+
+    await engine.stop()
+
+
+async def test_opposite_signal_reverses_even_with_headroom():
+    """
+    Regression for the 2026-06-07 stacked-bracket incident.
+
+    The flatten-before-reverse machinery used to trigger ONLY on a
+    MAX_CONTRACTS denial. With max_contracts=30 and a small open position,
+    an opposite-side signal does NOT exhaust headroom, so the pretrade gate
+    Allows it — and the engine placed a SECOND, opposing bracket that netted
+    against the existing position (long 5 + short 6 -> tangled net -1 with two
+    live brackets, leaving an orphan). The engine must reverse, not stack.
+    """
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())  # max_contracts=30
+    engine = ExecutionEngine(broker, state, [make_runner()], replay_mode=True)
+    await broker.connect()
+    await engine.start()
+
+    # Open LONG 5 — far under the 30 cap, so plenty of headroom remains.
+    state.record_fill(
+        realized_pnl_delta=Decimal("0"),
+        contracts_delta=5,
+        ts=in_ny_am(0),
+    )
+
+    placed: list[dict] = []
+    orig_place = broker.place_bracket
+    async def spy_place(**kw):
+        placed.append(kw)
+        return await orig_place(**kw)
+    broker.place_bracket = spy_place
+
+    # Opposite-side (short) signal while long. Gate would Allow it (headroom).
+    short_sig = _signal("1900", "1905", "1890", side="short")
+    outcome = await engine._act_on_signal(short_sig)
+
+    # Must defer to a reversal flatten, NOT place a stacked opposing bracket.
+    assert outcome.placed is False
+    assert outcome.reason == "reversal_pending"
+    assert "MGC" in engine._pending_reversal
+    assert placed == [], "must not stack a second bracket on the open position"
 
     await engine.stop()
 
@@ -449,12 +593,12 @@ class _StubLevels:
     def find_target(self, side, entry, stop, min_r): return self._r
 
 
-async def _run_short_signal(engine, broker):
+async def _run_short_signal(engine, broker, minute_offset: int = 0):
     captured = []
     async def cap(_, out): captured.append(out)
     engine.on_signal = cap
     for i, (o, h, l, c) in enumerate(SHORT_SIGNAL_BARS):
-        await broker.inject_bar(bar(in_ny_am(i), o, h, l, c))
+        await broker.inject_bar(bar(in_ny_am(i + minute_offset), o, h, l, c))
         await asyncio.sleep(0)
     return captured
 
@@ -677,112 +821,52 @@ async def test_htf_live_toggle_takes_effect_without_restart():
     engine.htf_bias = _StubBias("bullish")
     engine._htf_warned = False
 
-    second = await _run_short_signal(engine, broker)
+    # Distinct timestamps so the second run forms a FRESH swing. The liquidity
+    # tracker dedupes a swept swing by value-identity (kind/price/ts), so
+    # replaying the same bar timestamps is correctly treated as the
+    # already-swept swing and produces no new signal.
+    second = await _run_short_signal(engine, broker, minute_offset=80)
     assert len(second) == 1
     assert second[0].placed is False
     assert second[0].reason == "htf_bias"
 
 
 # =====================================================================
-# _snapshot_strategy_state
+# CPI-day router gate
 # =====================================================================
-
-def test_snapshot_empty_when_kz_levels_none():
-    """Returns empty collections when runner has no KZ tracker."""
-    runner = make_runner()
-    state = _snapshot_strategy_state(runner)
-    assert state["instrument"] == "MGC"
-    assert state["kz_ranges"] == {}
-    assert state["kz_pending_a"] == []
-    assert state["awaiting_sweeps"] == []
-
-
-def test_snapshot_kz_ranges_serialized_as_strings():
-    """Finalized KZ ranges appear as string decimals."""
-    from app.strategy.kz_levels import KillzoneLevelTracker
-    runner = make_runner()
-    runner.kz_levels = KillzoneLevelTracker()
-    runner.kz_levels._kz_ranges["London"] = (Decimal("103"), Decimal("98"))
-    state = _snapshot_strategy_state(runner)
-    assert state["kz_ranges"] == {"London": {"high": "103", "low": "98"}}
-
-
-def test_snapshot_pending_a_keys_included():
-    """Pattern A tags in progress appear in kz_pending_a."""
-    from app.strategy.kz_levels import KillzoneLevelTracker
-    runner = make_runner()
-    runner.kz_levels = KillzoneLevelTracker()
-    runner.kz_levels._kz_ranges["London"] = (Decimal("103"), Decimal("98"))
-    runner.kz_levels._pending_a["London_high"] = Decimal("103.3")
-    state = _snapshot_strategy_state(runner)
-    assert "London_high" in state["kz_pending_a"]
-
-
-def test_snapshot_awaiting_sweeps_serialized():
-    """Awaiting sweep entries are serialized with correct fields and string price."""
-    from datetime import timezone
-    from app.strategy.liquidity import Swing, SweepEvent
-    from app.strategy.composer import _Awaiting
-    runner = make_runner()
-    # Inject a synthetic _Awaiting entry directly into the composer
-    swing = Swing(kind="high", price=Decimal("103"), bar_ts=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc), confirmed_ts=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc))
-    sweep = SweepEvent(side="high", swept_swing=swing, pattern="B_one_bar", sweep_extreme=Decimal("103.3"), completed_at=datetime(2026, 5, 28, 9, 0, tzinfo=timezone.utc))
-    runner.composer._awaiting.append(_Awaiting(sweep=sweep, bars_since_sweep=2, killzone_name="London", source="kz_level"))
-    state = _snapshot_strategy_state(runner)
-    assert len(state["awaiting_sweeps"]) == 1
-    s = state["awaiting_sweeps"][0]
-    assert s["side"] == "high"
-    assert s["source"] == "kz_level"
-    assert s["price"] == "103"
-    assert s["bars_elapsed"] == 2
-    assert s["killzone"] == "London"
-
-
-# =====================================================================
-# Bar router — signal_instrument field on StrategyRunner
-# =====================================================================
-
-def test_bar_router_empty_when_no_signal_instrument():
-    """Default runner (signal_instrument empty) produces empty bar router."""
-    broker = PaperBroker(starting_balance=Decimal("50000"))
-    state = RiskState(config=fifty_k_combine())
-    runner = make_runner()
-    # signal_instrument defaults to "" — no routing needed
-    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
-    assert engine._bar_router == {}
-
-
-def test_bar_router_maps_signal_to_execution_instrument():
-    """Runner with signal_instrument='GC' builds {'GC': 'MGC'} router."""
-    broker = PaperBroker(starting_balance=Decimal("50000"))
-    state = RiskState(config=fifty_k_combine())
-    runner = make_runner()
-    runner.signal_instrument = "GC"
-    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
-    assert engine._bar_router == {"GC": "MGC"}
-
 
 @pytest.mark.asyncio
-async def test_gc_bar_routes_to_mgc_runner():
-    """GC bars are processed by the MGC runner when signal_instrument='GC'."""
+async def test_engine_blocks_base_entry_on_cpi_day():
+    # WHY: with cpi_event_dates covering the signal's ET date, _act_on_signal must
+    # hit the CPI_DAY_BLOCK gate and place no order (straddle owns CPI days).
     broker = PaperBroker(starting_balance=Decimal("50000"))
     state = RiskState(config=fifty_k_combine())
-    runner = make_runner()
-    runner.signal_instrument = "GC"
-    engine = ExecutionEngine(broker, state, [runner], replay_mode=True)
+    engine = ExecutionEngine(
+        broker, state, [make_runner()], replay_mode=True,
+        cpi_event_dates=frozenset({date(2026, 5, 11)}),  # in_ny_am(0) is 2026-05-11 ET
+    )
     await broker.connect()
     await engine.start()
 
-    processed = []
-    original_on_bar = runner.on_bar
-    def tracking_on_bar(b):
-        processed.append(b)
-        return original_on_bar(b)
-    runner.on_bar = tracking_on_bar
+    outcome = await engine._act_on_signal(_signal("1900", "1895", "1910", side="long"))
+    assert outcome.placed is False
+    # Assert the CPI gate fired specifically — not some other denial path
+    # (lockout, max-contracts, feed health). placed=False alone is ambiguous.
+    assert outcome.reason == "CPI_DAY_BLOCK"
 
-    # Inject a GC bar — should route to the MGC runner
-    gc_bar = bar(in_ny_am(0), '100', '101', '99', '100', instrument="GC")
-    await broker.inject_bar(gc_bar)
-    await asyncio.sleep(0)
-    assert len(processed) == 1
-    assert processed[0].instrument == "GC"
+
+@pytest.mark.asyncio
+async def test_engine_allows_entry_on_non_cpi_day():
+    # WHY: the router must not leak into normal days — same signal, empty CPI set,
+    # the entry proceeds to placement.
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    engine = ExecutionEngine(
+        broker, state, [make_runner()], replay_mode=True,
+        cpi_event_dates=frozenset(),  # router off => never blocks
+    )
+    await broker.connect()
+    await engine.start()
+
+    outcome = await engine._act_on_signal(_signal("1900", "1895", "1910", side="long"))
+    assert outcome.placed is True

@@ -5,11 +5,11 @@ that paper-mode replay can consume.
 Single symbol:
     python scripts/fetch_bars.py --symbol MGC --days 30 --interval 1
 
-Multiple symbols (saves bars_MGC.csv, bars_MNQ.csv, ...):
+Multiple symbols (saves bars/bars_MGC.csv, bars/bars_MNQ.csv, ...):
     python scripts/fetch_bars.py --symbol MGC,MNQ,ES --days 365
 
 The --out flag overrides the output path for single-symbol fetches only.
-For multi-symbol, files are always saved as bars_{SYMBOL}.csv.
+For multi-symbol, files are always saved as bars/bars_{SYMBOL}.csv.
 
 CSV columns: timestamp,open,high,low,close,volume
 Timestamps are UTC ISO-8601.
@@ -103,7 +103,7 @@ async def _run(symbols: list[str], days: int, interval: int, out: Path | None) -
     async with ProjectX.from_env() as client:
         await client.authenticate()
         for symbol in symbols:
-            dest = out if (out and len(symbols) == 1) else Path(f"bars_{symbol}.csv")
+            dest = out if (out and len(symbols) == 1) else Path("bars") / f"bars_{symbol}.csv"
             await _fetch_one(client, symbol, days, interval, dest)
 
 
@@ -117,7 +117,7 @@ def main() -> None:
     parser.add_argument("--days",     type=int, default=30, help="Days of history (default: 30)")
     parser.add_argument("--interval", type=int, default=1,  help="Bar interval in minutes (default: 1)")
     parser.add_argument("--out", default=None,
-                        help="Output path for single-symbol fetch (default: bars_{SYMBOL}.csv)")
+                        help="Output path for single-symbol fetch (default: bars/bars_{SYMBOL}.csv)")
     args = parser.parse_args()
 
     symbols = [s.strip().upper() for s in args.symbol.split(",") if s.strip()]

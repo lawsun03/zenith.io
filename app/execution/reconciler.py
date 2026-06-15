@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
@@ -56,6 +56,7 @@ from app.broker.protocol import Broker
 from app.risk.state import LockoutReason, RiskState
 
 if TYPE_CHECKING:
+    from app.broker.events import ExitCoverage
     from app.notifications.email import EmailNotifier
 
 log = logging.getLogger(__name__)
@@ -82,9 +83,10 @@ class ReconcileReport:
 
     # Did we take any action?
     drift_detected: bool
-    drift_kind: Optional[str]  # "contract_count" | "balance" | None
+    drift_kind: Optional[str]  # "contract_count" | "balance" | "naked_position" | None
     flattened: bool
     notes: str = ""
+    naked_instruments: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -124,6 +126,17 @@ class ReconcilerConfig:
     # guard; this is the backstop when feed_is_healthy is unavailable.
     min_flat_after_drift_seconds: float = 120.0
 
+    # --- Exit-coverage monitor ---
+    # How long a naked position is tolerated before emergency remediation fires.
+    # First sighting → grace started (log + record timestamp, no action).
+    # Past this window → _remediate_naked() is called.
+    naked_grace_seconds: float = 15.0
+    # Per-instrument emergency stop distance in price points (instrument → Decimal).
+    # Used by _remediate_naked to place a protective stop at avg_price ± distance.
+    emergency_stop_distance: dict[str, Decimal] = field(default_factory=dict)
+    # Emergency target expressed as a multiple of the stop distance (R-multiple).
+    emergency_target_r: Decimal = Decimal("2.0")
+
 
 class Reconciler:
     """
@@ -162,6 +175,10 @@ class Reconciler:
 
         # Last report kept for dashboard inspection.
         self._last_report: Optional[ReconcileReport] = None
+
+        # Per-instrument timestamp of when a position was first seen naked.
+        # Drives the grace window before emergency remediation.
+        self._naked_since: dict[str, datetime] = {}
 
     # ------------------------------------------------------------------
     # Read-only views
@@ -288,12 +305,17 @@ class Reconciler:
             self._last_report = report
             return report
 
+        # Signed net contracts: long = +size, short = -size. The comparison
+        # MUST be signed, not magnitude. A sign-flipped/orphaned position
+        # (internal short 3 vs broker long 3) has equal magnitude but is a
+        # genuine drift — comparing abs() values silently missed it and left
+        # an unprotected position open on a live account (2026-06-07 incident).
         broker_contracts = sum(
-            p.size for p in broker_positions
+            (p.size if p.side == "long" else -p.size) for p in broker_positions
         )
 
-        # open_contracts is signed (negative = short); broker sizes are unsigned.
-        internal_contracts = abs(self.risk_state.open_contracts)
+        # open_contracts is already signed (negative = short).
+        internal_contracts = self.risk_state.open_contracts
         internal_balance = self.risk_state.realized_balance
 
         # First-tick grace: silently accept whatever we find, but mark
@@ -389,6 +411,12 @@ class Reconciler:
             )
             self._last_report = report
             return report
+
+        # ----- Exit-coverage: counts match, but is every contract protected? -----
+        naked_report = await self._check_exit_coverage(ts, broker_positions, broker_balance)
+        if naked_report is not None:
+            self._last_report = naked_report
+            return naked_report
 
         # ----- Balance drift: tolerated up to threshold. -----
         balance_delta = broker_balance - internal_balance
@@ -553,6 +581,148 @@ class Reconciler:
             flattened=False,
             notes=f"balance delta {delta}, adopted broker truth (no lockout)",
         )
+
+    async def _check_exit_coverage(
+        self, ts: datetime, broker_positions: list, broker_balance: Decimal
+    ) -> "Optional[ReconcileReport]":
+        """For each open position, verify exchange exit coverage. Grace on first
+        sighting; remediate once past naked_grace_seconds. Returns a naked report
+        if any instrument was remediated this tick, else None.
+
+        Ticks within the grace window are silent — no action is taken until
+        naked_grace_seconds has elapsed since first sighting."""
+        acted: list[str] = []
+        for p in broker_positions:
+            if p.size == 0:
+                continue
+            cov = await self.broker.exit_coverage(p.instrument)
+            if cov.fully_covered:
+                self._naked_since.pop(p.instrument, None)
+                continue
+            first = self._naked_since.get(p.instrument)
+            if first is None:
+                self._naked_since[p.instrument] = ts
+                log.warning(
+                    "Exit-coverage: %s NAKED (stop %d/%d, target %d/%d) — "
+                    "grace started (%.0fs).",
+                    p.instrument, cov.covered_stop, cov.position_size,
+                    cov.covered_target, cov.position_size,
+                    self.config.naked_grace_seconds,
+                )
+                continue
+            if (ts - first).total_seconds() < self.config.naked_grace_seconds:
+                continue
+            log.error(
+                "Exit-coverage: %s STILL NAKED past grace — remediating "
+                "(stop %d/%d, target %d/%d).",
+                p.instrument, cov.covered_stop, cov.position_size,
+                cov.covered_target, cov.position_size,
+            )
+            await self._remediate_naked(cov)
+            self._naked_since.pop(p.instrument, None)
+            acted.append(p.instrument)
+
+        # Prune naked-state for instruments no longer open (position closed) so a
+        # stale timestamp can't skip the grace window on a future re-entry.
+        seen = {p.instrument for p in broker_positions if p.size > 0}
+        self._naked_since = {k: v for k, v in self._naked_since.items() if k in seen}
+
+        if not acted:
+            return None
+        return ReconcileReport(
+            ts=ts,
+            broker_open_contracts=sum(
+                (p.size if p.side == "long" else -p.size) for p in broker_positions
+            ),
+            broker_balance=broker_balance,
+            internal_open_contracts=self.risk_state.open_contracts,
+            internal_balance=self.risk_state.realized_balance,
+            drift_detected=True,
+            drift_kind="naked_position",
+            flattened=False,
+            naked_instruments=acted,
+            notes=f"emergency exit re-attach for {acted}",
+        )
+
+    async def _remediate_naked(self, cov: "ExitCoverage") -> None:
+        """Re-attach only the missing leg(s). Flatten ONLY if the stop cannot
+        be restored — a missing target is not a capital risk."""
+        stop_gap = cov.position_size - cov.covered_stop
+        target_gap = cov.position_size - cov.covered_target
+        dist = self.config.emergency_stop_distance.get(cov.instrument)
+
+        if stop_gap > 0:
+            if dist is None:
+                log.error(
+                    "Exit-coverage: no emergency_stop_distance for %s — "
+                    "cannot re-attach a safe stop. Flattening.", cov.instrument,
+                )
+                await self.broker.flatten(cov.instrument)
+                self._notify_naked(cov, action="flattened (no stop distance)")
+                return
+            stop_price = (
+                cov.avg_price - dist if cov.side == "long" else cov.avg_price + dist
+            )
+            ok = await self.broker.place_protective_stop(
+                cov.instrument, stop_gap, stop_price
+            )
+            if not ok:
+                log.error(
+                    "Exit-coverage: emergency stop re-attach FAILED on %s — "
+                    "flattening.", cov.instrument,
+                )
+                await self.broker.flatten(cov.instrument)
+                self._notify_naked(cov, action="flattened (stop re-attach failed)")
+                return
+
+        actions: list[str] = []
+        if stop_gap > 0:
+            actions.append(f"re-attached stop x{stop_gap}")
+
+        if target_gap > 0:
+            if dist is None:
+                # Missing target with no distance to price it — not a capital
+                # risk, so we don't flatten, but be honest that nothing was done.
+                log.error(
+                    "Exit-coverage: %s missing target and no emergency distance "
+                    "configured — left without a target (no capital risk).",
+                    cov.instrument,
+                )
+                actions.append("target still missing (no distance configured)")
+            else:
+                target_price = (
+                    cov.avg_price + self.config.emergency_target_r * dist
+                    if cov.side == "long"
+                    else cov.avg_price - self.config.emergency_target_r * dist
+                )
+                ok = await self.broker.place_protective_target(
+                    cov.instrument, target_gap, target_price
+                )
+                if ok:
+                    actions.append(f"re-attached target x{target_gap}")
+                else:
+                    # No capital risk — log, do NOT flatten.
+                    log.error(
+                        "Exit-coverage: emergency target re-attach failed on %s "
+                        "(non-fatal).", cov.instrument,
+                    )
+                    actions.append("target re-attach FAILED")
+
+        self._notify_naked(cov, action="; ".join(actions) if actions else "no action")
+
+    def _notify_naked(self, cov: "ExitCoverage", action: str) -> None:
+        if self.notifier is not None and self.notifier.enabled:
+            asyncio.create_task(self.notifier.send(
+                subject=f"NAKED POSITION on {cov.instrument} — {action}",
+                body=(
+                    f"Exit-coverage monitor found {cov.instrument} unprotected.\n\n"
+                    f"  Position size:   {cov.position_size} ({cov.side})\n"
+                    f"  Avg price:       {cov.avg_price}\n"
+                    f"  Stop covered:    {cov.covered_stop}/{cov.position_size}\n"
+                    f"  Target covered:  {cov.covered_target}/{cov.position_size}\n"
+                    f"  Action taken:    {action}\n"
+                ),
+            ))
 
     async def _emergency_flatten(self) -> bool:
         """

@@ -56,7 +56,7 @@ from app.backtest.runner import (
     run_backtest,
     run_sweep,
 )
-from app.bot_config import load_bot_config
+from app.bot_config import load_bot_config, strategy_for
 from app.replay import load_bars_csv
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
@@ -68,6 +68,7 @@ from app.strategy.liquidity import LiquidityConfig
 # _build_runner honors when strategy_params is set). name → value type.
 STRATEGY_PARAM_TYPES: dict[str, type] = {
     "swing_lookback":             int,
+    "swing_stop_lookback":        int,
     "min_penetration":            Decimal,
     "multi_bar_window":           int,
     "atr_period":                 int,
@@ -84,6 +85,7 @@ STRATEGY_PARAM_TYPES: dict[str, type] = {
     "min_penetration_atr_factor": Decimal,
     "vp_min_target_r":            Decimal,
     "vp_filter_tolerance":        Decimal,
+    "ifvg_sweep_window_bars":     int,
 }
 
 # Legacy mode (--legacy): no VP, bare sub-configs. name → (container, type).
@@ -139,6 +141,7 @@ def build_base_config(args: argparse.Namespace) -> BacktestConfig:
     including the VP gate. Legacy mode (--legacy): bare sub-configs, no VP.
     """
     instrument = args.instrument.upper()
+    no_risk = getattr(args, "no_risk_limits", False)
     if not getattr(args, "legacy", False):
         bot_cfg = load_bot_config(Path(args.config))
         return BacktestConfig(
@@ -146,10 +149,13 @@ def build_base_config(args: argparse.Namespace) -> BacktestConfig:
             bars=iter([]),  # filled in per-run
             starting_balance=Decimal(args.starting_balance),
             soft_buffer=Decimal(args.soft_buffer),
-            strategy_params=bot_cfg.strategy,
+            strategy_params=strategy_for(bot_cfg, instrument),
             enabled_killzones=bot_cfg.enabled_killzones,
             contracts=bot_cfg.contracts,
             risk_per_trade_pct=bot_cfg.risk_per_trade_pct,
+            partial_profit_r=bot_cfg.partial_profit_r,
+            timeframe=args.timeframe,
+            enforce_risk_limits=not no_risk,
         )
     # Legacy bare-config path (no VP).
     return BacktestConfig(
@@ -195,7 +201,7 @@ def write_outputs(
 async def run_single(args: argparse.Namespace) -> int:
     """One backtest, one summary."""
     base = build_base_config(args)
-    base.bars = load_bars_csv(args.bars, base.instrument)
+    base.bars = load_bars_csv(args.bars, base.instrument, args.timeframe)
     base.label = f"single ({args.instrument})"
 
     result = await run_backtest(base)
@@ -221,7 +227,7 @@ async def run_sweep_cmd(
     instrument = base.instrument
 
     def bars_factory():
-        return load_bars_csv(args.bars, instrument)
+        return load_bars_csv(args.bars, instrument, args.timeframe)
 
     results = await run_sweep(base, dims, bars_factory)
 
@@ -229,7 +235,7 @@ async def run_sweep_cmd(
     print()
     print(f"Total runs: {len(results)}")
     print(f"Profitable: {sum(1 for r in results if r.stats.is_profitable)}")
-    print(f"Passed Combine target: {sum(1 for r in results if r.stats.passed_combine)}")
+    print(f"Period net >= +$3k (NOT a Combine verdict; see per-run funded-pipeline summary): {sum(1 for r in results if r.stats.passed_combine)}")
 
     if args.output_dir:
         out = Path(args.output_dir)
@@ -248,7 +254,7 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
     all_results: list[BacktestResult] = []
 
     for symbol in symbols:
-        bars_path = args.bars or f"bars_{symbol}.csv"
+        bars_path = args.bars or f"bars/bars_{symbol}.csv"
         if not Path(bars_path).exists():
             print(f"SKIP {symbol}: {bars_path} not found")
             continue
@@ -261,11 +267,11 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
             dims = [parse_sweep_arg(s, faithful=not args.legacy) for s in args.sweep]
             base = build_base_config(args_copy)
             def bars_factory(p=bars_path, sym=symbol):
-                return load_bars_csv(p, sym)
+                return load_bars_csv(p, sym, args.timeframe)
             results = await run_sweep(base, dims, bars_factory)
         else:
             base = build_base_config(args_copy)
-            base.bars = load_bars_csv(bars_path, symbol)
+            base.bars = load_bars_csv(bars_path, symbol, args.timeframe)
             base.label = symbol
             results = [await run_backtest(base)]
 
@@ -281,7 +287,7 @@ async def run_multi_symbol(args: argparse.Namespace, symbols: list[str]) -> int:
         print(format_sweep_table(all_results))
         print(f"\nTotal runs: {len(all_results)}")
         print(f"Profitable: {sum(1 for r in all_results if r.stats.is_profitable)}")
-        print(f"Passed Combine target: {sum(1 for r in all_results if r.stats.passed_combine)}")
+        print(f"Period net >= +$3k (NOT a Combine verdict; see per-run funded-pipeline summary): {sum(1 for r in all_results if r.stats.passed_combine)}")
 
     return 0
 
@@ -290,12 +296,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="topstep-bot backtest runner")
     parser.add_argument(
         "--bars", default=None,
-        help="Path to OHLCV CSV. Defaults to bars_{SYMBOL}.csv when --symbol is used.",
+        help="Path to OHLCV CSV. Defaults to bars/bars_{SYMBOL}.csv when --symbol is used.",
     )
     parser.add_argument(
         "--symbol", default=None,
         help="Symbol or comma-separated list for multi-symbol runs (e.g. MGC,MNQ,ES). "
-             "Auto-loads bars_{SYMBOL}.csv for each.",
+             "Auto-loads bars/bars_{SYMBOL}.csv for each.",
     )
     parser.add_argument(
         "--instrument", default="MGC",
@@ -319,12 +325,20 @@ def main() -> int:
              "Default is faithful: seed from --config and run VP like live.",
     )
     parser.add_argument(
+        "--timeframe", default="1min",
+        help="Bar timeframe; CSV rows are resampled on the fly (default: 1min)",
+    )
+    parser.add_argument(
         "--sweep", action="append", default=[],
         help="Sweep dimension: key=v1,v2,v3 (repeatable)",
     )
     parser.add_argument(
         "--output-dir", default=None,
         help="Optional directory to write trades/equity/summary CSVs",
+    )
+    parser.add_argument(
+        "--no-risk-limits", action="store_true", dest="no_risk_limits",
+        help="Disable MLL/DLL/DPL for parameter exploration (trade count unaffected by lockouts)",
     )
     parser.add_argument(
         "--log-level", default="WARNING",
@@ -346,7 +360,7 @@ def main() -> int:
         # Single symbol via --symbol, treat as --instrument
         args.instrument = symbols[0]
         if not args.bars:
-            args.bars = f"bars_{symbols[0]}.csv"
+            args.bars = f"bars/bars_{symbols[0]}.csv"
 
     if not args.bars:
         print("ERROR: provide --bars <path> or --symbol <SYMBOL>", file=sys.stderr)

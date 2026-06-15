@@ -21,7 +21,8 @@ import pytest
 from app.bot_config import StrategyParams
 from app.broker.events import Fill
 from app.config import load_config
-from app.main import _async_main, _append_fill_csv, _build_runner
+from app.main import _async_main, _build_runner
+from app.journaling import _append_fill_csv
 from app.replay import load_bars_csv
 
 ET = ZoneInfo("America/New_York")
@@ -97,12 +98,12 @@ def test_append_fill_csv_logs_entry_with_unicode_rationale(tmp_path: Path, monke
     """
     master = tmp_path / "trades.csv"
     daily = tmp_path / "trades_today.csv"
-    monkeypatch.setattr("app.main._TRADES_CSV", master)
-    monkeypatch.setattr("app.main._daily_csv_path", lambda: daily)
+    monkeypatch.setattr("app.journaling._TRADES_CSV", master)
+    monkeypatch.setattr("app.journaling._daily_csv_path", lambda: daily)
 
     rationale = "London: bullish displacement | VP: no VP level ≥2.0R, using 2.5R multiple"
     oid = "3027017076"
-    monkeypatch.setattr("app.main._pending_signal_meta", {oid: {"rationale": rationale}})
+    monkeypatch.setattr("app.journaling._pending_signal_meta", {oid: {"rationale": rationale}})
 
     fill = Fill(
         ts=datetime(2026, 5, 26, 7, 20, tzinfo=timezone.utc),
@@ -126,6 +127,72 @@ def test_append_fill_csv_logs_entry_with_unicode_rationale(tmp_path: Path, monke
         assert rows[0]["rationale"] == rationale  # ≥ preserved
 
 
+def test_append_fill_csv_records_grade_and_slippage(tmp_path: Path, monkeypatch):
+    """ENTRY rows carry grade, grade_reason, and computed slippage (fill - entry)."""
+    master = tmp_path / "trades.csv"
+    daily = tmp_path / "trades_today.csv"
+    monkeypatch.setattr("app.journaling._TRADES_CSV", master)
+    monkeypatch.setattr("app.journaling._daily_csv_path", lambda: daily)
+    oid = "OID-1"
+    monkeypatch.setattr("app.journaling._pending_signal_meta", {oid: {
+        "signal_entry": "4559.7",
+        "grade": "A-",
+        "grade_reason": "All: grade A- - momentum=decent, P/D=ok, fib=low (0.91x)",
+    }})
+    fill = Fill(
+        ts=datetime(2026, 6, 2, 10, 14, tzinfo=timezone.utc),
+        instrument="MGC", side="short", fill_price=Decimal("4558.1"),
+        size=20, is_entry=True, realized_pnl_delta=Decimal("0"),
+        contracts_delta=-20, broker_order_id=oid,
+    )
+    _append_fill_csv(fill)
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["grade"] == "A-"
+    assert rows[0]["grade_reason"].startswith("All: grade A-")
+    # slippage = fill - signal_entry = 4558.1 - 4559.7 = -1.6
+    assert float(rows[0]["slippage"]) == pytest.approx(-1.6)
+
+
+def test_pre_place_captures_grade_into_meta(monkeypatch):
+    """pre_place copies the signal's setup_grade letter + reason into the meta dict."""
+    from types import SimpleNamespace
+    from app.journaling import _make_pre_place, _pending_signal_meta
+    _pending_signal_meta.clear()
+    grade = SimpleNamespace(grade="A", reason="All: grade A - momentum=strong, P/D=ok", score=87)
+    signal = SimpleNamespace(
+        instrument="MGC", side="long", entry=Decimal("4556.4"),
+        stop=Decimal("4555.5"), target=Decimal("4561.0"), killzone="All",
+        sweep_pattern="B_one_bar", sweep_extreme=Decimal("4555.6"),
+        fvg_low=Decimal("4555.8"), fvg_high=Decimal("4556.4"),
+        rationale="bullish setup", setup_grade=grade,
+    )
+    pre_place = _make_pre_place(config_path=None)  # None -> BotConfig() defaults
+    asyncio.run(pre_place(signal, 20))
+    meta = _pending_signal_meta["MGC"]
+    assert meta["grade"] == "A"
+    assert meta["grade_reason"] == "All: grade A - momentum=strong, P/D=ok"
+    assert meta["score"] == "87"
+
+
+def test_append_rejection_csv_writes_row(tmp_path: Path, monkeypatch):
+    """A rejected setup is written to rejections.csv with reason + would-be levels."""
+    from app.journaling import _append_rejection_csv
+    master = tmp_path / "rejections.csv"
+    daily = tmp_path / "rejections_today.csv"
+    monkeypatch.setattr("app.journaling._REJECTIONS_CSV", master)
+    monkeypatch.setattr("app.journaling._daily_rejections_path", lambda: daily)
+    _append_rejection_csv(
+        ts="2026-06-02T12:19:00+00:00", instrument="MGC", side="long",
+        reason="vp_filter", grade="A-", entry="4556.4", stop="4555.5",
+        target="4561.0", killzone="All", rationale="bullish", source="engine",
+    )
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["reason"] == "vp_filter"
+    assert rows[0]["side"] == "long"
+    assert rows[0]["entry"] == "4556.4"
+    assert rows[0]["source"] == "engine"
+
+
 def test_config_loader_validates_mode(monkeypatch):
     """Bad mode value should raise."""
     monkeypatch.setenv("TOPSTEP_BOT_MODE", "wrong")
@@ -134,10 +201,13 @@ def test_config_loader_validates_mode(monkeypatch):
         load_config()
 
 
-def test_config_loader_defaults(monkeypatch):
+def test_config_loader_defaults(monkeypatch, tmp_path):
     """Required values present, others take defaults."""
     monkeypatch.setenv("TOPSTEP_BOT_MODE", "paper")
     monkeypatch.setenv("TOPSTEP_BOT_INSTRUMENT", "mgc")  # lowercase OK
+    # Point away from the repo's live bot_config.json — by design it
+    # overrides env instrument/timeframes, which is not under test here.
+    monkeypatch.setenv("BOT_CONFIG_PATH", str(tmp_path / "missing.json"))
     cfg = load_config()
     assert cfg.mode == "paper"
     assert cfg.instrument == "MGC"
@@ -213,3 +283,50 @@ async def test_paper_mode_full_run(tmp_path: Path, monkeypatch):
 
     # If we got here without a different exception, the cleanup ran.
     # That's the success condition.
+
+
+def test_append_excursion_csv_writes_row(tmp_path: Path, monkeypatch):
+    from decimal import Decimal
+    from app.journaling import _append_excursion_csv
+    from app.execution.excursion import ExcursionWindow
+    master = tmp_path / "excursions.csv"
+    daily = tmp_path / "excursions_today.csv"
+    monkeypatch.setattr("app.journaling._EXCURSIONS_CSV", master)
+    monkeypatch.setattr("app.journaling._daily_excursions_path", lambda: daily)
+    w = ExcursionWindow(key="OID-1", kind="trade", side="long",
+                        ref=Decimal("100"), target=Decimal("104"), bars_left=0,
+                        max_high=Decimal("104.5"), min_low=Decimal("99"),
+                        reached_target=True, stop=Decimal("98"),
+                        stop_hit_bar=1, target_hit_bar=2)
+    _append_excursion_csv(w)
+    rows = list(csv.DictReader(master.open(encoding="utf-8")))
+    assert rows[0]["key"] == "OID-1"
+    assert rows[0]["kind"] == "trade"
+    assert rows[0]["stop"] == "98"
+    assert rows[0]["mfe"] == "4.5"
+    assert rows[0]["mae"] == "1"
+    assert rows[0]["reached_target"] == "True"
+    assert rows[0]["stop_hit"] == "True"
+    assert rows[0]["outcome"] == "stopped_then_target"
+
+
+def test_fill_journaler_opens_trade_excursion(monkeypatch, tmp_path):
+    """An ENTRY fill opens an excursion window keyed by broker_order_id."""
+    from app.journaling import _make_fill_journaler
+    from app.execution.excursion import ExcursionTracker
+    from app.api.journal import Journal
+    monkeypatch.setattr("app.journaling._TRADES_CSV", tmp_path / "t.csv")
+    monkeypatch.setattr("app.journaling._daily_csv_path", lambda: tmp_path / "td.csv")
+    monkeypatch.setattr("app.journaling._pending_signal_meta",
+                        {"OID9": {"signal_entry": "100", "target": "104", "stop": "98"}})
+    opened = []
+    tracker = ExcursionTracker(emit=lambda w: None)
+    monkeypatch.setattr(tracker, "open", lambda **k: opened.append(k))
+    on_fill = _make_fill_journaler(Journal(), excursion_tracker=tracker)
+    fill = Fill(ts=datetime(2026, 6, 2, tzinfo=timezone.utc), instrument="MGC",
+                side="long", fill_price=Decimal("100.5"), size=20, is_entry=True,
+                realized_pnl_delta=Decimal("0"), contracts_delta=20, broker_order_id="OID9")
+    asyncio.run(on_fill(fill))
+    assert opened and opened[0]["key"] == "OID9"
+    assert opened[0]["kind"] == "trade" and opened[0]["side"] == "long"
+    assert opened[0]["stop"] == Decimal("98")

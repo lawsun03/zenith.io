@@ -1,0 +1,102 @@
+//@version=6
+// =====================================================================
+// ORB Engine — Zenith parity build (for TradingView validation)
+// Faithful port of app/strategy/orb.py (the ORB half of the deployed
+// combined engine). Purpose: run TradingView's backtester on the SAME
+// rules and confirm it produces the same trades/stats as our Python
+// backtester — an independent cross-check of bar handling, session
+// timing, bracket fills, and EOD flatten.
+//
+// PARITY NOTES (read before comparing):
+//  - Apply on a 5-minute chart of the SAME contract the bot trades
+//    (MNQ1!/NQ1!). Our backtester uses 5-min bars.
+//  - Compare against a Python run with NO partials (partial_profit_r=0)
+//    and swing_stop_lookback irrelevant (ORB uses the OR edge as stop).
+//    The bot's live config books a 1.5R partial; THIS script trades the
+//    full position to a single target — so set partial_r=0 on the Python
+//    side for an apples-to-apples comparison (or add the partial here).
+//  - Rules replicated exactly: opening range = high/low of bars in
+//    [open, open+range_minutes) ET; a later bar CLOSING beyond an edge
+//    fires (closed-bar only); entry = that close; stop = OPPOSITE OR
+//    edge; target = entry ± r_multiple × |entry-stop|; ONE trade/day;
+//    flat by EOD. No FVGs, sweeps, grader, or prior-day-range filter.
+//  - TradingView fills the stop/target intrabar on the SAME bar if both
+//    are touched it assumes the worst (stop first) only with
+//    `calc_on_order_fills`/default — leave defaults for parity.
+// =====================================================================
+strategy("ORB Zenith Parity", overlay=true, pyramiding=0,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     calc_on_every_tick=false, process_orders_on_close=true,
+     initial_capital=50000, commission_type=strategy.commission.cash_per_order,
+     commission_value=0.0)
+
+// ---- inputs (defaults = deployed config) ----
+openH    = input.int(9,    "Session open hour (ET)")
+openM    = input.int(30,   "Session open minute (ET)")
+rangeMin = input.int(15,   "Opening-range minutes")
+rMult    = input.float(2.5,"R multiple (target)")
+flatH    = input.int(15,   "EOD flatten hour (ET)")
+flatM    = input.int(59,   "EOD flatten minute (ET)")
+longOnly = input.bool(false,"Long only")
+
+TZ = "America/New_York"
+
+// ---- ET minute-of-day for this bar (bar open time) ----
+mod = hour(time, TZ) * 60 + minute(time, TZ)
+openMod  = openH * 60 + openM
+rangeEnd = openMod + rangeMin
+flatMod  = flatH * 60 + flatM
+
+// ---- new ET day detection ----
+newDay = na(time[1]) or dayofmonth(time, TZ) != dayofmonth(time[1], TZ) or month(time, TZ) != month(time[1], TZ)
+
+var float orHigh = na
+var float orLow  = na
+var bool  fired  = false
+
+if newDay
+    orHigh := na
+    orLow  := na
+    fired  := false
+
+inRange    = mod >= openMod and mod < rangeEnd
+afterRange = mod >= rangeEnd and mod < flatMod
+
+// ---- build the opening range ----
+if inRange
+    orHigh := na(orHigh) ? high : math.max(orHigh, high)
+    orLow  := na(orLow)  ? low  : math.min(orLow,  low)
+
+// ---- breakout (closed-bar) ----
+rangeReady = afterRange and not na(orHigh) and not na(orLow) and not fired
+longBreak  = rangeReady and close > orHigh
+shortBreak = rangeReady and close < orLow and not longOnly
+
+if longBreak
+    entry = close
+    stop  = orLow
+    r     = entry - stop
+    if r > 0
+        target = entry + r * rMult
+        strategy.entry("ORB_L", strategy.long)
+        strategy.exit("ORB_L_x", "ORB_L", stop=stop, limit=target)
+        fired := true
+
+if shortBreak
+    entry = close
+    stop  = orHigh
+    r     = stop - entry
+    if r > 0
+        target = entry - r * rMult
+        strategy.entry("ORB_S", strategy.short)
+        strategy.exit("ORB_S_x", "ORB_S", stop=stop, limit=target)
+        fired := true
+
+// ---- EOD flatten (backstop; most trades resolve via stop/target) ----
+if mod >= flatMod
+    strategy.close_all(comment="EOD")
+
+// ---- visuals ----
+plot(orHigh, "OR High", color=color.new(color.lime, 0), style=plot.style_linebr)
+plot(orLow,  "OR Low",  color=color.new(color.red, 0),  style=plot.style_linebr)
+bgcolor(inRange ? color.new(color.blue, 90) : na, title="OR window")

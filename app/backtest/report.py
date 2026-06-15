@@ -9,13 +9,23 @@ from pathlib import Path
 from app.backtest.runner import BacktestResult, BacktestStats
 
 
+def _pipeline_lines(stats) -> list[str]:
+    """Pass/bust/payout summary — replaces the misleading period-total
+    'Combine target: PASSED' verdict."""
+    try:
+        from app.backtest.funded_sim import format_pipeline_summary
+        return format_pipeline_summary(stats.equity_curve).splitlines()
+    except Exception as e:  # report must never crash a backtest
+        return [f"(funded-pipeline summary unavailable: {e})"]
+
+
 def format_summary(stats: BacktestStats, label: str = "") -> str:
     sep = "=" * 60
     title = f"BACKTEST SUMMARY: {label}" if label else "BACKTEST SUMMARY"
     lines = [
         sep, title, sep,
         f"Verdict:           {'PROFITABLE' if stats.is_profitable else 'UNPROFITABLE'}",
-        f"Combine target:    {'PASSED' if stats.passed_combine else 'DID NOT PASS'}",
+        *_pipeline_lines(stats),
         "",
         f"Net P&L:           {'+' if stats.net_pnl >= 0 else ''}{stats.net_pnl:.2f}",
         f"  Gross profit:    +{stats.gross_win:.2f}",

@@ -25,7 +25,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -39,61 +39,30 @@ import os
 import sys
 import uuid
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from app.bot_config import BotConfig, load_bot_config, save_bot_config
+from app.bot_config import BotConfig, load_bot_config, save_bot_config, strategy_for
 from app.execution.reconciler import Reconciler
+from app.risk.account_phase import tracker_from_config
 from app.risk.state import RiskState
 from app.strategy.composer import Signal
 from app.strategy.killzone import in_killzone, killzones_from_names
-from app.strategy.kz_levels import KillzoneLevelTracker
 
 from .journal import Journal, _decimal_to_str
+from .schemas import (
+    AskClaudeRequest,
+    BacktestRequest,
+    DatabentoBarsRequest,
+    ForceSignalRequest,
+    NoteRequest,
+    RandomSearchRequest,
+)
 
 if TYPE_CHECKING:
     from app.sync.outbox import Outbox
-
-
-class BacktestRequest(BaseModel):
-    bars_path: str | None = None      # default: bars_<INSTRUMENT>.csv (or fetched)
-    instrument: str | None = None     # default: current config
-    timeframe: str | None = None      # default: current config
-    label: str | None = None
-    starting_balance: str = "50000"
-    start_date: str | None = None     # "YYYY-MM-DD"
-    end_date: str | None = None       # "YYYY-MM-DD"
-    # Per-run overrides. When provided, we write a temporary config
-    # for the backtest subprocess; the live bot's bot_config.json is untouched.
-    strategy: dict[str, Any] | None = None
-    enabled_killzones: list[str] | None = None
-
-
-class RandomSearchRequest(BaseModel):
-    count_per_timeframe: int = 15
-    timeframes: list[str] = ["1min", "5min"]
-    start_date: str
-    end_date: str
-    concurrency: int = 2          # how many subprocesses at once
-    label_prefix: str = "rs"
-    seed: int | None = None       # set for reproducible searches
-
-
-class NoteRequest(BaseModel):
-    note: str = ""
-
-
-class ForceSignalRequest(BaseModel):
-    side: str = "long"          # "long" or "short"
-    entry: str                  # price as string, e.g. "4720.0"
-    stop_distance: str = "2.0"  # points from entry
-    r_multiple: str = "2.0"
-
-
-class AskClaudeRequest(BaseModel):
-    question: str | None = None
 
 
 def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
@@ -174,6 +143,68 @@ def _build_vp_state(vp: Any, cfg: "BotConfig") -> dict:
     }
 
 
+# Maps the bot's instrument symbol to the Databento continuous front-month
+# symbol on GLBX.MDP3 (stype_in="continuous", schema="ohlcv-1m"), as consumed
+# by scripts/fetch_bars_databento.py.
+_DATABENTO_SYMBOL_MAP: dict[str, str] = {
+    "MGC": "GC.c.0",
+    "MES": "ES.c.0",
+    "MNQ": "NQ.c.0",
+}
+
+
+def _bars_csv_path(symbol: str) -> str:
+    """Return the absolute path to the local bars CSV for the given instrument symbol."""
+    return str(Path(__file__).resolve().parent.parent.parent / "bars" / f"bars_{symbol.upper()}.csv")
+
+
+def _csv_cached_through(csv_path: str) -> str | None:
+    """Return the YYYY-MM-DD of the last bar in the CSV, or None if absent/empty."""
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    try:
+        with p.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size == 0:
+                return None
+            chunk = min(512, size)
+            f.seek(-chunk, 2)
+            tail = f.read().decode("utf-8", errors="replace")
+        for line in reversed(tail.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            ts = line.split(",")[0].strip()
+            if len(ts) >= 10:
+                return ts[:10]
+        return None
+    except Exception:
+        return None
+
+
+def _csv_cached_from(csv_path: str) -> str | None:
+    """Return the YYYY-MM-DD of the first data bar in the CSV, or None if absent/empty."""
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                ts = line.split(",")[0].strip()
+                if ts.lower() in ("ts", "timestamp", "datetime"):
+                    continue
+                if len(ts) >= 10:
+                    return ts[:10]
+        return None
+    except Exception:
+        return None
+
+
 def build_app(
     risk_state: RiskState,
     reconciler: Reconciler,
@@ -219,6 +250,26 @@ def build_app(
     # /api/status — the four numbers that matter, plus context
     # ------------------------------------------------------------------
 
+    def _today_trade_stats() -> dict:
+        try:
+            from app.analytics.loader import load_all_trades
+            today = date.today().isoformat()
+            exits = [
+                t for t in load_all_trades()
+                if t["type"] == "EXIT" and t["realized_pnl"] is not None and t["ts"].startswith(today)
+            ]
+            n = len(exits)
+            wins = sum(1 for t in exits if t["realized_pnl"] > 0)
+            return {
+                "trades": n,
+                "wins": wins,
+                "losses": n - wins,
+                "win_rate": round(wins / n, 4) if n else None,
+                "avg_pnl": round(sum(t["realized_pnl"] for t in exits) / n, 2) if n else None,
+            }
+        except Exception:
+            return {"trades": 0, "wins": 0, "losses": 0, "win_rate": None, "avg_pnl": None}
+
     @app.get("/api/status")
     async def status() -> JSONResponse:
         cfg = risk_state.config
@@ -255,6 +306,7 @@ def build_app(
                 if risk_state.locked_out is not None
                 else None
             ),
+
             "last_reconcile": (
                 _serialize_report(reconciler.last_report)
                 if reconciler.last_report is not None
@@ -265,6 +317,7 @@ def build_app(
                 if outbox is not None
                 else None
             ),
+            "daily_trades": _today_trade_stats(),
         }))
 
     # ------------------------------------------------------------------
@@ -282,6 +335,17 @@ def build_app(
     @app.get("/api/reconciles")
     async def reconciles(limit: int = 20) -> JSONResponse:
         return JSONResponse({"items": await journal.recent_reconciles(limit)})
+
+    @app.get("/api/positions")
+    async def get_open_positions() -> JSONResponse:
+        """Open brackets with entry/stop/target for the dashboard positions panel."""
+        if _broker is None:
+            return JSONResponse({"positions": []})
+        try:
+            return JSONResponse({"positions": _broker.open_brackets()})
+        except Exception:
+            log.exception("get_open_positions failed")
+            return JSONResponse({"positions": []})
 
     @app.get("/api/setup_state")
     async def setup_state() -> JSONResponse:
@@ -434,50 +498,92 @@ def build_app(
         cfg = load_bot_config(_bot_config_path)
         return JSONResponse({
             "instrument": cfg.instrument or effective_instrument,
+            "instruments": cfg.instruments or [],
             "timeframes": cfg.timeframes or _effective_timeframes,
             "replay_delay_ms": cfg.replay_delay_ms,
             "replay_start_delay_s": cfg.replay_start_delay_s,
             "account_name": cfg.account_name,
             "entry_mode": cfg.entry_mode,
+            "forming_bar_entries": cfg.forming_bar_entries,
             "contracts": cfg.contracts,
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "partial_profit_r": float(cfg.partial_profit_r),
+            "max_entry_slippage_frac": float(cfg.max_entry_slippage_frac),
             "enabled_killzones": cfg.enabled_killzones,
+            "signal_instrument": cfg.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(cfg.strategy.model_dump()),
+            "strategy_overrides": cfg.strategy_overrides,
+            "emergency_stop_distance": {k: float(v) for k, v in cfg.emergency_stop_distance.items()},
+            "emergency_target_r": float(cfg.emergency_target_r),
+            "naked_grace_seconds": cfg.naked_grace_seconds,
+            "account_phase": cfg.account_phase,
+            "phase_rules": cfg.phase_rules,
+            "phase_shadow": cfg.phase_shadow,
         })
 
-    @app.patch("/api/config")
-    async def patch_config(body: BotConfig) -> JSONResponse:
+    async def _hot_apply(body: BotConfig) -> None:
+        """Save config to disk and hot-apply all fields to the running bot."""
         save_bot_config(body, _bot_config_path)
-        # Hot-apply entry_mode to the running broker so the next signal
-        # uses the new mode without requiring a restart.
         if _broker is not None and hasattr(_broker, "entry_mode"):
             _broker.entry_mode = body.entry_mode
+        if _broker is not None and hasattr(_broker, "_account_name"):
+            _broker._account_name = body.account_name
         if _broker is not None and hasattr(_broker, "partial_profit_r"):
             _broker.partial_profit_r = body.partial_profit_r
+        if _broker is not None and hasattr(_broker, "max_entry_slippage_frac"):
+            _broker.max_entry_slippage_frac = body.max_entry_slippage_frac
         if _engine is not None:
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
+            _engine.forming_bar_entries = body.forming_bar_entries
             _engine.strategy_cfg = body.strategy
-            # Reset the fail-loud warning so a fresh enable+rebuild can re-warn
-            # if the rebuild leaves trackers None.
+            _engine.commission_per_contract = Decimal(str(body.commission_per_contract))
+            _engine.max_contracts_override = body.max_contracts_override
             _engine._htf_warned = False
-        # Hot-apply HTF: (re)build trackers to match the new flags. Without
-        # this, toggling htf_bias_enabled / htf_target_enabled on via the
-        # dashboard would silently no-op until restart (Rule 10).
+            _engine.flatten_enabled = body.flatten_enabled
+            _engine.flatten_time_ct = body.flatten_time_ct
+            _engine.entry_cutoff_time_ct = body.entry_cutoff_time_ct
+            if body.account_phase != "practice":
+                if _engine.phase is None or _engine.phase.phase != body.account_phase:
+                    _engine.phase = tracker_from_config(body)  # fresh tracker on phase change
+                    log.warning("Account phase changed to %s — fresh tracker; verify balance vs TopstepX", body.account_phase)
+            else:
+                _engine.phase = None
         if _htf_rebuild is not None:
             try:
                 await _htf_rebuild(body)
             except Exception:
-                log.exception("PATCH /api/config: HTF tracker rebuild failed")
-        # Hot-apply kz_levels_enabled: wire or unwire per-runner.
-        if _engine is not None:
-            for runner in _engine.runners.values():
-                if body.strategy.kz_levels_enabled and runner.kz_levels is None:
-                    runner.kz_levels = KillzoneLevelTracker()
-                elif not body.strategy.kz_levels_enabled and runner.kz_levels is not None:
-                    runner.kz_levels = None
+                log.exception("_hot_apply: HTF tracker rebuild failed")
+        # Paper/replay/test apps run without a reconciler — hot-apply must not
+        # crash the PATCH for the fields that still applied above.
+        if reconciler is not None:
+            reconciler.config.naked_grace_seconds = body.naked_grace_seconds
+            reconciler.config.emergency_stop_distance = dict(body.emergency_stop_distance)
+            reconciler.config.emergency_target_r = body.emergency_target_r
+
+    @app.patch("/api/config")
+    async def patch_config(request: Request) -> JSONResponse:
+        updates = await request.json()
+        # Merge onto the current saved config so partial patches (e.g. only
+        # changing account_name) don't clobber every other field with defaults.
+        current = load_bot_config(_bot_config_path)
+        base = current.model_dump()
+        if "strategy" in updates and isinstance(updates["strategy"], dict):
+            base["strategy"].update(updates["strategy"])
+            updates = {k: v for k, v in updates.items() if k != "strategy"}
+        base.update(updates)
+        body = BotConfig.model_validate(base)
+        # Validate overrides eagerly: a typo'd field or bad value must 400 here,
+        # not blow up later inside a runner rebuild.
+        try:
+            for inst in body.strategy_overrides:
+                strategy_for(body, inst)
+        except Exception as e:
+            return JSONResponse(
+                {"error": f"invalid strategy_overrides: {e}"}, status_code=400,
+            )
+        await _hot_apply(body)
         return JSONResponse({
             "instrument": body.instrument,
             "timeframes": body.timeframes,
@@ -485,13 +591,75 @@ def build_app(
             "replay_start_delay_s": body.replay_start_delay_s,
             "account_name": body.account_name,
             "entry_mode": body.entry_mode,
+            "forming_bar_entries": body.forming_bar_entries,
             "contracts": body.contracts,
             "risk_per_trade_pct": float(body.risk_per_trade_pct),
             "partial_profit_r": float(body.partial_profit_r),
+            "max_entry_slippage_frac": float(body.max_entry_slippage_frac),
             "enabled_killzones": body.enabled_killzones,
+            "signal_instrument": body.signal_instrument,
             "mode": _mode,
             "strategy": _decimal_to_str(body.strategy.model_dump()),
+            "strategy_overrides": body.strategy_overrides,
+            "emergency_stop_distance": {k: float(v) for k, v in body.emergency_stop_distance.items()},
+            "emergency_target_r": float(body.emergency_target_r),
+            "naked_grace_seconds": body.naked_grace_seconds,
+            "account_phase": body.account_phase,
+            "phase_rules": body.phase_rules,
+            "phase_shadow": body.phase_shadow,
         })
+
+    # ------------------------------------------------------------------
+    # Config presets — named snapshots of bot_config.json
+    # ------------------------------------------------------------------
+
+    _PRESETS_FILE = Path(__file__).parent.parent.parent / "config_presets.json"
+
+    def _load_presets() -> list:
+        if not _PRESETS_FILE.exists():
+            return []
+        try:
+            return json.loads(_PRESETS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+
+    def _save_presets(presets: list) -> None:
+        _PRESETS_FILE.write_text(json.dumps(presets, indent=2), encoding="utf-8")
+
+    @app.get("/api/config/presets")
+    async def get_presets() -> JSONResponse:
+        return JSONResponse([{"name": p["name"], "saved_at": p.get("saved_at", "")} for p in _load_presets()])
+
+    @app.post("/api/config/presets")
+    async def save_preset(request: Request) -> JSONResponse:
+        body = await request.json()
+        name = (body.get("name") or "").strip()
+        if not name:
+            return JSONResponse({"error": "name required"}, status_code=400)
+        cfg = load_bot_config(_bot_config_path)
+        presets = [p for p in _load_presets() if p["name"] != name]
+        presets.append({
+            "name": name,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "config": json.loads(cfg.model_dump_json()),
+        })
+        _save_presets(presets)
+        return JSONResponse({"ok": True})
+
+    @app.delete("/api/config/presets/{name}")
+    async def delete_preset(name: str) -> JSONResponse:
+        presets = [p for p in _load_presets() if p["name"] != name]
+        _save_presets(presets)
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/config/presets/{name}/apply")
+    async def apply_preset(name: str) -> JSONResponse:
+        preset = next((p for p in _load_presets() if p["name"] == name), None)
+        if not preset:
+            return JSONResponse({"error": "preset not found"}, status_code=404)
+        body = BotConfig.model_validate(preset["config"])
+        await _hot_apply(body)
+        return JSONResponse({"ok": True, "name": name})
 
     @app.get("/api/accounts")
     async def list_accounts() -> JSONResponse:
@@ -538,7 +706,7 @@ def build_app(
             })
 
     @app.get("/api/bars")
-    async def get_bars(limit: int = 500, timeframe: str = "") -> JSONResponse:
+    async def get_bars(limit: int = 500, timeframe: str = "", instrument: str = "") -> JSONResponse:
         """
         Recent historical bars for chart pre-population. Live mode only.
         Returns up to `limit` bars at the requested timeframe, or the
@@ -549,9 +717,11 @@ def build_app(
         try:
             cfg = load_bot_config(_bot_config_path)
             tf = timeframe or (cfg.timeframes or _effective_timeframes)[0]
-            # Scale lookback to timeframe so longer TFs get full TopstepX history (~43 trading days).
+            exec_instr = instrument or cfg.instrument or effective_instrument
             _days = {"4h": 60, "1d": 90}.get(tf, 5)
-            bars = await _broker.get_historical_bars(timeframe=tf, limit=limit, days=_days)
+            bars = await _broker.get_historical_bars(
+                timeframe=tf, limit=limit, days=_days, instrument=exec_instr,
+            )
             return JSONResponse({"bars": [
                 {
                     "time": int(b.ts.timestamp()),
@@ -602,7 +772,7 @@ def build_app(
         return JSONResponse(result)
 
     @app.get("/api/forming-bar")
-    async def get_forming_bar() -> JSONResponse:
+    async def get_forming_bar(instrument: str = "") -> JSONResponse:
         """Return the current partially-closed bar for chart display."""
         if _broker is None:
             return JSONResponse(None)
@@ -611,7 +781,7 @@ def build_app(
             return JSONResponse(None)
         cfg = load_bot_config(_bot_config_path)
         tf = (cfg.timeframes or _effective_timeframes)[0]
-        bar = await get_fb(tf)
+        bar = await get_fb(tf, instrument)
         if bar is None:
             return JSONResponse(None)
         return JSONResponse({
@@ -650,6 +820,175 @@ def build_app(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ── Trade Analysis endpoints ─────────────────────────────────────────────
+
+    def _scan_trade_analysis_dates() -> list[dict]:
+        trades_dir = Path("trades")
+        analysis_dir = Path("trade_analysis")
+        dates: set[str] = set()
+        for prefix in ("trades", "excursions", "rejections"):
+            for f in trades_dir.glob(f"{prefix}_*.csv"):
+                m = re.match(rf"{prefix}_(\d{{4}}-\d{{2}}-\d{{2}})\.csv", f.name)
+                if m:
+                    dates.add(m.group(1))
+        results = []
+        for dt in sorted(dates, reverse=True):
+            trades_path = trades_dir / f"trades_{dt}.csv"
+            exc_path = trades_dir / f"excursions_{dt}.csv"
+            rej_path = trades_dir / f"rejections_{dt}.csv"
+            report_path = analysis_dir / f"{dt}.md"
+            trade_count = wins = losses = 0
+            net_pnl = 0.0
+            if trades_path.exists():
+                with open(trades_path, newline="", encoding="utf-8") as fh:
+                    for row in csv.DictReader(fh):
+                        if row.get("type") == "EXIT":
+                            trade_count += 1
+                            pnl = float(row.get("realized_pnl") or 0)
+                            net_pnl += pnl
+                            if pnl > 0:
+                                wins += 1
+                            else:
+                                losses += 1
+            results.append({
+                "date": dt,
+                "has_trades": trades_path.exists(),
+                "has_excursions": exc_path.exists(),
+                "has_rejections": rej_path.exists(),
+                "has_report": report_path.exists(),
+                "trade_count": trade_count,
+                "win_count": wins,
+                "loss_count": losses,
+                "net_pnl": round(net_pnl, 2),
+            })
+        return results
+
+    @app.get("/api/trade-analysis")
+    async def list_trade_analysis() -> JSONResponse:
+        return JSONResponse(_scan_trade_analysis_dates())
+
+    @app.get("/api/trade-analysis/{date}/report")
+    async def get_trade_analysis_report(date: str) -> JSONResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return JSONResponse({"error": "invalid date"}, status_code=400)
+        path = Path("trade_analysis") / f"{date}.md"
+        if not path.exists():
+            return JSONResponse({"error": "report not found"}, status_code=404)
+        return JSONResponse({"date": date, "content": path.read_text(encoding="utf-8")})
+
+    @app.get("/api/trade-analysis/{date}/csv/{csv_type}")
+    async def get_trade_analysis_csv(date: str, csv_type: str) -> StreamingResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            from fastapi import HTTPException
+            raise HTTPException(400, "invalid date")
+        if csv_type not in ("trades", "excursions", "rejections"):
+            from fastapi import HTTPException
+            raise HTTPException(400, "invalid csv_type")
+        path = Path("trades") / f"{csv_type}_{date}.csv"
+        if not path.exists():
+            from fastapi import HTTPException
+            raise HTTPException(404, "file not found")
+        return StreamingResponse(
+            open(path, "rb"),  # noqa: SIM115
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{csv_type}_{date}.csv"'},
+        )
+
+    @app.post("/api/trade-analysis/{date}/run")
+    async def run_trade_analysis(date: str) -> StreamingResponse:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return JSONResponse({"error": "invalid date"}, status_code=400)
+
+        async def _stream() -> AsyncIterator[str]:
+            import anthropic as _anthropic
+
+            def _sse_ta(event_type: str, data: dict) -> str:
+                return f"data: {json.dumps({'type': event_type, **data})}\n\n"
+
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                yield _sse_ta("error", {"message": "ANTHROPIC_API_KEY not set in .env"})
+                return
+
+            trades_dir = Path("trades")
+
+            def _read_csv(name: str) -> str:
+                p = trades_dir / f"{name}_{date}.csv"
+                if not p.exists():
+                    return ""
+                return p.read_text(encoding="utf-8")
+
+            trades_csv = _read_csv("trades")
+            excursions_csv = _read_csv("excursions")
+            rejections_csv = _read_csv("rejections")
+
+            if not trades_csv and not excursions_csv:
+                yield _sse_ta("error", {"message": f"No trade data found for {date}"})
+                return
+
+            prompt = f"""Analyze the bot's trades for {date}. Produce a structured markdown report with:
+
+1. **Headline** — net P&L, trade count, win rate, dominant failure mode
+2. **Session Structure** — time windows visible in the data
+3. **Per-Trade Breakdown** — table with: ET time, symbol, side, grade/score, slippage, contracts, outcome, P&L
+4. **Pattern Summary** — grade distribution, win rate by grade, slippage stats, excursion outcomes
+5. **Dominant Failure Modes** — top 2 with mechanistic explanation
+6. **Prioritized Actions** — 3-4 concrete, evidence-backed fixes
+
+**Trades CSV (all fills):**
+```
+{trades_csv[:8000]}
+```
+
+**Excursions CSV (MFE/MAE/outcome per trade):**
+```
+{excursions_csv[:4000]}
+```
+
+**Rejections CSV (filtered signals):**
+```
+{rejections_csv[:3000]}
+```
+
+Notes:
+- Log timestamps are system-local (CDT = UTC-5); convert to ET for the report
+- `slippage` column in trades CSV = fill - signal_entry (positive = adverse for longs, favorable for shorts — check sign per side)
+- EXIT rows carry realized_pnl; ENTRY rows have pnl=0
+- excursions `outcome`: win/stopped/stopped_then_target/partial_win
+- Grade A-/A/A+ = passes filter; B/C/D/F = would previously have been rejected
+"""
+
+            client = _anthropic.AsyncAnthropic(api_key=api_key)
+            full_text = ""
+
+            yield _sse_ta("status", {"message": f"Generating analysis for {date}…"})
+
+            async with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                async for chunk in stream.text_stream:
+                    full_text += chunk
+                    yield _sse_ta("text_delta", {"delta": chunk})
+
+            # Save report
+            analysis_dir = Path("trade_analysis")
+            analysis_dir.mkdir(exist_ok=True)
+            out_path = analysis_dir / f"{date}.md"
+            header = f"# Trade Analysis — {date}\n\n"
+            out_path.write_text(header + full_text, encoding="utf-8")
+            yield _sse_ta("done", {"saved_to": str(out_path)})
+
+        from collections.abc import AsyncIterator
+        return StreamingResponse(
+            _stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── End Trade Analysis endpoints ──────────────────────────────────────────
 
     @app.post("/api/test-trade")
     async def test_trade() -> JSONResponse:
@@ -816,12 +1155,23 @@ def build_app(
             )
         try:
             new_cfg = load_bot_config(_bot_config_path)
-            instrument = (new_cfg.instrument or effective_instrument).upper()
-            new_runner = _runner_factory(
-                instrument, new_cfg.strategy, new_cfg.enabled_killzones,
-                new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
-            )
-            _engine.runners = {instrument: new_runner}
+            instruments = new_cfg.instruments or [
+                (new_cfg.instrument or effective_instrument).upper()
+            ]
+            instrument = instruments[0]
+            new_runners = [
+                _runner_factory(
+                    inst, strategy_for(new_cfg, inst), new_cfg.enabled_killzones,
+                    new_cfg.timeframes[0] if new_cfg.timeframes else "1min",
+                    signal_instrument=new_cfg.signal_instrument if len(instruments) == 1 else None,
+                )
+                for inst in instruments
+            ]
+            new_runner = new_runners[0]
+            _engine.runners = {r.instrument: r for r in new_runners}
+            _engine._bar_router = {
+                new_runner.signal_instrument: new_runner.instrument
+            } if len(instruments) == 1 and new_runner.signal_instrument and new_runner.signal_instrument != new_runner.instrument else {}
             _engine.strategy_cfg = new_cfg.strategy
             # Reset HTF fail-loud guard so a fresh rebuild can re-warn if needed.
             _engine._htf_warned = False
@@ -839,8 +1189,9 @@ def build_app(
             vp_warmed = None
             if _vp_warmup is not None and new_cfg.strategy.vp_enabled:
                 try:
-                    await _vp_warmup(new_runner, new_cfg)
-                    vp_warmed = bool(new_runner.vp and new_runner.vp.has_prior_profile())
+                    for r in new_runners:
+                        await _vp_warmup(r, new_cfg)
+                    vp_warmed = all(bool(r.vp and r.vp.has_prior_profile()) for r in new_runners)
                 except Exception:
                     log.exception("strategy/reload: VP re-warm failed — filter inactive until session boundary")
                     vp_warmed = False
@@ -867,7 +1218,7 @@ def build_app(
 
     backtests_dir = Path("backtests")
 
-    bars_cache_dir = Path("bars_cache")
+    bars_cache_dir = Path("bars")
 
     async def _fetch_bars_to_csv(
         instrument: str,
@@ -929,6 +1280,85 @@ def build_app(
                 ])
         log.info("Wrote %d bars to %s", len(unique), out_path)
         return out_path
+
+    @app.get("/api/databento/symbols")
+    async def databento_symbols() -> JSONResponse:
+        """Return the instrument symbols supported for Databento fetch."""
+        return JSONResponse({"symbols": sorted(_DATABENTO_SYMBOL_MAP.keys())})
+
+    @app.post("/api/databento/fetch")
+    async def databento_fetch(req: DatabentoBarsRequest) -> JSONResponse:
+        """
+        Fetch Databento bars for the requested date range and symbol.
+        Skips download if local CSV already covers req.end (cache hit).
+        With dry_run=True, returns cost estimate without downloading.
+        """
+        api_key = os.environ.get("DATABENTO_API_KEY")
+        if not api_key:
+            return JSONResponse({"ok": False, "reason": "DATABENTO_API_KEY not set in .env"})
+
+        db_symbol = _DATABENTO_SYMBOL_MAP.get(req.symbol.upper())
+        if db_symbol is None:
+            return JSONResponse(
+                {"ok": False, "reason": f"Unsupported symbol: {req.symbol!r}. Supported: {list(_DATABENTO_SYMBOL_MAP)}"},
+                status_code=400,
+            )
+
+        csv_path = _bars_csv_path(req.symbol)
+        cached_through = _csv_cached_through(csv_path)
+        cached_from = _csv_cached_from(csv_path)
+
+        # Cache hit: skip download only if the end is covered AND no historical gap.
+        needs_backfill = cached_from is not None and cached_from > req.start
+        if not req.dry_run and cached_through is not None and cached_through >= req.end and not needs_backfill:
+            return JSONResponse({
+                "ok": True,
+                "days_fetched": 0,
+                "cached_through": cached_through,
+                "cost_estimate": 0.0,
+            })
+
+        script = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetch_bars_databento.py"
+        cmd = [
+            sys.executable, str(script),
+            "--symbol", db_symbol,
+            "--start", req.start,
+            "--end", req.end,
+            "--out", csv_path,
+        ]
+        if req.dry_run:
+            cmd.append("--estimate-only")
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            return JSONResponse({"ok": False, "reason": "Databento fetch timed out (>120s)"}, status_code=500)
+        except Exception as e:
+            return JSONResponse({"ok": False, "reason": str(e)}, status_code=500)
+
+        if result.returncode != 0:
+            return JSONResponse({
+                "ok": False,
+                "reason": result.stderr.strip() or f"Script exited with code {result.returncode}",
+            }, status_code=500)
+
+        cost_match = re.search(r'\$(\d+\.\d+)', result.stdout)
+        cost = float(cost_match.group(1)) if cost_match else 0.0
+
+        if "fully cached" in result.stdout or "skipping fetch" in result.stdout:
+            days_fetched = 0  # cache hit — the script downloaded nothing
+        else:
+            try:
+                days_fetched = (date.fromisoformat(req.end) - date.fromisoformat(req.start)).days + 1
+            except ValueError:
+                days_fetched = 0
+
+        return JSONResponse({
+            "ok": True,
+            "days_fetched": 0 if req.dry_run else days_fetched,
+            "cached_through": _csv_cached_through(csv_path) or req.end,
+            "cost_estimate": cost,
+        })
 
     @app.post("/api/backtest/run")
     async def run_backtest(req: BacktestRequest) -> JSONResponse:
@@ -994,7 +1424,7 @@ def build_app(
                     status_code=500,
                 )
         else:
-            bars_path = req.bars_path or f"./bars_{instrument}.csv"
+            bars_path = req.bars_path or f"bars/bars_{instrument}.csv"
             if not Path(bars_path).exists():
                 return JSONResponse(
                     {"ok": False, "reason": f"bars file not found: {bars_path}"},
@@ -1007,7 +1437,7 @@ def build_app(
         # config so the subprocess picks them up *without* touching the
         # live bot_config.json. Falls back to the live config otherwise.
         config_path_for_run = str(_bot_config_path)
-        if req.strategy or req.enabled_killzones is not None:
+        if req.strategy or req.enabled_killzones is not None or req.partial_profit_r is not None:
             try:
                 base_cfg = load_bot_config(_bot_config_path).model_dump()
                 if req.strategy:
@@ -1019,6 +1449,8 @@ def build_app(
                     base_cfg["strategy"] = merged_strategy
                 if req.enabled_killzones is not None:
                     base_cfg["enabled_killzones"] = req.enabled_killzones
+                if req.partial_profit_r is not None:
+                    base_cfg["partial_profit_r"] = req.partial_profit_r
                 # Pydantic refuses Decimals in JSON dump output, so coerce.
                 tmp_cfg = backtests_dir / f"_config_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}.json"
                 tmp_cfg.write_text(json.dumps(base_cfg, default=str, indent=2))
@@ -1038,6 +1470,12 @@ def build_app(
         ]
         if req.label:
             cmd += ["--label", req.label]
+        if req.start_date:
+            cmd += ["--start-date", req.start_date]
+        if req.end_date:
+            cmd += ["--end-date", req.end_date]
+        if not req.enforce_risk_limits:
+            cmd += ["--no-risk-limits"]
         try:
             proc = subprocess.Popen(cmd, cwd=Path.cwd())
         except Exception as e:
@@ -1210,6 +1648,22 @@ def build_app(
             "running": state["task"] is not None and not state["task"].done(),
         })
 
+    @app.get("/api/backtest/bars-files")
+    async def list_bars_files() -> JSONResponse:
+        """Local bars CSVs runnable from the UI (replaces the hardcoded map)."""
+        bars_dir = Path("bars")
+        if not bars_dir.exists():
+            return JSONResponse({"files": []})
+        files = []
+        for f in sorted(bars_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
+            files.append({
+                "path": str(f).replace("\\", "/"),
+                "name": f.name,
+                "size_mb": round(f.stat().st_size / 1e6, 1),
+                "modified": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
+            })
+        return JSONResponse({"files": files})
+
     @app.get("/api/backtest/list")
     async def list_backtests() -> JSONResponse:
         if not backtests_dir.exists():
@@ -1230,8 +1684,11 @@ def build_app(
                     "completed_at": data.get("completed_at"),
                     "instrument": data.get("instrument"),
                     "timeframe": data.get("timeframe"),
+                    "start_date": data.get("start_date"),
+                    "end_date": data.get("end_date"),
                     "bars_processed": data.get("bars_processed"),
                     "stats": data.get("stats", {}),
+                    "funded_pipeline": data.get("funded_pipeline"),
                     "ending_balance": data.get("ending_balance"),
                     "bookmarked": bool(data.get("bookmarked", False)),
                 })
@@ -1249,6 +1706,91 @@ def build_app(
         if not f.exists():
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(json.loads(f.read_text()))
+
+    @app.get("/api/research/state")
+    async def research_state() -> JSONResponse:
+        """Read-only snapshot of the autonomous research loop's state files."""
+        rdir = Path("research")
+
+        def _read(name: str) -> str:
+            p = rdir / name
+            try:
+                return p.read_text(encoding="utf-8") if p.exists() else ""
+            except Exception:
+                return ""
+
+        findings = []
+        try:
+            raw = _read("findings.json")
+            if raw:
+                findings = json.loads(raw)
+        except Exception:
+            log.warning("research findings.json unparseable", exc_info=True)
+        loop_log_tail = ""
+        lp = rdir / "loop.log"
+        if lp.exists():
+            try:
+                loop_log_tail = "\n".join(
+                    lp.read_text(encoding="utf-8", errors="replace").splitlines()[-20:])
+            except Exception:
+                pass
+        return JSONResponse({
+            "findings": findings,
+            "backlog_md": _read("BACKLOG.md"),
+            "journal_md": _read("JOURNAL.md"),
+            "lessons_md": _read("LESSONS.md"),
+            "ledger": _read("databento_ledger.txt"),
+            "loop_log_tail": loop_log_tail,
+            "stopped": (rdir / "STOP").exists(),
+        })
+
+    @app.get("/api/backtest/{run_id}/trade-chart")
+    async def backtest_trade_chart(run_id: str, i: int = 0, pad: int = 60) -> JSONResponse:
+        """Bars + markers for one backtest trade (the trade-replay visualizer).
+
+        Slices the run's bars CSV around trade `i` (entry−pad .. exit+pad bars
+        at the run's timeframe) so the frontend can render the trade in
+        context without shipping the whole bar file.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_\-]*", run_id):
+            return JSONResponse({"error": "invalid id"}, status_code=400)
+        f = backtests_dir / f"{run_id}.json"
+        if not f.exists():
+            return JSONResponse({"error": "not found"}, status_code=404)
+        data = json.loads(f.read_text())
+        trades = data.get("trades") or []
+        if not trades:
+            return JSONResponse({"error": "run has no trade list"}, status_code=404)
+        i = max(0, min(i, len(trades) - 1))
+        trade = trades[i]
+        bars_path = data.get("bars_path")
+        if not bars_path or not Path(bars_path).exists():
+            return JSONResponse({"error": f"bars file missing: {bars_path}"},
+                                status_code=404)
+
+        from datetime import datetime as _dt, timedelta as _td
+
+        from app.replay import load_bars_csv as _load
+        tf = data.get("timeframe") or "5min"
+        tf_secs = {"1min": 60, "3min": 180, "5min": 300, "15min": 900,
+                   "30min": 1800, "1h": 3600}.get(tf, 300)
+        entry_ts = _dt.fromisoformat(trade["entry_ts"])
+        exit_ts = _dt.fromisoformat(trade["exit_ts"])
+        lo = entry_ts - _td(seconds=tf_secs * pad)
+        hi = exit_ts + _td(seconds=tf_secs * pad)
+        bars = []
+        for b in _load(bars_path, data.get("instrument", "MNQ"), tf):
+            if b.ts < lo:
+                continue
+            if b.ts > hi:
+                break
+            bars.append({"time": int(b.ts.timestamp()), "open": float(b.open),
+                         "high": float(b.high), "low": float(b.low),
+                         "close": float(b.close)})
+        return JSONResponse({
+            "trade": trade, "bars": bars, "index": i, "total": len(trades),
+            "timeframe": tf, "tf_secs": tf_secs,
+        })
 
     @app.delete("/api/backtest/clear-unbookmarked")
     async def clear_unbookmarked() -> JSONResponse:
@@ -1306,6 +1848,61 @@ def build_app(
         except Exception as e:
             log.exception("bookmark toggle failed")
             return JSONResponse({"ok": False, "reason": str(e)}, status_code=500)
+
+    # ------------------------------------------------------------------
+    # A/B TP variants — serve ab_tp_variants.json for the backtests page
+    # ------------------------------------------------------------------
+
+    _AB_VARIANTS_FILE = Path(__file__).parent.parent.parent / "ab_tp_variants.json"
+
+    @app.get("/api/ab-variants")
+    async def get_ab_variants():
+        if not _AB_VARIANTS_FILE.exists():
+            return JSONResponse([])
+        try:
+            data = json.loads(_AB_VARIANTS_FILE.read_text(encoding="utf-8"))
+            return JSONResponse(data.get("variants", []))
+        except Exception as e:
+            log.warning("Failed to read ab_tp_variants.json: %s", e)
+            return JSONResponse([], status_code=500)
+
+    # ------------------------------------------------------------------
+    # Todos — backlog items from todos/ directory
+    # ------------------------------------------------------------------
+
+    _TODOS_DIR = Path(__file__).parent.parent.parent / "todos"
+
+    @app.get("/api/todos")
+    async def get_todos():
+        items = []
+        if _TODOS_DIR.exists():
+            for f in sorted(_TODOS_DIR.glob("*.md")):
+                try:
+                    text = f.read_text(encoding="utf-8")
+                    # Split frontmatter (key: value lines) from body (after ---)
+                    parts = text.split("---", 1)
+                    meta_text = parts[0].strip()
+                    body = parts[1].strip() if len(parts) > 1 else ""
+                    meta: dict = {}
+                    for line in meta_text.splitlines():
+                        if ":" in line:
+                            k, _, v = line.partition(":")
+                            meta[k.strip()] = v.strip()
+                    items.append({
+                        "id": f.stem,
+                        "title": meta.get("title", f.stem),
+                        "priority": meta.get("priority", "medium"),
+                        "status": meta.get("status", "open"),
+                        "category": meta.get("category", ""),
+                        "created": meta.get("created", ""),
+                        "body": body,
+                    })
+                except Exception:
+                    log.warning("Failed to parse todo file: %s", f.name)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        status_order = {"in-progress": 0, "open": 1, "done": 2}
+        items.sort(key=lambda x: (status_order.get(x["status"], 9), priority_order.get(x["priority"], 9)))
+        return items
 
     # ------------------------------------------------------------------
     # WebSocket — live event feed
@@ -1385,5 +1982,6 @@ def _serialize_report(report: Any) -> dict:
         "drift_detected": report.drift_detected,
         "drift_kind": report.drift_kind,
         "flattened": report.flattened,
+        "naked_instruments": getattr(report, "naked_instruments", []),
         "notes": report.notes,
     })

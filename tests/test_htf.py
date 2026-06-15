@@ -51,28 +51,86 @@ def _swing_sequence(highs_lows: list[tuple[float, float]]) -> list[Bar]:
     return bars
 
 
-def test_bias_neutral_when_insufficient_data():
-    t = HTFBiasTracker(lookback=2)
-    t.rebuild([_bar(0, 10, 11, 9, 10)])
+def test_ifvg_bias_neutral_with_fewer_than_3_bars():
+    """Fewer than 3 bars → cannot form a FVG → neutral."""
+    t = HTFBiasTracker()
+    t.rebuild([_bar(0, 10, 11, 9, 10), _bar(1, 10, 11, 9, 10)])
     assert t.bias() == "neutral"
 
 
-def test_bias_bullish_on_higher_highs_and_higher_lows():
-    t = HTFBiasTracker(lookback=2)
-    t.rebuild(_swing_sequence([(12, 8), (14, 10)]))
+def test_ifvg_bias_neutral_before_any_inversion():
+    """FVG exists but has not been inversed yet → neutral."""
+    t = HTFBiasTracker()
+    # Bearish FVG: b1.low=10 > b3.high=9 → gap [9, 10]
+    # b4 close=9 stays at gap edge, does NOT cross high=10
+    t.rebuild([
+        _bar(0, 11, 12, 10, 11),   # b1: low=10
+        _bar(1, 10, 10,  8,  9),   # b2
+        _bar(2,  9,  9,  7,  8),   # b3: high=9 → bearish FVG [9, 10]
+        _bar(3,  8,  9,  7,  9),   # b4: close=9 — does NOT cross high=10
+    ])
+    assert t.bias() == "neutral"
+
+
+def test_ifvg_bias_bullish_after_bearish_fvg_inversion():
+    """Bearish FVG inversed (close > fvg.high) → bias = bullish."""
+    t = HTFBiasTracker()
+    # Bearish FVG: b1.low=10 > b3.high=9 → gap [9, 10]
+    # b4 closes at 10.5 > fvg.high=10 → IFVG → bullish
+    t.rebuild([
+        _bar(0, 11, 12, 10, 11),   # b1: low=10
+        _bar(1, 10, 10,  8,  9),   # b2
+        _bar(2,  9,  9,  7,  8),   # b3: high=9 → bearish FVG [9, 10]
+        _bar(3,  8, 11,  8, 10.5), # b4: close=10.5 > 10 → inversion → bullish
+    ])
     assert t.bias() == "bullish"
 
 
-def test_bias_bearish_on_lower_highs_and_lower_lows():
-    t = HTFBiasTracker(lookback=2)
-    t.rebuild(_swing_sequence([(14, 10), (12, 8)]))
+def test_ifvg_bias_bearish_after_bullish_fvg_inversion():
+    """Bullish FVG inversed (close < fvg.low) → bias = bearish."""
+    t = HTFBiasTracker()
+    # Bullish FVG: b3.low=11 > b1.high=10 → gap [10, 11]
+    # b4 closes at 9.5 < fvg.low=10 → IFVG → bearish
+    t.rebuild([
+        _bar(0,  9, 10,  8,  9),   # b1: high=10
+        _bar(1, 10, 12, 10, 11),   # b2
+        _bar(2, 11, 12, 11, 11.5), # b3: low=11 → bullish FVG [10, 11]
+        _bar(3, 11, 11,  9,  9.5), # b4: close=9.5 < 10 → inversion → bearish
+    ])
     assert t.bias() == "bearish"
 
 
-def test_bias_neutral_on_mixed_structure():
-    t = HTFBiasTracker(lookback=2)
-    t.rebuild(_swing_sequence([(12, 10), (14, 8)]))
-    assert t.bias() == "neutral"
+def test_ifvg_most_recent_fvg_replaces_old_unmitigated_fvg():
+    """When a new FVG forms before the tracked one is inversed, the new one is tracked."""
+    t = HTFBiasTracker()
+    # Bearish FVG [9, 10] forms. Before it's inverted, bullish FVG [9, 12] forms.
+    # Bullish FVG [9, 12] is then inverted (close < 9) → bearish.
+    t.rebuild([
+        _bar(0, 11, 12, 10, 11),   # b1 of FVG1
+        _bar(1, 10, 10,  8,  9),   # b2 of FVG1
+        _bar(2,  9,  9,  7,  8),   # b3 of FVG1: bearish FVG [9, 10]
+        _bar(3,  8,  9,  8,  9),   # b4: close=9, NOT > 10 (no inversion); b1 of FVG2
+        _bar(4,  9, 11,  9, 10),   # b5: b2 of FVG2
+        _bar(5, 12, 13, 12, 12.5), # b6: b3 of FVG2: low=12 > b4.high=9 → bullish FVG [9, 12]
+        _bar(6, 12, 12,  8,  8.5), # b7: close=8.5 < fvg.low=9 → inversion → bearish
+    ])
+    assert t.bias() == "bearish"
+
+
+def test_ifvg_bias_persists_after_inversion():
+    """Bias stays at the last inversion value; does not revert to neutral."""
+    t = HTFBiasTracker()
+    # Inversion at bar 3, then 3 more bars with no new FVG → bias stays bullish.
+    t.rebuild([
+        _bar(0, 11, 12, 10, 11),
+        _bar(1, 10, 10,  8,  9),
+        _bar(2,  9,  9,  7,  8),   # bearish FVG [9, 10]
+        _bar(3,  8, 11,  8, 10.5), # inversion → bullish
+        _bar(4, 10, 11,  9, 10),   # no new FVG
+        _bar(5, 10, 11,  9, 10),
+        _bar(6, 10, 11,  9, 10),
+    ])
+    assert t.bias() == "bullish"
 
 
 def _tf_bar(i, o, h, l, c, tf):
@@ -193,86 +251,28 @@ def test_strategy_params_htf_defaults_inert():
     assert s.htf_swing_timeframe == "30min"
 
 
-def test_bias_tracker_diagnostics_exposes_recent_swings():
-    """Diagnostics must return the swing prices the bias logic actually compared,
-    so the operator can verify a neutral verdict against the chart."""
-    t = HTFBiasTracker(lookback=2)
-    # Bearish structure: LH + LL.
-    t.rebuild(_swing_sequence([(14, 10), (12, 8)]))
-
-    d = t.diagnostics()
-    assert d["bias"] == "bearish"
-    assert d["lookback"] == 2
-    assert d["high_count"] >= 2
-    assert d["low_count"] >= 2
-    # Last two highs descending (LH).
-    high_prices = [Decimal(h["price"]) for h in d["recent_high_swings"]]
-    assert high_prices[-1] < high_prices[-2]
-    # Last two lows descending (LL).
-    low_prices = [Decimal(l["price"]) for l in d["recent_low_swings"]]
-    assert low_prices[-1] < low_prices[-2]
-    # ts is ISO-format string.
-    assert "T" in d["recent_high_swings"][-1]["ts"]
-
-
-def test_bias_tracker_diagnostics_empty_before_rebuild():
-    """Before any rebuild, diagnostics returns neutral with empty swing lists
-    (so the API doesn't crash on a freshly-constructed tracker)."""
-    t = HTFBiasTracker(lookback=2)
+def test_ifvg_diagnostics_before_rebuild():
+    """Before any rebuild, diagnostics is neutral with no tracked FVG."""
+    t = HTFBiasTracker()
     d = t.diagnostics()
     assert d["bias"] == "neutral"
-    assert d["high_count"] == 0
-    assert d["low_count"] == 0
-    assert d["recent_high_swings"] == []
-    assert d["recent_low_swings"] == []
+    assert d["tracked_fvg"] is None
+    assert d["last_inversion_ts"] is None
 
 
-def test_bias_tracker_swings_persist_across_rebuilds():
-    """Two rebuilds with disjoint bars must produce a tracker that has seen
-    swings from BOTH halves — proving persistence across refreshes."""
-    t = HTFBiasTracker(lookback=2)
-    # First half: a bullish swing sequence.
-    first_bars = _swing_sequence([(14, 10), (16, 12)])  # HH + HL
-    t.rebuild(first_bars)
-    first_high_count = len(t.diagnostics()["recent_high_swings"])
-    assert first_high_count >= 2  # we expect at least the 2 high pivots
-
-    # Second half: bars with strictly LATER timestamps continuing the trend.
-    # Build a second sequence and shift its timestamps so they come AFTER first.
-    second_bars = _swing_sequence([(18, 14), (20, 16)])
-    # Shift each second bar's timestamp past the last first-bar timestamp.
-    last_first_ts = max(b.ts for b in first_bars)
-    shifted = [
-        Bar(
-            instrument=b.instrument, timeframe=b.timeframe,
-            ts=last_first_ts + timedelta(hours=4 * (i + 1)),
-            open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume,
-        )
-        for i, b in enumerate(second_bars)
-    ]
-    t.rebuild(shifted)
-
-    final_high_count = len(t.diagnostics()["recent_high_swings"])
-    assert final_high_count > first_high_count, (
-        f"swings did not grow after second rebuild: {first_high_count} -> {final_high_count}"
-    )
-
-
-def test_bias_tracker_dedupes_overlapping_bars():
-    """If two consecutive rebuilds include the same bars (broker returns
-    overlapping windows), bars seen before must NOT be re-fed."""
-    t = HTFBiasTracker(lookback=2)
-    bars = _swing_sequence([(14, 10), (16, 12)])
-    t.rebuild(bars)
-    count_after_first = len(t.diagnostics()["recent_high_swings"])
-
-    # Same bars again — no new ts, no progress.
-    t.rebuild(bars)
-    count_after_second = len(t.diagnostics()["recent_high_swings"])
-
-    assert count_after_second == count_after_first, (
-        "re-feeding identical bars duplicated swings"
-    )
+def test_ifvg_diagnostics_after_inversion():
+    """After an inversion, diagnostics shows the new bias and inversion timestamp."""
+    t = HTFBiasTracker()
+    t.rebuild([
+        _bar(0, 11, 12, 10, 11),
+        _bar(1, 10, 10,  8,  9),
+        _bar(2,  9,  9,  7,  8),   # bearish FVG [9, 10]
+        _bar(3,  8, 11,  8, 10.5), # inversion → bullish
+    ])
+    d = t.diagnostics()
+    assert d["bias"] == "bullish"
+    assert d["last_inversion_ts"] is not None
+    assert "T" in d["last_inversion_ts"]  # ISO format
 
 
 def test_aggregate_bars_folds_1min_into_4h():
@@ -330,82 +330,3 @@ def test_aggregate_bars_splits_across_buckets():
     assert out[0].volume == 240
     assert out[1].volume == 60
     assert out[1].ts == base + timedelta(hours=4)
-
-
-def test_bias_fallback_bearish_when_recent_low_after_recent_high():
-    """Data-limited case: only one confirmed high and one confirmed low.
-    Low came AFTER high (timestamp) → most recent leg was down → bearish."""
-    t = HTFBiasTracker(lookback=2)
-    # _swing_sequence with ONE pair produces 1 confirmed high then 1 confirmed
-    # low at later timestamps. The single (h, l) pair = (14, 10) → low confirms
-    # after high in the 8-bar layout.
-    bars = _swing_sequence([(14, 10)])
-    t.rebuild(bars)
-    d = t.diagnostics()
-    assert d["high_count"] == 1
-    assert d["low_count"] == 1
-    # Low's bar_ts > high's bar_ts in this construction → bearish.
-    high_ts = d["recent_high_swings"][0]["ts"]
-    low_ts = d["recent_low_swings"][0]["ts"]
-    assert low_ts > high_ts, "test scaffolding assumption broken"
-    assert t.bias() == "bearish"
-
-
-def test_bias_fallback_bullish_when_recent_high_after_recent_low():
-    """Mirror: low first, then high → most recent leg up → bullish.
-    We build a single low first, then a single high, by hand."""
-    t = HTFBiasTracker(lookback=2)
-    base = datetime(2026, 5, 1, tzinfo=timezone.utc)
-
-    # Pattern that confirms ONLY a swing LOW first (low at pivot index 2),
-    # then ONLY a swing HIGH later (high at later pivot index).
-    # Use 5-bar sequences with lookback=2.
-    def _bar_at(i, o, h, l, c):
-        return Bar(
-            instrument="MGC", timeframe="4h",
-            ts=base + timedelta(hours=4 * i),
-            open=Decimal(str(o)), high=Decimal(str(h)),
-            low=Decimal(str(l)), close=Decimal(str(c)), volume=100,
-        )
-
-    bars = [
-        # Pivot LOW at index 2 (low=8 strictly below 9.5 neighbors)
-        _bar_at(0, 11, 11.5, 9.5, 10),
-        _bar_at(1, 10, 10.5, 9.5, 10),
-        _bar_at(2, 10, 10.5, 8.0, 10),     # low pivot
-        _bar_at(3, 10, 10.5, 9.5, 10),
-        _bar_at(4, 10, 10.5, 9.5, 10),
-        # Pivot HIGH at index 7 (high=15 strictly above 12 neighbors)
-        _bar_at(5, 11, 12, 11, 11.5),
-        _bar_at(6, 11, 12, 11, 11.5),
-        _bar_at(7, 11, 15, 11, 14),         # high pivot
-        _bar_at(8, 13, 12, 11, 11.5),
-        _bar_at(9, 11, 12, 11, 11.5),
-    ]
-    t.rebuild(bars)
-    d = t.diagnostics()
-    assert d["high_count"] >= 1
-    assert d["low_count"] >= 1
-    # Most recent high ts should be after most recent low ts.
-    high_ts = d["recent_high_swings"][-1]["ts"]
-    low_ts = d["recent_low_swings"][-1]["ts"]
-    assert high_ts > low_ts, "test scaffolding: high should come after low"
-    assert t.bias() == "bullish"
-
-
-def test_bias_fallback_neutral_when_no_extremes():
-    """Zero of either kind → still neutral."""
-    t = HTFBiasTracker(lookback=2)
-    # Flat bars — no swings will confirm.
-    base = datetime(2026, 5, 1, tzinfo=timezone.utc)
-    flat = [
-        Bar(instrument="MGC", timeframe="4h",
-            ts=base + timedelta(hours=4 * i),
-            open=Decimal("100"), high=Decimal("100"),
-            low=Decimal("100"), close=Decimal("100"), volume=1)
-        for i in range(10)
-    ]
-    t.rebuild(flat)
-    d = t.diagnostics()
-    assert d["high_count"] == 0 or d["low_count"] == 0
-    assert t.bias() == "neutral"

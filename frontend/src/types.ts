@@ -28,22 +28,76 @@ export interface StrategyConfig {
   htf_target_enabled: boolean
   htf_target_min_r: string
   htf_swing_timeframe: string
-  kz_levels_enabled: boolean
+  // iFVG entry
+  ifvg_entry_mode: string
+  ifvg_stop_buffer_ticks: string
+  ifvg_zone_max_age_bars: number  // bars an armed zone stays valid; 0 = never expires
+  // iFVG grader / session filters
+  ifvg_sweep_window_bars: number
+  ifvg_min_displacement_mult: string
+  grader_min_grade: string  // "A".."F"; "F" = no floor
+  ifvg_gapping_sack_enabled: boolean  // Rule I: reject stacked same-side FVGs
+  ifvg_macro_windows: string[]
+  ifvg_news_blackout: string[]
+  // iFVG rule flags
+  ifvg_rule_f_enabled: boolean  // cancel armed zone if target hit before fill
+  // iFVG exit ladder
+  ifvg_tp1_fraction: string    // fraction of position to close at structural TP1 (0–1)
+  ifvg_be_after_tp1: boolean   // move stop to breakeven when structural TP1 fills
+}
+
+export interface FundedPipelineCombine {
+  attempts?: number | string
+  passes?: number | string
+  busts?: number | string
+  median_days_to_pass?: number | string | null
+}
+
+export interface FundedPipelineXfa {
+  accounts?: number | string
+  busts?: number | string
+  gross_payouts?: number | string
+  net_payouts?: number | string
+  median_days_to_first_payout?: number | string | null
+}
+
+export interface FundedPipeline {
+  combine?: FundedPipelineCombine
+  xfa?: FundedPipelineXfa
+  caveat?: string
+  error?: string
 }
 
 export interface BotConfig {
   instrument: string
+  instruments?: string[]
   timeframes: string[]
   replay_delay_ms: number
   replay_start_delay_s: number
   account_name: string | null
   entry_mode: string
+  forming_bar_entries?: boolean  // false = closed-bar confirmation only (validated path)
   enabled_killzones: string[]
+  signal_instrument: string | null
   contracts: number
   risk_per_trade_pct: number
   partial_profit_r: number
+  max_entry_slippage_frac: number  // 0 = off; abort entry if adverse slip > frac × stop distance
+  flatten_enabled: boolean
+  flatten_time_ct: string
+  entry_cutoff_time_ct: string
+  emergency_stop_distance?: Record<string, number>
+  emergency_target_r?: number
+  naked_grace_seconds?: number
+  commission_per_contract?: number
+  max_contracts_override?: number | null
   mode?: string
+  account_phase?: string
+  phase_shadow?: boolean
+  phase_rules?: Record<string, unknown>
   strategy: StrategyConfig
+  // Per-instrument partial overrides of `strategy`, e.g. {MNQ: {stop_buffer: "3.0"}}
+  strategy_overrides?: Record<string, Partial<StrategyConfig>>
 }
 
 export interface StatusPayload {
@@ -71,6 +125,13 @@ export interface StatusPayload {
   }
   lockout: { code: string; message: string } | null
   sync: { pending: number; poisoned: number; sent: number } | null
+  daily_trades: {
+    trades: number
+    wins: number
+    losses: number
+    win_rate: number | null
+    avg_pnl: number | null
+  } | null
 }
 
 export interface SignalPayload {
@@ -107,6 +168,21 @@ export interface JournalItem {
   payload: SignalPayload | FillPayload | ReconcilePayload
 }
 
+export interface Position {
+  instrument: string
+  side: string
+  size: number
+  entry: string
+  stop: string
+  target: string
+  partial: string | null
+  entry_time: number | null
+  mfe_r?: number
+  mae_r?: number
+  mfe_pts?: number
+  mae_pts?: number
+}
+
 export interface BarEvent {
   time: number   // Unix seconds (UTCTimestamp for lightweight-charts)
   open: number
@@ -127,13 +203,64 @@ export interface VpProfile {
 
 export interface StrategyStatePayload {
   instrument: string
-  kz_ranges: Record<string, { high: string; low: string }>
-  kz_pending_a: string[]
-  awaiting_sweeps: Array<{
-    side: string
-    source: string
-    price: string
-    bars_elapsed: number
-    killzone: string
-  }>
+  grade?: string                  // "A" | "B" | "C" | "D" | "F"
+  passes?: boolean
+  has_delivery_fvg?: boolean
+  delivery_fvg_side?: string | null
+  delivery_fvg_in_pd?: boolean
+  premium_discount_ok?: boolean
+  target_clear?: boolean
+  fvg_singular?: boolean
+  singularity_timeframe?: string  // "1min" | "30min" | "none"
+  momentum_quality?: string       // "strong" | "decent" | "weak"
+  bpr_confluence?: boolean
+  bpr_timeframe?: string | null
+  recent_sweep_ok?: boolean
+  fib_displacement_ok?: boolean
+  fib_extension?: string
+  ce_respected?: boolean
+  reason?: string
+  active_fvgs_count?: number
+  session_high?: string
+  session_low?: string
+  in_session_window?: boolean
+  in_macro_window?: boolean
+  news_blackout?: boolean
+  phase?: {
+    name: string
+    balance: string
+    mll: string
+    cushion: string
+    today_pnl: string
+    best_day: string
+    winning_days: number
+    target_reached: boolean
+  } | null
+  orb_state?: {
+    or_high: string | null
+    or_low: string | null
+    or_established: boolean
+    fired: number
+  } | null
+  news_straddle?: {
+    instrument: string
+    offset: string
+    tp_r: string
+    size: number
+    events: {
+      ts: string
+      status: string          // pending | armed | skipped
+      range_high: string | null
+      range_low: string | null
+    }[]
+  } | null
+  cpi_day_router?: {
+    today_is_cpi_day: boolean
+    next_cpi_date: string | null
+    base_entries_suppressed: boolean
+  } | null
+  pos_mfe_r?: number
+  pos_mae_r?: number
+  pos_mfe_pts?: number
+  pos_mae_pts?: number
 }

@@ -31,5 +31,5 @@ export function useConfig() {
     }
   }
 
-  return { config, saveConfig, saving, saveError }
+  return { config, setConfig, saveConfig, saving, saveError }
 }

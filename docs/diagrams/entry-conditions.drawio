@@ -1,0 +1,113 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="entry-conditions" name="Entry Conditions">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="2100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Legend -->
+        <mxCell id="leg" value="ENTRY CONDITIONS — TopstepX iFVG strategy (per 1-min bar)&#10;Green=start/end  Yellow=filter/gate  Blue=process  Purple=grader  Red=reject/skip&#10;Left column = armed-zone lifecycle · Center = signal generation · Bottom = engine gates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="40" y="20" width="640" height="70" as="geometry"/></mxCell>
+
+        <!-- ===== Per-bar filters ===== -->
+        <mxCell id="start" value="New 1-min bar (close)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="460" y="120" width="220" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="dNews" value="News blackout?&#10;(ifvg_news_blackout)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="210" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="rNews" value="Skip — news blackout" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="230" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="dSess" value="Inside session window?&#10;(ifvg_session_windows;&#10;empty = allow all)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="340" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="rSess" value="Skip — outside session" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="360" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="dArmed" value="Armed zone&#10;active &amp; pending?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="470" width="240" height="90" as="geometry"/></mxCell>
+
+        <!-- ===== LEFT: armed-zone lifecycle ===== -->
+        <mxCell id="aTitle" value="ARMED-ZONE LIFECYCLE (iFVG delayed entry)" style="text;html=1;fontStyle=1;fontSize=11;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="40" y="600" width="330" height="20" as="geometry"/></mxCell>
+        <mxCell id="aPre" value="Premature liquidity?&#10;TP1 hit before entry (Rule F)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="630" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="rPre" value="Reject — premature_liquidity&#10;(cancel zone)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="760" width="240" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="aStatus" value="Zone status this bar?&#10;(body close vs far edge,&#10;price vs entry)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="850" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rInval" value="Reject — invalidated&#10;(close back thru far FVG edge;&#10;wick does NOT count)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="40" y="990" width="270" height="60" as="geometry"/></mxCell>
+        <mxCell id="rPend" value="Skip bar — zone still pending" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="40" y="1080" width="270" height="50" as="geometry"/></mxCell>
+        <mxCell id="aFilled" value="FILLED — build execution signal&#10;(entry=zone entry, stop=zone stop,&#10;target=tp1 / HTF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="1170" width="240" height="70" as="geometry"/></mxCell>
+
+        <!-- ===== CENTER: signal generation ===== -->
+        <mxCell id="cTitle" value="SIGNAL GENERATION (no active zone)" style="text;html=1;fontStyle=1;fontSize=11;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="450" y="600" width="320" height="20" as="geometry"/></mxCell>
+        <mxCell id="cSweep" value="Liquidity sweep?&#10;(A_multi_bar / B_one_bar&#10;sweep of swing high/low)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="630" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rNoSweep" value="No signal — no sweep" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="655" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="cDisp" value="Displacement?&#10;(body &#8805; body_atr_multiple &#215; ATR,&#10;min body-to-range)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="770" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rNoDisp" value="No signal — no displacement" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="795" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="cCand" value="Composer: iFVG candidate?&#10;(sweep + displacement inverts a&#10;prior FVG → entry=FVG edge,&#10;stop=sweep_extreme &#177; buffer)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="440" y="910" width="260" height="110" as="geometry"/></mxCell>
+        <mxCell id="rNoCand" value="No signal — no FVG candidate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="940" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="cGrader" value="GRADER (Dodgy 5-criteria + structural target)&#10;• momentum (decent/strong)  • premium/discount&#10;• delivery from 30min FVG  • FVG singularity / BPR  • fib&#10;• structural target (HTF swing &#8804;3&#215;ATR, else 'no target')&#10;• Rule A: recent sweep OR delivery (else cap B)&#10;• Rule I: gapping sack → fail unless 30min rescue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacing=6;fontSize=10;" vertex="1" parent="1"><mxGeometry x="420" y="1060" width="300" height="130" as="geometry"/></mxCell>
+
+        <mxCell id="cGrade" value="Grade &#8805; A-?&#10;(passes)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="1230" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="rGrade" value="Reject — grader_B / grader_*&#10;(logged to rejections.csv)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="1245" width="200" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="cMode" value="ifvg_entry_mode?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="1360" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="cArm" value="ARM zone &amp; wait for fill&#10;(entry = FVG edge or CE,&#10;stop = sweep_extreme &#177; buffer,&#10;tp1 = nearest HTF swing)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="230" y="1470" width="240" height="80" as="geometry"/></mxCell>
+
+        <!-- ===== ENGINE GATES ===== -->
+        <mxCell id="gTitle" value="ENGINE GATES (on a filled / immediate signal)" style="text;html=1;fontStyle=1;fontSize=11;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="460" y="1500" width="340" height="20" as="geometry"/></mxCell>
+        <mxCell id="gBias" value="HTF bias gate&#10;(htf_bias_enabled: block&#10;counter-trend vs 4h bias)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="460" y="1540" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rBias" value="Reject — htf_bias" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="1565" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="gVp" value="VP filter&#10;(vp_enabled: volume-profile&#10;level/target gate)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="460" y="1680" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rVp" value="Reject — vp_filter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="1705" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="gTarget" value="Target precedence&#10;(HTF 4h FVG → 30min swing → VP → r_multiple)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="1820" width="260" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="gRisk" value="Risk pretrade gate&#10;(daily-loss limit, max contracts,&#10;stop on correct side of entry)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="460" y="1920" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="rRisk" value="Reject — risk gate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1"><mxGeometry x="900" y="1945" width="200" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="gSize" value="Risk sizing&#10;(contracts = risk% &#215; equity / (stop_dist &#215; point_value), clamp [1, max])" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="440" y="2060" width="280" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="gPlace" value="Place entry (market / limit) →&#10;bracket-after-fill (stop + target)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="450" y="2160" width="260" height="60" as="geometry"/></mxCell>
+        <mxCell id="end" value="ENTRY PLACED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="470" y="2260" width="220" height="50" as="geometry"/></mxCell>
+
+        <!-- ===== EDGES ===== -->
+        <mxCell id="es1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="start" target="dNews"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es2" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="dNews" target="rNews"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es3" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="dNews" target="dSess"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es4" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="dSess" target="rSess"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es5" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="dSess" target="dArmed"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es6" value="yes → process zone" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="dArmed" target="aPre"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es7" value="no → generate" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="dArmed" target="cSweep"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- armed lifecycle -->
+        <mxCell id="ea1" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="aPre" target="rPre"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ea2" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="aPre" target="aStatus"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ea3" value="invalidated" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="aStatus" target="rInval"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ea4" value="pending" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="aStatus" target="rPend"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ea5" value="filled" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="aStatus" target="aFilled"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ea6" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="aFilled" target="gBias"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- signal generation -->
+        <mxCell id="ec1" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="cSweep" target="rNoSweep"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec2" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cSweep" target="cDisp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec3" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="cDisp" target="rNoDisp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec4" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cDisp" target="cCand"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec5" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="cCand" target="rNoCand"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec6" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cCand" target="cGrader"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec7" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cGrader" target="cGrade"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec8" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="cGrade" target="rGrade"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec9" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cGrade" target="cMode"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec10" value="ifvg_edge / retrace_ce" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cMode" target="cArm"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec11" value="close → immediate" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cMode" target="gBias"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ec12" value="next bars" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" edge="1" parent="1" source="cArm" target="aPre"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- engine gates -->
+        <mxCell id="eg1" value="block" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="gBias" target="rBias"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg2" value="pass" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gBias" target="gVp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg3" value="block" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="gVp" target="rVp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg4" value="pass" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gVp" target="gTarget"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg5" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gTarget" target="gRisk"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg6" value="block" style="edgeStyle=orthogonalEdgeStyle;html=1;fontColor=#b85450;" edge="1" parent="1" source="gRisk" target="rRisk"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg7" value="pass" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gRisk" target="gSize"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg8" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gSize" target="gPlace"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg9" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="gPlace" target="end"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

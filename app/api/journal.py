@@ -37,6 +37,7 @@ from app.strategy.composer import Signal
 
 if TYPE_CHECKING:
     from app.sync.outbox import Outbox
+    from app.strategy.grader import SetupGrade
 
 
 def _decimal_to_str(obj: Any) -> Any:
@@ -111,6 +112,7 @@ class Journal:
                 "sweep_pattern": signal.sweep_pattern,
                 "fvg_low": signal.fvg_low,
                 "fvg_high": signal.fvg_high,
+                "setup_grade": signal.setup_grade.grade if signal.setup_grade else None,
                 "outcome": {
                     "placed": outcome.placed,
                     "reason": outcome.reason,
@@ -276,28 +278,85 @@ class Journal:
     # WebSocket pub-sub
     # ------------------------------------------------------------------
 
-    def publish_strategy_state(self, state: dict) -> None:
-        """Stream strategy state to WebSocket subscribers without storing it."""
-        entry = JournalEntry(
-            ts=datetime.now(timezone.utc),
-            kind="strategy_state",
-            payload=state,
-        )
-        self._publish(entry)
-
     def publish_bar(self, bar: Bar, display_instrument: str | None = None) -> None:
         """Stream a bar to WebSocket subscribers without storing it."""
         entry = JournalEntry(
             ts=bar.ts,
             kind="bar",
             payload={
-                "instrument": display_instrument or bar.instrument,
+                "instrument": display_instrument if display_instrument is not None else bar.instrument,
                 "open": str(bar.open),
                 "high": str(bar.high),
                 "low": str(bar.low),
                 "close": str(bar.close),
                 "volume": bar.volume,
             },
+        )
+        self._publish(entry)
+
+    def publish_strategy_state(
+        self,
+        instrument: str,
+        grade: "SetupGrade | None" = None,
+        active_fvgs_count: int = 0,
+        session_high: "Decimal | None" = None,
+        session_low: "Decimal | None" = None,
+        in_macro: bool = False,
+        news_blackout: bool = False,
+        phase: "dict | None" = None,
+        orb_state: "dict | None" = None,
+        pos_excursion: "dict | None" = None,
+        news_straddle: "dict | None" = None,
+        cpi_day_router: "dict | None" = None,
+    ) -> None:
+        """Emit strategy_state WebSocket event each bar for the live dashboard."""
+        payload: dict = {"instrument": instrument}
+
+        if grade is not None:
+            payload.update({
+                "grade": grade.grade,
+                "passes": grade.passes,
+                "has_delivery_fvg": grade.has_delivery_fvg,
+                "delivery_fvg_side": grade.delivery_fvg_side,
+                "delivery_fvg_in_pd": grade.delivery_fvg_in_pd,
+                "premium_discount_ok": grade.premium_discount_ok,
+                "target_clear": grade.target_clear,
+                "fvg_singular": grade.fvg_singular,
+                "singularity_timeframe": grade.singularity_timeframe,
+                "momentum_quality": grade.momentum_quality,
+                "bpr_confluence": grade.bpr_confluence,
+                "bpr_timeframe": grade.bpr_timeframe,
+                "recent_sweep_ok": grade.recent_sweep_ok,
+                "fib_displacement_ok": grade.fib_displacement_ok,
+                "fib_extension": str(grade.fib_extension),
+                "ce_respected": grade.ce_respected,
+                "reason": grade.reason,
+            })
+
+        payload["active_fvgs_count"] = active_fvgs_count
+        if session_high is not None:
+            payload["session_high"] = str(session_high)
+        if session_low is not None:
+            payload["session_low"] = str(session_low)
+        payload["in_macro_window"] = in_macro
+        payload["news_blackout"] = news_blackout
+        payload["phase"] = phase  # None when practice; dict with tracker state otherwise
+        if orb_state is not None:
+            payload["orb_state"] = orb_state
+        if news_straddle is not None:
+            payload["news_straddle"] = news_straddle
+        if cpi_day_router is not None:
+            payload["cpi_day_router"] = cpi_day_router
+        if pos_excursion is not None:
+            payload["pos_mfe_r"]   = pos_excursion.get("mfe_r", 0.0)
+            payload["pos_mae_r"]   = pos_excursion.get("mae_r", 0.0)
+            payload["pos_mfe_pts"] = pos_excursion.get("mfe_pts", 0.0)
+            payload["pos_mae_pts"] = pos_excursion.get("mae_pts", 0.0)
+
+        entry = JournalEntry(
+            ts=datetime.now(timezone.utc),
+            kind="strategy_state",
+            payload=_decimal_to_str(payload),
         )
         self._publish(entry)
 

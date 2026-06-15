@@ -1,98 +1,163 @@
 import { useState } from 'react'
 import type { StrategyStatePayload } from '../types'
 
-interface Props {
-  state: StrategyStatePayload | null
+function LabeledValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-1.5 border-b border-border last:border-0">
+      <span className="text-[10px] text-dim font-mono tracking-wide">{label}</span>
+      <span className="text-[10px] text-ink font-mono">{value}</span>
+    </div>
+  )
 }
 
-export function StrategyDebug({ state }: Props) {
+function PhaseSection({ phase }: { phase: NonNullable<StrategyStatePayload['phase']> }) {
+  const nameLabel = phase.name.toUpperCase()
+  const targetBadge = phase.target_reached
+    ? <span className="ml-1.5 text-[9px] text-accent font-mono tracking-widest">TARGET</span>
+    : null
+  return (
+    <div>
+      <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase flex items-center">
+        Account Phase — {nameLabel}{targetBadge}
+      </div>
+      <LabeledValue label="balance" value={`$${parseFloat(phase.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+      <LabeledValue label="MLL" value={phase.mll === 'None' ? '—' : `$${parseFloat(phase.mll).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+      <LabeledValue label="cushion" value={phase.cushion === 'None' ? '—' : `$${parseFloat(phase.cushion).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+      <LabeledValue label="today P&L" value={`$${parseFloat(phase.today_pnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+      <LabeledValue label="best day" value={`$${parseFloat(phase.best_day).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+      <LabeledValue label="winning days" value={String(phase.winning_days)} />
+    </div>
+  )
+}
+
+export function StrategyDebug({ state }: { state: StrategyStatePayload | null }) {
   const [open, setOpen] = useState(false)
 
+  if (!state) return null
+
+  const hasPhase = state.phase != null
+
   return (
-    <div className="border border-border font-mono text-sm">
+    <div className="shrink-0">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2 text-dim hover:text-ink text-xs tracking-widest uppercase"
+        className="w-full flex items-center justify-between px-3 py-2 text-[10px] text-faint font-mono tracking-widest uppercase hover:text-dim transition-colors"
       >
-        <span>Strategy State</span>
-        <span className="text-accent">{open ? '▼' : '▶'}</span>
+        <span>Strategy Debug</span>
+        <span className="text-[8px]">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="border-t border-border p-4 flex flex-col gap-6">
+        <div className="border-t border-border">
+          {/* Grader */}
+          {state.grade != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Grader</div>
+              <LabeledValue label="grade" value={`${state.grade}${state.passes ? ' ✓' : ' ✗'}`} />
+              {state.reason && <LabeledValue label="reason" value={state.reason} />}
+              {state.active_fvgs_count != null && (
+                <LabeledValue label="active FVGs" value={String(state.active_fvgs_count)} />
+              )}
+            </div>
+          )}
 
-          {/* KZ Levels */}
+          {/* Session range */}
+          {(state.session_high != null || state.session_low != null) && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Session Range</div>
+              {state.session_high != null && <LabeledValue label="high" value={state.session_high} />}
+              {state.session_low != null && <LabeledValue label="low" value={state.session_low} />}
+            </div>
+          )}
+
+          {/* Filters */}
           <div>
-            <div className="text-dim text-xs tracking-widest uppercase mb-2">KZ Levels</div>
-            {!state || Object.keys(state.kz_ranges).length === 0 ? (
-              <div className="text-dim text-xs">No levels locked today</div>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-dim">
-                    <th className="text-left pr-6 pb-1">Zone</th>
-                    <th className="text-right pr-6 pb-1">High</th>
-                    <th className="text-right pb-1">Low</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(state.kz_ranges).map(([name, { high, low }]) => (
-                    <tr key={name}>
-                      <td className="text-ink pr-6 py-0.5">{name}</td>
-                      <td className="text-right pr-6 py-0.5">
-                        <span className="text-ink">{high}</span>
-                        {state.kz_pending_a.includes(`${name}_high`) && (
-                          <span className="ml-1 text-accent text-[10px]">[A]</span>
-                        )}
-                      </td>
-                      <td className="text-right py-0.5">
-                        <span className="text-ink">{low}</span>
-                        {state.kz_pending_a.includes(`${name}_low`) && (
-                          <span className="ml-1 text-accent text-[10px]">[A]</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Filters</div>
+            <LabeledValue label="macro window" value={state.in_macro_window ? 'yes' : 'no'} />
+            <LabeledValue label="news blackout" value={state.news_blackout ? 'yes' : 'no'} />
           </div>
 
-          {/* Awaiting Sweeps */}
-          <div>
-            <div className="text-dim text-xs tracking-widest uppercase mb-2">Awaiting Sweeps</div>
-            {!state || state.awaiting_sweeps.length === 0 ? (
-              <div className="text-dim text-xs">No pending sweeps</div>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-dim">
-                    <th className="text-left pr-4 pb-1">Side</th>
-                    <th className="text-left pr-4 pb-1">Src</th>
-                    <th className="text-right pr-4 pb-1">Price</th>
-                    <th className="text-right pr-4 pb-1">Bars</th>
-                    <th className="text-left pb-1">Zone</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.awaiting_sweeps.map((s) => (
-                    <tr key={`${s.side}-${s.price}-${s.source}`}>
-                      <td className={`pr-4 py-0.5 ${s.side === 'high' ? 'text-red-400' : 'text-accent'}`}>
-                        {s.side}
-                      </td>
-                      <td className="text-dim pr-4 py-0.5">
-                        {s.source === 'kz_level' ? 'kz' : 'sw'}
-                      </td>
-                      <td className="text-ink text-right pr-4 py-0.5">{s.price}</td>
-                      <td className="text-dim text-right pr-4 py-0.5">{s.bars_elapsed}</td>
-                      <td className="text-dim py-0.5">{s.killzone}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {/* ORB State */}
+          {state.orb_state != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">ORB</div>
+              <LabeledValue
+                label="range"
+                value={
+                  state.orb_state.or_established
+                    ? `${state.orb_state.or_low} – ${state.orb_state.or_high}`
+                    : 'building…'
+                }
+              />
+              <LabeledValue label="signals today" value={String(state.orb_state.fired)} />
+            </div>
+          )}
 
+          {/* News Straddle (B92 live resting-OCO scheduler) */}
+          {state.news_straddle != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">
+                News Straddle ({state.news_straddle.instrument})
+              </div>
+              <LabeledValue
+                label="offset / target"
+                value={`${state.news_straddle.offset}pt → ${state.news_straddle.tp_r}R`}
+              />
+              <LabeledValue label="contracts" value={String(state.news_straddle.size)} />
+              {state.news_straddle.events
+                .filter((e) => e.status !== 'pending')
+                .slice(-4)
+                .map((e) => (
+                  <LabeledValue
+                    key={e.ts}
+                    label={e.ts.slice(5, 16).replace('T', ' ')}
+                    value={
+                      e.range_high != null
+                        ? `${e.status} [${e.range_low}–${e.range_high}]`
+                        : e.status
+                    }
+                  />
+                ))}
+            </div>
+          )}
+
+          {state.cpi_day_router != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">
+                CPI-Day Router
+              </div>
+              <LabeledValue
+                label="today"
+                value={state.cpi_day_router.today_is_cpi_day ? 'CPI DAY — base suppressed' : 'normal — base active'}
+              />
+              <LabeledValue
+                label="next CPI"
+                value={state.cpi_day_router.next_cpi_date ?? '—'}
+              />
+            </div>
+          )}
+
+          {/* Live Excursion */}
+          {(state.pos_mfe_r != null || state.pos_mae_r != null) && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Live Excursion</div>
+              {state.pos_mfe_r != null && (
+                <LabeledValue label="MFE" value={`${state.pos_mfe_r.toFixed(2)}R`} />
+              )}
+              {state.pos_mae_r != null && (
+                <LabeledValue label="MAE" value={`${state.pos_mae_r.toFixed(2)}R`} />
+              )}
+            </div>
+          )}
+
+          {/* Account Phase */}
+          {hasPhase && <PhaseSection phase={state.phase!} />}
+          {!hasPhase && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Account Phase</div>
+              <div className="px-3 py-1.5 text-[10px] text-faint font-mono">— (practice)</div>
+            </div>
+          )}
         </div>
       )}
     </div>

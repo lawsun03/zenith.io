@@ -25,7 +25,7 @@ from typing import (
     runtime_checkable,
 )
 
-from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side
+from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 
 
 # Callback type aliases. Keep these explicit — the strategy and engine
@@ -55,6 +55,33 @@ class Broker(Protocol):
         """Snapshot of all open positions. Used by the reconciler."""
         ...
 
+    async def exit_coverage(self, instrument: str) -> ExitCoverage:
+        """Working-order coverage for the open position in `instrument`.
+
+        Queries the exchange for live stop/target orders on the closing side.
+        Used by the reconciler to detect positions with no protective exit.
+        """
+        ...
+
+    async def place_protective_stop(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        """Place a plain protective stop on the closing side of the current
+        position at `price`, sized `size`. Returns True on success.
+
+        Emergency use only — NOT registered in the bracket/partial state
+        machine. If the position is already flat, no-ops and returns True.
+        """
+        ...
+
+    async def place_protective_target(
+        self, instrument: str, size: int, price: Decimal
+    ) -> bool:
+        """Place a plain protective limit (take-profit) on the closing side
+        of the current position at `price`, sized `size`. Returns True on
+        success. Emergency use only — NOT registered in the state machine."""
+        ...
+
     # ------------------------------------------------------------------
     # Order placement
     # ------------------------------------------------------------------
@@ -67,9 +94,17 @@ class Broker(Protocol):
         entry: Decimal,
         stop: Decimal,
         target: Decimal,
+        tp1_price: "Decimal | None" = None,
+        tp1_fraction: Decimal = Decimal("0.5"),
+        be_after_tp1: bool = True,
     ) -> BracketResult:
         """
         Atomic entry + stop-loss + take-profit.
+
+        Optional structural TP1 params: when tp1_price is provided the broker
+        places a partial exit at that price and (when be_after_tp1 is True)
+        moves the stop to break-even after that leg fills. tp1_fraction controls
+        how much of the position to close at TP1 (0.5 = half).
 
         On success returns the three order IDs. On failure returns an
         error string and no IDs. The caller MUST check `success`.
@@ -113,7 +148,7 @@ class Broker(Protocol):
         """True if the real-time event feed is connected and delivering events."""
         ...
 
-    async def get_forming_bar(self, timeframe: str = "1min") -> "Bar | None":
+    async def get_forming_bar(self, timeframe: str = "1min", instrument: str = "") -> "Bar | None":
         """
         Return the currently-forming bar (partially closed), or None if
         not supported by this broker implementation.

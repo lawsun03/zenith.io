@@ -18,11 +18,13 @@ What this module is NOT:
     or live — but doesn't care about replay speed or cost modeling.
     That's the backtester's job on DigitalOcean.
 
-Idempotency note: every event handler is async and may be called
-concurrently. The engine uses a single asyncio.Lock around the
-critical section (gate + place + state update) so a fill arriving
-mid-decision can't corrupt state. Without this lock, a tight burst
-of bars + fills would race.
+Concurrency note: asyncio is single-threaded; coroutines only interleave
+at explicit await points. Risk-state mutations are synchronous, so the
+gate-check → place-bracket path is safe unless another coroutine runs
+during the broker.place_bracket await. The flatten task's last-moment
+in-window re-check (inside _act_on_signal, before that await) closes
+the only meaningful race: a wall-clock flatten firing between gate and
+placement.
 
 Lifecycle:
 
@@ -38,24 +40,40 @@ import asyncio
 import dataclasses
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Awaitable, Callable, Optional
 
+from dataclasses import replace as dc_replace
+
 from app.broker.events import Bar, Fill, MarkToMarket
 from app.broker.protocol import Broker
-from app.broker.topstepx import _point_value
+from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
+from app.risk.account_phase import PhaseTracker
+from app.risk.flatten import in_flatten_window, past_entry_cutoff, trading_day_ct
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
-from app.risk.state import RiskState
+from app.risk.state import CT, RiskState
+from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector, DisplacementEvent
+from app.strategy.grader import SetupGrader
+from app.strategy.killzone import in_killzone, in_macro_window, in_news_blackout
 from app.strategy.liquidity import LiquidityTracker
+from app.strategy.cpi_day import is_cpi_day
 from app.strategy.volume_profile import VolumeProfileTracker
-from app.strategy.kz_levels import KillzoneLevelTracker
 
 log = logging.getLogger(__name__)
+
+
+def _confluence_multiplier(confluence_count: int) -> Decimal:
+    """B58: fixed sizing ladder keyed on per-signal confluence count."""
+    if confluence_count >= 3:
+        return Decimal("1.5")
+    if confluence_count == 2:
+        return Decimal("1.0")
+    return Decimal("0.5")
 
 
 def _is_opposite_side(signal_side: str, open_contracts: int) -> bool:
@@ -95,6 +113,22 @@ class OrderOutcome:
     broker_order_id: str | None = None
 
 
+@dataclass(frozen=True)
+class RejectInfo:
+    """A setup the runner rejected internally (grader-B, premature liquidity, or
+    zone invalidation). Surfaced to the rejection ledger via ExecutionEngine.on_reject."""
+
+    reason: str                  # "grader_<G>" | "premature_liquidity" | "invalidated"
+    side: str
+    entry: Decimal | None
+    stop: Decimal | None
+    target: Decimal | None
+    grade: str
+    score: int = 0
+    killzone: str = ""
+    rationale: str = ""
+
+
 @dataclass
 class StrategyRunner:
     """
@@ -110,45 +144,238 @@ class StrategyRunner:
     liquidity: LiquidityTracker
     displacement: DisplacementDetector
     composer: SweepDisplacementComposer
+    grader: SetupGrader
+    strategy_cfg: StrategyParams
+    armed_tracker: ArmedZoneTracker = field(default_factory=ArmedZoneTracker)
+    _pending_signal: Optional[Signal] = field(default=None, init=False, repr=False)
     vp: VolumeProfileTracker | None = None
-    kz_levels: "KillzoneLevelTracker | None" = None
-    signal_instrument: str = ""
-    # Empty string = same as instrument. Set to "GC" when using GC bars for MGC execution.
+    signal_instrument: str = ""  # if set, bars from this instrument drive signals; execution uses `instrument`
     _prev_atr: Decimal | None = field(default=None, init=False, repr=False)
+    last_reject: "RejectInfo | None" = field(default=None, init=False, repr=False)
 
     def on_bar(self, bar: Bar) -> Optional[Signal]:
         """Run all detectors against one bar. Returns at most one Signal."""
-        sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
-        for s in sweeps:
-            self.composer.on_sweep(bar, s, source="swing")
-
+        # Cleared each bar; set at an internal reject site below. The engine reads
+        # it immediately after on_bar(), before the next bar clears it.
+        self.last_reject = None
+        # News and session filters (Rules G, H)
+        if in_news_blackout(bar.ts, self.strategy_cfg.ifvg_news_blackout):
+            log.info("Signal blocked: news blackout at %s", bar.ts)
+            return None
         signal: Optional[Signal] = None
-        disp = self.displacement.on_bar(bar)
-        if disp is not None:
-            signal = self.composer.on_displacement(bar, disp)
+
+        # ── Armed zone path ──────────────────────────────────────────────
+        if self.armed_tracker.active is not None and self._pending_signal is not None:
+            zone = self.armed_tracker.active  # capture before on_bar clears it
+
+            # Rule F: premature liquidity — TP1 hit before entry fills (config-gated)
+            if self.strategy_cfg.ifvg_rule_f_enabled and zone.tp1_price is not None:
+                if zone.side == "long" and bar.high >= zone.tp1_price:
+                    log.info(
+                        "Premature liquidity: TP1 %s hit before long entry — cancelling armed zone",
+                        zone.tp1_price,
+                    )
+                    _ps = self._pending_signal
+                    self.armed_tracker.cancel()
+                    self._pending_signal = None
+                    self.last_reject = RejectInfo(
+                        reason="premature_liquidity", side="long",
+                        entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
+                        grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
+                        killzone=(_ps.killzone if _ps else "") or "",
+                        rationale=(_ps.rationale if _ps else "") or "",
+                    )
+                    # fall through to normal signal generation
+                elif zone.side == "short" and bar.low <= zone.tp1_price:
+                    log.info(
+                        "Premature liquidity: TP1 %s hit before short entry — cancelling armed zone",
+                        zone.tp1_price,
+                    )
+                    _ps = self._pending_signal
+                    self.armed_tracker.cancel()
+                    self._pending_signal = None
+                    self.last_reject = RejectInfo(
+                        reason="premature_liquidity", side="short",
+                        entry=zone.entry_price, stop=zone.stop_price, target=zone.tp1_price,
+                        grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                        score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
+                        killzone=(_ps.killzone if _ps else "") or "",
+                        rationale=(_ps.rationale if _ps else "") or "",
+                    )
+                    # fall through to normal signal generation
+
+        if self.armed_tracker.active is not None and self._pending_signal is not None:
+            zone = self.armed_tracker.active
+            status = self.armed_tracker.on_bar(bar)
+
+            if status == "filled":
+                # Build execution signal: zone's entry/stop, pending signal's target+meta
+                pending = self._pending_signal
+                self._pending_signal = None
+                signal = dc_replace(
+                    pending,
+                    entry=zone.entry_price,
+                    stop=zone.stop_price,
+                    armed_zone=zone,
+                )
+                log.info(
+                    "Armed zone filled: %s %s @ entry=%s stop=%s",
+                    zone.killzone, zone.side, zone.entry_price, zone.stop_price,
+                )
+            elif status in ("invalidated", "expired"):
+                log.info("Armed zone %s — pending signal discarded", status)
+                _ps = self._pending_signal
+                self._pending_signal = None
+                self.last_reject = RejectInfo(
+                    reason=("zone_expired" if status == "expired" else "invalidated"),
+                    side=(_ps.side if _ps else ""),
+                    entry=(_ps.entry if _ps else None), stop=(_ps.stop if _ps else None),
+                    target=(_ps.target if _ps else None),
+                    grade=(_ps.setup_grade.grade if _ps and _ps.setup_grade else ""),
+                    score=(_ps.setup_grade.score if _ps and _ps.setup_grade else 0),
+                    killzone=(_ps.killzone if _ps else "") or "",
+                    rationale=(_ps.rationale if _ps else "") or "",
+                )
+                # fall through to normal signal generation on this same bar
+
+            elif status == "pending":
+                # Zone still live — skip signal generation this bar
+                self._prev_atr = self.displacement.atr
+                kz = in_killzone(bar.ts, self.composer._zones)
+                self.grader.update_session_range(bar, kz.name if kz else None)
+                self.composer.on_bar_close(bar)
+                return None
+
+        # ── Normal signal generation (when no active zone or just invalidated) ──
+        if signal is None:
+            sweeps = self.liquidity.on_bar(bar, atr=self._prev_atr)
+            for sw in sweeps:
+                self.composer.on_sweep(bar, sw)
+
+            disp = self.displacement.on_bar(bar)
+            if disp is not None:
+                candidate = self.composer.on_displacement(bar, disp)
+                if candidate is not None:
+                    grade = self.grader.score(
+                        candidate,
+                        disp,
+                        self.displacement.active_fvgs,
+                        bars_since_sweep=0,  # sweep tracking deferred — always 0 for now
+                        sweep_window_bars=self.strategy_cfg.ifvg_sweep_window_bars,
+                        min_displacement_mult=self.strategy_cfg.ifvg_min_displacement_mult,
+                        min_grade=self.strategy_cfg.grader_min_grade,
+                        gapping_sack_enabled=self.strategy_cfg.ifvg_gapping_sack_enabled,
+                    )
+                    if grade.passes:
+                        graded = dc_replace(candidate, setup_grade=grade)
+                        signal = self._arm_or_return(bar, graded, disp)
+                    else:
+                        log.info(
+                            "Signal filtered by grader: %s — %s",
+                            grade.grade, grade.reason,
+                        )
+                        self.last_reject = RejectInfo(
+                            reason=f"grader_{grade.grade}", side=candidate.side,
+                            entry=candidate.entry, stop=candidate.stop,
+                            target=candidate.target, grade=grade.grade,
+                            score=grade.score,
+                            killzone=candidate.killzone or "",
+                            rationale=candidate.rationale or "",
+                        )
 
         # Cache ATR for the NEXT bar's liquidity call (one-bar lag is acceptable;
         # ATR doesn't change sharply bar-to-bar and liquidity runs before displacement).
         self._prev_atr = self.displacement.atr
 
+        # Update grader session range every bar
+        kz = in_killzone(bar.ts, self.composer._zones)
+        self.grader.update_session_range(bar, kz.name if kz else None)
+
+        # Macro-window bonus log (observability, not a hard filter)
+        if signal and in_macro_window(bar.ts, self.strategy_cfg.ifvg_macro_windows):
+            log.info("Signal in macro window — higher-confidence timing")
+
         # Bookkeeping AFTER signal evaluation — see composer docstring.
         self.composer.on_bar_close(bar)
         return signal
 
+    def _arm_or_return(self, bar: Bar, signal: Signal, disp: DisplacementEvent) -> Optional[Signal]:
+        """
+        For 'close' mode: return signal immediately (existing behavior).
+        For 'ifvg_edge' / 'retrace_ce': arm the tracker and return None.
+
+        Stop buffer is sourced from the composer config (already in price units)
+        to avoid a tick-size conversion here.
+        """
+        mode = self.strategy_cfg.ifvg_entry_mode
+
+        if signal.fvg_low is None or signal.fvg_high is None:
+            # No FVG zone bounds — can't compute armed zone; return signal directly
+            log.info("Armed zone skipped: no fvg_low/fvg_high on signal — returning directly")
+            return signal
+
+        if mode == "close":
+            # Immediate fill at signal's original entry — unchanged from previous behavior.
+            return signal
+
+        # Compute TP1 for premature-liquidity cancel (Rule F)
+        tp1_price: Optional[Decimal] = None
+        highs = self.grader._htf_swing_highs
+        lows = self.grader._htf_swing_lows
+        if signal.side == "long":
+            candidates = [h for h in highs if h > signal.entry]
+            tp1_price = min(candidates) if candidates else None
+        else:
+            candidates = [l for l in lows if l < signal.entry]
+            tp1_price = max(candidates) if candidates else None
+
+        # Use composer's stop_buffer (already in price units) as zone stop buffer
+        stop_buffer = self.composer.config.stop_buffer
+
+        zone = self.armed_tracker.arm(
+            side=signal.side,
+            fvg_low=signal.fvg_low,
+            fvg_high=signal.fvg_high,
+            entry_mode=mode,
+            stop_buffer=stop_buffer,
+            created_at=bar.ts,
+            killzone=signal.killzone,
+            sweep_extreme=signal.sweep_extreme,
+            max_age_bars=self.strategy_cfg.ifvg_zone_max_age_bars,
+        )
+        # Attach tp1_price to zone (ArmedZone is frozen — use dc_replace)
+        if tp1_price is not None:
+            zone = dc_replace(zone, tp1_price=tp1_price)
+            self.armed_tracker._active = zone  # update tracker's active zone
+
+        self._pending_signal = dc_replace(signal, armed_zone=zone)
+        log.info(
+            "Signal armed: %s %s zone=[%s-%s] entry=%s mode=%s tp1=%s",
+            signal.killzone, signal.side,
+            signal.fvg_low, signal.fvg_high,
+            zone.entry_price, mode, tp1_price,
+        )
+        return None  # wait for armed zone to fill
+
     def try_signal_from_forming(self, forming_bar: Bar) -> Optional[Signal]:
         """
-        Check if the forming bar (as b3) already satisfies the FVG condition
-        for the most recently processed displacement candidate (b2 = window[-1]).
-        If so, emit a signal via the normal composer path (which clears _awaiting).
-        Returns None if no pending sweep, no displacement, or no FVG yet.
+        Check if the displacement candidate (b2 = window[-1]) can invert a
+        prior active FVG. peek_displacement already gates on this — if it
+        returns non-None, a prior FVG is invertible. The forming bar (b3)
+        is no longer used to generate the FVG; the entry FVG is the prior
+        inverted one identified by _find_inverted_fvg(b2, side).
+        Returns None if no pending sweep, no displacement, or no prior FVG.
         """
         peek = self.displacement.peek_displacement()
         if peek is None:
             return None
         side, b1, b2 = peek
-        fvg = DisplacementDetector._compute_fvg(b1, forming_bar, side)
-        if fvg is None:
+
+        ifvg = self.displacement._find_inverted_fvg(b2, side, prev_close=b1.close)
+        if ifvg is None:
             return None
+
         body = abs(b2.close - b2.open)
         atr = self.displacement.atr or body
         event = DisplacementEvent(
@@ -156,39 +383,22 @@ class StrategyRunner:
             displacement_bar=b2,
             body_size=body,
             atr_at_event=atr,
-            body_to_atr=body / atr if atr else Decimal("0"),
-            fvg=fvg,
+            body_to_atr=body / atr,
+            fvg=ifvg,
         )
-        return self.composer.on_displacement(forming_bar, event)
-
-
-def _snapshot_strategy_state(runner: "StrategyRunner") -> dict:
-    """Read-only snapshot of strategy state for the debug panel. No mutation."""
-    kz_ranges: dict = {}
-    kz_pending_a: list[str] = []
-    if runner.kz_levels is not None:
-        kz_ranges = {
-            name: {"high": str(high), "low": str(low)}
-            for name, (high, low) in runner.kz_levels._kz_ranges.items()
-        }
-        kz_pending_a = list(runner.kz_levels._pending_a.keys())
-    awaiting = [
-        {
-            "side": a.sweep.side,
-            "source": a.source,
-            "price": str(a.sweep.swept_swing.price),
-            "bars_elapsed": a.bars_since_sweep,
-            "killzone": a.killzone_name,
-        }
-        for a in runner.composer._awaiting
-    ]
-    return {
-        "instrument": runner.instrument,
-        "signal_instrument": runner.signal_instrument or runner.instrument,
-        "kz_ranges": kz_ranges,
-        "kz_pending_a": kz_pending_a,
-        "awaiting_sweeps": awaiting,
-    }
+        candidate = self.composer.on_displacement(forming_bar, event)
+        if candidate is None:
+            return None
+        grade = self.grader.score(
+            candidate, event, self.displacement.active_fvgs,
+            min_grade=self.strategy_cfg.grader_min_grade,
+            gapping_sack_enabled=self.strategy_cfg.ifvg_gapping_sack_enabled,
+        )
+        if not grade.passes:
+            log.info("Forming-bar signal filtered: %s — %s", grade.grade, grade.reason)
+            return None
+        graded = dc_replace(candidate, setup_grade=grade)
+        return self._arm_or_return(forming_bar, graded, event)
 
 
 class ExecutionEngine:
@@ -207,33 +417,62 @@ class ExecutionEngine:
         on_signal: SignalEmitted | None = None,
         on_order_placed: Callable[[], None] | None = None,
         on_pre_place: PrePlaceCallback | None = None,
+        on_reject: "Callable[[RejectInfo, str], Awaitable[None]] | None" = None,
         replay_mode: bool = False,
         contracts: int = 1,
         risk_per_trade_pct: Decimal = Decimal("0"),
         strategy_cfg: "StrategyParams | None" = None,
-        on_bar_done: "Callable[[str, dict], None] | None" = None,
+        commission_per_contract: Decimal = Decimal("0"),
+        max_contracts_override: int | None = None,
+        forming_bar_entries: bool = False,
+        flatten_enabled: bool = True,
+        flatten_time_ct: str = "15:05",
+        entry_cutoff_time_ct: str = "14:30",
+        flatten_wallclock_enabled: bool = True,
+        phase: "PhaseTracker | None" = None,
+        cpi_event_dates: "frozenset[date] | None" = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
         self.runners = {r.instrument: r for r in runners}
-        self.on_signal = on_signal
-        self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
-        self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
-        self.strategy_cfg = strategy_cfg
-        self.on_bar_done = on_bar_done
-        # Maps signal instrument → execution instrument (e.g. {"GC": "MGC"}).
-        # Empty when all runners use the same instrument for signal and execution.
+        # Maps signal_instrument → execution instrument when they differ (GC → MGC).
+        # Built from runners that have a non-empty signal_instrument.
         self._bar_router: dict[str, str] = {
             r.signal_instrument: r.instrument
             for r in runners
             if r.signal_instrument and r.signal_instrument != r.instrument
         }
+        self.on_signal = on_signal
+        self.contracts = contracts  # contracts per signal; hot-applied via PATCH /api/config
+        self.risk_per_trade_pct = risk_per_trade_pct  # 0 = use fixed contracts; else % equity risked; hot-applied
+        self.strategy_cfg = strategy_cfg
+        self.commission_per_contract = commission_per_contract  # deducted per fill side; hot-applied
+        self.max_contracts_override = max_contracts_override  # None = use account-level cap; hot-applied
+        # Mid-bar entries: when False (default), the b3 confirmation must come
+        # from a CLOSED bar — the only path the backtest validates. The poll
+        # task always runs; it checks this flag per tick so PATCH hot-applies.
+        self.forming_bar_entries = forming_bar_entries
+        self.flatten_enabled = flatten_enabled            # hot-applied via PATCH /api/config
+        self.flatten_time_ct = flatten_time_ct
+        self.entry_cutoff_time_ct = entry_cutoff_time_ct
+        self.flatten_wallclock_enabled = flatten_wallclock_enabled  # startup-only; restart to change
+        self.phase = phase  # hot-applied via PATCH /api/config
+        # CPI-day router: ET dates on which the base engine takes no new entries.
+        # Empty/None => router off => never blocks (cpi_day_router_enabled gates
+        # whether main.py passes a populated set). Read-only after construction.
+        self._cpi_dates = cpi_event_dates or frozenset()
+        self._phase_day: "date | None" = None
+        self._flatten_task: asyncio.Task | None = None
+        self._flattened_today: str | None = None  # trading-day key, avoid re-flatten spam
         # Called immediately after broker.place_bracket() succeeds so the
         # reconciler can start its fill-latency grace window.
         self._on_order_placed = on_order_placed
         # Called BEFORE await broker.place_bracket() so signal meta is written
         # before the market-order fill can race in during the HTTP round-trip.
         self._on_pre_place = on_pre_place
+        # Called when the runner rejects a setup internally (grader-B, premature
+        # liquidity, invalidate) so the rejection ledger can record the miss.
+        self._on_reject = on_reject
 
         # When True, the wall-clock staleness check is skipped so historical
         # bars are processed the same way regardless of when the run happens.
@@ -269,12 +508,21 @@ class ExecutionEngine:
 
         self._started = False
 
+        # Rule F: premature-liquidity cancel.
+        # Maps instrument → (tp1_price, side) for the most recently placed
+        # pending entry. Cleared on fill. When a bar crosses the TP1 level
+        # before the entry fills, the pending order is cancelled — the setup
+        # is dead because the opposing liquidity has already been taken.
+        self._pending_entry_tp1: dict[str, tuple[Decimal, str]] = {}
+
         # HTF confluence trackers — set externally by main.py after warm-up.
         # Engine-owned (not per-runner) so they survive /api/strategy/reload.
         # None until wired; the on_bar gates no-op while None or while the
         # corresponding strategy_cfg flag is off.
         self.htf_bias = None      # HTFBiasTracker | None
         self.htf_levels = None    # HTFLevelFinder | None
+        # Which instrument's bars htf_levels was built from. Only apply to matching signals.
+        self._htf_instrument: str | None = None
         # One-shot warning guard: fires once if a flag is on but the tracker is
         # None (e.g. rebuild failed). Resets when trackers are successfully wired.
         self._htf_warned: bool = False
@@ -292,9 +540,11 @@ class ExecutionEngine:
         self._started = True
         if not self._replay_mode:
             self._poll_task = asyncio.create_task(self._poll_forming_bars())
+            if self._flatten_task is None and self.flatten_wallclock_enabled:
+                self._flatten_task = asyncio.create_task(self._flatten_clock())
         log.info(
-            "ExecutionEngine started: %d instruments tracked",
-            len(self.runners),
+            "ExecutionEngine started: %d instruments tracked, forming_bar_entries=%s",
+            len(self.runners), self.forming_bar_entries,
         )
 
     async def stop(self) -> None:
@@ -308,6 +558,13 @@ class ExecutionEngine:
             except asyncio.CancelledError:
                 pass
             self._poll_task = None
+        if self._flatten_task is not None:
+            self._flatten_task.cancel()
+            try:
+                await self._flatten_task
+            except asyncio.CancelledError:
+                pass
+            self._flatten_task = None
         # Cancel only — we do NOT flatten on stop. The operator may be
         # restarting the bot mid-position; auto-flattening would be
         # surprising. The kill-switch endpoint is for that.
@@ -316,6 +573,61 @@ class ExecutionEngine:
         except Exception as e:
             log.warning("cancel_all on stop failed: %s", e)
         self._started = False
+
+    # ------------------------------------------------------------------
+    # Flatten-rule enforcement
+    # ------------------------------------------------------------------
+
+    async def _enforce_flatten(self, ts: datetime) -> None:
+        """Topstep flatten rule: flat by 3:10 PM CT — we act at flatten_time_ct.
+
+        Bar-driven so it works identically in replay and live; live also has
+        a wall-clock task because 5min bars can arrive late.
+        """
+        if not self.flatten_enabled:
+            return
+        if not in_flatten_window(ts, self.flatten_time_ct):
+            return
+        day_key = ts.astimezone(CT).date().isoformat()
+        if self._flattened_today == day_key:
+            return
+        open_insts = self._open_instruments()
+        if not open_insts:
+            self._flattened_today = day_key
+            return
+        log.warning("FLATTEN WINDOW: closing all positions at %s (rule: flat by 3:10 PM CT)", ts)
+        all_closed = True
+        for inst in open_insts:
+            try:
+                await self.broker.cancel_all(inst)
+                ok = await self.broker.flatten(inst)
+                if not ok:
+                    all_closed = False
+                    log.error("FLATTEN WINDOW: flatten(%s) rejected — will retry next tick", inst)
+            except Exception:
+                all_closed = False
+                log.exception("FLATTEN WINDOW: close failed for %s — will retry next tick", inst)
+        if all_closed:
+            self._flattened_today = day_key
+
+    def _open_instruments(self) -> list[str]:
+        """Instruments with open positions, per broker truth where available."""
+        if callable(getattr(self.broker, "open_brackets", None)):
+            insts = sorted({b["instrument"] for b in self.broker.open_brackets()})
+            if insts:
+                return insts
+        if self.risk_state.open_contracts != 0:
+            return [r.instrument for r in self.runners.values()]
+        return []
+
+    async def _flatten_clock(self) -> None:
+        """Live backup for bar-driven flatten: check every 30s of wall time."""
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await self._enforce_flatten(datetime.now(timezone.utc))
+            except Exception:
+                log.exception("flatten clock check failed")
 
     # ------------------------------------------------------------------
     # Event handlers — registered with the broker
@@ -332,8 +644,43 @@ class ExecutionEngine:
         and a fill arriving during that window only changes state
         the NEXT signal will see — which is correct behavior.
         """
-        exec_instrument = self._bar_router.get(bar.instrument, bar.instrument)
-        runner = self.runners.get(exec_instrument)
+        await self._enforce_flatten(bar.ts)
+        td = trading_day_ct(bar.ts)
+        if self._phase_day is None:
+            self._phase_day = td
+        elif td != self._phase_day:
+            # DLL/DPL lockouts are daily rules and must clear at 5pm CT live,
+            # same as the backtest replay loop (MLL lockouts persist).
+            self.risk_state.roll_trading_day(bar.ts)
+            if self.phase is not None:
+                self.phase.roll_day(bar.ts)
+                log.info("Phase day rolled: %s — balance %s, cushion %s",
+                         td, self.phase.balance, self.phase.cushion)
+            self._phase_day = td
+        # Resolve: a GC bar routes to the MGC runner via _bar_router.
+        execution_key = self._bar_router.get(bar.instrument, bar.instrument)
+
+        # Rule F: premature-liquidity cancel.
+        # If we have a pending limit entry and the bar crossed the TP1 price
+        # before the entry filled, the setup's opposing liquidity is already
+        # taken — cancel all working orders for this instrument.
+        # Runs before the runner-None guard so it fires even during misconfiguration.
+        pending_tp1 = self._pending_entry_tp1.get(execution_key)
+        if pending_tp1 is not None and self.risk_state.open_contracts == 0:
+            tp1_lvl, tp1_side = pending_tp1
+            hit = (
+                (tp1_side == "long" and bar.high >= tp1_lvl)
+                or (tp1_side == "short" and bar.low <= tp1_lvl)
+            )
+            if hit:
+                log.info(
+                    "Premature liquidity: TP1 %s hit before %s entry filled — cancelling pending orders",
+                    tp1_lvl, tp1_side,
+                )
+                self._pending_entry_tp1.pop(execution_key, None)
+                asyncio.create_task(self.broker.cancel_all(execution_key))
+
+        runner = self.runners.get(execution_key)
         if runner is None:
             # We're subscribed to a symbol we don't have a runner for.
             # Either misconfiguration or a multi-runner setup in
@@ -358,30 +705,59 @@ class ExecutionEngine:
         if runner.vp is not None and self.strategy_cfg is not None:
             runner.vp.on_bar(bar, self.strategy_cfg)
 
-        # KZ level sweeps fire before runner.on_bar() so both sources feed the
-        # composer in the same bar, and the composer picks up whichever is freshest.
-        if runner.kz_levels is not None and self.strategy_cfg is not None:
-            for s in runner.kz_levels.on_bar(
-                bar, runner.composer._zones, self.strategy_cfg
-            ):
-                runner.composer.on_sweep(bar, s, source="kz_level")
-
         try:
             signal = runner.on_bar(bar)
         except Exception:
             log.exception("Strategy raised on bar %s", bar.ts)
             return
 
-        if self.on_bar_done is not None:
-            self.on_bar_done(bar.instrument, _snapshot_strategy_state(runner))
+        # Strategy-initiated exit channel (e.g. chop_breakout failed-breakout
+        # / VWAP invalidation). Consumed every bar; only acts when a position
+        # is open — a request while flat is a no-op by design.
+        exit_req = getattr(runner, "exit_request", None)
+        if exit_req is not None:
+            runner.exit_request = None
+            if self.risk_state.open_contracts != 0:
+                log.info("Strategy exit request '%s' — flattening %s",
+                         exit_req, runner.instrument)
+                try:
+                    await self.broker.cancel_all(runner.instrument)
+                    await self.broker.flatten(runner.instrument)
+                except Exception:
+                    log.exception("Strategy exit flatten failed for %s",
+                                  runner.instrument)
 
-        if signal is None or is_stale:
-            if is_stale and signal is not None:
-                log.debug(
-                    "Warmup bar %s (age=%.0fs) generated signal — skipping order.",
-                    bar.ts, (datetime.now(timezone.utc) - bar.ts).total_seconds(),
-                )
+        if signal is None:
+            # Runner rejected internally (grader-B / premature-liq / invalidate).
+            # Skip stale/warmup bars so the ledger holds live misses only.
+            rej = runner.last_reject
+            if rej is not None and self._on_reject is not None and not is_stale:
+                try:
+                    await self._on_reject(rej, runner.instrument)
+                except Exception:
+                    log.exception("on_reject callback raised")
             return
+
+        # Armed-zone fills are live market events — price re-entered the zone on
+        # THIS bar — so the warmup/replay staleness guard must not discard them.
+        # Staleness still applies to fresh signals so we don't trade on bars that
+        # a reconnect re-delivered with old timestamps. Both branches log at
+        # WARNING: the prior DEBUG line made silent drops invisible at INFO and
+        # swallowed legitimate armed fills during SignalR reconnect churn.
+        if is_stale:
+            age_secs = (datetime.now(timezone.utc) - bar.ts).total_seconds()
+            if signal.armed_zone is None:
+                log.warning(
+                    "Stale bar %s (age=%.0fs) produced a signal — skipping order "
+                    "(bar-stream latency / reconnect churn).",
+                    bar.ts, age_secs,
+                )
+                return
+            log.warning(
+                "Armed-zone fill on stale bar %s (age=%.0fs) — placing anyway; "
+                "armed fills are live events.",
+                bar.ts, age_secs,
+            )
 
         original_signal = signal
         signal, deny_reason = self._apply_confluence(signal, runner)
@@ -404,11 +780,20 @@ class ExecutionEngine:
 
     async def _handle_fill(self, fill: Fill) -> None:
         """Fill arrived. Update risk state. Synchronous, no await needed."""
+        if fill.is_entry:
+            # Entry confirmed — TP1 premature-liquidity watch is no longer needed.
+            self._pending_entry_tp1.pop(fill.instrument, None)
+        commission = self.commission_per_contract * fill.size if self.commission_per_contract else Decimal("0")
         self.risk_state.record_fill(
-            realized_pnl_delta=fill.realized_pnl_delta,
+            realized_pnl_delta=fill.realized_pnl_delta - commission,
             contracts_delta=fill.contracts_delta,
             ts=fill.ts,
         )
+        # Governor must see NET P&L — Topstep balances/MLL are net of
+        # commissions, and a gross-fed cushion drifts optimistic.
+        net_delta = fill.realized_pnl_delta - commission
+        if self.phase is not None and net_delta != 0:
+            self.phase.on_pnl(net_delta, fill.ts)
         log.info(
             "Fill: %s %s %d @ %s pnl=%s contracts_now=%d",
             fill.instrument,
@@ -461,6 +846,10 @@ class ExecutionEngine:
         target. Returns (None, reason) if a gate blocks it, where reason is
         "htf_bias" or "vp_filter". Pure decision: does not call on_signal.
         """
+        # Engine-level strategy_cfg on purpose: VP/HTF confluence toggles are
+        # hot-applied here by PATCH /api/config without a runner rebuild.
+        # Per-instrument overrides live on runner.strategy_cfg (runner-level
+        # fields only — composer/displacement/liquidity/grader/iFVG).
         cfg = self.strategy_cfg
         if cfg is not None and not self._htf_warned:
             if (cfg.htf_bias_enabled and self.htf_bias is None) or (
@@ -511,7 +900,10 @@ class ExecutionEngine:
         # Part B — target precedence: HTF (4h FVG → 30min swing) wins,
         # VP target is the fallback, fixed r_multiple is the final fallback.
         target_chosen = False
-        if cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None:
+        if (
+            cfg is not None and cfg.htf_target_enabled and self.htf_levels is not None
+            and (self._htf_instrument is None or signal.instrument == self._htf_instrument)
+        ):
             found = self.htf_levels.find_target(
                 signal.side, signal.entry, signal.stop, cfg.htf_target_min_r,
             )
@@ -530,33 +922,99 @@ class ExecutionEngine:
 
     def _entry_size(self, signal: Signal) -> int:
         """Contracts for this entry. Risk-based when risk_per_trade_pct > 0,
-        else the fixed `contracts` count. Logs the decision (Rule 12)."""
+        else the fixed `contracts` count. B58: scaled by confluence multiplier
+        when risk_policy='confluence'. Logs the decision (Rule 12)."""
+        account_max = self.risk_state.config.max_contracts
+        effective_max = (
+            min(account_max, self.max_contracts_override)
+            if self.max_contracts_override is not None
+            else account_max
+        )
+
         if not self.risk_per_trade_pct or self.risk_per_trade_pct <= 0:
-            return self.contracts
+            size = self.contracts
+        else:
+            if self.phase is not None and self.phase.phase in ("combine", "xfa"):
+                # Phase-aware sizing: the tracked account (real or shadow) is the
+                # capital at risk — broker equity may be an unrelated practice
+                # balance (e.g. $153k practice vs a simulated $50k Combine).
+                # XFA balances start at $0, so its risked capital is the MLL
+                # cushion, not the balance.
+                if self.phase.phase == "combine":
+                    equity = self.phase.balance
+                else:
+                    equity = self.phase.cushion or Decimal("1")
+                offset = Decimal("0")
+            else:
+                equity = self.risk_state.current_equity
+                if equity <= 0:  # before the first mark-to-market tick of the session
+                    equity = self.risk_state.realized_balance
+                offset = self.risk_state.config.risk_sizing_equity_offset
+                if offset > 0:
+                    equity = max(equity - offset, Decimal("1"))
+            stop_distance = abs(signal.entry - signal.stop)
+            if stop_distance <= 0:
+                size = self.contracts  # degenerate signal; fall back rather than divide by zero
+            else:
+                pv = _point_value(signal.instrument)
+                size = risk_based_size(
+                    equity, self.risk_per_trade_pct, stop_distance, pv,
+                    max_size=effective_max,
+                )
+                budget = equity * (self.risk_per_trade_pct / Decimal("100"))
+                risk_per_contract = stop_distance * pv
+                over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
+                offset_note = f" (profit-above-base; offset={offset})" if offset > 0 else ""
+                log.info(
+                    "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s%s",
+                    equity, budget, stop_distance, risk_per_contract, size, over, offset_note,
+                )
 
-        equity = self.risk_state.current_equity
-        if equity <= 0:  # before the first mark-to-market tick of the session
-            equity = self.risk_state.realized_balance
-        stop_distance = abs(signal.entry - signal.stop)
-        if stop_distance <= 0:
-            return self.contracts  # degenerate signal; fall back rather than divide by zero
+        # B58: apply confluence multiplier when risk_policy="confluence"
+        if (self.strategy_cfg is not None and
+                self.strategy_cfg.risk_policy == "confluence"):
+            mult = _confluence_multiplier(signal.confluence_count)
+            base_before_mult = size
+            scaled = int(Decimal(str(size)) * mult)
+            size = max(1, min(scaled, effective_max))
+            log.info(
+                "Confluence-sized: count=%d mult=%s base=%d -> size=%d",
+                signal.confluence_count, mult, base_before_mult, size,
+            )
 
-        pv = _point_value(signal.instrument)
-        size = risk_based_size(
-            equity, self.risk_per_trade_pct, stop_distance, pv,
-            max_size=self.risk_state.config.max_contracts,
-        )
-        budget = equity * (self.risk_per_trade_pct / Decimal("100"))
-        risk_per_contract = stop_distance * pv
-        over = " (OVER-BUDGET floored to 1)" if risk_per_contract > budget else ""
-        log.info(
-            "Risk-sized: equity=%s budget=%s stop=%spt $/ct=%s -> size=%d%s",
-            equity, budget, stop_distance, risk_per_contract, size, over,
-        )
         return size
 
     async def _act_on_signal(self, signal: Signal) -> OrderOutcome:
-        """Run the pretrade gate and place if allowed. Caller holds the lock."""
+        """Run the pretrade gate and place if allowed.
+
+        Asyncio cooperative scheduling: no lock needed. A last-moment
+        flatten-window re-check runs immediately before broker.place_bracket
+        to catch the flatten task interleaving at that await point.
+        """
+        # Opposite-side signal while holding a position: flatten first, then
+        # reverse. This MUST be checked before the pretrade gate. The gate only
+        # denies (MAX_CONTRACTS) when headroom is exhausted, but max_contracts
+        # (30) far exceeds the traded size, so the gate would Allow the opposing
+        # entry and stack a second, conflicting bracket on a netted position
+        # (2026-06-07 incident: long 5 + short 6 -> tangled net -1, orphan left
+        # open). Routing here restores the intended flatten-before-reverse flow.
+        if (
+            self.risk_state.open_contracts != 0
+            and _is_opposite_side(signal.side, self.risk_state.open_contracts)
+            and signal.instrument not in self._reversal_flatten_active
+        ):
+            log.info(
+                "Opposite-side signal while in position — flattening for reversal: %s",
+                signal.rationale,
+            )
+            self._pending_reversal[signal.instrument] = signal
+            asyncio.create_task(self._flatten_for_reversal(signal.instrument))
+            return OrderOutcome(placed=False, reason="reversal_pending")
+
+        if self.flatten_enabled and past_entry_cutoff(signal.created_at, self.entry_cutoff_time_ct):
+            log.info("Entry blocked: past %s CT entry cutoff (flatten rule)", self.entry_cutoff_time_ct)
+            return OrderOutcome(placed=False, reason="entry_cutoff")
+
         order = ProposedOrder(
             instrument=signal.instrument,
             side=signal.side,
@@ -565,8 +1023,13 @@ class ExecutionEngine:
             stop=signal.stop,
             target=signal.target,
             is_entry=True,
+            setup_grade=(signal.setup_grade.grade if signal.setup_grade else ""),
         )
-        decision = check(order, self.risk_state)
+        cpi_active = is_cpi_day(signal.created_at, self._cpi_dates)
+        decision = check(
+            order, self.risk_state, phase=self.phase,
+            ts=signal.created_at, cpi_day_active=cpi_active,
+        )
 
         if isinstance(decision, Deny):
             if (
@@ -615,6 +1078,34 @@ class ExecutionEngine:
             except Exception:
                 log.exception("on_pre_place callback raised")
 
+        # Compute structural TP1 from the nearest HTF swing in trade direction.
+        # Uses the runner's grader swing data — already computed during on_bar.
+        # Falls back gracefully to None (uses partial_profit_r path instead).
+        tp1_price: Decimal | None = None
+        tp1_fraction = Decimal("0.5")
+        be_after_tp1 = True
+        runner = self.runners.get(signal.instrument)
+        if runner is not None and self.strategy_cfg is not None:
+            highs = runner.grader._htf_swing_highs
+            lows = runner.grader._htf_swing_lows
+            if signal.side == "long":
+                candidates = [h for h in highs if h > signal.entry]
+                tp1_price = min(candidates) if candidates else None
+            else:
+                candidates = [lo for lo in lows if lo < signal.entry]
+                tp1_price = max(candidates) if candidates else None
+            tp1_fraction = self.strategy_cfg.ifvg_tp1_fraction
+            be_after_tp1 = self.strategy_cfg.ifvg_be_after_tp1
+
+        # Last-moment flatten-window re-check. The 30s wall-clock flatten task
+        # can fire between the pretrade gate above and this await, opening a
+        # narrow race where a new entry slips in just as the flatten fires.
+        # Asyncio is single-threaded, so interleaving only happens at await
+        # points — this check runs before the next await and closes the gap.
+        if self.flatten_enabled and in_flatten_window(signal.created_at, self.flatten_time_ct):
+            log.info("Entry blocked: inside flatten window (last-moment check)")
+            return OrderOutcome(placed=False, reason="flatten_window")
+
         # Allowed — place the bracket. Note: the gate may have sized down,
         # which is reflected in decision.allowed_size.
         result = await self.broker.place_bracket(
@@ -624,6 +1115,9 @@ class ExecutionEngine:
             entry=signal.entry,
             stop=signal.stop,
             target=signal.target,
+            tp1_price=tp1_price,
+            tp1_fraction=tp1_fraction if tp1_price is not None else Decimal("0.5"),
+            be_after_tp1=be_after_tp1 if tp1_price is not None else True,
         )
 
         if not result.success:
@@ -638,11 +1132,19 @@ class ExecutionEngine:
             )
 
         log.info(
-            "Bracket placed: %s size=%d entry=%s stop=%s target=%s",
+            "Bracket placed: %s size=%d entry=%s stop=%s target=%s tp1=%s",
             signal.rationale,
             decision.allowed_size,
-            signal.entry, signal.stop, signal.target,
+            signal.entry, signal.stop, signal.target, tp1_price,
         )
+
+        # Rule F: arm the premature-liquidity watch.
+        # Only for limit entries — market entries fill immediately so there is
+        # no pending window during which TP1 can be hit first.
+        broker_entry_mode = getattr(self.broker, "entry_mode", "market")
+        if broker_entry_mode == "limit" and tp1_price is not None:
+            self._pending_entry_tp1[signal.instrument] = (tp1_price, signal.side)
+
         return OrderOutcome(
             placed=True,
             reason="allowed",
@@ -659,6 +1161,8 @@ class ExecutionEngine:
         """
         while True:
             await asyncio.sleep(1)
+            if not self.forming_bar_entries:
+                continue
             for instrument, runner in self.runners.items():
                 try:
                     get_fb = getattr(self.broker, "get_forming_bar", None)

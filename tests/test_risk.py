@@ -401,3 +401,38 @@ def test_no_invariant_violated_in_random_session(fills):
         if state.locked_out is not None:
             decision = check(make_long_order(), state)
             assert isinstance(decision, Deny)
+
+
+# ---------------------------------------------------------------------
+# CPI-day router gate.
+# ---------------------------------------------------------------------
+
+class TestCpiDayRouter:
+    def test_cpi_day_blocks_base_entry(self):
+        # WHY: on a CPI day the straddle owns the session; a base entry must be
+        # denied so the two strategies never trade the same day.
+        state = RiskState(config=fifty_k_combine())
+        decision = check(make_long_order(), state, cpi_day_active=True)
+        assert isinstance(decision, Deny)
+        assert decision.reason_code == "CPI_DAY_BLOCK"
+
+    def test_cpi_day_allows_exit(self):
+        # WHY: closing/flattening an existing position must never be blocked,
+        # even on a CPI day.
+        state = RiskState(config=fifty_k_combine())
+        exit_order = ProposedOrder(
+            instrument="MGC", side="short", size=1,
+            entry=Decimal("2400"), stop=Decimal("2402"), target=Decimal("2394"),
+            is_entry=False,
+        )
+        decision = check(exit_order, state, cpi_day_active=True)
+        assert isinstance(decision, Allow)
+
+    def test_non_cpi_day_allows_base_entry(self):
+        # WHY: the router must not leak into normal days — a clean entry on a
+        # non-CPI day must pass. make_long_order() trips no other gate (no
+        # lockout, headroom available, valid stop), so an Allow here isolates
+        # the CPI gate: this test fails if the gate over-blocks.
+        state = RiskState(config=fifty_k_combine())
+        decision = check(make_long_order(), state, cpi_day_active=False)
+        assert isinstance(decision, Allow)

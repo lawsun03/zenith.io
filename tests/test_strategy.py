@@ -225,6 +225,59 @@ class TestLiquidityTracker:
         assert a_sweeps[0].side == "high"
         assert a_sweeps[0].swept_swing.price == Decimal("2403")
 
+    def test_pattern_b_sweep_carries_sweep_bar(self):
+        """The grader's fib extension needs the manipulation bar's range —
+        a Pattern B event must carry the bar that pierced and closed back."""
+        cfg = LiquidityConfig(swing_lookback=2, min_penetration=Decimal("0.20"))
+        tracker = LiquidityTracker(cfg)
+        prices = [
+            ("2400", "2400.5", "2399.8", "2400.2"),
+            ("2400.2", "2401", "2400", "2400.8"),
+            ("2400.8", "2403", "2400.5", "2401.5"),  # swing high candidate
+            ("2401.5", "2402", "2401", "2401.2"),
+            ("2401.2", "2401.5", "2400", "2400.5"),  # confirms swing high
+            ("2400.5", "2403.5", "2400", "2401"),    # sweep bar
+        ]
+        events: list[SweepEvent] = []
+        for b in make_session_bars(prices):
+            events.extend(tracker.on_bar(b))
+
+        assert len(events) == 1
+        assert events[0].sweep_bar.high == Decimal("2403.5")
+        assert events[0].sweep_bar.low == Decimal("2400")
+
+    def test_pattern_a_sweep_bar_is_the_extreme_setting_bar(self):
+        """For a multi-bar sweep, the manipulation bar is the one that set
+        the final extreme — not the tag bar, not the close-back bar."""
+        cfg = LiquidityConfig(
+            swing_lookback=2,
+            min_penetration=Decimal("0.20"),
+            multi_bar_window=4,
+        )
+        tracker = LiquidityTracker(cfg)
+        prices = [
+            ("2400", "2400.5", "2399.8", "2400.2"),
+            ("2400.2", "2401", "2400", "2400.8"),
+            ("2400.8", "2403", "2400.5", "2401.5"),  # swing high candidate
+            ("2401.5", "2402", "2401", "2401.2"),
+            ("2401.2", "2401.5", "2400", "2400.5"),  # confirms swing high
+            # Tag bar: pierces 2403, closes above.
+            ("2400.5", "2403.5", "2400.5", "2403.2"),
+            # Pushes the extreme higher — this is the manipulation bar.
+            ("2403.2", "2404.1", "2403.0", "2403.3"),
+            # Close-back bar → Pattern A emit.
+            ("2403.3", "2403.4", "2402", "2402.5"),
+        ]
+        events: list[SweepEvent] = []
+        for b in make_session_bars(prices):
+            events.extend(tracker.on_bar(b))
+
+        a_sweeps = [e for e in events if e.pattern == "A_multi_bar"]
+        assert len(a_sweeps) == 1
+        assert a_sweeps[0].sweep_extreme == Decimal("2404.1")
+        assert a_sweeps[0].sweep_bar.high == Decimal("2404.1")
+        assert a_sweeps[0].sweep_bar.low == Decimal("2403.0")
+
     def test_pattern_a_expires_without_emitting(self):
         """
         Tag a swing, then never close back within the window. No event.
@@ -306,10 +359,9 @@ class TestDisplacement:
 
     def test_strong_bullish_displacement_with_fvg(self):
         """
-        Quiet bars to warm ATR, then a 3-bar pattern:
-          bar1: small range
-          bar2: huge bullish body, also above bar1's high
-          bar3: opens above bar1's high → FVG formed
+        Quiet bars to warm ATR, then a prior bearish FVG is formed,
+        followed by a big bullish displacement bar that closes above
+        the FVG's high → iFVG inversion fires with fvg = prior bearish FVG.
         """
         cfg = DisplacementConfig(
             atr_period=5,
@@ -327,23 +379,32 @@ class TestDisplacement:
                 "2400", "2400.5", "2399.8", "2400.1",
             ))
 
-        # Bar 1 (will be the b1 of the 3-bar window): small.
-        det.on_bar(bar(ts0 + timedelta(minutes=5), "2400", "2400.3", "2399.9", "2400.1"))
+        # Form a bearish FVG [2399.6, 2399.9] before the displacement:
+        #   b1 low=2399.9, b3 high=2399.6 < b1.low → bearish FVG [2399.6, 2399.9]
+        det.on_bar(bar(ts0 + timedelta(minutes=5), "2400", "2400.3", "2399.9", "2400.1"))  # b1
+        det.on_bar(bar(ts0 + timedelta(minutes=6), "2400.1", "2400.2", "2399.5", "2399.7"))
+        det.on_bar(bar(ts0 + timedelta(minutes=7), "2399.7", "2399.6", "2398.8", "2399.0"))  # b3: high=2399.6 < 2399.9 → FVG
 
-        # Bar 2 — big bullish: open 2400.2, close 2402.5, range 2400.0–2402.6.
-        # body=2.3, range=2.6, ratio=0.88 (>0.6), body=2.3 > 1.5×ATR(~0.5).
-        det.on_bar(bar(ts0 + timedelta(minutes=6), "2400.2", "2402.6", "2400", "2402.5"))
+        # b1 of the displacement window — close 2399.8 must stay at/below
+        # fvg.high=2399.9 so the inversion happens ON the displacement bar
+        # (a prior close already above the edge would make it stale). High must
+        # also stay below 2399.9 or the wick would mitigate the FVG.
+        det.on_bar(bar(ts0 + timedelta(minutes=8), "2399.7", "2399.8", "2399.5", "2399.8"))
 
-        # Bar 3 — gaps up further: low 2401 > bar1.high 2400.3 → FVG forms.
-        ev = det.on_bar(bar(ts0 + timedelta(minutes=7), "2402.5", "2403", "2401", "2402.8"))
+        # Displacement bar (b2) — big bullish: open 2400.2, close 2402.5.
+        # body=2.3, range=2.6, ratio=0.88 (>0.6). close=2402.5 > fvg.high=2399.9 → iFVG inversion.
+        det.on_bar(bar(ts0 + timedelta(minutes=9), "2400.2", "2402.6", "2400", "2402.5"))
+
+        # b3: gaps up, no further FVG needed (inversion already evaluated on b2).
+        ev = det.on_bar(bar(ts0 + timedelta(minutes=10), "2402.5", "2403", "2401", "2402.8"))
 
         assert ev is not None
         assert ev.side == "bullish"
         assert ev.fvg is not None
-        assert ev.fvg.side == "bullish"
-        # FVG zone: bar1.high to bar3.low
-        assert ev.fvg.low == Decimal("2400.3")
-        assert ev.fvg.high == Decimal("2401")
+        # iFVG is the prior bearish FVG that b2 closed through.
+        assert ev.fvg.side == "bearish"
+        assert ev.fvg.low == Decimal("2399.6")
+        assert ev.fvg.high == Decimal("2399.9")
 
     def test_displacement_without_fvg_when_bars_overlap(self):
         """
@@ -407,10 +468,11 @@ class TestComposer:
     def test_high_sweep_then_bearish_displacement_emits_short(self):
         """
         End-to-end: feed a hand-crafted 1m /MGC sequence that has
+          - a prior bullish FVG (for iFVG inversion)
           - a confirmed swing high
           - a Pattern B sweep of that high
-          - a bearish displacement bar after, with FVG
-        Expect a SHORT signal.
+          - a bearish displacement bar whose close is below the prior bullish FVG
+        Expect a SHORT signal via iFVG inversion.
         """
         liquidity = LiquidityTracker(LiquidityConfig(
             swing_lookback=2, min_penetration=Decimal("0.20"),
@@ -423,7 +485,7 @@ class TestComposer:
         ))
         composer = SweepDisplacementComposer(ComposerConfig(
             instrument="MGC",
-            displacement_window_bars=5,
+            displacement_window_bars=10,
         ))
 
         # Pre-warm bars (outside killzone is fine for warming detectors —
@@ -436,28 +498,34 @@ class TestComposer:
             ("2400.3", "2400.7", "2400", "2400.4"),
             ("2400.4", "2400.8", "2400.1", "2400.5"),
         ]
+        # 3 bars forming a bullish FVG [2399.0, 2399.5].
+        # The bearish displacement bar (further below) closes at 2398.5 < 2399.0.
+        # All intervening bars have low > 2399.0 so the FVG is not mitigated.
+        fvg_seed = [
+            ("2399.5", "2399.0", "2398.5", "2398.8"),   # b1: high=2399.0
+            ("2398.8", "2399.2", "2398.7", "2399.0"),   # middle
+            ("2399.0", "2400.2", "2399.5", "2400.0"),   # b3: low=2399.5 > b1.high=2399.0 → FVG [2399.0, 2399.5]
+        ]
         # In-killzone bars: build swing high, sweep it, then displace down.
         action = [
-            ("2400.5", "2401", "2400.3", "2400.8"),   # idx 5
-            ("2400.8", "2403", "2400.5", "2402.5"),   # idx 6 SWING HIGH candidate
-            ("2402.5", "2402.8", "2401.5", "2401.8"), # idx 7
-            ("2401.8", "2402.5", "2401", "2401.5"),   # idx 8 — confirms swing high
-            # Pattern B sweep on idx 9: pierces 2403, closes at 2401.5.
-            ("2401.5", "2403.5", "2401", "2401.5"),   # idx 9 SWEEP
-            # Bar that becomes b1 of FVG window:
-            ("2401.5", "2401.7", "2400.8", "2401"),   # idx 10
-            # Bearish displacement bar (b2): big down body, range mostly body.
-            # Open 2401, close 2398.5, range 2401.2-2398.4 → body 2.5, range 2.8.
-            ("2401", "2401.2", "2398.4", "2398.5"),   # idx 11 DISPLACE
-            # b3: gaps down further. high 2398.3 < b1.low 2400.8 → bearish FVG.
-            ("2398.5", "2398.3", "2397", "2397.5"),   # idx 12 FVG
+            ("2400.5", "2401", "2400.3", "2400.8"),   # idx 8
+            ("2400.8", "2403", "2400.5", "2402.5"),   # idx 9 SWING HIGH candidate
+            ("2402.5", "2402.8", "2401.5", "2401.8"), # idx 10
+            ("2401.8", "2402.5", "2401", "2401.5"),   # idx 11 — confirms swing high
+            # Pattern B sweep on idx 12: pierces 2403, closes at 2401.5.
+            ("2401.5", "2403.5", "2401", "2401.5"),   # idx 12 SWEEP
+            # Bar that becomes b1 of displacement window:
+            ("2401.5", "2401.7", "2400.8", "2401"),   # idx 13
+            # Bearish displacement bar (b2): big down body.
+            # close=2398.5 < fvg.low=2400.2 (most recent bullish FVG) → iFVG inversion.
+            ("2401", "2401.2", "2398.4", "2398.5"),   # idx 14 DISPLACE
+            # b3: gaps down.
+            ("2398.5", "2398.3", "2397", "2397.5"),   # idx 15
         ]
-        # Wait — b3.high 2398.3 must be below b1.low 2400.8.
-        # b1 = idx 10, low 2400.8. b3 = idx 12, high 2398.3. ✓ FVG forms.
 
         signals: list[Signal] = []
 
-        for i, (o, h, l, c) in enumerate(warmup + action):
+        for i, (o, h, l, c) in enumerate(warmup + fvg_seed + action):
             ts = in_ny_am(i)
             b = bar(ts, o, h, l, c)
             sweeps = liquidity.on_bar(b)
@@ -481,6 +549,9 @@ class TestComposer:
         # Entry below stop. Target below entry.
         assert sig.entry < sig.stop
         assert sig.target < sig.entry
+        # Manipulation context for the grader's fib extension:
+        # sweep bar idx 12 = high 2403.5, low 2401 → range 2.5.
+        assert sig.sweep_bar_range == Decimal("2.5")
 
     def test_no_signal_outside_killzone(self):
         """
@@ -543,6 +614,7 @@ class TestComposer:
         # Manually build a sweep + bullish displacement.
         from app.strategy.liquidity import Swing
         ts1 = in_ny_am(1)
+        b_sweep = bar(ts1, "2401", "2403.5", "2401", "2401.5")
         sweep = SweepEvent(
             side="high",
             swept_swing=Swing(
@@ -552,8 +624,8 @@ class TestComposer:
             pattern="B_one_bar",
             sweep_extreme=Decimal("2403.5"),
             completed_at=ts1,
+            sweep_bar=b_sweep,
         )
-        b_sweep = bar(ts1, "2401", "2403.5", "2401", "2401.5")
         composer.on_sweep(b_sweep, sweep)
         composer.on_bar_close(b_sweep)
 
@@ -590,6 +662,7 @@ class TestComposer:
 
         from app.strategy.liquidity import Swing
         ts0 = in_ny_am(0)
+        b_sweep = bar(ts0, "2401", "2403.5", "2401", "2401.5")
         sweep = SweepEvent(
             side="high",
             swept_swing=Swing(
@@ -599,8 +672,8 @@ class TestComposer:
             pattern="B_one_bar",
             sweep_extreme=Decimal("2403.5"),
             completed_at=ts0,
+            sweep_bar=b_sweep,
         )
-        b_sweep = bar(ts0, "2401", "2403.5", "2401", "2401.5")
         composer.on_sweep(b_sweep, sweep)
         composer.on_bar_close(b_sweep)
 
