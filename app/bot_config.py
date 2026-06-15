@@ -137,6 +137,11 @@ class StrategyParams(BaseModel):
     news_straddle_live_enabled: bool = False
     news_straddle_contracts: int = 1               # size for the live straddle
     news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
+    # CPI-day router (in-process day-gate). Default-OFF. When True, the base
+    # engine takes NO new entries on CPI trading days (pretrade CPI_DAY_BLOCK)
+    # and the news_straddle scheduler is constructed to own those days, while
+    # engine stays "combined". Phase-agnostic (combine and shadow alike).
+    cpi_day_router_enabled: bool = False
 
     # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
     cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"
