@@ -62,6 +62,11 @@ CPI = [  # 08:30 ET
     "2025-07-15", "2025-08-12", "2025-09-11", "2025-10-24", "2025-12-18",
     # 2026 H1 (May-2026 data released 06-10, within bars)
     "2026-01-13", "2026-02-11", "2026-03-11", "2026-04-10", "2026-05-12", "2026-06-10",
+    # 2026 H2 (FORWARD schedule, added 2026-06-15 for the live CPI-day router).
+    # Source: usinflationcalculator BLS mirror; 2026-07-14 cross-confirmed against
+    # bls.gov archive search. Re-verify vs bls.gov/schedule/news_release/cpi.htm
+    # before each go-live (BLS dates can shift, e.g. the 2025 Q4 shutdown moves).
+    "2026-07-14", "2026-08-12", "2026-09-11", "2026-10-14", "2026-11-10", "2026-12-10",
 ]
 
 PPI = [  # 08:30 ET (lowest-confidence series; diagnostic validates)
