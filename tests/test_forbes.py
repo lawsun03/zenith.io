@@ -23,3 +23,25 @@ def test_aggregator_emits_one_15m_bar_per_15_one_min_bars():
     assert r.high == Decimal("114")   # max of highs 100..114
     assert r.low == Decimal("99")
     assert r.timeframe == "15min"
+
+
+from app.strategy.forbes import ForbesPOIMap, _Level
+
+
+def test_poi_map_nearest_unswept_opposing():
+    m = ForbesPOIMap()
+    m.add(_Level(price=Decimal("110"), kind="session_high", swept=False))
+    m.add(_Level(price=Decimal("120"), kind="swing_high", swept=False))
+    m.add(_Level(price=Decimal("105"), kind="session_high", swept=True))  # already swept
+    # Long from 100: nearest UNSWEPT level ABOVE = 110 (105 swept, 120 farther).
+    lvl = m.nearest_unswept_opposing(side="long", price=Decimal("100"))
+    assert lvl is not None and lvl.price == Decimal("110")
+    # Short from 100: no unswept level below -> None.
+    assert m.nearest_unswept_opposing(side="short", price=Decimal("100")) is None
+
+
+def test_poi_map_mark_swept_when_price_trades_through():
+    m = ForbesPOIMap()
+    m.add(_Level(price=Decimal("110"), kind="session_high", swept=False))
+    m.update_swept(bar_high=Decimal("111"), bar_low=Decimal("108"))
+    assert m.nearest_unswept_opposing(side="long", price=Decimal("100")) is None  # 110 now swept

@@ -42,3 +42,41 @@ class _FifteenMinAggregator:
             self._c = bar.close
         self._bucket_key = k
         return out
+
+
+@dataclass
+class _Level:
+    price: Decimal
+    kind: str              # "session_high"|"session_low"|"swing_high"|"swing_low"
+    swept: bool = False
+
+
+class ForbesPOIMap:
+    """Liquidity map: 15m swing H/L + session H/L, each swept/unswept. POIs and targets
+    are the same objects (spec). add() de-dups by (price, kind)."""
+
+    def __init__(self) -> None:
+        self._levels: list[_Level] = []
+
+    def add(self, lvl: _Level) -> None:
+        if not any(x.price == lvl.price and x.kind == lvl.kind for x in self._levels):
+            self._levels.append(lvl)
+
+    def update_swept(self, bar_high: Decimal, bar_low: Decimal) -> None:
+        for lvl in self._levels:
+            if lvl.swept:
+                continue
+            is_high = lvl.kind.endswith("high")
+            if (is_high and bar_high >= lvl.price) or (not is_high and bar_low <= lvl.price):
+                lvl.swept = True
+
+    def nearest_unswept_opposing(self, side: str, price: Decimal) -> "Optional[_Level]":
+        # long -> target above (unswept highs); short -> target below (unswept lows).
+        if side == "long":
+            cands = [l for l in self._levels if not l.swept and l.price > price]
+            return min(cands, key=lambda l: l.price) if cands else None
+        cands = [l for l in self._levels if not l.swept and l.price < price]
+        return max(cands, key=lambda l: l.price) if cands else None
+
+    def reset_day(self) -> None:
+        self._levels = []
