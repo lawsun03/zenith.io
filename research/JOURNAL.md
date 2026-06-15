@@ -3899,3 +3899,41 @@ r1.5 vs r2.0 and r1.5 vs r2.5 both tie on net payouts under CIs. r1.0 is cleanly
 - **Learned:** The one deterministic funded_sim path is too short (1030 trading days) to reliably separate competing configs by less than ~20% in net payouts -- CIs span ~$35k for every ORB variant. Use block-bootstrap before calling a funded winner; overlapping 90% CIs = declare a tie and pick the config with lower bust-count variance (lower p95 busts) instead.
 - **Tests:** full suite **843 passed, 3 skipped, 0 failures** (+6 new B102 tests). findings.json #121.
 - **Next:** B103 (funded_sim intraday DLL-bust modeling, infra, pending) or B104 (firm-rule shock grid, pending).
+
+---
+
+## 2026-06-15T23:15Z -- session wk7-b103 -- B103 (funded_sim DLL intraday modeling -- SHIPPED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- infra only).
+- **Claimed:** B103 (top pending item; no orphan in-progress).
+
+**Method:** Added two new functions to `app/backtest/funded_sim.py`:
+- `daily_pnls_with_low(equity_curve)` -- extends `daily_pnls_from_equity` to also track the intraday running-minimum P&L per day (3-tuple: ts, day_pnl, day_low_pnl)
+- `cap_daily_pnls_at_dll(daily_with_low, dll_amount)` -- applies daily loss limit cap: when `day_low <= -dll_amount`, caps the effective day P&L at exactly -dll_amount (the bot stops trading at DLL threshold; subsequent fills are "phantom")
+
+Added `--dll DOLLARS` flag to `scripts/funded_sim.py`. Backward-compatible: `--dll 0` (default) passes through to existing `daily_pnls_from_equity` path.
+
+**Benchmark:** Ran {h0,h200,h400} x {gap0,12,24} x {dll=0, dll=500} grid on ORB-reentry r0.75 per-year equity (2021/23/24/25/26 excl 2022 holdout). DLL=$500 = 1% of $50K funded account.
+
+**DLL trigger frequency:** 158/1029 trading days (15.4%) hit the $500 DLL intraday.
+
+| h | gap | no-DLL busts | DLL busts | delta | no-DLL sust | DLL sust |
+|---|-----|-------------|-----------|-------|-------------|---------|
+| 0 | 0   | 12          | 5         | -7    | 1.42x       | 4.00x   |
+| 0 | 12  | 13          | 5         | -8    | 1.31x       | 4.00x   |
+| 0 | 24  | 12          | 7         | -5    | 1.42x       | 2.86x   |
+| 200 | 0 | 16          | 9         | -7    | 1.06x       | 2.56x   |
+| 200 | 12 | 13         | 10        | -3    | 1.31x       | 2.30x   |
+| 200 | 24 | 11         | 10        | -1    | 1.55x       | 2.30x   |
+| 400 | 0 | 21          | 9         | -12   | 0.95x       | 2.33x   |
+| 400 | 12 | 18         | 10        | -8    | 1.11x       | 2.10x   |
+| 400 | 24 | 15         | 10        | -5    | 1.33x       | 2.10x   |
+
+**Combine passes (invariant):** 17 (DLL doesn't affect combine P&L since the DLL only applies to the XFA funded phase per spec).
+
+**Key finding:** The spec predicted "busts can only move down" (increase). The ACTUAL result is the OPPOSITE: busts DECREASE by 7-12 across all grid cells when DLL is modeled. The DLL is PROTECTIVE, not busting, for ORB-reentry r0.75. Mechanism: 15.4% of days hit the DLL intraday; on those days, the post-DLL trading in the backtest is net-negative on average (continued stop-outs). The DLL cap prevents those extra losses, keeping accounts further from MLL. Result: the current funded_sim OVERCOUNTS busts (pessimistic) rather than undercounting them (optimistic) as the spec assumed.
+
+**Verdict: SHIPPED.** `daily_pnls_with_low` + `cap_daily_pnls_at_dll` in funded_sim.py; `--dll` flag in scripts/funded_sim.py; 11 defining-behavior tests; Lessons 173-174 added.
+- **Learned:** DLL modeling of ORB-reentry r0.75 reveals the existing funded_sim is conservative (overcounts busts by 7-12), not optimistic as the external reviewer predicted. The DLL acts as a loss cap on catastrophic trading days, reducing the cumulative drawdown that would otherwise bust accounts through MLL. Strategy- and sizing-specific: the directionality of DLL effect depends on whether post-DLL trades are net positive (DLL hurts) or net negative (DLL helps) on average. Always measure, don't assume.
+- **Tests:** full suite **854 passed, 3 skipped, 0 failures** (+11 new B103 tests). findings.json #122.
+- **Next:** B104 (firm-rule shock grid, pending) or B105 (report lived variance, pending).

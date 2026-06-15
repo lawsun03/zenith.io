@@ -4203,5 +4203,36 @@
       ],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-15T23:15Z",
+    "session": "wk7-b103",
+    "item": "B103",
+    "variant": "DLL=$500 vs no-DLL on ORB-reentry r0.75 (2021/23/24/25/26 per-year)",
+    "objective": "infra",
+    "metrics": {
+      "dll_amount": 500,
+      "dll_days_triggered": 158,
+      "dll_days_total": 1029,
+      "dll_days_pct": 15.4,
+      "grid_h0_g0_baseline_busts": 12,
+      "grid_h0_g0_dll_busts": 5,
+      "grid_h0_g0_delta": -7,
+      "grid_h200_g0_baseline_busts": 16,
+      "grid_h200_g0_dll_busts": 9,
+      "grid_h200_g0_delta": -7,
+      "grid_h400_g0_baseline_busts": 21,
+      "grid_h400_g0_dll_busts": 9,
+      "grid_h400_g0_delta": -12,
+      "spec_prediction": "busts can only increase",
+      "actual_direction": "busts universally decrease with DLL"
+    },
+    "verdict": "shipped",
+    "learned": "DLL modeling is PROTECTIVE for ORB-reentry r0.75 -- busts DECREASE by 7-12 across all {h0/200/400}x{gap0/12/24} combinations. The spec predicted busts would increase ('denominator can only move down') but 15.4% of DLL-triggered days are ones where the EOD loss exceeded DLL (post-DLL trading was net negative), so the cap prevents further damage. The sim overcounts busts, not undercounts. Funded pipeline sustainability is more optimistic than previously estimated.",
+    "links": {
+      "doc": null,
+      "runs": ["research/equity_b21/orb_reentry_r0p75_{year}.csv"],
+      "src": null
+    }
   }
 ]

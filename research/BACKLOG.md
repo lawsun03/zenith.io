@@ -4290,7 +4290,7 @@ length preserving loss clustering); report 5th/25th/median $/mo + sustainability
 recent candidate stack (incl. B99 r1.5-vs-r2.5) under CIs; expect several past "wins" -> ties.
 **Source:** external review (opus ultracode) 2026-06-15.
 
-## B103 -- funded_sim: model the intraday daily-loss-limit (DLL) bust  [pending]
+## B103 -- funded_sim: model the intraday daily-loss-limit (DLL) bust  [done -- SHIPPED, DLL reduces busts (protective, not busting); Lessons 173-174]
 Review #6: funded_sim.py:48 collapses each day to one EOD delta; is_dead() (account_phase.py
 :134-136) checks only the MLL; the DLL exists only in the live path (state.py:257). So the sim
 UNDERCOUNTS busts -- the "13/61 combine" sustainability denominator is optimistic. Add an

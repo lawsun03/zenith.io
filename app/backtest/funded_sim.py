@@ -48,6 +48,73 @@ def daily_pnls_from_equity(
     return [(ts, days[d]) for d, ts in order]
 
 
+def daily_pnls_with_low(
+    equity_curve: list[tuple[datetime, Decimal]],
+) -> list[tuple[datetime, Decimal, Decimal]]:
+    """Like daily_pnls_from_equity, but also tracks intraday running-minimum P&L.
+
+    Returns [(first_ts_of_day, day_pnl, day_low_pnl)] where day_low_pnl is the
+    worst cumulative P&L seen during the day (always <= 0 on days with any loss,
+    may be negative even if the day closes positive due to intraday dips).
+
+    Used by cap_daily_pnls_at_dll to model the daily loss limit (DLL).
+    """
+    days_pnl: dict = {}
+    days_low: dict = {}
+    days_running: dict = {}
+    order: list = []
+    prev: Decimal | None = None
+    equity_curve = sorted(equity_curve, key=lambda p: p[0])
+    for ts, eq in equity_curve:
+        d = trading_day_ct(ts)
+        if d not in days_pnl:
+            days_pnl[d] = Decimal("0")
+            days_low[d] = Decimal("0")
+            days_running[d] = Decimal("0")
+            order.append((d, ts))
+        if prev is not None:
+            delta = eq - prev
+            days_pnl[d] += delta
+            days_running[d] += delta
+            if days_running[d] < days_low[d]:
+                days_low[d] = days_running[d]
+        prev = eq
+    return [(ts, days_pnl[d], days_low[d]) for d, ts in order]
+
+
+def cap_daily_pnls_at_dll(
+    daily_with_low: list[tuple[datetime, Decimal, Decimal]],
+    dll_amount: Decimal,
+) -> list[tuple[datetime, Decimal]]:
+    """Apply daily loss limit cap to a series produced by daily_pnls_with_low.
+
+    When a day's intraday running-low P&L drops below -dll_amount, the bot
+    would have stopped trading at the DLL threshold — subsequent fills don't
+    occur. Effective day P&L is capped at -dll_amount.
+
+    Days where the EOD P&L is worse than -dll_amount are also capped (DLL
+    prevents trading after the threshold, limiting further loss). Days where
+    the intraday low never reached -dll_amount are returned unchanged.
+
+    Args:
+        daily_with_low: output of daily_pnls_with_low
+        dll_amount: daily loss threshold in $, positive (e.g. Decimal("500"))
+
+    Returns [(ts, effective_pnl)] — same format as daily_pnls_from_equity.
+    """
+    if dll_amount <= 0:
+        return [(ts, pnl) for ts, pnl, _ in daily_with_low]
+    neg_dll = -dll_amount
+    result = []
+    for ts, day_pnl, day_low in daily_with_low:
+        if day_low <= neg_dll:
+            # DLL was breached intraday; cap effective P&L at -dll_amount
+            result.append((ts, neg_dll))
+        else:
+            result.append((ts, day_pnl))
+    return result
+
+
 def _dead_with_haircut(tracker: PhaseTracker, haircut: Decimal) -> bool:
     """is_dead() with an assumed intraday adverse excursion of `haircut`
     below the day's closing balance — a conservative proxy until the

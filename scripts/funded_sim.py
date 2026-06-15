@@ -16,7 +16,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 from app.backtest.funded_sim import (
     bootstrap_pipeline,
+    cap_daily_pnls_at_dll,
     daily_pnls_from_equity,
+    daily_pnls_with_low,
     simulate_combines,
     simulate_xfa_chain,
 )
@@ -47,25 +49,36 @@ def main() -> None:
     ap.add_argument("--block-len", type=int, default=20, metavar="DAYS",
                     help="Block length in trading days for the bootstrap (default 20 = ~1 month). "
                          "Must be shorter than the series length.")
+    ap.add_argument("--dll", default="0", metavar="DOLLARS",
+                    help="Daily loss limit in $ to apply per day before MLL check "
+                         "(e.g. 500 for 1%% of a $50K funded account). "
+                         "0 = disabled (default, existing behavior). "
+                         "When triggered intraday, caps the day P&L at -DLL.")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
+    dll_amount = Decimal(args.dll)
     curve: list[tuple[datetime, Decimal]] = []
     with open(args.equity_csv, newline="") as f:
         for row in csv.DictReader(f):
             curve.append((datetime.fromisoformat(row["ts"]), Decimal(row["equity"])))
 
-    daily = daily_pnls_from_equity(curve)
+    if dll_amount > 0:
+        daily_extended = daily_pnls_with_low(curve)
+        daily = cap_daily_pnls_at_dll(daily_extended, dll_amount)
+    else:
+        daily = daily_pnls_from_equity(curve)
     c = simulate_combines(daily, haircut=haircut)
     x = simulate_xfa_chain(daily, haircut=haircut, combine_gap_days=args.combine_gap_days)
 
     haircut_note = f", haircut ${haircut:.0f}" if haircut else ""
+    dll_note = f", DLL ${dll_amount:.0f}" if dll_amount else ""
     print(
         f"COMBINE: attempts {c['attempts']} | passes {c['passes']} | "
         f"busts {c['busts']} | median days-to-pass {c['median_days_to_pass']}\n"
         f"XFA:     accounts {x['accounts']} | busts {x['busts']} | "
         f"payouts ${x['gross_payouts']:.0f} gross / ${x['net_payouts']:.0f} net (90%)\n"
-        f"(daily granularity — intraday MLL touches understated{haircut_note})"
+        f"(daily granularity — intraday MLL touches understated{haircut_note}{dll_note})"
     )
 
     if args.bootstrap > 0:
