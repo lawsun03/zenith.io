@@ -4123,7 +4123,7 @@ for the live path).
 
 ---
 
-## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [in-progress — session 2026-06-15T13:30Z]
+## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [pending -- reset from stale in-progress (session died on weekly limit) 2026-06-15; CHEAP Phase-1 only, NO build unless GO; model:opus]
 
 Lawrence sent a batch of MA/EMA/RSI/Bollinger ideas. MOST map to mechanism classes
 this program has ALREADY rejected — do NOT build systems from them. Receipts:
@@ -4148,7 +4148,7 @@ deployed-combined dataset or an equity_export --trade-csv):
 2. **RSI-pullback-in-uptrend**: within price>200-SMA, does short-RSI(2/14) oversold-
    then-recover precede better long outcomes? Same localize() pass.
 
-## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [pending -- Lawrence-requested 2026-06-15; model:sonnet]
+## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [pending -- Lawrence-requested 2026-06-15; model:opus]
 
 Lawrence reviewed a LIVE wide-OR ORB trade (long MNQ, OR=30601.75-30735.5=133.75pt,
 entry=30780.5 breakout CLOSE, stop=OR low 30601.75=178.75pt, target=2.5R=447pt) and
@@ -4181,7 +4181,7 @@ r2.5 baseline; entry/width variants reported if run. "r2.5 still best" is a vali
 Deliverable: trade_analysis doc + findings entries.
 **Source:** Lawrence-requested 2026-06-15 (live ORB trade review).
 
-## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [pending — Lawrence-requested 2026-06-15; model:sonnet]
+## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [pending — Lawrence-requested 2026-06-15; model:opus]
 
 Lawrence wants the full strategy set re-tested on MGC and MES. DO NOT blindly
 re-derive — CONFIRM against prior receipts and report deltas:

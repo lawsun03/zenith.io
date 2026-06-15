@@ -56,12 +56,16 @@ while ($true) {
     $minsLeft = [int](($windowStart.AddHours($windowHours) - (Get-Date)).TotalMinutes)
     if ($model -eq 'sonnet' -and $minsLeft -le 75 -and $windowSessions -le 5) { $model = 'opus' }
     $windowSessions++
+    # Opus runs at LOW effort to stretch the tighter weekly Opus quota (Lawrence,
+    # 2026-06-15: use opus at a lower effort when Sonnet is weekly-capped). Sonnet
+    # has abundant quota, so it stays high.
+    $effort = if ($model -eq 'opus') { 'low' } else { 'high' }
 
-    Log "session #$sessionNum starting (model $model, ~${minsLeft}m left in est. window, $windowSessions sessions this window) -> $sessionLog"
+    Log "session #$sessionNum starting (model $model effort $effort, ~${minsLeft}m left in est. window, $windowSessions sessions this window) -> $sessionLog"
     $start = Get-Date
 
     # Headless session: full permission bypass (approved 2026-06-12).
-    & claude -p $prompt --model $model --dangerously-skip-permissions 2>&1 |
+    & claude -p $prompt --model $model --effort $effort --dangerously-skip-permissions 2>&1 |
         Tee-Object -FilePath $sessionLog | Out-Null
     $code = $LASTEXITCODE
     $mins = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
@@ -72,7 +76,7 @@ while ($true) {
         Add-Content -Path $loopLog -Value ("--- session #$sessionNum tail ---`r`n" + $tail) -Encoding utf8
     }
 
-    if ($tail -match 'session limit|usage limit|rate limit|limit reached|overloaded|429|out of credit|exceeded') {
+    if ($tail -match 'session limit|usage limit|rate limit|weekly limit|limit reached|overloaded|429|out of credit|exceeded') {
         # Sleep until the stated reset time when present ("resets 4:30pm"),
         # else fall back to 40 min. +3 min cushion past the reset.
         $sleepSec = 2400
@@ -81,6 +85,15 @@ while ($true) {
             if ($Matches[3] -eq 'pm' -and $h -ne 12) { $h += 12 }
             if ($Matches[3] -eq 'am' -and $h -eq 12) { $h = 0 }
             $target = (Get-Date).Date.AddHours($h).AddMinutes($m)
+            if ($target -le (Get-Date)) { $target = $target.AddDays(1) }
+            $sleepSec = [int]((($target - (Get-Date)).TotalSeconds) + 180)
+        }
+        elseif ($tail -match 'resets (\d{1,2})\s*(am|pm)') {
+            # "resets 2pm" form (no minutes), e.g. the weekly-limit message.
+            $h = [int]$Matches[1]
+            if ($Matches[2] -eq 'pm' -and $h -ne 12) { $h += 12 }
+            if ($Matches[2] -eq 'am' -and $h -eq 12) { $h = 0 }
+            $target = (Get-Date).Date.AddHours($h)
             if ($target -le (Get-Date)) { $target = $target.AddDays(1) }
             $sleepSec = [int]((($target - (Get-Date)).TotalSeconds) + 180)
         }
