@@ -62,6 +62,7 @@ def check(
     state: RiskState,
     phase: PhaseTracker | None = None,
     ts: datetime | None = None,
+    cpi_day_active: bool = False,
 ) -> Decision:
     """
     Run every gate in priority order. First failing gate decides.
@@ -108,6 +109,17 @@ def check(
                 return Deny(reason_code="WINNING_DAY_LOCK",
                             message=f"Today {phase.today_pnl} — protecting the "
                                     f"winning day; A-grade setups only.")
+
+    # ------------------------------------------------------------
+    # 1c. CPI-day router: on a CPI trading day the base engine takes no new
+    #     entries — the CPI straddle owns the day (cpi_day_router_enabled).
+    #     Exits always fall through (you must always be allowed to flatten).
+    # ------------------------------------------------------------
+    if cpi_day_active and order.is_entry:
+        return Deny(
+            reason_code="CPI_DAY_BLOCK",
+            message="CPI day — base engine suppressed; CPI straddle owns the session.",
+        )
 
     # ------------------------------------------------------------
     # 2. Sanity: stop must actually be protective relative to entry.
