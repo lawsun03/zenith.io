@@ -3906,7 +3906,7 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 
 ---
 
-## B90 -- CPI-day mode switch vs standalone CPI straddle (pipeline evaluation)  [in-progress — session 2026-06-15T00:40:00Z]
+## B90 -- CPI-day mode switch vs standalone CPI straddle (pipeline evaluation)  [done -- 2026-06-15: CANDIDATE B90a mode switch \/mo 3.38x sust beats B42 \/mo 3.23x; B90b standalone DOA (sust 0.77x); oracle 31/47 wins 66% mean 1.644R/event]
 
 Once B89 makes the CPI straddle simulatable in the pipeline, evaluate the two
 deployment shapes Lawrence wants, on BOTH objectives, vs the base-only baseline:

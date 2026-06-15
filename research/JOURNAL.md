@@ -3490,3 +3490,43 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Lesson 157 added.** Code: app/backtest/funded_sim.py (combine_gap_days param), scripts/funded_sim.py (--combine-gap-days flag), scripts/run_b86_gap.py (benchmark). Tests: tests/test_funded_sim_gap.py (4 tests).
 
 - **Next:** B87 (Phase B funded_survival dynamic risk policy -- expose CLI flag, benchmark vs baseline 13 busts). Then B88, B90, B92, B93.
+
+
+---
+
+## 2026-06-15T02:30Z -- session wk7-b90 -- B90 (CPI-day mode switch vs standalone straddle -- CANDIDATE)
+
+- **Bot-keeper:** healthy. Shadow combine active (account_phase=combine + phase_shadow=true). Market closed. No drift, no open positions.
+
+- **Claimed:** B90 (Lawrence-requested, ranked ahead of B87/B88 per BACKLOG priority annotation). No orphan in-progress.
+
+- **Ran:** scripts/run_b90_pipeline.py. Method: (a) 1s oracle on 47 CPI events across 2021/2023-2026; (b) per-year equity CSVs rebuilt with CPI-day P&L replaced by straddle R*\; (c) stitched and run through funded_sim (same stitch+phase_stats+pipeline_economics formula as B82). Phase A variants: base B42 deployed_r1p0, switch B90a, standalone B90b. Phase B fixed: equity_b21/orb_reentry_r0p75. Haircut \.
+
+- **Oracle (1s, offset=60t, tp_r=3R):** 47 events; 31/47 wins (66%); 13 stops/whipsaws; mean 1.644R/event = \/event; total 77.3R = +\,636 over 5y.
+
+- **Numbers:**
+
+  | Config          | Passes/Att | d/funded | Resets/funded | $/mo | Sust   | vs B42         |
+  |-----------------|------------|----------|---------------|------|--------|----------------|
+  | Base B42 ref    | 42/159     | 24.6d    | \         | \ | 3.23x  | --             |
+  | Switch B90a     | 44/153     | 23.5d    | \         | \ | 3.38x  | +\, +0.15x  |
+  | Standalone B90b | 10/12      | 103.3d   | \         | \ | 0.77x  | -\, -2.46x |
+
+  Phase B (fixed ORB r0.75): 14 accts, 13 busts, \,131/acct, 73.5d/acct.
+
+- **Verdict:** CANDIDATE. B90a mode switch beats B42 on BOTH $/mo (+16) AND sust (+0.15x). Does NOT beat B57 stretch target (\/mo, 3.54x sust) on sust (3.38 < 3.54). Improvement is modest (+3%/mo, +4.6% sust). Stop rule does NOT fire (B90a is better on both). B90b standalone: volume starvation confirmed (Lesson 2: 9-12 CPI events/yr cannot sustain combine pass cadence at 103d/funded). Additive overlay (base + straddle on CPI days) not tested -- deferred to B93 as separate framing.
+
+- **Key observations:**
+  1. Mode switch helps most in losing base-engine years: 2023 base -\ but switch adds +\,932 straddle net; 2025 base +\.8k, switch adds +\,716 straddle net.
+  2. Combine pass ratio improved (44/153 = 28.8% vs 42/159 = 26.4%) because replacing a bad base-engine day with a winning straddle accelerates equity toward the \ pass threshold.
+  3. 2023 was the worst straddle year: 7/12 wins but 3 whipsaws + stops in Mar/Jun/Aug (back-to-back losses). Still +\,932 net that year.
+  4. The \/mo pipeline improvement nets ~\/yr -- material if persistent, but within simulation noise.
+  5. Standalone B90b sust=0.77x -- BELOW 1.0 -- means more funded busts than combine passes. This is the worst possible pipeline configuration.
+
+- **Recommendation:** B90a (mode switch) is deployable as a config layer on top of B42. Set a per-event risk flag to disable base engine on CPI release day and route to straddle (news_straddle engine, already built as B89). Low risk: worst case is a single straddle loss (~-\) replacing what would have been a normal base-engine day.
+
+- **Tests:** 767 passed, 2 skipped, 0 failures. Green.
+
+- **Lessons:** 158 (straddle mode switch: marginal pipeline gain), 159 (standalone straddle: volume starvation kills pipeline). BACKLOG: B90 -> done, B93 updated.
+
+- **Next:** B87 (Phase B funded_survival dynamic risk policy). B88 (FVG zone-width quality gate). B92 (live resting-OCO build for straddle).
