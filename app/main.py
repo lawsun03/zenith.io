@@ -537,7 +537,7 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
-def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None):
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None, cpi_dates=None):
     """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
 
     Reads pre-computed grader state — no heavy computation on the hot path.
@@ -603,6 +603,9 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
         if broker is not None and hasattr(broker, "live_excursion"):
             pos_excursion = broker.live_excursion(runner.instrument)
 
+        from app.strategy.cpi_day import router_state as _cpi_router_state
+        cpi_router = _cpi_router_state(bar.ts, cpi_dates) if cpi_dates else None
+
         journal.publish_strategy_state(
             instrument=runner.instrument,
             grade=grade,
@@ -615,6 +618,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             orb_state=orb_state,
             pos_excursion=pos_excursion,
             news_straddle=news_straddle_scheduler.state() if news_straddle_scheduler is not None else None,
+            cpi_day_router=cpi_router,
         )
 
     return on_bar
@@ -1295,7 +1299,7 @@ async def _async_main() -> int:
         )
 
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler, cpi_dates=cpi_dates))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):

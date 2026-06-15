@@ -254,6 +254,11 @@ export interface StrategyStatePayload {
       range_low: string | null
     }[]
   } | null
+  cpi_day_router?: {
+    today_is_cpi_day: boolean
+    next_cpi_date: string | null
+    base_entries_suppressed: boolean
+  } | null
   pos_mfe_r?: number
   pos_mae_r?: number
   pos_mfe_pts?: number

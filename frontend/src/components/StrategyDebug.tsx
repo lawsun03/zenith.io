@@ -121,6 +121,22 @@ export function StrategyDebug({ state }: { state: StrategyStatePayload | null })
             </div>
           )}
 
+          {state.cpi_day_router != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">
+                CPI-Day Router
+              </div>
+              <LabeledValue
+                label="today"
+                value={state.cpi_day_router.today_is_cpi_day ? 'CPI DAY — base suppressed' : 'normal — base active'}
+              />
+              <LabeledValue
+                label="next CPI"
+                value={state.cpi_day_router.next_cpi_date ?? '—'}
+              />
+            </div>
+          )}
+
           {/* Live Excursion */}
           {(state.pos_mfe_r != null || state.pos_mae_r != null) && (
             <div>

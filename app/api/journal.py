@@ -307,6 +307,7 @@ class Journal:
         orb_state: "dict | None" = None,
         pos_excursion: "dict | None" = None,
         news_straddle: "dict | None" = None,
+        cpi_day_router: "dict | None" = None,
     ) -> None:
         """Emit strategy_state WebSocket event each bar for the live dashboard."""
         payload: dict = {"instrument": instrument}
@@ -344,6 +345,8 @@ class Journal:
             payload["orb_state"] = orb_state
         if news_straddle is not None:
             payload["news_straddle"] = news_straddle
+        if cpi_day_router is not None:
+            payload["cpi_day_router"] = cpi_day_router
         if pos_excursion is not None:
             payload["pos_mfe_r"]   = pos_excursion.get("mfe_r", 0.0)
             payload["pos_mae_r"]   = pos_excursion.get("mae_r", 0.0)
