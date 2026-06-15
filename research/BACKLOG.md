@@ -4123,7 +4123,7 @@ for the live path).
 
 ---
 
-## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [pending -- reset from stale in-progress (session died on weekly limit) 2026-06-15; CHEAP Phase-1 only, NO build unless GO; model:opus]
+## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [done -- rejected (Phase-1 NO-GO): 200-SMA regime not a quality gate (bear_long PF 1.30 is the ORB edge resurfacing -- orb_bear 2.18, iFVG regime-neutral 0.97; bear regime only 11.5% of trades = volume-fatal; direction backward per B65); RSI-pullback fails (Connors RSI(2)<10 PF 1.27 but 1/4 yrs; only RSI(14) overbought marginal 1.22, opposite of hypothesis); joins daily-context reject class (Lessons 120/164/165); no engine built; doc trade_analysis/2026-06-15_B96_sma_rsi_regime.md]
 
 Lawrence sent a batch of MA/EMA/RSI/Bollinger ideas. MOST map to mechanism classes
 this program has ALREADY rejected — do NOT build systems from them. Receipts:

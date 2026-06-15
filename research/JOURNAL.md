@@ -3714,3 +3714,24 @@ Gold-FOMC additive Î”$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **â
 - **Tests:** full suite **787 passed, 2 skipped, 0 failures** (was 782; +5 new). 
 
 - **Next:** B95 (news_straddle shifted-window P&L re-validation, Sonnet -- gates trusting B85 numbers for the live path) or B96 (200-SMA/RSI cheap Phase-1 falsification, Sonnet). No build pending; gold-FOMC could be revisited only in a non-pipeline-constrained context.
+
+---
+
+## 2026-06-15T16:35Z -- session wk7-b96 -- B96 (200-SMA regime + RSI-pullback as FEATURES -- REJECTED, Phase-1 NO-GO)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,226.50 (HWM $152,227.12), 1 open contract, no drift, no lockout, last reconcile clean. Market closed (weekend). Databento $11.20/$20 (NO fetch -- reused on-disk data).
+- **Claimed:** B96 (top pending, model:opus; ran on Opus per wrapper tag). RECLAIMED ORPHAN: a prior session crashed on the weekly limit after writing Lessons 164/165 + `scripts/analyze_b96_sma_rsi.py` but before recording findings/journal/doc or committing. I verified that script reproduces 164/165 exactly, adopted it as the single source of truth, and removed a redundant re-derivation script I had written before noticing the orphan.
+
+**Method (no engine -- CHEAP Phase-1 feature falsification):** Tagged the deployed iFVG+ORB combined per-trade CSV (`research/mfe_mae_deployed_b88.csv`, MNQ, 2813 usable trades, 2023-2026, 2022/SMA-warmup excluded) with a daily 200-SMA regime + Wilder RSI(2)/RSI(14) from `bars/bars_MNQ_dbv_2021_2026.csv`. Ran `edge_diagnostics.localize` on `pnl_usd` with the aggregate PF (1.079) as control_pf.
+
+**H1 -- 200-SMA regime x side:** aggregate PF 1.079 (not robust). `bear_long` flagged (PF 1.30, n=174, 3/4 yrs) but NOT a usable gate: (1) it is the ORB edge resurfacing -- `orb_bear` PF 2.18 (n=82), while iFVG is regime-neutral and slightly negative (0.97 in BOTH regimes); (2) the bear regime is only 323/2813 = 11.5% of trades -- gating destroys combine volume (Lesson 2); (3) direction is BACKWARD (downtrend longs > uptrend longs), matching B65's NQ-regime-backward confound. Regime alone: bear 1.19 / bull 1.06, neither clears 1.20.
+
+**H2 -- RSI-pullback-in-bull (longs):** Connors RSI(2) v_oversold<10 reaches PF 1.27 but only 1/4 yrs (fails year-consistency). The only marginally-robust RSI bucket is RSI(14) OVERBOUGHT>70 (PF 1.22, 3/4) -- momentum continuation, the OPPOSITE of the mean-reversion pullback hypothesis, and barely above 1.20. RSI(14)<30 never fires on daily NQ uptrend (n=2).
+
+- **Verdict: REJECTED (Phase-1 NO-GO).** The 200-day SMA regime joins the failed daily-context class (B5/B35/B65, Lesson 120). The slower 200d timescale (vs B65's 20d, B35's 1d) did not rescue it. RSI-pullback rejected. Lawrence's MA/EMA/Bollinger SYSTEM ideas remain correctly un-queued. No engine, no gate, no config change. bot_config.json + .env untouched.
+
+- **Learned:** A regime indicator can show a "robust" sub-edge in `localize` while being useless: the bear_long hit is an ORB-engine + long-side restatement, not a new signal -- always decompose a flagged regime hit by engine and side before believing it times anything. Lessons 164/165 (already written by the orphan) capture this.
+
+- **Tests:** full suite green (no code change -- analysis-only; verified below). findings.json #116. Databento untouched.
+
+- **Next:** B99 (ORB target-R sweep 1.0/1.5/2.0/2.5R, model:opus, Lawrence-requested -- live ORB trade review) or B97 (MGC+MES instrument-transfer re-run, model:opus).
