@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, date
 
-from app.strategy.cpi_day import is_cpi_day, next_cpi_date, router_state
+from app.strategy.cpi_day import is_cpi_day, load_cpi_dates, next_cpi_date, router_state
 
 
 # A CPI release is 08:30 ET. In UTC that is 12:30 (EDT) — same calendar day in ET.
@@ -64,3 +64,22 @@ def test_router_state_shape_off_day():
     assert st["today_is_cpi_day"] is False
     assert st["base_entries_suppressed"] is False
     assert st["next_cpi_date"] == "2026-08-12"
+
+
+def test_load_cpi_dates_et_conversion_and_event_filter(tmp_path):
+    # 2026-07-16T00:30:00+00:00 UTC is 2026-07-15 20:30 ET — the ET calendar date
+    # must be 2026-07-15, not 2026-07-16. The FOMC row must be excluded by event_type.
+    csv_file = tmp_path / "events.csv"
+    csv_file.write_text(
+        "event_type,ts_utc\n"
+        "CPI,2026-07-16T00:30:00+00:00\n"
+        "FOMC,2026-07-30T18:00:00+00:00\n",
+        encoding="utf-8",
+    )
+    result = load_cpi_dates(str(csv_file), "CPI")
+    assert result == frozenset({date(2026, 7, 15)})
+
+
+def test_load_cpi_dates_missing_file_returns_empty_frozenset():
+    result = load_cpi_dates("does/not/exist.csv")
+    assert result == frozenset()
