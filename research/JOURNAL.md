@@ -3682,3 +3682,35 @@ Notable: at h400 (pessimistic), OV-3R REDUCES busts by 5 (22->17) -- the straddl
 **Learned:** The gap model matters for the sust verdict: at gap=0 (optimistic), the occasional bad CPI day (base loses + straddle loses) adds 2 busts; at gap=24 (realistic post-B86), sust is neutral because the bust boundary falls differently. For funded-overlay analysis, always report both gap=0 (parity with historical references) and gap=24 (realistic). Lesson 162 added. BACKLOG: B93 -> done; B94 now fully unblocked (B89 + B90 + B93 all done). 782 tests green.
 
 - **Next:** B94 (event-calendar router, model:opus, Lawrence PRIORITY -- stack base + CPI straddle + gold-FOMC straddle by day type). B94 is the full three-engine stack that B93 + B90 + B91 motivated.
+
+---
+
+## 2026-06-15T04:30Z -- session wk7-b94 -- B94 (event-calendar router: stack base + CPI + gold-FOMC -- CPI ships, gold-FOMC REJECTED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- all 1s data on disk).
+- **Claimed:** B94 (top pending, model:opus PRIORITY; ran on Opus per wrapper tag). Deps B89/B90/B91/B93 all done. No orphan in-progress.
+
+**Method:** Two-phase funded pipeline (B42/B90/B93 model). Day-type routing = per-date P&L injection (CPI & FOMC dates disjoint: 1 same-day in 5y). **Multi-instrument combination done in R-space:** every straddle normalised to R, sized to the same R_FIXED=$375 (0.75%), so MGC + NQ P&L merge into one dollar account stream. Oracles reproduced exactly: CPI (NQ, 60t, 3R) 46/47 PF 5.99 5/5; gold-FOMC (MGC, ATR, 3R) 31/32 PF 1.99 4/5. New script `scripts/run_b94_pipeline.py`; 5 defining-behavior tests `tests/test_b94_router.py` (additivity / dollar conversion / nofill no-op / mode-switch replaces-not-adds).
+
+**Self-checks PASS:** BASE @h200/gap0 = $549/mo 3.23x (= B42 exact); +CPI = $853/mo 2.80x +2 busts (= B93 OV-3R exact). Harness trustworthy.
+
+**Results (h200; Δ vs BASE):**
+
+| Variant | gap0 $/mo | gap0 sust | gap0 Δbusts | gap24 $/mo | gap24 Δbusts |
+|---|---|---|---|---|---|
+| BASE | 549 | 3.23x | -- | 387 | -- |
+| **+CPI (additive)** | **853** | 2.80x | +2 | **715** | **0** |
+| +FOMC (additive) | 603 | 2.21x | **+6** | 506 | +1 |
+| FULL STACK (PhB) | 905 | 2.33x | +5 | 749 | +1 |
+| CPI switch (PhA, cf B90a) | 557 | 3.23x | 0 | 395 | 0 |
+| STACK (both phases) | 938 | 2.56x | +5 | 771 | +1 |
+
+Gold-FOMC additive Δ$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **−40/+119/−25 (gap24)** -- sign not robust.
+
+- **Verdict: CANDIDATE (CPI only).** CPI straddle CONFIRMED additive -- the value driver: +$304/mo (h200/gap0, +55%), bust-neutral at realistic gap=24, positive in EVERY sensitivity cell. **Gold-FOMC straddle REJECTED from the router:** marginal $/mo, raises busts in every cell (sust 3.23x→2.21x), and goes negative $/mo at h0/h400 gap24. The three-strategy router collapses to **base + CPI** (= B93's candidate). Per Rule 2, **no new live engine / multi-instrument router code is justified** -- B92's CPI `news_straddle` already ships default-off; base runs daily; nothing new to enable. bot_config.json + .env untouched.
+
+- **Learned:** A low-PF event overlay (gold-FOMC PF 1.99 vs CPI 5.99) can be net-positive standalone (B91 confirmed) yet pipeline-negative, because the funded pipeline's binding constraint is bust frequency, not raw expectancy: ~31 FOMC days/5y at ⅓ CPI's expectancy inject losers that tip near-MLL accounts over faster than the thin edge replenishes them. And WHERE the straddle is applied dominates: additive into the high-throughput funded phase (+$304/mo) ≫ B90a-style switch of the combine phase (+$8/mo). Lesson 163 added.
+
+- **Tests:** full suite **787 passed, 2 skipped, 0 failures** (was 782; +5 new). 
+
+- **Next:** B95 (news_straddle shifted-window P&L re-validation, Sonnet -- gates trusting B85 numbers for the live path) or B96 (200-SMA/RSI cheap Phase-1 falsification, Sonnet). No build pending; gold-FOMC could be revisited only in a non-pipeline-constrained context.

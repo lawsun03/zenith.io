@@ -3998,5 +3998,36 @@
    "runs": [],
    "src": "B89 follow-on; Lawrence-requested funded-overlay evaluation 2026-06-14"
   }
+ },
+ {
+  "ts": "2026-06-15T04:30:00Z",
+  "session": "wk7-b94",
+  "item": "B94",
+  "variant": "event-calendar router: base + CPI straddle + gold-FOMC straddle (day-gated)",
+  "objective": "funded",
+  "metrics": {
+   "base_$/mo_h200_gap0": 549,
+   "base_sust_h200_gap0": 3.23,
+   "cpi_add_$/mo_h200_gap0": 853,
+   "cpi_add_sust_h200_gap0": 2.80,
+   "cpi_add_dbusts": 2,
+   "fomc_add_$/mo_h200_gap0": 603,
+   "fomc_add_sust_h200_gap0": 2.21,
+   "fomc_add_dbusts": 6,
+   "fullstack_phb_$/mo_h200_gap0": 905,
+   "fullstack_phb_dbusts": 5,
+   "stack_bothphases_$/mo_h200_gap0": 938,
+   "cpi_add_$/mo_gap24": 715,
+   "cpi_add_dbusts_gap24": 0,
+   "fomc_add_$/mo_gap24_h0": -40,
+   "pf": null
+  },
+  "verdict": "candidate",
+  "learned": "Stacking the gold-FOMC straddle onto the confirmed CPI-straddle overlay is REJECTED: gold-FOMC adds only marginal $/mo (+$31..+$119) but raises busts in every cell (sust 3.23x->2.21x h200/gap0) and goes NEGATIVE $/mo at h0/h400 gap24 -- not robust. The CPI straddle alone is the value driver (+$304/mo h200/gap0, bust-neutral at gap24, +ve in every cell). A low-PF event overlay (gold-FOMC PF 1.99 vs CPI 5.99) can be net-positive standalone yet pipeline-negative because the binding constraint is bust frequency. Router collapses to base + CPI (= B93's candidate, $853/mo); no new live engine justified (B92 CPI straddle already default-off).",
+  "links": {
+   "doc": "trade_analysis/2026-06-15_B94_event_router.md",
+   "runs": [],
+   "src": "Lawrence-requested 2026-06-15 (stack the three by day type); deps B89/B90/B91/B93"
+  }
  }
 ]

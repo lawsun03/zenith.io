@@ -4040,7 +4040,7 @@ question is whether 9 high-PF days/yr meaningfully shift a pipeline dominated by
 
 ---
 
-## B94 -- Event-calendar router: stack base + CPI straddle + gold-FOMC straddle, toggled by day type  [in-progress — session wk7-b94 2026-06-15T04:00Z; model:opus]
+## B94 -- Event-calendar router: stack base + CPI straddle + gold-FOMC straddle, toggled by day type  [done -- 2026-06-15 wk7-b94: CPI overlay CONFIRMED additive (ship, = B93 $853/mo h200/gap0, bust-neutral gap24); gold-FOMC straddle REJECTED from router (marginal $/mo, raises busts every cell, sign flips negative at h0/h400 gap24 -- PF 1.99 too low for the bust-constrained pipeline). Router collapses to base + CPI; NO new live engine justified (B92 CPI news_straddle already default-off). Self-checks: BASE=$549/3.23x=B42, +CPI=$853/2.80x=B93 exact. Lesson 163. doc: trade_analysis/2026-06-15_B94_event_router.md; script: scripts/run_b94_pipeline.py]
 
 Lawrence: stack the three confirmed pieces and turn each on/off by DAY TYPE.
 A calendar router keyed to `data/news_events.csv` classifies each trading day and
