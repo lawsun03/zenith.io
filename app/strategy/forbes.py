@@ -171,6 +171,10 @@ class ForbesDetector:
         stop_dist = abs(entry - stop)
         if stop_dist == 0:
             return None
+        # Reject a stop on the wrong side of entry (can occur in beyond_or mode when the
+        # entry level sits inside the OR). A non-protective stop must never become an order.
+        if (side == "long" and stop >= entry) or (side == "short" and stop <= entry):
+            return None
         rr = abs(target - entry) / stop_dist
         if rr < self.config.min_rr:
             return None
@@ -186,7 +190,9 @@ class ForbesDetector:
         if self.config.target_mode == "liquidity":
             lvl = self.poi.nearest_unswept_opposing(side, entry)
             return lvl.price if lvl is not None else None
-        return None   # or_top / midway_poi wired in Task 8 ablations; default None -> skip
+        # or_top / midway_poi wired in Task 8 ablations; default None -> skip
+        log.warning("forbes: target_mode=%s not implemented yet -> setup skipped", self.config.target_mode)
+        return None
 
     # ------------------------------------------------------------------
     # Opening-range tracking (mirrors ORBDetector's ET-window timing)
@@ -269,16 +275,19 @@ class ForbesDetector:
             if sig is not None:
                 return sig
 
-        # Priority 3: breakout + retest of an OR boundary (best-effort).
+        # Priority 3: breakout + retest of an OR boundary (best-effort). The stop anchors to
+        # the RECLAIMED boundary (beyond_wick), not the opposite one: a long reclaims or_high
+        # so its stop sits just below or_high; a short reclaims or_low so its stop sits above it.
         if self._or_high is not None and self._or_low is not None:
             if bar.low <= self._or_high <= bar.close and bar.open > self._or_high:
-                side, sweep_level = "long", self._or_low
+                side, sweep_level = "long", self._or_high
             elif bar.high >= self._or_low >= bar.close and bar.open < self._or_low:
-                side, sweep_level = "short", self._or_high
+                side, sweep_level = "short", self._or_low
             else:
                 return None
             entry = bar.close
-            stop = self._stop_for(side, sweep_level)
+            buf = self._kz_params.min_penetration
+            stop = (sweep_level - buf) if side == "long" else (sweep_level + buf)
             target = self._select_target(side, entry)
             if target is not None:
                 return self._build_signal(side=side, entry=entry, stop=stop, target=target,

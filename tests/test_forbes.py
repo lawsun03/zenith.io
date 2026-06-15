@@ -110,6 +110,60 @@ def test_max_trades_per_day_enforced():
     assert d._can_trade() is False
 
 
+def test_build_signal_rejects_wrong_side_stop():
+    # WHY: a non-protective stop (short with stop below entry) must never become a Signal.
+    d = ForbesDetector(_cfg())
+    sig = d._build_signal(side="short", entry=Decimal("100"), stop=Decimal("110"),
+                          target=Decimal("80"), bar=_b(0,"100","100","100","100"),
+                          pattern="x", sweep_level=Decimal("110"))
+    assert sig is not None  # short: stop 110 ABOVE entry 100 = protective, RR=(100-80)/10=2.0
+    bad = d._build_signal(side="short", entry=Decimal("100"), stop=Decimal("90"),
+                          target=Decimal("80"), bar=_b(0,"100","100","100","100"),
+                          pattern="x", sweep_level=Decimal("90"))
+    assert bad is None  # short stop 90 BELOW entry = wrong side -> rejected
+
+
+def _b_at(minute, o, h, l, c):
+    # Like _b but always inside the 09:30-10:30 ET killzone (13:30 UTC = 09:30 EDT).
+    return Bar(instrument="MNQ", timeframe="1min",
+               ts=datetime(2026, 5, 11, 13, 30 + minute, tzinfo=timezone.utc),
+               open=Decimal(o), high=Decimal(h), low=Decimal(l), close=Decimal(c), volume=100)
+
+
+def test_on_bar_emits_breakout_retest_with_protective_stop_and_caps_trades():
+    # WHY: end-to-end — drive on_bar to actually EMIT a signal via the breakout+retest
+    # branch and assert (a) the stop is on the protective side (long: stop < entry) and
+    # (b) max_trades_per_day=1 suppresses a second same-day trigger.
+    d = ForbesDetector(_cfg(forbes_max_trades_per_day=1, forbes_min_rr="1.0"))
+    # Seed the gates that are otherwise driven by the OR window / FVG detection so we can
+    # exercise the trigger branch deterministically (Priority 3 depends only on OR geometry).
+    from app.strategy.killzone import ET
+    d._day = datetime(2026, 5, 11, 13, 30, tzinfo=timezone.utc).astimezone(ET).date()
+    d._or_locked = True
+    d._or_fvg_count = 1            # day_eligible() True
+    d._or_high = Decimal("100")
+    d._or_low = Decimal("90")
+    # An unswept liquidity target ABOVE entry so _select_target returns a level for the long.
+    d.poi.add(_Level(price=Decimal("120"), kind="swing_high", swept=False))
+
+    # Breakout+retest LONG at 09:45 ET (minute 15 -> past the 09:30-09:45 OR window so the
+    # seeded OR isn't re-accumulated, still inside the killzone): open above or_high(100),
+    # wick back to retest 100, close above.
+    trig = _b_at(15, "102", "103", "100", "101")
+    sig = d.on_bar(trig)
+    assert sig is not None, "expected a breakout+retest long emission"
+    assert sig.side == "long"
+    assert sig.stop < sig.entry, "long stop must be protective (below entry)"
+    # Stop anchors to the RECLAIMED boundary (or_high=100), just below it — NOT or_low(90).
+    assert sig.stop == Decimal("100") - d._kz_params.min_penetration
+    assert d._trades_today == 1
+
+    # A second identical trigger the same day is capped by max_trades_per_day=1.
+    sig2 = d.on_bar(_b_at(16, "102", "103", "100", "101"))
+    assert sig2 is None
+    assert d._can_trade() is False
+
+
 def test_on_bar_outside_killzone_returns_none():
     # WHY: the killzone gate must hard-block on_bar end-to-end, not just in_killzone().
     # _b(0,...) is 13:00 UTC = 09:00 ET (EDT) -> before the 09:30-10:30 window.
