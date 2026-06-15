@@ -3830,3 +3830,45 @@ Gold-FOMC additive Î”$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **â
 - **Verdict:** REJECTED -- no Fib variant beats the fixed-R baselines on primary funded metrics. iFVG Fib fails on XFA net despite marginal PF improvement; ORB Fib stop-rule-triggered vs B99 r1.5. The `ifvg_fib_target_ext` and `orb_fib_target_ext` features ship default-off (0 = off). No 2022 holdout required (no candidate). Lessons 168-169 added.
 - **Learned:** Fib-extension targets (measured-move off the displacement leg or OR-width) introduce signal-adaptive target distances but do not improve funded economics vs fixed-R. For iFVG, the displacement leg is already geometrically embedded in the stop calculation; adding a Fib multiplier on top doesn't extract new signal value -- the fixed-R framework is already the right normalization. For ORB, the Fib ext=1.618 cross-check confirms B99's r1.5 finding (nearly identical effective R) while slightly underperforming because OR_width < actual stop distance.
 - **Next:** B100 (ORB OR-width Phase-1 data mining -- pending, cheap, no code) or B102 (bootstrap CIs on funded_sim -- pending, infra). B100 is the top non-gated pending item.
+
+---
+
+## 2026-06-15T21:30Z -- session wk7-b100 -- B100 (ORB OR-width filter Phase-1 cut -- REJECTED, no build)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch).
+- **Claimed:** B100 (top pending item). No orphan in-progress.
+
+**Method (Phase-1 data mining, no engine build):** Tagged all B99 ORB per-trade CSVs (1026 trades each, 2021/23/24/25/26, excl 2022) with each trade's daily opening-range width. OR computed from the 1-min bars CSV (bars/bars_MNQ_dbv_2021_2026.csv): 9:30-9:45 ET window (same as ORB detector: range_minutes=15, open_et=09:30), OR_width = OR_high - OR_low. Daily ATR computed as 14-day rolling mean of session TR (TR = day_high - day_low) for OR/ATR normalization. Ran edge_diagnostics.localize across OR-width quartile (Q1_narrow/Q2/Q3/Q4_wide) and OR/ATR ratio quartile (A1_tight/A2/A3/A4_bloated) dimensions. 4 trades dropped per R-level due to holiday/warmup gaps.
+
+**OR width distribution (across all R-levels):** p25=52.5pt, p50=71.8pt, p75=102.2pt, p90=141.5pt, max=349.0pt.
+- Lawrence's specific live trade: OR=133.75pt -> Q4_wide (above p75=102.2pt); target at r2.5 = 447pt.
+
+**Results (r=2.5, deployed config, n=1026):**
+
+| Bucket | n | win% | PF | yrs+ | Robust? |
+|--------|---|------|----|------|---------|
+| AGGREGATE | 1026 | 45% | 1.19 | 5/5 | No (PF<1.2) |
+| Q1_narrow | 258 | 43% | 1.18 | 4/5 | No |
+| Q2 | 256 | 44% | 1.24 | 3/5 | No (3/5 ok but borderline) |
+| Q3 | 255 | 44% | 1.14 | 3/5 | No |
+| Q4_wide | 257 | 49% | 1.19 | 3/5 | No (PF<1.2) |
+
+OR/ATR ratio quartile:
+| A1_tight | 257 | 40% | 1.16 | 3/5 | No |
+| A2 | 256 | 46% | 1.16 | 3/5 | No |
+| A3 | 256 | 47% | 1.34 | 5/5 | YES -- but A3, not A4 |
+| A4_bloated | 257 | 47% | 1.10 | 2/5 | No (2/5 < 3/5) |
+
+Narrow (Q1+Q2) PF=1.209, Wide (Q3+Q4) PF=1.166 -- 3.7% spread.
+
+Q4_wide year breakdown (r=2.5): 2021 PF=0.77 (-), 2023 PF=2.16 (+), 2024 PF=0.77 (-), 2025 PF=1.58 (+), 2026 PF=1.03 (+). Positive in 3/5 years, but 2024 notably bad for wide-OR days.
+
+**Results (r=1.5, B99 candidate):** Aggregate already robust (PF=1.24, 5/5 yrs). All quartiles positive: Q4_wide PF=1.25 (4/5 yrs) -- STRONGER than at r2.5. The tighter target makes the OR range more often reachable, neutralising the wide-OR deficit.
+
+**Verdict: REJECTED (Phase-1 NO-GO, no build).** Wide OR does NOT predict net-negative ORB outcomes. Q4_wide (>p75=102pt) is PF=1.19 at r2.5 -- positive in 3 of 5 years (not a skip condition per robustness rules). The A4_bloated OR/ATR bucket IS the weakest (PF=1.10, 2/5 years) but fails the minimum 3/5 year requirement -- borderline but not a confirmed edge for gating. Per spec: "if NO (width doesn't predict trade quality) -> REJECT, no build." The OR-width gate joins B5 (prior-day range) and B35 (prior-day bias) as day-level filters that don't improve ORB trade quality.
+
+The r1.5 target (B99 candidate) already handles Lawrence's wide-OR concern better: at r1.5, Q4_wide improves to PF=1.25 (4/5 yrs) because the 102pt+ OR range still reaches a 1.5R target on most days (OR_wide*1.5 = ~153pt target, within a typical NQ intraday range of ~200pt), whereas OR_wide*2.5 = ~255pt is near the extreme of the daily range. No code change needed; the r1.5 recommendation from B99 is the correct fix. No 2022 holdout required (no candidate). Lesson 170 added.
+
+- **Learned:** Wide opening-range width does not robustly predict ORB trade failure on NQ 5min -- the widest-OR quartile is mildly positive (PF 1.19) and the signal weakens year-to-year without crossing below 1.0 in the aggregate. The practical fix for the "OR too wide, target unreachable" concern is a tighter R-multiple (r1.5 from B99), not a skip gate.
+- **Tests:** 837 passed, 3 skipped, 0 failures (no code change -- analysis only). findings.json #120.
+- **Next:** B102 (funded_sim bootstrap CIs -- infra, pending) or B103 (intraday DLL-bust modeling -- infra, pending) are next non-gated items.

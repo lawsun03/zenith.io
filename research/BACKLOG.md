@@ -4266,7 +4266,7 @@ Fib-filter prior). Deliverable: per-ext table per engine, trade_analysis doc, fi
 Build a default-off knob ONLY if it wins.
 **Source:** Lawrence-requested 2026-06-15 (Fib levels as a target).
 
-## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [pending]
+## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [done -- rejected: Q4_wide (>102pt) PF=1.19 at r2.5 -- positive, not net-negative; A4_bloated OR/ATR PF=1.10 fails 2/5 year robustness; OR width joins B5/B35 day-level gate rejection class; r1.5 target (B99) already fixes the wide-OR economics (Q4_wide improves to PF=1.25 4/5 yrs at r1.5)]
 
 Spun out of B99 secondary. Lawrence's live wide-OR trade (OR 133.75pt, 2.5R target=447pt)
 is exactly the case where the target balloons past NQ's realistic daily range. B99 showed
