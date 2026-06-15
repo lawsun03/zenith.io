@@ -4198,3 +4198,36 @@ because the framing differs slightly and the check is nearly free.
 
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
+
+## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [pending -- Lawrence-requested 2026-06-15; model:sonnet]
+
+Lawrence reviewed a LIVE wide-OR ORB trade (long MNQ, OR=30601.75-30735.5=133.75pt,
+entry=30780.5 breakout CLOSE, stop=OR low 30601.75=178.75pt, target=2.5R=447pt) and
+asked whether NQ even moves that far intraday. A quick 1-min INTUITION sim
+(scripts/_orb_target_hitrate.py, NOT authoritative) said: ORB 9:30+15min MNQ 5y hit
+2.5R only ~12% of trades (47% full stop, 41% EOD-flat, mean ~+0.10R); median target
+~217pt vs NQ median daily RTH range 233pt (only 10% of days range >=447pt). RE-RUN on
+the OFFICIAL backtester to get authoritative numbers.
+
+PRIMARY -- target-R sweep (pre-registered 4-point grid; the single sanctioned param):
+- engine=orb, 9:30+15min, MNQ, orb_r_multiple in {1.0, 1.5, 2.0, 2.5}, all else fixed.
+- Data bars/bars_MNQ_dbv_2021_2026.csv, EXCLUDE 2022 holdout. Per R report: target-hit%
+  / stop% / EOD-flat%, win%, PF, mean R/trade, expectancy $, trades/mo, AND funded metric
+  (combine pass-rate + XFA payout via funded_sim, haircut 0/200/400). Baseline = shipped r2.5.
+- OVERFIT GUARD: per-year breakdown (2021/2023/2024/2025-26); the chosen R must be stable
+  across years, not a single-year artifact.
+- Answer plainly: does a lower, more-reachable R (likely 1.0-1.5R, higher win%) BEAT r2.5
+  on expectancy AND on the funded metric, or does r2.5's fat tail still win?
+
+SECONDARY (only if cheap; flag + skip if it needs a real build, do NOT force):
+- Entry-mechanic: stop-entry AT the OR boundary vs the current breakout-CLOSE confirm.
+  The close entry adds the breakout overshoot to the stop (the live trade: OR 133.75pt but
+  stop 178.75pt because entry was 45pt above OR high). Test if boundary entry tightens R
+  and lifts expectancy.
+- OR-width filter: skip/cap trades when the opening range is abnormally wide (OR > Nth pct
+  or > k*ATR) -- wide-OR days are where the target balloons past NQ's realistic daily range.
+
+Success: a per-R expectancy/funded table with a recommended target R (year-stable) vs the
+r2.5 baseline; entry/width variants reported if run. "r2.5 still best" is a valid result.
+Deliverable: trade_analysis doc + findings entries.
+**Source:** Lawrence-requested 2026-06-15 (live ORB trade review).
