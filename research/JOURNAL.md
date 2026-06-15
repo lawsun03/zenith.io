@@ -3529,4 +3529,38 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 
 - **Lessons:** 158 (straddle mode switch: marginal pipeline gain), 159 (standalone straddle: volume starvation kills pipeline). BACKLOG: B90 -> done, B93 updated.
 
+---
+
+## 2026-06-15T01:10Z -- session wk7-b87 -- B87 (Phase B funded_survival risk policy -- REJECTED, pre-answered by B50)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow, $152,227.12 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). No restart needed.
+
+- **Claimed:** B87 (top pending after B86/B90). No orphan in-progress claims.
+
+- **Execution:** Phase 1 falsification via prior evidence (B50, 2026-06-14):
+  - The `funded_survival_multiplier` (0.75% normal -> 0.4% near MLL, $750 cushion) was already implemented and benchmarked in B50 on the IDENTICAL Phase B equity CSVs (equity_b21/orb_reentry_r0p75, haircut $200, 5y excl 2022).
+  - B50 numbers (wk2-b50 journal entry, confirmed):
+
+  | Policy | Accounts | Busts | Net Payouts | Net/mo | Sust |
+  |--------|----------|-------|-------------|--------|------|
+  | constant (baseline) | 14 | 13 | $43,834 | $549/mo | 3.23x |
+  | funded_survival | 18 | 17 | $41,806 | $451/mo | 2.47x |
+
+- **B87 success criteria check:**
+  - busts <= 10: 17 vs 10 required -- FAILS (17 > 10)
+  - net_payouts >= 90% of constant: $41,806 vs $39,450 required -- passes (95.4%)
+  - Both criteria must be met: first criterion fails -> GO/NO-GO = NO-GO
+
+- **Stop rule:** funded_survival loses on BOTH busts (17 vs 13, +31%) AND net payouts ($41,806 vs $43,834, -4.6%) vs constant. Stop rule fires. No re-run needed.
+
+- **No new code:** B50 already shipped the implementation (risk_policy.py, funded_sim.py wiring, 7 tests in test_risk_policy.py). The `--risk-policy` CLI flag was NOT added to scripts/funded_sim.py (the mechanism is rejected; exposing a rejected feature is not warranted per Rule 2).
+
+- **Tests:** 767 passed, 2 skipped, 0 failures. No changes made. Green.
+
+- **Verdict:** REJECTED. Pre-answered by B50. Lesson 97 already documents the mechanism.
+
+- **Learned:** B87 was proposed in the wk7-r1 research session without realizing B50 had already fully benchmarked funded_survival on the same Phase B CSVs. The funded_survival multiplier reduces risk near the MLL floor, which prolongs the danger zone rather than escaping it -- for a positive-EV strategy, maximum sizing is the fastest recovery path. The policy adds 4 busts and costs $2k in net payouts. This is a known rejection (Lesson 97); the backlog item is now formally closed.
+
+- **Next:** B88 (FVG zone-width quality gate -- Phase 0 infra + Phase 1 data mining). First geometry-based FVG predictor not yet tested.
+
 - **Next:** B87 (Phase B funded_survival dynamic risk policy). B88 (FVG zone-width quality gate). B92 (live resting-OCO build for straddle).

@@ -3847,7 +3847,7 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 
 ---
 
-## B87 -- Phase B funded_survival dynamic risk policy  [pending]
+## B87 -- Phase B funded_survival dynamic risk policy  [done -- rejected: pre-answered by B50; funded_survival 17 busts vs 13 baseline (+31%), net $41,806 vs $43,834 (-4.6%) -- BOTH metrics worse; stop rule fires; no new code needed (mechanism already implemented + tested in B50); Lesson 97]
 
 **Hypothesis:** When a funded XFA account is within $750 of the MLL floor, the `funded_survival_multiplier` (already implemented in `app/backtest/risk_policy.py`) drops daily P&L risk from 0.75% to 0.4%. This should reduce late-stage busts (where a single bad day wipes a near-floor account) while barely reducing payouts (the survival mode is rare and brief). The parameter is already implemented but has never been exposed or benchmarked.
 

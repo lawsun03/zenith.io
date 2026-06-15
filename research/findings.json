@@ -3902,5 +3902,30 @@
     },
     "verdict": "candidate",
     "learned": "B90a mode switch (CPI days: straddle only; other days: base engine) beats B42 on both pipeline metrics: +\\/mo (549->565) and +0.15x sust (3.23->3.38). Modest improvement. The straddle runs 47 CPI events across 5y (2021/2023-2026), 31/47 wins (66%), mean 1.644R/event. Switch improves combine pass ratio (44/153 vs 42/159) because the straddle replaces base-engine losses on CPI days (especially 2023 base -\\). B90b standalone (straddle only, no base engine): 10 combine passes but 0.77x sust and \\/mo -- volume starvation kills pipeline throughput (Lesson 2 confirmed). B90a does not beat B57 stretch target (\\/mo, 3.54x sust) on sust (3.38 < 3.54). Additive overlay (base + straddle on CPI days) not tested -- higher variance path, deferred to B93. Recommendation: B90a is deployable as a marginal improve; B93 should frame standalone straddle funding as a separate funded-account track (not pipeline modification)."
+  },
+  {
+    "ts": "2026-06-15T01:10:00Z",
+    "session": "wk7-b87",
+    "item": "B87",
+    "variant": "funded_survival policy Phase B benchmark",
+    "objective": "funded",
+    "metrics": {
+      "busts_baseline": 13,
+      "busts_funded_survival": 17,
+      "net_payout_baseline": 43834,
+      "net_payout_funded_survival": 41806,
+      "npm_baseline": 549,
+      "npm_funded_survival": 451,
+      "sust_baseline": 3.23,
+      "sust_funded_survival": 2.47,
+      "b50_ref": "wk2-b50"
+    },
+    "verdict": "rejected",
+    "learned": "B87 is pre-answered by B50 (2026-06-14): funded_survival_multiplier (0.75% normal -> 0.4% near MLL, 50 cushion) was already benchmarked on the identical Phase B equity CSVs (equity_b21/orb_reentry_r0p75). Result: 17 busts vs 13 baseline (+31%) and net payouts 1,806 vs 3,834 (-4.6%) -- both metrics worse than constant policy. B87 success criteria (busts <= 10 AND net >= 90% of constant) fail on busts (17 >> 10). Stop rule fires on both metrics. Mechanism already documented in Lesson 97: reducing size near MLL prolongs the danger zone rather than escaping it; for a positive-EV strategy, full size is the fastest path out. No new code required -- B50 implementation (risk_policy.py + funded_sim.py wiring + 7 tests in test_risk_policy.py) is complete.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
