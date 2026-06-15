@@ -1,0 +1,33 @@
+### MES combined — equity_export
+wrote 4528 equity points -> research\equity_b97\MES_combined.csv (trades=2513, net=-29029.0550000, pf=0.8540525173643189)
+--- MES combined funded h0
+COMBINE: attempts 29 | passes 2 | busts 26 | median days-to-pass 28.5
+XFA:     accounts 28 | busts 27 | payouts $6825 gross / $6142 net (90%)
+--- MES combined funded h200
+COMBINE: attempts 34 | passes 2 | busts 31 | median days-to-pass 41.5
+XFA:     accounts 32 | busts 31 | payouts $7312 gross / $6581 net (90%)
+--- MES combined funded h400
+COMBINE: attempts 40 | passes 2 | busts 37 | median days-to-pass 17.0
+XFA:     accounts 38 | busts 37 | payouts $7047 gross / $6342 net (90%)
+### MES orb — equity_export
+wrote 1435 equity points -> research\equity_b97\MES_orb.csv (trades=814, net=2810.4750000, pf=1.0272641287503061)
+--- MES orb funded h0
+COMBINE: attempts 21 | passes 6 | busts 14 | median days-to-pass 33.5
+XFA:     accounts 15 | busts 14 | payouts $14422 gross / $12980 net (90%)
+--- MES orb funded h200
+COMBINE: attempts 23 | passes 6 | busts 16 | median days-to-pass 33.5
+XFA:     accounts 17 | busts 16 | payouts $16019 gross / $14417 net (90%)
+--- MES orb funded h400
+COMBINE: attempts 25 | passes 6 | busts 18 | median days-to-pass 36.0
+XFA:     accounts 19 | busts 18 | payouts $16337 gross / $14703 net (90%)
+### MES ifvg — equity_export
+wrote 3209 equity points -> research\equity_b97\MES_ifvg.csv (trades=1797, net=-30675.7350000, pf=0.7984899424749374)
+--- MES ifvg funded h0
+COMBINE: attempts 25 | passes 1 | busts 23 | median days-to-pass 18
+XFA:     accounts 24 | busts 23 | payouts $1657 gross / $1492 net (90%)
+--- MES ifvg funded h200
+COMBINE: attempts 28 | passes 0 | busts 27 | median days-to-pass None
+XFA:     accounts 28 | busts 27 | payouts $0 gross / $0 net (90%)
+--- MES ifvg funded h400
+COMBINE: attempts 31 | passes 0 | busts 30 | median days-to-pass None
+XFA:     accounts 31 | busts 30 | payouts $0 gross / $0 net (90%)

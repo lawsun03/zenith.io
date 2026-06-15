@@ -4181,7 +4181,7 @@ r2.5 baseline; entry/width variants reported if run. "r2.5 still best" is a vali
 Deliverable: trade_analysis doc + findings entries.
 **Source:** Lawrence-requested 2026-06-15 (live ORB trade review).
 
-## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [in-progress — session wk7-b97 2026-06-15T18:00Z]
+## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [done — CONFIRMATORY REJECT (wk7-b97 2026-06-15): 5/6 cells PF<1 (0.46-0.91), every cell busts ~all XFA accounts; MES ORB lone PF>1 (1.03=breakeven, pipeline-catastrophic); gold ORB longs loss-making (PF 0.72) -> bias FLIPS, fails structurally. Session edge is NQ-specific. Lesson 167; doc trade_analysis/2026-06-15_b97_mgc_mes_transfer.md]
 
 Lawrence wants the full strategy set re-tested on MGC and MES. DO NOT blindly
 re-derive — CONFIRM against prior receipts and report deltas:

@@ -3763,3 +3763,27 @@ Gold-FOMC additive Î”$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **â
 - **Learned:** A higher target-R is not free fat-tail upside -- past r1.5 the extra distance is reached too rarely to pay for the lower win rate; and the combine's risk-limited harness can FLIP the standalone expectancy ranking (volume, not PF, binds). Lesson 166 added.
 - **Tests:** full suite **816 passed, 3 skipped, 0 failures**. findings.json #117.
 - **Next:** B97 (full strategy re-run on MGC+MES, model:opus, Lawrence-requested) or B100 (ORB OR-width Phase-1 cut, cheap).
+
+---
+
+## 2026-06-15T19:30Z -- session wk7-b97 -- B97 (full strategy re-run on MGC+MES -- CONFIRMATORY REJECT)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,226.50 (HWM $152,227.12), 1 open contract, no drift, no lockout, last reconcile clean. Market closed (weekend). Databento $11.20/$20 (NO fetch -- on-disk 5y MGC + 2.5y MES v-rolled).
+- **Claimed:** B97 (top pending, model:opus, Lawrence-requested).
+
+**Method:** 3 engines x 2 instruments. Variants (FIXED, no sweeps): (a) deployed combined (ifvg_entry_mode=close); (b) orb r2.5; (c) ifvg. All 5min, deployed-style (partial_r=1.5, killzones=all, swing_stop_lookback=30). MNQ point overrides RESCALED by %-of-price (Lesson 3): MNQ stop_buffer 3.0pt=0.0182%, body 5.0pt=0.0303% -> MGC sb=0.40/body=0.60, MES sb=1.00/body=1.75. Funded via equity_export r0.75 -> funded_sim h0/200/400 (2022 excluded); combine via run_monthly_combine r1.25 on holdout-clean 2024-26 files.
+
+**FUNDED (PF | XFA net h200 | busts/accts h200):**
+| MGC combined 0.81 | $2,922 | 50/51 |
+| MGC orb      0.91 | $8,883 | 27/28 |
+| MGC ifvg     0.79 | $4,482 | 44/45 |
+| MES combined 0.85 | $6,581 | 31/32 |
+| MES orb      1.03 | $14,417| 16/17 |
+| MES ifvg     0.46 | $0     | 27/28 |
+
+**COMBINE (2024-26, 29mo, ORB only):** MES orb 3/29 (10%), run PF 1.08, 0 MLL fail; MGC orb 4/29 (14%), run PF **0.90**, longs PF 0.72 / shorts 1.14. MNQ control ~6/17 (35%).
+
+- **Verdict: CONFIRMATORY REJECT.** No MGC/MES config has materially positive net payouts at a sustainable bust rate. 5 of 6 cells PF<1; every cell busts essentially all XFA accounts. MES ORB is the lone PF>1 (1.03 = breakeven) and still pipeline-catastrophic (16 busts/17 accounts). The iFVG/ORB session-structure edge is NQ-specific and does not transfer to gold or S&P micros. Confirms the documented prior. No engine/gate/config justified; bot_config.json + .env untouched.
+- **Learned:** The transfer fails STRUCTURALLY, not by tuning -- the clincher is that directional bias FLIPS: NQ's edge is long-biased (Lesson 8) but gold ORB longs are loss-making (PF 0.72) while shorts work (1.14). A side filter tuned on NQ would be backwards on gold. MGC/MES remain CONFIRMED only on the event-driven CPI/FOMC straddle, never the session engines. Lesson 167 added.
+- **Tests:** full suite **816 passed, 3 skipped, 0 failures** (analysis-only, no code change). findings.json #118.
+- **Next:** B100 (ORB OR-width Phase-1 cut, cheap -- direct fix for the live wide-OR trade) is the top remaining pending item.
