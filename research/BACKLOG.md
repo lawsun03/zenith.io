@@ -4148,6 +4148,48 @@ deployed-combined dataset or an equity_export --trade-csv):
 2. **RSI-pullback-in-uptrend**: within price>200-SMA, does short-RSI(2/14) oversold-
    then-recover precede better long outcomes? Same localize() pass.
 
+## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [pending — Lawrence-requested 2026-06-15; model:sonnet]
+
+Lawrence wants the full strategy set re-tested on MGC and MES. DO NOT blindly
+re-derive — CONFIRM against prior receipts and report deltas:
+- base combined iFVG+ORB on MES/MGC = REJECTED (project bench); all instruments
+  LOSE on 1min (PF 0.71-0.86), 5/15min materially better (Lesson set);
+- MGC CONFIRMED on CPI straddle AND FOMC straddle; MES CONFIRMED on CPI straddle.
+Data: the 5y v-rolled files already on disk — bars/bars_MGC_* and bars/bars_MES_*
+(e.g. bars_MES_dbv/ESv 5y, bars_MGC 5min). EXCLUDE 2022 holdout per convention.
+Variants (FIXED configs, NO sweeps): (a) the deployed config (engine=combined 5min,
+MNQ overrides stop_buffer=3.0/min_absolute_body=5.0 — RESCALE to each instrument's
+tick/ATR, do not copy MNQ point values); (b) ORB (engine=orb, orb_r_multiple=2.5);
+(c) iFVG-only. Score each via equity_export -> funded_sim on the XFA payout metric
++ combine pass-rate (campaign standard), haircut 0/200/400.
+Success: any MGC/MES config with materially positive net payouts + sustainable bust
+rate. A confirmatory REJECT is a valid, publishable outcome — say so plainly.
+Deliverable: per-instrument payout table, trade_analysis doc, findings entries.
+
+## B98 -- BTC (MBT) session-engine test: iFVG + ORB on a 24h crypto tape  [pending — Lawrence-requested 2026-06-15; needs SESSION REDEFINITION first; model:opus]
+
+Test the base session engines (iFVG + ORB) on Micro Bitcoin. Lawrence's call;
+controller prior is LOW — these engines are anchored to the equity RTH session,
+which a ~24h crypto tape does not have. Expect to either reject or first redefine
+"session". PREREQS ALREADY DONE this session:
+- MBT contract specs FIXED + tested (commit 03f2d3f): $0.10/point, tick=5.0 =>
+  $0.50/tick, 0.2 ticks/point; cross-module invariant in tests/test_pricing.py.
+  (Before the fix MBT P&L was 20x too high and risk-sizing could not price it.)
+- Data fetched: bars/bars_MBT_dbv_2021_2026.csv (1,222,441 1-min bars, v-rolled,
+  2021-06-13 -> 2026-06-11, Databento GLBX.MDP3). QUALITY: 0 dup ts, 0 OHLC
+  violations, BUT SPARSE — median 934 bars/day, 510 thin weekdays (<800 bars);
+  thin overnight micro-BTC liquidity. Model gaps + WIDER slippage than equity.
+DESIGN (the blocker — pick ONE primary, document it): define session/killzones +
+ORB anchor for 24h BTC. Default = CME daily open 17:00 CT as the day boundary;
+ORB = first N min after 17:00 CT. May also probe a UTC-day anchor and an
+Asia/EU/US crypto-session split. iFVG killzones likewise need a non-RTH mapping.
+Variants (FIXED, NO sweeps): ORB (engine=orb r2.5, MBT-adapted anchor) + iFVG
+(combined) on 5min MBT, EXCLUDE 2022, slippage widened for the thin book.
+Success: any MBT config with positive expectancy surviving the thin-liquidity
+reality (PF + funded metric). Confirmatory REJECT is acceptable — document the
+cause (session mismatch / vol scale / liquidity). Deliverable: session-definition
+note, MBT payout table, trade_analysis doc, findings.
+
 GO/NO-GO: a bucket must clear the edge_diagnostics robust bar (PF>=1.2, n>=30, positive
 in >=60% of years) AND beat the no-filter baseline. If it lands in the failed-daily-
 context set like B5/B35/B65 (the strong prior), REJECT immediately, log that the
