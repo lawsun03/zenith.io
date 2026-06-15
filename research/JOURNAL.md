@@ -3787,3 +3787,46 @@ Gold-FOMC additive Î”$/mo sensitivity: h0/h200/h400 = +60/+55/+31 (gap0) but **â
 - **Learned:** The transfer fails STRUCTURALLY, not by tuning -- the clincher is that directional bias FLIPS: NQ's edge is long-biased (Lesson 8) but gold ORB longs are loss-making (PF 0.72) while shorts work (1.14). A side filter tuned on NQ would be backwards on gold. MGC/MES remain CONFIRMED only on the event-driven CPI/FOMC straddle, never the session engines. Lesson 167 added.
 - **Tests:** full suite **816 passed, 3 skipped, 0 failures** (analysis-only, no code change). findings.json #118.
 - **Next:** B100 (ORB OR-width Phase-1 cut, cheap -- direct fix for the live wide-OR trade) is the top remaining pending item.
+
+## 2026-06-15T21:10:00Z -- session wk7-b101 (reclaim) -- B101 (Fib-extension target levels -- REJECTED)
+
+- **Bot health:** /api/status 200 -- XFA shadow, equity $152,402.38 at HWM (slight appreciation from prior entry), 0 open contracts, no drift, no lockout. Market closed (weekend).
+- **Claimed:** B101 (reclaim -- prior session wk7-b101 2026-06-15T19:50Z was orphaned: code + tests + benchmark runs were complete but no journal entry or findings.json entry existed). Per protocol: reclaimed and completed.
+- **State inherited from crashed session:**
+  - Code: `ifvg_fib_target_ext` + `orb_fib_target_ext` in StrategyParams (bot_config.py); `fib_target_ext` in ComposerConfig (composer.py:209) + ORBConfig (orb.py:55); target calculation in composer.py:757-766 and orb.py:197-203; wired in runner.py + main.py.
+  - Tests: `tests/test_b101_fib_target.py` (1 iFVG test) + `tests/test_orb.py::test_fib_target_ext_overrides_fixed_r` (1 ORB test).
+  - Benchmarks: `research/equity_b101/` -- equity and trade CSVs for all 11 variants (iFVG base + 5 ext + ORB 5 ext), funded_sim logs at h0/200/400. Analysis script: `scripts/_b101_analyze.py`.
+- **Ran:** (1) Bot health check. (2) Full test suite -- **837 passed, 3 skipped, 0 failures** (+21 vs prior B97 session, from the crashed B101 code). (3) `scripts/_b101_analyze.py` to extract per-variant metrics. (4) Read funded_sim logs for all 11 variants.
+- **Numbers (flat 5y, excl 2022 holdout, h=200):**
+
+  **iFVG Fib-ext target (baseline = fixed r2.5 deployed):**
+  | ext | n | win% | PF | exp$/tr | tgt% | stop% | eod% | Combine passes | XFA busts/accts | XFA net h200 |
+  |-----|---|------|----|---------|------|-------|------|----------------|-----------------|--------------|
+  | base (r2.5) | 2513 | 35.5 | 1.06 | +16.3 | 29.9 | 62.2 | 7.9 | 30/122 att | 65/66 | $100,833 |
+  | 1.272 | 2607 | 47.7 | 1.08 | +13.9 | 45.2 | 50.2 | 4.6 | 21/74 att | 52/53 | $62,153 |
+  | 1.414 | 2594 | 45.6 | 1.07 | +13.5 | 42.9 | 52.3 | 4.8 | 27/90 att | 53/54 | $70,739 |
+  | 1.618 | 2583 | 43.4 | 1.08 | +17.5 | 40.2 | 54.4 | 5.4 | 29/96 att | 49/50 | $77,895 |
+  | 2.0 | 2554 | 39.8 | 1.08 | +17.1 | 35.5 | 57.9 | 6.6 | 30/100 att | 56/57 | $87,256 |
+  | 2.618 | 2523 | 36.5 | 1.08 | +21.6 | 30.6 | 61.2 | 8.2 | 34/130 att | 57/58 | $89,513 |
+
+  Per-year PF (all variants positive except 2023 borderline 0.89-0.95 range): year-stable.
+
+  **ORB Fib-ext target (cross-check vs B99 r1.5/r2.5):**
+  | ext | n | win% | PF | exp$/tr | tgt% | stop% | eod% | Combine passes | XFA busts/accts | XFA net h200 |
+  |-----|---|------|----|---------|------|-------|------|----------------|-----------------|--------------|
+  | 1.272 (eff ~r1.2) | 1030 | 52.9 | 1.20 | +33.4 | 42.1 | 37.8 | 20.1 | 15/33 att | 17/18 | $34,792 |
+  | 1.414 (eff ~r1.3) | 1030 | 51.4 | 1.22 | +38.1 | 38.0 | 38.6 | 23.4 | 18/38 att | 20/21 | $42,264 |
+  | 1.618 (eff ~r1.5) | 1030 | 49.9 | 1.23 | +43.9 | 32.9 | 39.9 | 27.2 | 21/46 att | 25/26 | $45,205 |
+  | 2.0 (eff ~r1.8) | 1030 | 47.3 | 1.21 | +44.6 | 23.6 | 41.7 | 34.8 | 23/60 att | 30/30 | $51,557 |
+  | 2.618 (eff ~r2.3) | 1030 | 45.3 | 1.18 | +42.4 | 14.4 | 43.0 | 42.6 | 26/68 att | 34/34 | $53,546 |
+  | B99 r1.5 (benchmark) | -- | -- | 1.24 | +47.9 | -- | -- | -- | 22/53 att | 25/26 | $56,269 |
+  | B99 r2.5 (deployed) | -- | -- | -- | +43.8 | 11.2 | 43 | 46 | 25/68 att | 34/34 | $55,775 |
+
+- **Stop rule check:**
+  - iFVG: PF improves (+0.01-0.02) but XFA net DECREASES for ALL variants vs baseline. Stop rule NOT triggered (PF improves). But no variant meets success criteria (XFA net >= $100,833 AND combine passes >= 30 simultaneously).
+  - ORB (cross-check): Fib 1.618 vs B99 r1.5: PF 1.23 < 1.24 AND exp$ 43.9 < 47.9 AND XFA net $45,205 < $56,269. Stop rule TRIGGERED -- loses on ALL metrics vs B99 r1.5.
+- **Root cause (iFVG):** Fib targets scale with the displacement leg (L = |sweep_extreme -> disp_bar_extreme|). Smaller ext (1.272) brings the target closer, boosting win% from 35% to 48% but reducing each winner's payout -- net falls. Larger ext (2.618) approaches the fixed-r2.5 target but the L-scaled absolute target differs from stop_dist-scaled target, so the path to the target changes. The fixed-R framework already captures the displacement leg geometry through the stop_dist normalization; the Fib layer adds complexity without extracting additional signal value. XFA net universally decreases because the Fib target change moves profitable EOD flattens into the target/stop classification differently without improving the underlying P&L distribution.
+- **Root cause (ORB):** ORB Fib target uses OR_width as L. Since stop_dist = entry - OR_boundary > OR_width (entry is above OR_high for longs), the effective R = ext * OR_width / stop_dist < ext. Fib 1.618 produces effective R ~1.4-1.5 -- nearly the same as B99 r1.5, but calibrated to OR_width rather than the actual stop distance. The slight underperformance vs B99 r1.5 is exactly this effect: the target is systematically a little shorter than intended. Fixed-R r1.5 remains optimal for ORB.
+- **Verdict:** REJECTED -- no Fib variant beats the fixed-R baselines on primary funded metrics. iFVG Fib fails on XFA net despite marginal PF improvement; ORB Fib stop-rule-triggered vs B99 r1.5. The `ifvg_fib_target_ext` and `orb_fib_target_ext` features ship default-off (0 = off). No 2022 holdout required (no candidate). Lessons 168-169 added.
+- **Learned:** Fib-extension targets (measured-move off the displacement leg or OR-width) introduce signal-adaptive target distances but do not improve funded economics vs fixed-R. For iFVG, the displacement leg is already geometrically embedded in the stop calculation; adding a Fib multiplier on top doesn't extract new signal value -- the fixed-R framework is already the right normalization. For ORB, the Fib ext=1.618 cross-check confirms B99's r1.5 finding (nearly identical effective R) while slightly underperforming because OR_width < actual stop distance.
+- **Next:** B100 (ORB OR-width Phase-1 data mining -- pending, cheap, no code) or B102 (bootstrap CIs on funded_sim -- pending, infra). B100 is the top non-gated pending item.

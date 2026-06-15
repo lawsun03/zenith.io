@@ -231,6 +231,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 skip_trading_days=s.skip_trading_days,
                 signal_window_mins=s.orb_signal_window_mins,
                 require_pm_break=s.orb_require_pm_break,
+                fib_target_ext=s.orb_fib_target_ext,
             ))
             _sr_det = SweepReentryDetector(SweepReentryConfig(
                 instrument=cfg.instrument,
@@ -260,6 +261,14 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                     band_sigma=s.vwap_band_sigma,
                     stop_sigma=s.vwap_stop_sigma,
                 )),
+                strategy_cfg=s,
+            )
+        if s.engine == "forbes":
+            from app.strategy.forbes import ForbesConfig, ForbesDetector, ForbesRunner
+            return ForbesRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                detector=ForbesDetector(ForbesConfig.from_params(cfg.instrument, s)),
                 strategy_cfg=s,
             )
         if s.engine == "news_straddle":
@@ -294,6 +303,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 skip_trading_days=s.skip_trading_days,
                 signal_window_mins=s.orb_signal_window_mins,
                 require_pm_break=s.orb_require_pm_break,
+                fib_target_ext=s.orb_fib_target_ext,
             ))
             return ORBRunner(
                 instrument=cfg.instrument,
@@ -347,6 +357,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                     max_short_rank=s.ifvg_max_short_rank,
                     silver_bullet_only=s.silver_bullet_only,
                     suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                    fib_target_ext=s.ifvg_fib_target_ext,
                 )),
                 grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
                 strategy_cfg=s,
@@ -396,6 +407,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 max_short_rank=s.ifvg_max_short_rank,
                 silver_bullet_only=s.silver_bullet_only,
                 suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                fib_target_ext=s.ifvg_fib_target_ext,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,

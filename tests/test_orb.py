@@ -43,6 +43,17 @@ class TestORB:
         assert sig.target == Decimal("21084")
         assert sig.killzone == "ORB"
 
+    def test_fib_target_ext_overrides_fixed_r(self):
+        # B101: target = entry ± ext × OR_width, stop (opposite edge) unchanged.
+        det = ORBDetector(_cfg(range_minutes=15, r_multiple=Decimal("2.0"),
+                               fib_target_ext=Decimal("1.618")))
+        feed_range(det)  # OR = [21000, 21020], width 20
+        sig = det.on_bar(bar(9, 50, "21015", "21030", "21014", "21028"))
+        assert sig is not None
+        assert sig.stop == Decimal("21000")            # unchanged
+        # 21028 + 1.618 * 20 = 21060.36  (NOT entry + 2R = 21084)
+        assert sig.target == Decimal("21060.36")
+
     def test_short_breakout(self):
         det = ORBDetector(_cfg())
         feed_range(det)

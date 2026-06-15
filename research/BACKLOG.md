@@ -4232,7 +4232,7 @@ because the framing differs slightly and the check is nearly free.
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
 
-## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [in-progress — session wk7-b101 2026-06-15T19:50Z]
+## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [done -- REJECTED (wk7-b101 reclaim 2026-06-15): iFVG Fib ext 1.272-2.618 all improve PF marginally (+0.01-0.02) but reduce XFA net payouts vs fixed-r2.5 baseline ($62-90k vs $100k). ORB Fib cross-check: Fib 1.618 (eff ~r1.5) hits PF=1.23/exp=$43.9 vs B99 r1.5 PF=1.24/exp=$47.9 -- fixed-R wins. Feature ships default-off; fixed-R framework remains optimal for both engines. Lesson 168-169.]
 
 Lawrence: test Fib EXTENSION levels as the take-profit TARGET (a measured-move target that
 scales with the entry leg), see if profitable, then whether it helps the funded (combine

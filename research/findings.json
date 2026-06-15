@@ -4106,5 +4106,32 @@
    "runs": [],
    "src": "Lawrence-requested 2026-06-15"
   }
+ },
+ {
+  "ts": "2026-06-15T21:10:00Z",
+  "session": "wk7-b101",
+  "item": "B101",
+  "variant": "iFVG fib_target_ext in {1.272, 1.414, 1.618, 2.0, 2.618} + ORB cross-check",
+  "objective": "funded",
+  "metrics": {
+   "ifvg_base_xfa_net_h200": 100833,
+   "ifvg_base_combine_passes": 30,
+   "ifvg_1p618_xfa_net_h200": 77895,
+   "ifvg_1p618_combine_passes": 29,
+   "ifvg_2p618_xfa_net_h200": 89513,
+   "ifvg_2p618_combine_passes": 34,
+   "orb_fib1p618_pf": 1.23,
+   "orb_fib1p618_exp_per_trade": 43.9,
+   "b99_r1p5_pf": 1.24,
+   "b99_r1p5_exp_per_trade": 47.9,
+   "orb_fib1p618_xfa_net_h200": 45205
+  },
+  "verdict": "rejected",
+  "learned": "Fibonacci-extension targets (measured-move off the displacement leg or OR-width) do not improve over fixed-R for either iFVG or ORB. iFVG Fib variants improve PF by 0.01-0.02 but all reduce XFA net payouts vs the fixed-r2.5 baseline; ORB Fib 1.618 (effective R approx 1.5) matches B99 r1.5 on PF (1.23 vs 1.24) but underperforms on exp$/trade ($43.9 vs $47.9) and XFA net ($45k vs $56k). The fixed-R r2.5 (iFVG combine) and r1.5 (ORB funded) remain the respective optima.",
+  "links": {
+   "doc": null,
+   "runs": [],
+   "src": "Lawrence-requested 2026-06-15"
+  }
  }
 ]

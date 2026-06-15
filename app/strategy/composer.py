@@ -203,6 +203,11 @@ class ComposerConfig:
     # Per-day reset: gate clears at ET midnight. ORB signals unaffected (different path).
     suppress_same_direction_repeat: bool = False
 
+    # B101: Fibonacci-extension target. 0 = off (fixed r_multiple). >0 = measured move off the
+    # displacement leg: target = entry ± ext × |sweep_extreme − displacement_bar_extreme|.
+    # Stop is unchanged (this only overrides the target). Applied after all stop adjustments.
+    fib_target_ext: Decimal = Decimal("0")
+
 
 @dataclass
 class _Awaiting:
@@ -746,6 +751,19 @@ class SweepDisplacementComposer:
                 target = entry + r * cfg.r_multiple
             else:
                 target = entry - r * cfg.r_multiple
+
+        # B101: Fibonacci-extension target — measured move off the displacement leg
+        # (|sweep_extreme → displacement-bar extreme|), independent of the stop. Stop unchanged.
+        if cfg.fib_target_ext > 0:
+            sweep_ext = awaiting.sweep.sweep_extreme
+            if side == "long":
+                leg = event.displacement_bar.high - sweep_ext
+                if leg > 0:
+                    target = entry + cfg.fib_target_ext * leg
+            else:
+                leg = sweep_ext - event.displacement_bar.low
+                if leg > 0:
+                    target = entry - cfg.fib_target_ext * leg
 
         fvg_desc = (f"{zone_kind} {zone_low}–{zone_high}" if zone_low is not None
                     else "no-FVG (displacement-only)")
