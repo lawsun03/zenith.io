@@ -44,6 +44,10 @@ class StrategyParams(BaseModel):
     # iFVG grader configuration
     ifvg_sweep_window_bars: int = 10                   # bars since sweep for Rule A
     ifvg_min_displacement_mult: Decimal = Decimal("1.0")  # Fibonacci displacement quality (Rule E)
+    # B101: Fibonacci-extension target. 0 = off (fixed r_multiple). >0 = target is a measured
+    # move off the displacement leg: target = entry ± ext × |sweep_extreme − displacement_bar_extreme|.
+    # Stop unchanged. The leg is the same one the grader measures for Rule E.
+    ifvg_fib_target_ext: Decimal = Decimal("0")
     # iFVG session / news filters (Rule G, H)
     ifvg_macro_windows: list[str] = Field(default_factory=list)
     ifvg_news_blackout: list[str] = Field(default_factory=list)  # UTC ISO ranges "YYYY-MM-DDTHH:MM/..."
@@ -120,6 +124,9 @@ class StrategyParams(BaseModel):
     orb_pdr_enabled: bool = False         # prior-day-range qualifier (default-off)
     orb_reentry_after_stop: bool = False  # re-arm detector once per day after a confirmed stop
     orb_long_only: bool = False           # suppress ORB short signals (funded PF improvement, B17)
+    # B101: Fibonacci-extension target. 0 = off (fixed orb_r_multiple). >0 = target is a
+    # measured move off the OR width: target = entry ± ext × (or_high − or_low). Stop unchanged.
+    orb_fib_target_ext: Decimal = Decimal("0")
     vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")
@@ -142,6 +149,22 @@ class StrategyParams(BaseModel):
     # and the news_straddle scheduler is constructed to own those days, while
     # engine stays "combined". Phase-agnostic (combine and shadow alike).
     cpi_day_router_enabled: bool = False
+
+    # Forbes Model (ICT session-liquidity engine; engine="forbes"). Backtest-only,
+    # default-off. All discretionary rules are params (spec 2026-06-15-forbes-model).
+    forbes_killzone_et: str = "09:30-10:30"      # active window (ET); outside it: no trades
+    forbes_or_open_et: str = "09:30"             # opening-range start (ET) = 06:30 PST
+    forbes_or_minutes: int = 15                  # OR length (first 15 1-min candles)
+    forbes_or_min_fvgs: int = 1                  # OR must hold >= this many FVGs, else stand aside
+    forbes_poi_swing_tf_min: int = 15            # timeframe (min) for swing-POI detection
+    forbes_target_mode: str = "liquidity"        # "liquidity" | "or_top" | "midway_poi"
+    forbes_min_rr: Decimal = Decimal("1.4")      # skip setups whose RR is below this
+    forbes_stop_mode: str = "beyond_wick"        # "beyond_wick" | "beyond_or"
+    forbes_max_trades_per_day: int = 1
+    # session windows (ET) for the liquidity map; comma "HH:MM-HH:MM" per session
+    forbes_asia_et: str = "18:00-00:00"
+    forbes_london_et: str = "02:00-05:00"
+    forbes_prior_ny_et: str = "09:30-16:00"
 
     # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
     cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"
