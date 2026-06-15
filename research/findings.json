@@ -4335,5 +4335,27 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-16T01:30Z",
+    "session": "wk7-b107",
+    "item": "B107",
+    "variant": "walkforward degenerate-score guard + expectancy fallback",
+    "objective": "infra",
+    "metrics": {
+      "tests_added": 5,
+      "total_tests": 885,
+      "default_test_days_old": 10,
+      "default_test_days_new": 20,
+      "degenerate_condition": "all scores == 0.000 (all INCOMPLETE)",
+      "fallback_metric": "avg_net_pnl_per_trade"
+    },
+    "verdict": "shipped",
+    "learned": "walkforward.py had a false-confidence bug: 10-day test windows can never reach the k combine target, so all 108 configs scored 0.000 and RECOMMENDED CONFIG was just grid-iteration order. Fix: scores_are_degenerate() guard suppresses RECOMMENDED CONFIG when all scores are equal; _score_config_by_expectancy() provides a diagnostic fallback. Default --test-days raised from 10 to 20.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]

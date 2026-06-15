@@ -4320,7 +4320,7 @@ MATCHED AVERAGE RISK on funded_sim (neutralizes the B63a "more risk->more busts"
 on PF/WR/r_mfe NOT avg-$; keep a never-below-1.0x floor; ship default-off only if it wins. Success:
 +0.2-0.5x sustainability with zero volume cut, or a clean reject. **Source:** external review 2026-06-15.
 
-## B107 -- Walk-forward optimizer is statistically degenerate (fix or retire)  [pending]
+## B107 -- Walk-forward optimizer is statistically degenerate (fix or retire)  [done -- SHIPPED (wk7-b107 2026-06-16): scores_are_degenerate() guard suppresses false-confidence RECOMMENDED CONFIG; _score_config_by_expectancy() diagnostic fallback; default --test-days raised 10->20; 5 defining-behavior tests; 885 total tests green. Lesson 182.]
 Review #12: walkforward.py:74-81 -- 30/10-day windows can't clear a +$3k Combine, so all 108 configs
 score 0.000 and "RECOMMENDED CONFIG" is just grid order (false confidence). Score on per-window
 net/PF/expectancy (or lengthen test windows to >=20 trading days); GUARD against emitting a

@@ -4098,3 +4098,34 @@ B106 wins on PF vs matched-risk control for ALL f (trivially -- aligned PF > agg
 - **Tests:** 880 passed, 3 skipped, 0 failures (analysis-only -- no code changes to production; scripts/_b106_analyze.py added). findings.json #125.
 
 - **Next:** B107 (walk-forward optimizer is statistically degenerate -- fix or retire; small item, last remaining pending).
+
+---
+
+## 2026-06-16T01:30Z -- session wk7-b107 -- B107 (walkforward degenerate-score guard -- SHIPPED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- infra only).
+- **Claimed:** B107 (only pending item; no orphan in-progress).
+
+**Root-cause diagnosis:** `walkforward.py` defaults to `--test-days=10`. A Combine needs ~21 trading days to reach the $3,000 target. With 10-day windows, every window is INCOMPLETE (neither PASS nor FAIL). `_score_config` returns `pass_rate - 2*fail_rate = 0.0 - 0.0 = 0.000` for all 108 grid configs. The tool then sorts by 0.000 == 0.000 == ... and prints "RECOMMENDED CONFIG" for whichever config appeared first in grid-iteration order -- pure false confidence, not a meaningful recommendation.
+
+**TDD:** Wrote 5 defining-behavior tests first (red), then implemented fixes:
+
+1. `test_scores_are_degenerate_all_incomplete` -- 5 configs all score 0.0 -> `scores_are_degenerate()` returns True
+2. `test_scores_are_degenerate_false_when_differentiated` -- 3 configs with different scores -> False
+3. `test_scores_are_degenerate_single_config` -- 1 config -> False (can't compare)
+4. `test_score_config_by_expectancy_ranks_by_per_trade_pnl` -- higher per-trade pnl config scores higher
+5. `test_score_config_by_expectancy_no_trades` -- all-zero-trade windows -> -inf sentinel
+
+**Implementation (3 changes):**
+
+1. `app/optimizer/walkforward.py`: Added `_score_config_by_expectancy(windows)` (avg per-trade net P&L across all windows; returns -inf when no trades), and `scores_are_degenerate(scores)` (True if all configs have identical scores and len >= 2).
+
+2. `scripts/walkforward.py`: Guarded the RECOMMENDED CONFIG block -- when `scores_are_degenerate(scores)` is True, emits a WARNING block instead: explains the degenerate condition, recommends re-running with `--test-days 21+`, and provides a diagnostic-only per-trade expectancy ranking (not a recommendation). When NOT degenerate, the existing RECOMMENDED CONFIG block is emitted unchanged.
+
+3. `scripts/walkforward.py`: Raised default `--test-days` from 10 to 20 (a full trading month; reduces but does not eliminate the degenerate condition since 20 days may still not reach $3k in sparse-trade configs).
+
+**Numbers:** 885 tests (up from 880), 3 skipped, 0 failures. findings.json #126.
+
+- **Learned:** A tool's "recommendation" output is only meaningful when the scores that drive it are differentiated. With constant scores (all INCOMPLETE windows), any recommendation is arbitrary -- just iteration order masquerading as analysis. Guard this pattern anywhere a ranking is emitted from a potentially-constant scoring function.
+- **Tests:** full suite **885 passed, 3 skipped, 0 failures** (+5 new B107 tests). findings.json #126. Lesson 182 added.
+- **Next:** Backlog is now clear (B107 was the last pending item). Session exits. Next session should run a research/ideation pass to replenish the backlog.

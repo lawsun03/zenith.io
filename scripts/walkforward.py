@@ -26,7 +26,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 from app.backtest.runner import BacktestConfig, SweepDimension
 from app.bot_config import load_bot_config
-from app.optimizer.walkforward import ConfigScore, run_walk_forward
+from app.optimizer.walkforward import (
+    ConfigScore,
+    _score_config_by_expectancy,
+    run_walk_forward,
+    scores_are_degenerate,
+)
 from app.replay import load_bars_csv
 
 # --- Edit this to change what's swept ---
@@ -61,7 +66,7 @@ def _write_results(scores: list[ConfigScore], out_dir: Path) -> None:
             f" {'+' if s.avg_net_pnl >= 0 else ''}{s.avg_net_pnl:>9.2f}"
         )
     lines.append("=" * 100)
-    if scores:
+    if scores and not scores_are_degenerate(scores):
         best = scores[0]
         lines += [
             "",
@@ -80,6 +85,27 @@ def _write_results(scores: list[ConfigScore], out_dir: Path) -> None:
                     f"{st['win_rate']:>5.1f}% WR  "
                     f"net {pnl_sign}{st['net_pnl']:>8.2f}"
                 )
+    elif scores:
+        # All configs scored identically — test windows too short to observe combine passes.
+        # Emitting RECOMMENDED CONFIG here would be false confidence (it's just grid order).
+        by_exp = sorted(scores, key=lambda s: _score_config_by_expectancy(s.windows), reverse=True)
+        best_exp = by_exp[0]
+        exp_score = _score_config_by_expectancy(best_exp.windows)
+        lines += [
+            "",
+            "WARNING: All configs scored identically (degenerate scoring).",
+            f"  All {len(scores)} configs have score={scores[0].score:.3f} — no test window reached the",
+            "  combine target. This happens when --test-days is too short (default is 20",
+            "  trading days; a combine needs ~21 days to reach the $3,000 target).",
+            "  No RECOMMENDED CONFIG is emitted — any ranking would be arbitrary.",
+            "",
+            "  To fix: re-run with a longer --test-days (e.g. --test-days 21 or higher).",
+            "",
+            "  Diagnostic only — top config by avg per-trade net P&L (not a recommendation):",
+            f"    {best_exp.label}",
+            f"    Avg net P&L/trade: ${exp_score:+.2f}",
+            f"    Avg net P&L/window: ${float(best_exp.avg_net_pnl):+.2f}",
+        ]
     ranking_path = out_dir / "walkforward_ranking.txt"
     ranking_path.write_text("\n".join(lines))
     print(f"Ranking saved to {ranking_path}")
@@ -155,7 +181,7 @@ def main() -> None:
                         help="Live config to seed the faithful base config from")
     parser.add_argument("--out-dir", default="walkforward_results")
     parser.add_argument("--train-days", type=int, default=30)
-    parser.add_argument("--test-days", type=int, default=10)
+    parser.add_argument("--test-days", type=int, default=20)
     parser.add_argument("--step-days", type=int, default=5)
     parser.add_argument(
         "--partial-profit-r", type=Decimal, default=Decimal("0"),
