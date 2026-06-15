@@ -4181,7 +4181,7 @@ r2.5 baseline; entry/width variants reported if run. "r2.5 still best" is a vali
 Deliverable: trade_analysis doc + findings entries.
 **Source:** Lawrence-requested 2026-06-15 (live ORB trade review).
 
-## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [pending — Lawrence-requested 2026-06-15; model:opus]
+## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [in-progress — session wk7-b97 2026-06-15T18:00Z]
 
 Lawrence wants the full strategy set re-tested on MGC and MES. DO NOT blindly
 re-derive — CONFIRM against prior receipts and report deltas:
@@ -4246,3 +4246,37 @@ queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't 
 trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
 the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
 **Source:** B99 secondary (2026-06-15).
+
+## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [pending -- Lawrence-requested 2026-06-15; model:opus]
+
+Lawrence: test Fib EXTENSION levels as the take-profit TARGET (a measured-move target that
+scales with the entry leg), see if profitable, then whether it helps the funded (combine
+pass + XFA payout) goals. PRIOR: Fib as a FILTER/gate was REJECTED (no edge, 2.5y MGC, all
+buckets equally negative; do NOT re-test Fib gating). Fib as a TARGET = NEW, untested.
+
+MECHANISM (pre-registered 5-point grid, the single sanctioned param):
+- target = entry +/- ext * L, ext in {1.272, 1.414, 1.618, 2.0, 2.618}. Direction-aware.
+- L (the "entry move" length) per engine:
+  - iFVG: the displacement leg = |sweep_extreme -> displacement-bar extreme| (the leg the
+    grader already measures for Rule E / ifvg_min_displacement_mult).
+  - ORB: the opening-range width = |OR_high - OR_low|; target = entry +/- ext * OR_width.
+- Stop unchanged per engine (iFVG: sweep/structure stop; ORB: opposite OR boundary).
+
+FRAMING (apples-to-apples vs B99): a Fib-ext target is an EFFECTIVE variable R
+(target_dist / stop_dist = effective R) -- REPORT the effective-R distribution per ext.
+For ORB, ext*OR_width ~= a fixed-R sweep (stop ~= OR_width), so ORB Fib-targets largely
+OVERLAP B99's R-sweep -> treat ORB as a CROSS-CHECK vs B99 (esp. the r1.5 expectancy
+optimum / 11.2% r2.5 hit-rate), do not redo from scratch. The NOVEL test is iFVG (target
+scales with the displacement leg, not a fixed R off the stop).
+
+DATA/METHOD: bars_MNQ_dbv_2021_2026.csv, MNQ 5min, EXCLUDE 2022. Per ext report: target-hit%
+/ stop% / EOD-flat%, win%, PF, mean R/trade, effective-R, expectancy $, trades/mo, AND
+funded metric (combine pass-rate + XFA payout via funded_sim, haircut 0/200/400). Baselines:
+fixed-R (iFVG r2.5 deployed; ORB r2.5 and the B99 r1.5 result). OVERFIT GUARD: per-year
+(2021/2023/2024/2025-26); chosen ext must be year-stable.
+
+SUCCESS: any Fib-ext target beating the fixed-R baseline on expectancy AND the funded metric,
+year-stable. "Fixed-R still best / Fib-target adds nothing" is a valid result (matches the
+Fib-filter prior). Deliverable: per-ext table per engine, trade_analysis doc, findings.
+Build a default-off knob ONLY if it wins.
+**Source:** Lawrence-requested 2026-06-15 (Fib levels as a target).
