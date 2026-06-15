@@ -46,3 +46,28 @@ Script: `scripts/news_multi.py`. (NQ confirmed at 1s in B85; ES/gold/oil here ar
 - Caveat: ES/gold confirmed at 1-min only; NQ's 1s check (B85) showed 1s ≈ 1-min (slightly
   better), so the 1-min ES/gold results are likely trustworthy — but a cheap 1s confirmation
   on ES + gold CPI windows (and gold FOMC) would close it before sizing. ~$1-2 Databento.
+
+## 1-SECOND CONFIRMATION (2026-06-14, B91) — ALL CONFIRMED; both sides work
+Fetched ES.v.0 + GC.v.0 ohlcv-1s for the CPI windows and GC.v.0 for the FOMC windows
+($2.46; ledger $11.20/$20) and replayed managing from the second after trigger, ATR-offset,
+with a LONG/SHORT split (script scripts/news_straddle_1s_confirm.py):
+
+| instrument/event | ALL (1s) | long | short |
+|---|---|---|---|
+| **ES CPI** | PF 2.42, 51% win, +0.88R, **5/5** | 1.96, 4/5 | **4.01, 4/5** |
+| **GOLD CPI** | PF 1.99, 45%, +0.66R, **4/5** | 1.62, 4/5 | 2.67, 4/5 |
+| **GOLD FOMC** | PF 1.99, 45%, +0.66R, **4/5** | 2.52, 2/4 | **1.72, 4/5** |
+
+(NQ CPI, from B85: PF 5.99 at 1s.) All slightly below the 1-min estimates — expected from the
+conservative manage-from-next-second handling — but all clearly positive and year-consistent.
+
+**Key: both sides work.** CPI straddle SHORT breaks are as good or better than longs (ES short
+PF 4.01, gold short 2.67) — so it is NOT a long/trend artifact; the bidirectional breakout has
+real edge. **Gold FOMC short side is PF 1.72, 4/5 years** — this resolves the trend-confound
+worry: gold-FOMC is a genuine bidirectional rate-reaction edge, not just gold's 2024-26 bull.
+
+### Final confirmed set
+- **CPI breakout straddle: NQ (PF ~6), ES/MES (2.4), gold (2.0)** — 1s-confirmed, both sides.
+- **Gold FOMC straddle: PF ~2.0, 4/5, both sides** — 1s-confirmed.
+- Oil rejected; fade rejected; PPI marginal. Next: B89 engine (instrument-parameterized) +
+  B90 pipeline/funded framing across the basket.

@@ -3940,7 +3940,7 @@ on B85 (confirmed straddle) + B89 (engine). Analogue of B84 but CPI-specific & g
 
 ---
 
-## B91 -- News straddle multi-instrument: ES/MES + gold (incl. gold-FOMC), 1s confirmation  [pending — Lawrence-requested 2026-06-14; rank with B89/B90; model:opus]
+## B91 -- News straddle multi-instrument: ES/MES + gold (incl. gold-FOMC), 1s confirmation  [done — 1s CONFIRMED 2026-06-14 ($2.46; ledger $11.20): ES CPI PF 2.42 5/5, gold CPI 1.99 4/5, gold FOMC 1.99 4/5; SHORT side works on all (ES CPI short 4.01, gold FOMC short 1.72 4/5) -> not a trend artifact. NQ CPI 5.99 (B85). Oil+fade rejected. REMAINING engine/framing work -> B89 (must be instrument-parameterized: NQ/ES/gold CPI + gold FOMC) + B90. doc: trade_analysis/2026-06-14_news_multi_instrument.md]
 
 The CPI breakout straddle GENERALIZES beyond NQ (doc:
 trade_analysis/2026-06-14_news_multi_instrument.md, script scripts/news_multi.py,
