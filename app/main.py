@@ -537,11 +537,13 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
-def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None):
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None):
     """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
 
     Reads pre-computed grader state — no heavy computation on the hot path.
-    Pure observability: never affects trade decisions.
+    Pure observability: never affects trade decisions. iFVG-specific reads are
+    guarded so the news_straddle runner (no displacement/composer zones) is
+    tolerated — its live state comes from the scheduler instead (B92, Rule 13).
     """
     from app.broker.events import Bar as BarEvent
     from app.strategy.killzone import in_macro_window, in_news_blackout
@@ -555,15 +557,17 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
         if runner is None:
             return
 
-        grade = runner.grader.last_grade
-        active_fvgs_count = len(runner.displacement.active_fvgs)
+        grade = getattr(runner.grader, "last_grade", None)
+        _disp = getattr(runner, "displacement", None)
+        active_fvgs_count = len(_disp.active_fvgs) if _disp is not None else 0
 
         # Read session range for the current bar's killzone (already maintained by runner)
         cfg = engine.strategy_cfg
         kz = None
-        if cfg is not None:
+        _zones = getattr(getattr(runner, "composer", None), "_zones", None)
+        if cfg is not None and _zones is not None:
             from app.strategy.killzone import in_killzone
-            kz = in_killzone(bar.ts, runner.composer._zones)
+            kz = in_killzone(bar.ts, _zones)
         sr = runner.grader.session_range(kz.name if kz else "") if kz else None
 
         in_macro = False
@@ -610,6 +614,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             phase=phase_data,
             orb_state=orb_state,
             pos_excursion=pos_excursion,
+            news_straddle=news_straddle_scheduler.state() if news_straddle_scheduler is not None else None,
         )
 
     return on_bar
@@ -1245,8 +1250,35 @@ async def _async_main() -> int:
     # For multi-symbol, let bars display their own instrument; for single-symbol
     # override is needed when signal_instrument != execution_instrument (e.g. GC→MGC).
     exec_instr = cfg.instrument if len(instruments_list) == 1 else ""
+    # news_straddle LIVE resting-OCO scheduler (B92). Default-OFF; only constructed
+    # when engine="news_straddle" AND news_straddle_live_enabled. Never auto-enables.
+    news_straddle_scheduler = None
+    _ns = bot_cfg.strategy
+    if _ns.engine == "news_straddle" and _ns.news_straddle_live_enabled:
+        from app.broker.paper import TICK_SIZE
+        from app.strategy.news_straddle import load_event_times
+        from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
+        _ns_events = load_event_times(_ns.news_straddle_events_path, _ns.news_straddle_event_type)
+        news_straddle_scheduler = NewsStraddleScheduler(
+            broker,
+            instrument=cfg.instrument,
+            event_times=_ns_events,
+            offset_ticks=_ns.news_straddle_offset_ticks,
+            tp_r=_ns.news_straddle_tp_r,
+            tick=TICK_SIZE.get(cfg.instrument, Decimal("0.25")),
+            size=_ns.news_straddle_contracts,
+            arm_lead_seconds=_ns.news_straddle_arm_lead_seconds,
+        )
+        broker.on_bar(news_straddle_scheduler.on_bar)
+        log.warning(
+            "news_straddle LIVE path ENABLED: %d %s events, %d contract(s), arm %ds "
+            "pre-release on %s — resting OCO stop straddle placed at each event.",
+            len(_ns_events), _ns.news_straddle_event_type, _ns.news_straddle_contracts,
+            _ns.news_straddle_arm_lead_seconds, cfg.instrument,
+        )
+
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):
@@ -1355,6 +1387,8 @@ async def _async_main() -> int:
                 engine.phase.mll, engine.phase.cushion,
             )
         await reconciler.start()
+        if news_straddle_scheduler is not None:
+            await news_straddle_scheduler.start()
         if notifier.enabled or discord.enabled:
             await eod_scheduler.start()
         if notifier.enabled:
@@ -1435,6 +1469,12 @@ async def _async_main() -> int:
             pass
         return 1
     finally:
+        if news_straddle_scheduler is not None:
+            log.info("Stopping news_straddle scheduler...")
+            try:
+                await news_straddle_scheduler.stop()
+            except Exception:
+                log.exception("news_straddle scheduler stop failed")
         log.info("Stopping EOD scheduler...")
         try:
             await eod_scheduler.stop()

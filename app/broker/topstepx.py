@@ -135,6 +135,9 @@ class TopstepXBroker:
         self._pending_brackets: dict[str, dict] = {}
         # OCO pairs: stop_id ↔ target_id. When either fills, the other is cancelled.
         self._exit_pairs: dict[str, str] = {}
+        # OCO ENTRY pairs (B92 news_straddle): buy_stop_id ↔ sell_stop_id. When one
+        # resting entry leg fills, the other is cancelled so only one direction opens.
+        self._oco_entry_siblings: dict[str, str] = {}
         # Partials path (only used when partial_profit_r > 0). Each leg order_id
         # maps to the same shared group dict. Kept separate from _exit_pairs so the
         # disabled path is byte-for-byte unchanged.
@@ -544,6 +547,106 @@ class TopstepXBroker:
             instrument, side, size, entry, stop, target,
             tp1_price=tp1_price, tp1_fraction=tp1_fraction, be_after_tp1=be_after_tp1,
         )
+
+    async def place_oco_stop_entries(
+        self,
+        instrument: str,
+        buy_stop: Decimal,
+        sell_stop: Decimal,
+        *,
+        stop_r: Decimal,
+        tp_r: Decimal,
+        size: int,
+    ) -> "tuple[str | None, str | None]":
+        """Place a resting OCO stop-entry straddle (B92 news_straddle live path).
+
+        buy_stop fills LONG on an upside break; sell_stop fills SHORT on a
+        downside break (SDK place_stop_order = a market order triggered at the
+        stop price; direction-agnostic, no place_bracket_order 60s-wait trap).
+        R = stop_r — the offset past the range, i.e. a TIGHT stop at the broken
+        boundary. target = tp_r × R. Each leg registers in _pending_brackets so
+        the proven _place_bracket_after_fill path attaches stop+target on fill;
+        the two legs link as OCO siblings so the first fill cancels the other
+        (see _cancel_oco_sibling, invoked from the fill handler). partial_r is
+        forced to 0 — the validated straddle (B89) takes the full tp_r target.
+
+        Returns (buy_id, sell_id); (None, None) if either leg could not be placed
+        (the surviving leg is cancelled so a single naked resting entry never
+        opens an un-bracketed directional position).
+        """
+        self._require_connected()
+        account_id = self._get_account_id()
+        suite = self._get_suite_for(instrument)
+
+        async def _place_leg(side_sdk, price, entry_side, stop_offset, target_offset):
+            try:
+                resp = await suite.orders.place_stop_order(
+                    suite.instrument_id, side_sdk, size, float(price), account_id,
+                )
+            except Exception:
+                log.exception("place_oco_stop_entries: %s leg failed for %s",
+                              entry_side, instrument)
+                return None
+            if not getattr(resp, "success", False):
+                log.error("place_oco_stop_entries: %s leg rejected: %s",
+                          entry_side, getattr(resp, "errorMessage", "rejected"))
+                return None
+            oid = self._safe_str(getattr(resp, "orderId", None))
+            if not oid:
+                log.error("place_oco_stop_entries: %s leg returned no order id", entry_side)
+                return None
+            close_sdk_side = SIDE_SELL if side_sdk == SIDE_BUY else SIDE_BUY
+            self._pending_brackets[oid] = {
+                "stop_offset": stop_offset,
+                "target_offset": target_offset,
+                "close_sdk_side": close_sdk_side,
+                "size": size,
+                "account_id": account_id,
+                "partial_r": Decimal("0"),
+                "entry_side": entry_side,
+                "instrument": instrument,
+                "tp1_price": None,
+                "tp1_fraction": Decimal("0.5"),
+                "be_after_tp1": True,
+                "signal_entry": price,
+            }
+            self._known_order_ids.add(oid)
+            return oid
+
+        # Long leg: stop = entry - R (the range high); target = entry + tp_r·R.
+        buy_id = await _place_leg(SIDE_BUY, buy_stop, "long", -stop_r, stop_r * tp_r)
+        # Short leg: stop = entry + R (the range low); target = entry - tp_r·R.
+        sell_id = await _place_leg(SIDE_SELL, sell_stop, "short", stop_r, -stop_r * tp_r)
+
+        if not (buy_id and sell_id):
+            for oid in (buy_id, sell_id):
+                if oid:
+                    self._pending_brackets.pop(oid, None)
+                    asyncio.create_task(self._cancel_order(oid))
+            log.error("news_straddle OCO incomplete (buy=%s sell=%s) — surviving leg cancelled",
+                      buy_id, sell_id)
+            return None, None
+
+        self._oco_entry_siblings[buy_id] = sell_id
+        self._oco_entry_siblings[sell_id] = buy_id
+        log.info(
+            "news_straddle OCO armed %s: buy_stop=%s (%s) sell_stop=%s (%s) R=%s tp=%sR size=%d",
+            instrument, buy_stop, buy_id, sell_stop, sell_id, stop_r, tp_r, size,
+        )
+        return buy_id, sell_id
+
+    def _cancel_oco_sibling(self, order_id: str) -> None:
+        """OCO entry: the first straddle leg to fill cancels its resting sibling so
+        only one direction is ever opened (B92). De-registers the sibling's pending
+        bracket so a late/raced sibling fill can never attach a second bracket."""
+        sibling_id = self._oco_entry_siblings.pop(order_id, None)
+        if sibling_id is None:
+            return
+        self._oco_entry_siblings.pop(sibling_id, None)
+        self._pending_brackets.pop(sibling_id, None)
+        log.info("OCO entry: leg %s filled — cancelling resting sibling %s",
+                 order_id, sibling_id)
+        asyncio.create_task(self._cancel_order(sibling_id))
 
     async def place_market_bracket(
         self,
@@ -1802,6 +1905,9 @@ class TopstepXBroker:
                 if order_id and order_id in self._pending_brackets:
                     # Definitive entry fill — bracket registered, place stop+target.
                     bracket_data = self._pending_brackets.pop(order_id)
+                    # OCO entry (news_straddle): if this is one leg of a resting
+                    # stop straddle, cancel the other leg before it can also fill.
+                    self._cancel_oco_sibling(order_id)
                     bracket_data["fill_price"] = fill.fill_price
                     bracket_data["entry_time"] = fill.ts.timestamp()
                     log.info(

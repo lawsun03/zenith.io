@@ -242,6 +242,18 @@ export interface StrategyStatePayload {
     or_established: boolean
     fired: number
   } | null
+  news_straddle?: {
+    instrument: string
+    offset: string
+    tp_r: string
+    size: number
+    events: {
+      ts: string
+      status: string          // pending | armed | skipped
+      range_high: string | null
+      range_low: string | null
+    }[]
+  } | null
   pos_mfe_r?: number
   pos_mae_r?: number
   pos_mfe_pts?: number

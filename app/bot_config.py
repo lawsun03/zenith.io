@@ -131,6 +131,12 @@ class StrategyParams(BaseModel):
     news_straddle_tp_r: Decimal = Decimal("3.0")
     news_straddle_event_type: str = "CPI"          # filters data/news_events.csv
     news_straddle_events_path: str = "data/news_events.csv"
+    # LIVE resting-OCO path (B92). Default-OFF — Lawrence decides go-live. When
+    # True (and engine="news_straddle"), a wall-clock scheduler arms a resting OCO
+    # stop straddle arm_lead_seconds before each event. Never auto-enables.
+    news_straddle_live_enabled: bool = False
+    news_straddle_contracts: int = 1               # size for the live straddle
+    news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
 
     # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
     cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"

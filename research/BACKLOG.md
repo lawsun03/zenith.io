@@ -3971,7 +3971,7 @@ Result: CPI straddle generalizes; gold adds FOMC; oil + fade rejected.
 
 ---
 
-## B92 -- news_straddle LIVE resting-OCO build (broker + scheduler)  [pending — DEPENDS ON B89 (done); model:opus]
+## B92 -- news_straddle LIVE resting-OCO build (broker + scheduler)  [done — SHIPPED default-off 2026-06-15 (wk7-b92): place_oco_stop_entries + OCO cancel-sibling-on-fill + NewsStraddleScheduler; 11 new tests, suite 782 green; live paper-day verification (real CPI) remains manual; model:opus]
 
 **Goal:** Deploy the B89-validated news_straddle engine live for CPI, using
 RESTING EXCHANGE stop entries (Lawrence-approved design). Default-off; never
@@ -4085,3 +4085,38 @@ equity combination + whether ~17 event days/yr shift a pipeline dominated by the
 **Source:** Lawrence-requested 2026-06-15 (stack the three; each on/off by CPI/FOMC/
 none). Generalizes B90 (CPI mode-switch) + B93 (CPI overlay) to the full 3-strategy
 day-type router incl. the confirmed gold-FOMC straddle.
+
+
+---
+
+## B95 -- news_straddle live-window P&L re-validation (shifted pre-range)  [pending]
+
+**Why:** B92's live scheduler places the resting OCO at arm_time = release - arm_lead
+(default 120s), so it locks the pre-range over [arm_time-15min, arm_time) -- a
+same-length window shifted 120s EARLIER than the B85/B89 oracle's
+[release-15min, release). The straddle mechanism is unchanged, but the exact
+levels (and therefore which side breaks / whether it whipsaws) can differ. B92
+shipped the build on the documented assumption that the shift is immaterial; this
+item falsifies that cheaply.
+
+**Method (no new code, reuse B85 1s data):**
+- Re-run the 1s oracle (scripts/news_straddle_cpi_1s.py) twice on bars_NQ_1s_cpi_windows.csv:
+  (a) range = [release-15min, release) (current oracle, baseline);
+  (b) range = [release-135s-15min ... ] i.e. [release-915s, release-120s) to mirror
+  the live arm_lead=120s window.
+- Compare per-event: same side? same fill/whipsaw/nofill classification? net R series.
+- Report n-events-changed, win% delta, PF delta, total-R delta at tp_r=3.
+
+**Success / GO (window is safe):** classification matches on >= 90% of events AND
+PF delta within +/-10% AND total-R delta within +/-15%. Then annotate B92 lesson
+that the shift is immaterial and the live path inherits B85 expectancy.
+**Reject / action:** if the shifted window materially changes outcomes, recommend
+arm_lead be reduced (place closer to release) or the scheduler place at release-epsilon
+using the full [release-15min, release) window with bars available up to arm time.
+
+**Prior:** ~75% the shift is immaterial (consolidation ranges are stable in the 2
+minutes before a scheduled release; the breakout is driven by the print, not the
+last 2 pre-range minutes). Cheap to check, high value (gates trusting B85 numbers
+for the live path).
+
+**Source:** B92 follow-on (documented window deviation, 2026-06-15).

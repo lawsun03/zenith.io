@@ -3616,3 +3616,30 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - `research/equity_b88/deployed_r1p0_excl2022.csv`: equity curve
 
 **Next:** B92 (news_straddle LIVE resting-OCO build, model:opus) or B93 (CPI-straddle funded-overlay framing). B92 is the highest-priority build item (Lawrence-requested live path).
+
+
+---
+
+## 2026-06-15T02:10Z -- session wk7-b92 -- B92 (news_straddle LIVE resting-OCO build -- SHIPPED, default-off)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,227.12 at HWM, flat (0 open contracts), no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch).
+- **Claimed:** B92 (top pending, model:opus; I ran on Opus per the wrapper tag). Dependency B89 done. No orphan in-progress.
+
+**Built (TDD, real-money order path -- CLAUDE.md Rule 1/8 followed):**
+1. `TopstepXBroker.place_oco_stop_entries(instrument, buy_stop, sell_stop, *, stop_r, tp_r, size)` -- lays TWO resting stop ENTRY orders. Verified the SDK primitive firsthand: `place_stop_order` (order_types.py:147) is a market-on-trigger, direction-agnostic, routed via low-level `place_order` -- NOT the `place_bracket_order` 60s-wait trap. Each leg pre-registers in the existing `_pending_brackets` with offsets (long: stop=-R, target=+R*tp_r; short mirror), `partial_r=0` (straddle takes full target). On fill the proven `_place_bracket_after_fill` attaches a tight stop at the broken boundary + 3R target. Incomplete OCO cancels the surviving leg.
+2. OCO cancel-sibling-on-fill: new `_oco_entry_siblings` map + `_cancel_oco_sibling`, hooked into the definitive `_pending_brackets` branch of `_on_fill_event`. First leg to fill cancels + de-registers the other so a raced sibling fill can never open an opposite/un-bracketed position.
+3. `NewsStraddleScheduler` (app/notifications/news_straddle_scheduler.py) -- wall-clock arming. Buffers 1-min bars, sleeps until `arm_lead_seconds` (120s) pre-release, locks the pre-range, places the OCO. One per event, no re-arm. Async-timeout loop mirroring EndOfDayScheduler; injectable now_fn.
+4. Wiring default-off: `news_straddle_live_enabled=False` (+ `news_straddle_contracts=1`, `news_straddle_arm_lead_seconds=120`). main.py constructs/starts/stops the scheduler only when engine=news_straddle AND the flag is on. Loud WARNING when enabled.
+5. Rule 13: scheduler.state() -> `strategy_state.news_straddle` SSE field; StrategyDebug.tsx renders it; guarded the grader-centric publisher with getattr so the news_straddle runner (no displacement/composer zones) stops crashing it (latent B89 gap fixed). Frontend build clean.
+
+- **Window deviation (honesty):** the live scheduler locks `[arm_time-15min, arm_time)` (arm_time = release-120s) vs the oracle's `[release-15min, release)` -- same-length window shifted 120s earlier so the resting orders are working before the 08:30 print. Mechanism unchanged; exact P&L re-validation against the shifted window deferred to B95.
+
+- **Tests:** `tests/test_news_straddle_live.py` -- 11 defining-behavior tests (RED-first), incl end-to-end money math (buy fill @125 -> stop 110 / target 170 through the real bracket path). Full suite **782 passed, 2 skipped, 0 failures** (was 771). Frontend `npm run build` clean.
+
+- **Verdict:** SHIPPED (default-off). bot_config.json + .env untouched; nothing enabled live.
+
+- **Learned:** The PaperBroker genuinely cannot model resting stop-entry fills, so this live path was un-testable by the backtest harness -- I closed that gap with deterministic order-routing tests against a fake SDK suite. The SDK `place_stop_order` opening a position (not just closing one) is the load-bearing fact that makes a single broker method serve as both legs of the entry straddle.
+
+- **Remaining (manual, Lawrence):** "paper run on a real CPI day" needs an actual 08:30 print -- not executable this weekend (market closed). Chain proven in tests. Lesson 161 added. BACKLOG: B92 -> done; B95 (shifted-window P&L re-validation) appended.
+
+- **Next:** B93 (CPI-straddle funded-overlay framing -- Sonnet) or B94 (event-calendar router, model:opus, Lawrence PRIORITY -- now unblocked on the live-build side; still depends on B93).

@@ -93,6 +93,34 @@ export function StrategyDebug({ state }: { state: StrategyStatePayload | null })
             </div>
           )}
 
+          {/* News Straddle (B92 live resting-OCO scheduler) */}
+          {state.news_straddle != null && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">
+                News Straddle ({state.news_straddle.instrument})
+              </div>
+              <LabeledValue
+                label="offset / target"
+                value={`${state.news_straddle.offset}pt → ${state.news_straddle.tp_r}R`}
+              />
+              <LabeledValue label="contracts" value={String(state.news_straddle.size)} />
+              {state.news_straddle.events
+                .filter((e) => e.status !== 'pending')
+                .slice(-4)
+                .map((e) => (
+                  <LabeledValue
+                    key={e.ts}
+                    label={e.ts.slice(5, 16).replace('T', ' ')}
+                    value={
+                      e.range_high != null
+                        ? `${e.status} [${e.range_low}–${e.range_high}]`
+                        : e.status
+                    }
+                  />
+                ))}
+            </div>
+          )}
+
           {/* Live Excursion */}
           {(state.pos_mfe_r != null || state.pos_mae_r != null) && (
             <div>
