@@ -191,8 +191,11 @@ class ForbesDetector:
         if self.config.target_mode == "liquidity":
             lvl = self.poi.nearest_unswept_opposing(side, entry)
             return lvl.price if lvl is not None else None
-        # or_top / midway_poi wired in Task 8 ablations; default None -> skip
-        log.warning("forbes: target_mode=%s not implemented yet -> setup skipped", self.config.target_mode)
+        # or_top / midway_poi not implemented -> skip. Warn ONCE per run (not per bar).
+        if not getattr(self, "_warned_target_mode", False):
+            log.warning("forbes: target_mode=%s not implemented -> setups skipped (warned once)",
+                        self.config.target_mode)
+            self._warned_target_mode = True
         return None
 
     # ------------------------------------------------------------------
