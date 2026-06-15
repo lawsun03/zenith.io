@@ -54,3 +54,28 @@ def test_kz_tracker_exposes_locked_session_ranges():
     t = KillzoneLevelTracker()
     assert hasattr(t, "locked_ranges")
     assert t.locked_ranges() == {}   # empty before any session locks
+
+
+from app.bot_config import StrategyParams
+from app.strategy.forbes import ForbesConfig, ForbesDetector
+
+
+def _cfg(**kw):
+    s = StrategyParams(engine="forbes", **kw)
+    return ForbesConfig.from_params("MNQ", s)
+
+
+def test_killzone_gate_blocks_outside_window():
+    d = ForbesDetector(_cfg())
+    # _b(0,...) is 13:00 UTC = 09:00 ET (summer EDT) -> before the 09:30-10:30 window.
+    bar = _b(0, "100", "100", "100", "100")
+    assert d.in_killzone(bar.ts) is False
+
+
+def test_or_fvg_gate_stands_aside_when_no_fvg():
+    d = ForbesDetector(_cfg())
+    d._or_locked = True
+    d._or_fvg_count = 0
+    assert d.day_eligible() is False
+    d._or_fvg_count = 1
+    assert d.day_eligible() is True

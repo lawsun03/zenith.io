@@ -6,10 +6,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import time as _time
 from decimal import Decimal
 from typing import Optional
 
 from app.broker.events import Bar
+from app.strategy.killzone import ET
+from app.strategy.displacement import DisplacementConfig, DisplacementDetector
+from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
+from app.strategy.kz_levels import KillzoneLevelTracker
 
 
 class _FifteenMinAggregator:
@@ -80,3 +85,60 @@ class ForbesPOIMap:
 
     def reset_day(self) -> None:
         self._levels = []
+
+
+def _parse_window(s: str) -> "tuple[_time, _time]":
+    a, b = s.split("-")
+    h1, m1 = (int(x) for x in a.split(":"))
+    h2, m2 = (int(x) for x in b.split(":"))
+    return _time(h1, m1), _time(h2, m2)
+
+
+@dataclass
+class ForbesConfig:
+    instrument: str
+    kz_start: _time
+    kz_end: _time
+    or_open: _time
+    or_minutes: int
+    or_min_fvgs: int
+    target_mode: str
+    min_rr: Decimal
+    stop_mode: str
+    max_trades_per_day: int
+    swing_tf_min: int
+
+    @classmethod
+    def from_params(cls, instrument: str, s) -> "ForbesConfig":
+        ks, ke = _parse_window(s.forbes_killzone_et)
+        oh, om = (int(x) for x in s.forbes_or_open_et.split(":"))
+        return cls(instrument=instrument, kz_start=ks, kz_end=ke,
+                   or_open=_time(oh, om), or_minutes=s.forbes_or_minutes,
+                   or_min_fvgs=s.forbes_or_min_fvgs, target_mode=s.forbes_target_mode,
+                   min_rr=s.forbes_min_rr, stop_mode=s.forbes_stop_mode,
+                   max_trades_per_day=s.forbes_max_trades_per_day,
+                   swing_tf_min=s.forbes_poi_swing_tf_min)
+
+
+class ForbesDetector:
+    def __init__(self, config: ForbesConfig) -> None:
+        self.config = config
+        self.displacement = DisplacementDetector(DisplacementConfig())
+        self.liquidity = LiquidityTracker(LiquidityConfig())
+        self.kz_levels = KillzoneLevelTracker()
+        self.agg = _FifteenMinAggregator(minutes=config.swing_tf_min)
+        self.poi = ForbesPOIMap()
+        self._day = None
+        self._or_locked = False
+        self._or_fvg_count = 0
+        self._trades_today = 0
+
+    def _et(self, ts):
+        return ts.astimezone(ET)
+
+    def in_killzone(self, ts) -> bool:
+        t = self._et(ts).time()
+        return self.config.kz_start <= t < self.config.kz_end
+
+    def day_eligible(self) -> bool:
+        return self._or_locked and self._or_fvg_count >= self.config.or_min_fvgs
