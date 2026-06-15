@@ -42,12 +42,22 @@ def next_cpi_date(ts: datetime, cpi_dates: frozenset[date]) -> date | None:
     return future[0] if future else None
 
 
-def router_state(ts: datetime, cpi_dates: frozenset[date]) -> dict:
-    """Rule-13 dashboard view. Pure read; never mutates anything."""
+def router_state(ts: datetime, cpi_dates: frozenset[date], base_suppress: bool = True) -> dict:
+    """Rule-13 dashboard view. Pure read; never mutates anything. base_entries_suppressed
+    is True only when the base is actually suppressed (switch mode); in additive mode the
+    base keeps trading on CPI days even though today_is_cpi_day is True."""
     active = is_cpi_day(ts, cpi_dates)
     nxt = next_cpi_date(ts, cpi_dates)
     return {
         "today_is_cpi_day": active,
         "next_cpi_date": nxt.isoformat() if nxt is not None else None,
-        "base_entries_suppressed": active,
+        "base_entries_suppressed": active and base_suppress,
     }
+
+
+def engine_cpi_dates(base_suppress: bool, cpi_dates: "frozenset[date]") -> "frozenset[date]":
+    """Dates the EXECUTION ENGINE uses to block the base on CPI days (-> CPI_DAY_BLOCK).
+    Only populated in switch mode (base_suppress=True); in additive mode (default) the base
+    keeps trading -> empty set, while the news_straddle scheduler still arms independently.
+    The B94/Lesson-163 income lever: additive +$304/mo vs switch +$8/mo (~40x)."""
+    return cpi_dates if base_suppress else frozenset()

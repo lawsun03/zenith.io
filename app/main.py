@@ -550,7 +550,7 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
-def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None, cpi_dates=None):
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None, cpi_dates=None, base_suppress: bool = True):
     """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
 
     Reads pre-computed grader state — no heavy computation on the hot path.
@@ -617,7 +617,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             pos_excursion = broker.live_excursion(runner.instrument)
 
         from app.strategy.cpi_day import router_state as _cpi_router_state
-        cpi_router = _cpi_router_state(bar.ts, cpi_dates) if cpi_dates else None
+        cpi_router = _cpi_router_state(bar.ts, cpi_dates, base_suppress) if cpi_dates else None
 
         journal.publish_strategy_state(
             instrument=runner.instrument,
@@ -1245,7 +1245,7 @@ async def _async_main() -> int:
 
     # CPI-day router (B92 straddle ownership on CPI days). Default-off; only a
     # populated date set when cpi_day_router_enabled. Empty set => never blocks.
-    from app.strategy.cpi_day import load_cpi_dates
+    from app.strategy.cpi_day import load_cpi_dates, engine_cpi_dates
     _router_on = bot_cfg.strategy.cpi_day_router_enabled
     cpi_dates = (
         load_cpi_dates(bot_cfg.strategy.news_straddle_events_path,
@@ -1253,10 +1253,12 @@ async def _async_main() -> int:
         if _router_on else frozenset()
     )
     if _router_on:
+        _mode = ("SWITCH (base suppressed)" if bot_cfg.strategy.cpi_base_suppress
+                 else "ADDITIVE (base keeps trading + straddle on top)")
         log.warning(
-            "CPI-day router ENABLED: %d CPI day(s) loaded — base engine suppressed "
-            "on those days, CPI straddle owns the session (engine stays '%s').",
-            len(cpi_dates), bot_cfg.strategy.engine,
+            "CPI-day router ENABLED [%s]: %d CPI day(s) loaded; straddle arms on those "
+            "days (engine '%s').",
+            _mode, len(cpi_dates), bot_cfg.strategy.engine,
         )
 
     engine = ExecutionEngine(
@@ -1277,7 +1279,7 @@ async def _async_main() -> int:
         flatten_time_ct=bot_cfg.flatten_time_ct,
         entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
         phase=(tracker_from_config(bot_cfg) if bot_cfg.account_phase != "practice" else None),
-        cpi_event_dates=cpi_dates,
+        cpi_event_dates=engine_cpi_dates(bot_cfg.strategy.cpi_base_suppress, cpi_dates),
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
@@ -1312,7 +1314,7 @@ async def _async_main() -> int:
         )
 
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler, cpi_dates=cpi_dates))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler, cpi_dates=cpi_dates, base_suppress=bot_cfg.strategy.cpi_base_suppress))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):

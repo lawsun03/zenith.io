@@ -83,3 +83,22 @@ def test_load_cpi_dates_et_conversion_and_event_filter(tmp_path):
 def test_load_cpi_dates_missing_file_returns_empty_frozenset():
     result = load_cpi_dates("does/not/exist.csv")
     assert result == frozenset()
+
+
+def test_engine_cpi_dates_additive_vs_switch():
+    # WHY (#1, B94/Lesson 163): additive (+$304/mo) beats the switch (+$8/mo). In additive
+    # mode (base_suppress=False, default) the engine gets NO CPI dates -> base never blocked.
+    from app.strategy.cpi_day import engine_cpi_dates
+    d = frozenset({date(2026, 7, 14)})
+    assert engine_cpi_dates(False, d) == frozenset()   # additive: base keeps trading
+    assert engine_cpi_dates(True, d) == d              # switch: base suppressed on CPI days
+
+
+def test_router_state_additive_not_suppressed_on_cpi_day():
+    # WHY: the dashboard must not claim "base suppressed" on a CPI day in additive mode.
+    d = frozenset({date(2026, 7, 15)})
+    ts = datetime(2026, 7, 15, 14, 0, tzinfo=timezone.utc)  # a CPI day
+    st = router_state(ts, d, base_suppress=False)
+    assert st["today_is_cpi_day"] is True
+    assert st["base_entries_suppressed"] is False
+    assert router_state(ts, d, base_suppress=True)["base_entries_suppressed"] is True

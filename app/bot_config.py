@@ -149,6 +149,11 @@ class StrategyParams(BaseModel):
     # and the news_straddle scheduler is constructed to own those days, while
     # engine stays "combined". Phase-agnostic (combine and shadow alike).
     cpi_day_router_enabled: bool = False
+    # B94/Lesson 163: the ADDITIVE overlay (base keeps trading on CPI days + straddle on
+    # top) made +$304/mo vs the mode-SWITCH (suppress base) +$8/mo (~40x). Default FALSE =
+    # additive (recommended): the straddle still arms on CPI days, but the base is NOT
+    # suppressed. True = the switch (base suppressed via the CPI_DAY_BLOCK pretrade gate).
+    cpi_base_suppress: bool = False
 
     # Forbes Model (ICT session-liquidity engine; engine="forbes"). Backtest-only,
     # default-off. All discretionary rules are params (spec 2026-06-15-forbes-model).
