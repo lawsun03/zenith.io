@@ -4,17 +4,28 @@ on a single 1-min feed; aggregates 1m->15m internally for swing POIs. See spec
 docs/superpowers/specs/2026-06-15-forbes-model-design.md."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import time as _time
 from decimal import Decimal
 from typing import Optional
 
+log = logging.getLogger(__name__)
+
 from app.broker.events import Bar
-from app.strategy.killzone import ET
+from app.bot_config import StrategyParams
+from app.strategy.composer import Signal
+from app.strategy.killzone import ET, Killzone, asia, london_open, ny_am, ny_pm
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 from app.strategy.kz_levels import KillzoneLevelTracker
+
+
+def _zones_for_forbes() -> "list[Killzone]":
+    """Session windows whose H/L ranges become liquidity POIs. Asia/London/NY-AM/NY-PM
+    so a later (killzone) session can sweep an earlier session's level."""
+    return [asia(), london_open(), ny_am(), ny_pm()]
 
 
 class _FifteenMinAggregator:
@@ -132,6 +143,12 @@ class ForbesDetector:
         self._or_locked = False
         self._or_fvg_count = 0
         self._trades_today = 0
+        # KillzoneLevelTracker.on_bar needs a StrategyParams for min_penetration /
+        # multi_bar_window; the Forbes engine reuses the defaults (no separate tuning).
+        self._kz_params = StrategyParams()
+        # OR high/low accumulated during the [or_open, or_open+or_minutes) ET window.
+        self._or_high: Decimal | None = None
+        self._or_low: Decimal | None = None
 
     def _et(self, ts):
         return ts.astimezone(ET)
@@ -142,3 +159,161 @@ class ForbesDetector:
 
     def day_eligible(self) -> bool:
         return self._or_locked and self._or_fvg_count >= self.config.or_min_fvgs
+
+    # ------------------------------------------------------------------
+    # Trade-count gate + signal construction
+    # ------------------------------------------------------------------
+
+    def _can_trade(self) -> bool:
+        return self._trades_today < self.config.max_trades_per_day
+
+    def _build_signal(self, *, side, entry, stop, target, bar, pattern, sweep_level):
+        stop_dist = abs(entry - stop)
+        if stop_dist == 0:
+            return None
+        rr = abs(target - entry) / stop_dist
+        if rr < self.config.min_rr:
+            return None
+        return Signal(
+            instrument=self.config.instrument, side=side, entry=entry, stop=stop,
+            target=target, created_at=bar.ts, killzone="Forbes",
+            sweep_pattern=pattern, sweep_extreme=sweep_level,
+            fvg_low=None, fvg_high=None,
+            rationale=f"Forbes {pattern}: {side} -> liquidity {target} (RR {rr:.2f})",
+        )
+
+    def _select_target(self, side, entry):
+        if self.config.target_mode == "liquidity":
+            lvl = self.poi.nearest_unswept_opposing(side, entry)
+            return lvl.price if lvl is not None else None
+        return None   # or_top / midway_poi wired in Task 8 ablations; default None -> skip
+
+    # ------------------------------------------------------------------
+    # Opening-range tracking (mirrors ORBDetector's ET-window timing)
+    # ------------------------------------------------------------------
+
+    def _maybe_lock_or(self, bar: Bar) -> None:
+        et = self._et(bar.ts)
+        start = datetime.combine(et.date(), self.config.or_open, tzinfo=ET)
+        end = start + timedelta(minutes=self.config.or_minutes)
+        if et < start:
+            return
+        if et < end:  # accumulate the opening range
+            self._or_high = bar.high if self._or_high is None else max(self._or_high, bar.high)
+            self._or_low = bar.low if self._or_low is None else min(self._or_low, bar.low)
+            return
+        if not self._or_locked:
+            # Lock the range: FVGs formed during/around the OR are the day-eligibility gate.
+            self._or_locked = True
+            self._or_fvg_count = len(self.displacement.active_fvgs)
+            log.info(
+                "Forbes OR locked: %s OR=[%s-%s] fvgs=%d",
+                self.config.instrument, self._or_low, self._or_high, self._or_fvg_count,
+            )
+
+    # ------------------------------------------------------------------
+    # Entry-trigger search (iFVG inversion > sweep+displacement > breakout+retest)
+    # ------------------------------------------------------------------
+
+    def _stop_for(self, side, sweep_level) -> Decimal:
+        """beyond_wick = just past the swept wick; beyond_or = past the opposite OR boundary."""
+        buf = self._kz_params.min_penetration
+        if self.config.stop_mode == "beyond_or" and self._or_high is not None and self._or_low is not None:
+            return (self._or_low - buf) if side == "long" else (self._or_high + buf)
+        return (sweep_level - buf) if side == "long" else (sweep_level + buf)
+
+    def _search_triggers(self, bar: Bar, sweeps) -> "Optional[Signal]":
+        # Priority 1: iFVG inversion. peek_displacement() returns (side, b1, b2) only when
+        # the latest bar both displaced AND closed through a prior active FVG (the inversion);
+        # we reuse that math directly rather than re-deriving FVG/inversion geometry.
+        peek = self.displacement.peek_displacement()
+        if peek is not None:
+            disp_side, _b1, b2 = peek
+            side = "long" if disp_side == "bullish" else "short"
+            # Only trade an inversion that follows a swept opposing POI (a taken level on the
+            # entry side): long after a swept low, short after a swept high.
+            swept = [l for l in self.poi._levels if l.swept and (
+                (side == "long" and l.kind.endswith("low")) or
+                (side == "short" and l.kind.endswith("high")))]
+            if swept:
+                sweep_level = (min(swept, key=lambda l: l.price).price if side == "long"
+                               else max(swept, key=lambda l: l.price).price)
+                entry = b2.close
+                stop = self._stop_for(side, sweep_level)
+                target = self._select_target(side, entry)
+                if target is not None:
+                    sig = self._build_signal(side=side, entry=entry, stop=stop,
+                                             target=target, bar=bar, pattern="ifvg",
+                                             sweep_level=sweep_level)
+                    if sig is not None:
+                        return sig
+
+        # Priority 2: sweep + displacement. A session level was swept this bar and a
+        # displacement prints back in (peek confirms direction). Enter at the swept level.
+        for sw in sweeps:
+            # high sweep -> short reversal; low sweep -> long reversal.
+            side = "short" if sw.side == "high" else "long"
+            if peek is None:
+                continue
+            disp_side = peek[0]
+            if (side == "long") != (disp_side == "bullish"):
+                continue
+            entry = sw.swept_swing.price
+            stop = self._stop_for(side, sw.sweep_extreme)
+            target = self._select_target(side, entry)
+            if target is None:
+                continue
+            sig = self._build_signal(side=side, entry=entry, stop=stop, target=target,
+                                     bar=bar, pattern="sweep_disp",
+                                     sweep_level=sw.sweep_extreme)
+            if sig is not None:
+                return sig
+
+        # Priority 3: breakout + retest of an OR boundary (best-effort).
+        if self._or_high is not None and self._or_low is not None:
+            if bar.low <= self._or_high <= bar.close and bar.open > self._or_high:
+                side, sweep_level = "long", self._or_low
+            elif bar.high >= self._or_low >= bar.close and bar.open < self._or_low:
+                side, sweep_level = "short", self._or_high
+            else:
+                return None
+            entry = bar.close
+            stop = self._stop_for(side, sweep_level)
+            target = self._select_target(side, entry)
+            if target is not None:
+                return self._build_signal(side=side, entry=entry, stop=stop, target=target,
+                                          bar=bar, pattern="breakout_retest",
+                                          sweep_level=sweep_level)
+        return None
+
+    def on_bar(self, bar):
+        et_date = self._et(bar.ts).date()
+        if et_date != self._day:
+            self._day = et_date
+            self._or_locked = False
+            self._or_fvg_count = 0
+            self._trades_today = 0
+            self._or_high = None
+            self._or_low = None
+            self.poi.reset_day()
+        atr = self.displacement.atr
+        self.displacement.on_bar(bar)
+        sweeps = self.liquidity.on_bar(bar, atr)
+        self.kz_levels.on_bar(bar, _zones_for_forbes(), self._kz_params)
+        for name, (hi, lo) in self.kz_levels.locked_ranges().items():
+            self.poi.add(_Level(hi, "session_high"))
+            self.poi.add(_Level(lo, "session_low"))
+        m15 = self.agg.on_bar(bar)
+        if m15 is not None:
+            for sw in self.liquidity.recent_high_swings:
+                self.poi.add(_Level(sw.price, "swing_high"))
+            for sw in self.liquidity.recent_low_swings:
+                self.poi.add(_Level(sw.price, "swing_low"))
+        self.poi.update_swept(bar.high, bar.low)
+        self._maybe_lock_or(bar)
+        if not (self.in_killzone(bar.ts) and self.day_eligible() and self._can_trade()):
+            return None
+        sig = self._search_triggers(bar, sweeps)
+        if sig is not None:
+            self._trades_today += 1
+        return sig

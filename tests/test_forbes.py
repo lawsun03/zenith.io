@@ -79,3 +79,57 @@ def test_or_fvg_gate_stands_aside_when_no_fvg():
     assert d.day_eligible() is False
     d._or_fvg_count = 1
     assert d.day_eligible() is True
+
+
+from app.strategy.composer import Signal
+
+
+def test_min_rr_gate_skips_low_rr_setup():
+    # WHY: a setup whose nearest-liquidity target is too close (RR < min_rr) must NOT trade.
+    d = ForbesDetector(_cfg(forbes_min_rr="3.0"))
+    sig = d._build_signal(side="long", entry=Decimal("100"), stop=Decimal("90"),
+                          target=Decimal("110"), bar=_b(0,"100","100","100","100"),
+                          pattern="ifvg", sweep_level=Decimal("90"))
+    assert sig is None  # RR = (110-100)/(100-90) = 1.0 < 3.0
+
+
+def test_build_signal_uses_liquidity_target_and_passes_min_rr():
+    # WHY: a valid setup targets the liquidity level with correct R geometry.
+    d = ForbesDetector(_cfg(forbes_min_rr="1.4"))
+    sig = d._build_signal(side="long", entry=Decimal("100"), stop=Decimal("90"),
+                          target=Decimal("125"), bar=_b(0,"100","100","100","100"),
+                          pattern="ifvg", sweep_level=Decimal("90"))
+    assert sig is not None
+    assert sig.side == "long" and sig.target == Decimal("125") and sig.stop == Decimal("90")
+
+
+def test_max_trades_per_day_enforced():
+    # WHY: with max_trades_per_day=1, a second trigger the same day is suppressed.
+    d = ForbesDetector(_cfg(forbes_max_trades_per_day=1))
+    d._trades_today = 1
+    assert d._can_trade() is False
+
+
+def test_on_bar_outside_killzone_returns_none():
+    # WHY: the killzone gate must hard-block on_bar end-to-end, not just in_killzone().
+    # _b(0,...) is 13:00 UTC = 09:00 ET (EDT) -> before the 09:30-10:30 window.
+    d = ForbesDetector(_cfg())
+    for m in range(20):
+        sig = d.on_bar(_b(m, "100", str(100 + m % 3), str(100 - m % 2), "100"))
+        assert sig is None
+
+
+def test_on_bar_stands_aside_when_no_or_fvg():
+    # WHY: a day whose opening range held no FVG must produce NO signal even inside
+    # the killzone with sweeps occurring — the OR-FVG eligibility gate stands the day aside.
+    d = ForbesDetector(_cfg())
+    # Feed a long flat sequence spanning the OR window + killzone so the OR locks with
+    # zero FVGs (flat bars never form a 3-bar gap), then sweeps cannot produce a trade.
+    out = []
+    # 30 bars from 13:30 UTC (09:30 ET) onward, all flat -> no FVG, no displacement.
+    for m in range(30, 90):
+        sig = d.on_bar(_b(m % 60, "100", "100", "100", "100"))
+        if sig is not None:
+            out.append(sig)
+    assert d._or_fvg_count == 0
+    assert out == []
