@@ -35,6 +35,10 @@ def main() -> None:
                     help="Instrument label for the registry entry (default MNQ)")
     ap.add_argument("--timeframe", default="5min",
                     help="Timeframe label for the registry entry (default 5min)")
+    ap.add_argument("--combine-gap-days", type=int, default=0,
+                    help="Trading days skipped after each XFA bust before starting the "
+                         "next account (models the real combine re-attempt gap; "
+                         "default 0 = existing behavior)")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
@@ -45,7 +49,7 @@ def main() -> None:
 
     daily = daily_pnls_from_equity(curve)
     c = simulate_combines(daily, haircut=haircut)
-    x = simulate_xfa_chain(daily, haircut=haircut)
+    x = simulate_xfa_chain(daily, haircut=haircut, combine_gap_days=args.combine_gap_days)
 
     haircut_note = f", haircut ${haircut:.0f}" if haircut else ""
     print(

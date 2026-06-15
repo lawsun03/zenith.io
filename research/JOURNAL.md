@@ -3450,3 +3450,43 @@ Phase 1 verdict: GO (ratio 2.097 >> 1.30, 3/5 years). Mechanism: breaking a 1.5-
 - **Tests:** 763 passed, 2 skipped, 0 failures (full suite; +12 news_straddle, +1 wiring). Green.
 
 - **Next:** B92 (live resting-OCO build: scheduler + place_oco_stop_entries + cancel-sibling-on-fill, real-money path -> trace SDK chain, TDD, Rule-13 UI, default-off). Then B93 (funded-overlay framing from the oracle per-event R). Routine queue: B86/B87/B88 still pending.
+
+---
+
+## 2026-06-15T01:00Z -- session wk7-b86 -- B86 (funded-sim combine-gap correction -- CALIBRATION COMPLETE)
+
+- **Bot-keeper:** healthy. GET :5175/api/status 200 -- XFA shadow, ,227.12 at HWM, 0 open contracts, no drift, last_reconcile clean. Market closed (Sun pre-15:00 PT). No restart needed.
+
+- **Claimed:** B86 (top pending after B89). No orphan in-progress claims.
+
+- **Ran:** Added combine_gap_days: int = 0 to simulate_xfa_chain() in pp/backtest/funded_sim.py + --combine-gap-days N flag to scripts/funded_sim.py. TDD: 4 defining-behavior tests in 	ests/test_funded_sim_gap.py (gap=0 regression, gap=5 skips days, gap=5 new account starts after gap, bust on last day no error). All tests written RED then passed GREEN. Benchmark script scripts/run_b86_gap.py.
+
+- **Numbers (Phase A = B57 r2.5 iFVG, Phase B = B21 ORB-reentry r0.75, haircut ):**
+
+  | gap | accounts | busts | $/acct | avg_days | $/mo  | sust  | d$/mo |
+  |-----|----------|-------|--------|----------|-------|-------|-------|
+  | 0   | 14       | 13    | ,131 | 73.5d    |   | 3.54x | +0    |
+  | 8   | 15       | 14    | ,702 | 68.6d    |   | 3.29x | -68   |
+  | 12  | 15       | 14    | ,488 | 68.6d    |   | 3.29x | -118  |
+  | 24  | 12       | 12    | ,604 | 85.8d    |   | 3.83x | -166  |
+
+  Baseline verified at gap=0: /mo 3.54x -- exact match to B57 reference.
+  Breakeven gap (/mo floor): between 12d and 24d.
+  Drag at gap=24: 29.4% -- CRITERION MET (>15% materiality threshold).
+
+- **Verdict:** CALIBRATION COMPLETE. Success criterion met. The combine-gap model inaccuracy is material: Lawrence should plan around -/mo for the deployed pipeline, NOT the /mo stated by the naive simulation.
+
+- **Key observations:**
+  1. gap=8 (median combine days-to-pass) gives /mo -- still comfortable above the  floor.
+  2. gap=12 (half-overlap, combine always running concurrently) gives /mo -- the recommended planning figure.
+  3. gap=24 (full sequential cycle) gives /mo -- the conservative lower bound.
+  4. gap=24 sust=3.83x is higher than gap=0 sust=3.54x -- this is a series-end artifact (fewer accounts cycle through the finite 5y window at larger gaps, so proportionally fewer busts occur). NOT a structural benefit; do not interpret it as gap reducing bust risk.
+  5. The Combined-strategy bot plan (Phase A + Phase B in one process) would operate near gap=0, recovering the full /mo potential.
+
+- **Learned:** The funded_sim's stated $/mo is an optimistic upper bound: simulate_xfa_chain() restarts funded accounts immediately after each bust, ignoring the real combine-gap (24.6d average). At the full sequential gap (gap=24), the drag is 29.4% (->). The recommended planning figure is /mo (gap=12, half-overlap model).
+
+- **Tests:** 767 passed, 2 skipped, 0 failures (+4 B86 gap tests vs 763 from B89). Green.
+
+- **Lesson 157 added.** Code: app/backtest/funded_sim.py (combine_gap_days param), scripts/funded_sim.py (--combine-gap-days flag), scripts/run_b86_gap.py (benchmark). Tests: tests/test_funded_sim_gap.py (4 tests).
+
+- **Next:** B87 (Phase B funded_survival dynamic risk policy -- expose CLI flag, benchmark vs baseline 13 busts). Then B88, B90, B92, B93.

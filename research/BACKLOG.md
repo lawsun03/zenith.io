@@ -3815,7 +3815,7 @@ Session 2026-06-14T21:55Z. Backlog fully exhausted (B84 done + B85 Lawrence-prio
 
 ---
 
-## B86 -- Funded-sim combine-gap correction: quantify idle-time drag and gap-corrected $/mo  [pending]
+## B86 -- Funded-sim combine-gap correction: quantify idle-time drag and gap-corrected $/mo  [done — CRITERION MET: gap=24 reduces $/mo by 29.4% ($566->$400); realistic range $400-498/mo; combine_gap_days param + --combine-gap-days flag shipped; 4 defining-behavior tests; 767 tests green]
 
 **Hypothesis:** `simulate_xfa_chain()` restarts a funded account the day after each bust, but in reality the NEXT funded account cannot start until the NEXT COMBINE PASS -- which takes an average of 24.6 trading days (the "d/funded" metric from B42: 1033 total days / 42 passes). With 13 Phase-B busts in 5y, this accounts for 13 x 24.6d = 320 idle days (31% of the period) where NO XFA income is earned. The stated B57 $/mo ($566) is therefore an optimistic upper bound; the gap-corrected realistic number is ~$390/mo (no overlap) to ~$479/mo (full Phase-A/Phase-B overlap). This item quantifies the drag precisely and establishes the true pipeline baseline.
 

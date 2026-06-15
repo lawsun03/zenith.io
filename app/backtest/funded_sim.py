@@ -112,8 +112,14 @@ def simulate_xfa_chain(
     haircut: Decimal = Decimal("0"),
     risk_policy: str = "constant",
     base_risk_pct: Decimal = Decimal("0.75"),
+    combine_gap_days: int = 0,
 ) -> dict:
-    """Sequential XFA accounts: bust -> next account starts the following day."""
+    """Sequential XFA accounts: bust -> next account starts the following day.
+
+    combine_gap_days: trading days to skip after each bust before starting the
+    next account. Models the real combine-gap (re-running Phase A before a new
+    funded account can start). Default 0 preserves the existing behavior.
+    """
     rules = rules or XfaRules()
     accounts = busts = 0
     gross_payouts = Decimal("0")
@@ -121,7 +127,11 @@ def simulate_xfa_chain(
     tracker: PhaseTracker | None = None
     days_in_account = 0
     had_payout = False
+    gap_remaining = 0
     for ts, pnl in daily_pnl:
+        if gap_remaining > 0:
+            gap_remaining -= 1
+            continue
         if tracker is None:
             tracker = PhaseTracker(phase="xfa", combine=CombineRules(), xfa=rules)
             accounts += 1
@@ -136,6 +146,7 @@ def simulate_xfa_chain(
         if _dead_with_haircut(tracker, haircut * mult):
             busts += 1
             tracker = None
+            gap_remaining = combine_gap_days
             continue
         tracker.roll_day(ts)
         if tracker.payout_eligible():
