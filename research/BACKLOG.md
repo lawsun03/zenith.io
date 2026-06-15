@@ -4232,7 +4232,7 @@ because the framing differs slightly and the check is nearly free.
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
 
-## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [pending -- Lawrence-requested 2026-06-15 (BUMPED ahead of B100); model:opus]
+## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [in-progress — session wk7-b101 2026-06-15T19:50Z]
 
 Lawrence: test Fib EXTENSION levels as the take-profit TARGET (a measured-move target that
 scales with the entry leg), see if profitable, then whether it helps the funded (combine
@@ -4280,3 +4280,49 @@ queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't 
 trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
 the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
 **Source:** B99 secondary (2026-06-15).
+
+## B102 -- funded_sim: bootstrap confidence intervals on every headline number  [pending]
+Review #5: funded_sim.py:80,131 replays ONE deterministic P&L path; decisions get made on
+13-vs-14-bust deltas with NO CI anywhere -> we may be chasing noise. Wrap the pure
+simulate_combines/simulate_xfa_chain in a seeded BLOCK-bootstrap (~1000 resamples, block
+length preserving loss clustering); report 5th/25th/median $/mo + sustainability CIs. Add a
+"CIs must SEPARATE to call a winner" rule to research/PROTOCOL.md. Success: re-score the
+recent candidate stack (incl. B99 r1.5-vs-r2.5) under CIs; expect several past "wins" -> ties.
+**Source:** external review (opus ultracode) 2026-06-15.
+
+## B103 -- funded_sim: model the intraday daily-loss-limit (DLL) bust  [pending]
+Review #6: funded_sim.py:48 collapses each day to one EOD delta; is_dead() (account_phase.py
+:134-136) checks only the MLL; the DLL exists only in the live path (state.py:257). So the sim
+UNDERCOUNTS busts -- the "13/61 combine" sustainability denominator is optimistic. Add an
+intraday DLL-bust check per day (feed each day's running-low equity from equity_export); report
+busts WITH vs WITHOUT DLL across the {h0,h200,h400}x{gap0,12,24} grid. Success: quantify the
+denominator shift; it can only move down. **Source:** external review 2026-06-15.
+
+## B104 -- Firm-rule / counterparty shock grid (the dominant unhedged tail)  [pending]
+Review #8: account_phase.py:6-7 notes Topstep changed rules 8x in 5mo; the payout-cap cut
+$5k->$2k was fixed in the sim but never SWEPT. funded_sim already takes XfaRules/CombineRules.
+Add a firm-rule shock grid (CLI flags on scripts/funded_sim.py): sweep payout_cap, mll_distance,
+profit-share; back-test the realized cap cut as a proof-of-concept. Success: a table of $/mo +
+sust vs each rule shock = the counterparty tail quantified. **Source:** external review 2026-06-15.
+
+## B105 -- Report lived variance, not just the headline mean  [pending]
+Review #9: Phase-B has ~33% flat/negative months + multi-month dry spells; mean $/account
+$3,131 vs median ~$2,114; no recurring subscription/fixed cost modeled (only $150/attempt reset).
+Add to pipeline summaries: median + p25 $/account, dry-spell cadence, a ~3mo cash-reserve figure,
+and subtract a recurring monthly fixed cost from EVERY month incl. idle. Success: honest net +
+drought map so a working strategy isn't abandoned mid-dry-spell. **Source:** external review 2026-06-15.
+
+## B106 -- iFVGxORB ALIGNMENT as up-only sizing (matched-risk benchmark)  [pending -- benchmark-gated]
+Review #10: the ONE untested variant. mfe_mae_deployed_combined_clean.csv: ORB trades ALIGNED
+with iFVG show PF 1.73 / WR 48.6% vs 1.25/1.20 unaligned; causal (Lesson 92), >1.0 PF all 5 yrs.
+Distinct from B58 (which DOWN-sized correlated features). Benchmark up-sizing aligned setups at
+MATCHED AVERAGE RISK on funded_sim (neutralizes the B63a "more risk->more busts" confound); judge
+on PF/WR/r_mfe NOT avg-$; keep a never-below-1.0x floor; ship default-off only if it wins. Success:
++0.2-0.5x sustainability with zero volume cut, or a clean reject. **Source:** external review 2026-06-15.
+
+## B107 -- Walk-forward optimizer is statistically degenerate (fix or retire)  [pending]
+Review #12: walkforward.py:74-81 -- 30/10-day windows can't clear a +$3k Combine, so all 108 configs
+score 0.000 and "RECOMMENDED CONFIG" is just grid order (false confidence). Score on per-window
+net/PF/expectancy (or lengthen test windows to >=20 trading days); GUARD against emitting a
+recommendation when the score is constant. Or retire the tool. Success: no false-confidence
+recommendation; one-line LESSONS.md entry. **Source:** external review 2026-06-15.
