@@ -430,7 +430,9 @@ class TestCpiDayRouter:
 
     def test_non_cpi_day_allows_base_entry(self):
         # WHY: the router must not leak into normal days — a clean entry on a
-        # non-CPI day must pass. This test fails if the gate over-blocks.
+        # non-CPI day must pass. make_long_order() trips no other gate (no
+        # lockout, headroom available, valid stop), so an Allow here isolates
+        # the CPI gate: this test fails if the gate over-blocks.
         state = RiskState(config=fifty_k_combine())
         decision = check(make_long_order(), state, cpi_day_active=False)
         assert isinstance(decision, Allow)

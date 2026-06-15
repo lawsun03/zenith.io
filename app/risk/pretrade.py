@@ -112,7 +112,9 @@ def check(
 
     # ------------------------------------------------------------
     # 1c. CPI-day router: on a CPI trading day the base engine takes no new
-    #     entries — the CPI straddle owns the day (cpi_day_router_enabled).
+    #     entries — the CPI straddle owns the day. cpi_day_active is resolved
+    #     upstream by the execution engine (gated by cpi_day_router_enabled);
+    #     check() stays pure and only consumes the boolean.
     #     Exits always fall through (you must always be allowed to flatten).
     # ------------------------------------------------------------
     if cpi_day_active and order.is_entry:
