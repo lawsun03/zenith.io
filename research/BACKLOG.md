@@ -4011,7 +4011,7 @@ untouched; Lawrence decides go-live.
 
 ---
 
-## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [pending]
+## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [in-progress — session 2026-06-15T02:30Z]
 
 **Hypothesis:** ~9 CPI/yr is too sparse for the Combine alone, but adding
 CPI-straddle days ON TOP of the B42/B57 funded pipeline may raise $/mo without
@@ -4120,3 +4120,39 @@ last 2 pre-range minutes). Cheap to check, high value (gates trusting B85 number
 for the live path).
 
 **Source:** B92 follow-on (documented window deviation, 2026-06-15).
+
+---
+
+## B96 -- Indicator-as-FEATURE Phase-1 batch: 200-SMA trend regime + RSI-pullback-in-trend  [pending — Lawrence-requested 2026-06-15; CHEAP Phase-1 only, NO build unless GO; model:sonnet]
+
+Lawrence sent a batch of MA/EMA/RSI/Bollinger ideas. MOST map to mechanism classes
+this program has ALREADY rejected — do NOT build systems from them. Receipts:
+- **MA/EMA daily trend-regime gate** = the daily-context-regime class: B5 (prior-day
+  range), B35 (prior-day-close bias), B65 (Markov 20-day regime) ALL REJECTED;
+  Lesson 120 "failed daily-context set"; B65 even found NQ regime direction BACKWARD
+  (bear-regime ORB longs > bull). htf_bias (4h swing) already exists as a config.
+- **RSI / Bollinger / ATR-band MEAN REVERSION** = mean-reversion class: VWAP-MR
+  rejected; supply/demand demand-zone bounce failed on NQ (NQ is momentum). External
+  claims 7-for-7 failures; the academic reviews (arxiv 2605.04004, SSRN) found NO
+  OHLCV signal family survives on MNQ 5min.
+- **MA-cross / triple-MA ribbon / Bollinger trend SYSTEMS** = daily/swing trend-
+  following that HOLDS overnight -> incompatible with Topstep intraday-flatten. The
+  intraday EMA filter already exists (trend_ema_period=50). NOT queued.
+
+The ONE thing worth a CHEAP feature-falsification (NO engine; reuse
+`scripts/edge_diagnostics.py` on an existing per-trade CSV with a ts column — the B77
+deployed-combined dataset or an equity_export --trade-csv):
+1. **200-day SMA trend regime** (price >/<= daily 200-SMA) as a FEATURE on iFVG+ORB
+   trades — a SLOWER timescale than B35 (1-day) / B65 (20-day), the only reason to
+   re-test the class. Tag each trade by regime×side; run localize().
+2. **RSI-pullback-in-uptrend**: within price>200-SMA, does short-RSI(2/14) oversold-
+   then-recover precede better long outcomes? Same localize() pass.
+
+GO/NO-GO: a bucket must clear the edge_diagnostics robust bar (PF>=1.2, n>=30, positive
+in >=60% of years) AND beat the no-filter baseline. If it lands in the failed-daily-
+context set like B5/B35/B65 (the strong prior), REJECT immediately, log that the
+200-SMA/RSI variants join the rejected set, build nothing. Prior ~20% — queued only
+because the framing differs slightly and the check is nearly free.
+
+**Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
+falsification because the bulk re-treads already-rejected mechanism classes.
