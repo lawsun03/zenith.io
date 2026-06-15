@@ -1226,6 +1226,22 @@ async def _async_main() -> int:
     # observation, writes excursions.csv via emit; never touches orders.
     excursion_tracker = ExcursionTracker(emit=_append_excursion_csv)
 
+    # CPI-day router (B92 straddle ownership on CPI days). Default-off; only a
+    # populated date set when cpi_day_router_enabled. Empty set => never blocks.
+    from app.strategy.cpi_day import load_cpi_dates
+    _router_on = bot_cfg.strategy.cpi_day_router_enabled
+    cpi_dates = (
+        load_cpi_dates(bot_cfg.strategy.news_straddle_events_path,
+                       bot_cfg.strategy.news_straddle_event_type)
+        if _router_on else frozenset()
+    )
+    if _router_on:
+        log.warning(
+            "CPI-day router ENABLED: %d CPI day(s) loaded — base engine suppressed "
+            "on those days, CPI straddle owns the session (engine stays '%s').",
+            len(cpi_dates), bot_cfg.strategy.engine,
+        )
+
     engine = ExecutionEngine(
         broker=broker,
         risk_state=risk_state,
@@ -1244,6 +1260,7 @@ async def _async_main() -> int:
         flatten_time_ct=bot_cfg.flatten_time_ct,
         entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
         phase=(tracker_from_config(bot_cfg) if bot_cfg.account_phase != "practice" else None),
+        cpi_event_dates=cpi_dates,
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
@@ -1254,7 +1271,7 @@ async def _async_main() -> int:
     # when engine="news_straddle" AND news_straddle_live_enabled. Never auto-enables.
     news_straddle_scheduler = None
     _ns = bot_cfg.strategy
-    if _ns.engine == "news_straddle" and _ns.news_straddle_live_enabled:
+    if (_ns.engine == "news_straddle" and _ns.news_straddle_live_enabled) or _ns.cpi_day_router_enabled:
         from app.broker.paper import TICK_SIZE
         from app.strategy.news_straddle import load_event_times
         from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
