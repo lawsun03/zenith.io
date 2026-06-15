@@ -11,7 +11,7 @@ Two layers:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -829,3 +829,41 @@ async def test_htf_live_toggle_takes_effect_without_restart():
     assert len(second) == 1
     assert second[0].placed is False
     assert second[0].reason == "htf_bias"
+
+
+# =====================================================================
+# CPI-day router gate
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_engine_blocks_base_entry_on_cpi_day():
+    # WHY: with cpi_event_dates covering the signal's ET date, _act_on_signal must
+    # hit the CPI_DAY_BLOCK gate and place no order (straddle owns CPI days).
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    engine = ExecutionEngine(
+        broker, state, [make_runner()], replay_mode=True,
+        cpi_event_dates=frozenset({date(2026, 5, 11)}),  # in_ny_am(0) is 2026-05-11 ET
+    )
+    await broker.connect()
+    await engine.start()
+
+    outcome = await engine._act_on_signal(_signal("1900", "1895", "1910", side="long"))
+    assert outcome.placed is False
+
+
+@pytest.mark.asyncio
+async def test_engine_allows_entry_on_non_cpi_day():
+    # WHY: the router must not leak into normal days — same signal, empty CPI set,
+    # the entry proceeds to placement.
+    broker = PaperBroker(starting_balance=Decimal("50000"))
+    state = RiskState(config=fifty_k_combine())
+    engine = ExecutionEngine(
+        broker, state, [make_runner()], replay_mode=True,
+        cpi_event_dates=frozenset(),  # router off => never blocks
+    )
+    await broker.connect()
+    await engine.start()
+
+    outcome = await engine._act_on_signal(_signal("1900", "1895", "1910", side="long"))
+    assert outcome.placed is True

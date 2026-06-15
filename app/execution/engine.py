@@ -61,6 +61,7 @@ from app.strategy.displacement import DisplacementDetector, DisplacementEvent
 from app.strategy.grader import SetupGrader
 from app.strategy.killzone import in_killzone, in_macro_window, in_news_blackout
 from app.strategy.liquidity import LiquidityTracker
+from app.strategy.cpi_day import is_cpi_day
 from app.strategy.volume_profile import VolumeProfileTracker
 
 log = logging.getLogger(__name__)
@@ -429,6 +430,7 @@ class ExecutionEngine:
         entry_cutoff_time_ct: str = "14:30",
         flatten_wallclock_enabled: bool = True,
         phase: "PhaseTracker | None" = None,
+        cpi_event_dates: "frozenset[date] | None" = None,
     ) -> None:
         self.broker = broker
         self.risk_state = risk_state
@@ -455,6 +457,10 @@ class ExecutionEngine:
         self.entry_cutoff_time_ct = entry_cutoff_time_ct
         self.flatten_wallclock_enabled = flatten_wallclock_enabled  # startup-only; restart to change
         self.phase = phase  # hot-applied via PATCH /api/config
+        # CPI-day router: ET dates on which the base engine takes no new entries.
+        # Empty/None => router off => never blocks (cpi_day_router_enabled gates
+        # whether main.py passes a populated set). Read-only after construction.
+        self._cpi_dates = cpi_event_dates or frozenset()
         self._phase_day: "date | None" = None
         self._flatten_task: asyncio.Task | None = None
         self._flattened_today: str | None = None  # trading-day key, avoid re-flatten spam
@@ -1019,7 +1025,11 @@ class ExecutionEngine:
             is_entry=True,
             setup_grade=(signal.setup_grade.grade if signal.setup_grade else ""),
         )
-        decision = check(order, self.risk_state, phase=self.phase, ts=signal.created_at)
+        cpi_active = is_cpi_day(signal.created_at, self._cpi_dates)
+        decision = check(
+            order, self.risk_state, phase=self.phase,
+            ts=signal.created_at, cpi_day_active=cpi_active,
+        )
 
         if isinstance(decision, Deny):
             if (
