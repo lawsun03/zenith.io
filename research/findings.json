@@ -4231,7 +4231,44 @@
     "learned": "DLL modeling is PROTECTIVE for ORB-reentry r0.75 -- busts DECREASE by 7-12 across all {h0/200/400}x{gap0/12/24} combinations. The spec predicted busts would increase ('denominator can only move down') but 15.4% of DLL-triggered days are ones where the EOD loss exceeded DLL (post-DLL trading was net negative), so the cap prevents further damage. The sim overcounts busts, not undercounts. Funded pipeline sustainability is more optimistic than previously estimated.",
     "links": {
       "doc": null,
-      "runs": ["research/equity_b21/orb_reentry_r0p75_{year}.csv"],
+      "runs": [
+        "research/equity_b21/orb_reentry_r0p75_{year}.csv"
+      ],
+      "src": null
+    }
+  },
+  {
+    "ts": "2026-06-15T23:45Z",
+    "session": "wk7-b104",
+    "item": "B104",
+    "variant": "firm-rule shock grid on ORB-reentry r0.75 (B21, h200, 2021/23-26)",
+    "objective": "infra",
+    "metrics": {
+      "baseline_xfa_busts": 16,
+      "baseline_net_usd": 38104,
+      "baseline_per_mo": 635,
+      "baseline_sust": 2.12,
+      "payout_cap_1k_sust": 3.4,
+      "payout_cap_1k_mo": 540,
+      "payout_cap_5k_sust": 2.0,
+      "payout_cap_5k_mo": 651,
+      "cap_cut_cost_mo": 16,
+      "xfa_mll_1500_busts": 21,
+      "xfa_mll_1500_sust": 1.62,
+      "xfa_mll_2500_busts": 12,
+      "xfa_mll_2500_sust": 2.83,
+      "profit_share_80_mo": 565,
+      "profit_share_95_mo": 670,
+      "profit_share_pp_cost_mo": 7,
+      "combine_mll_sweep_xfa_impact": "none (XFA net unchanged)"
+    },
+    "verdict": "shipped",
+    "learned": "The dominant counterparty risk is XFA MLL tightening: a ->.5k MLL cut drops sust from 2.12x to 1.62x. The payout cap cut (-> in 2026-04-28) cost only +/mo and actually IMPROVED sust (2.00x->2.12x) because smaller payouts retain more balance -- the cap cut was pipeline-neutral to slightly beneficial. Profit share cuts are pure linear scaling (~/mo per percentage point). Combine MLL changes do not affect XFA pipeline metrics.",
+    "links": {
+      "doc": null,
+      "runs": [
+        "scripts/_b104_shock_grid.py"
+      ],
       "src": null
     }
   }

@@ -4298,7 +4298,7 @@ intraday DLL-bust check per day (feed each day's running-low equity from equity_
 busts WITH vs WITHOUT DLL across the {h0,h200,h400}x{gap0,12,24} grid. Success: quantify the
 denominator shift; it can only move down. **Source:** external review 2026-06-15.
 
-## B104 -- Firm-rule / counterparty shock grid (the dominant unhedged tail)  [pending]
+## B104 -- Firm-rule / counterparty shock grid (the dominant unhedged tail)  [done -- SHIPPED (wk7-b104 2026-06-15): XFA MLL tightening is dominant risk (mll=$1.5k -> sust 1.62x vs 2.12x baseline); payout cap cut ($5k->$2k) cost only +$16/mo AND improved sust (2.12x vs 2.00x old rule); profit_share linear ~$7/mo/pp; combine_mll has zero XFA impact. CLI flags: --payout-cap, --xfa-mll-distance, --combine-mll-distance, --profit-share. Lessons 175-177.]
 Review #8: account_phase.py:6-7 notes Topstep changed rules 8x in 5mo; the payout-cap cut
 $5k->$2k was fixed in the sim but never SWEPT. funded_sim already takes XfaRules/CombineRules.
 Add a firm-rule shock grid (CLI flags on scripts/funded_sim.py): sweep payout_cap, mll_distance,

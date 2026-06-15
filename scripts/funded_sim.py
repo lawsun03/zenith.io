@@ -6,6 +6,7 @@ import csv
 import json
 import re
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +23,7 @@ from app.backtest.funded_sim import (
     simulate_combines,
     simulate_xfa_chain,
 )
+from app.risk.account_phase import CombineRules, XfaRules
 
 
 def main() -> None:
@@ -54,6 +56,17 @@ def main() -> None:
                          "(e.g. 500 for 1%% of a $50K funded account). "
                          "0 = disabled (default, existing behavior). "
                          "When triggered intraday, caps the day P&L at -DLL.")
+    # B104 firm-rule shock flags — override individual XfaRules/CombineRules fields.
+    # Omit a flag to use the dataclass default. Used for counterparty shock grid.
+    ap.add_argument("--payout-cap", default=None, metavar="DOLLARS",
+                    help="Override XfaRules.payout_cap (default 2000). "
+                         "e.g. 5000 to back-test the pre-2026-04-28 rule.")
+    ap.add_argument("--profit-share", default=None, metavar="FRAC",
+                    help="Override XfaRules.trader_profit_share fraction (default 0.90).")
+    ap.add_argument("--xfa-mll-distance", default=None, metavar="DOLLARS",
+                    help="Override XfaRules.mll_distance in $ (default 2000).")
+    ap.add_argument("--combine-mll-distance", default=None, metavar="DOLLARS",
+                    help="Override CombineRules.mll_distance in $ (default 2000).")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
@@ -68,17 +81,41 @@ def main() -> None:
         daily = cap_daily_pnls_at_dll(daily_extended, dll_amount)
     else:
         daily = daily_pnls_from_equity(curve)
-    c = simulate_combines(daily, haircut=haircut)
-    x = simulate_xfa_chain(daily, haircut=haircut, combine_gap_days=args.combine_gap_days)
+
+    # Build firm-rule overrides (B104). Replace only the fields that were explicitly
+    # set; leave the rest at dataclass defaults so omitted flags are transparent.
+    xfa_rules = XfaRules()
+    combine_rules = CombineRules()
+    if args.payout_cap is not None:
+        xfa_rules = replace(xfa_rules, payout_cap=Decimal(args.payout_cap))
+    if args.profit_share is not None:
+        xfa_rules = replace(xfa_rules, trader_profit_share=Decimal(args.profit_share))
+    if args.xfa_mll_distance is not None:
+        xfa_rules = replace(xfa_rules, mll_distance=Decimal(args.xfa_mll_distance))
+    if args.combine_mll_distance is not None:
+        combine_rules = replace(combine_rules, mll_distance=Decimal(args.combine_mll_distance))
+
+    c = simulate_combines(daily, rules=combine_rules, haircut=haircut)
+    x = simulate_xfa_chain(daily, rules=xfa_rules, haircut=haircut, combine_gap_days=args.combine_gap_days)
 
     haircut_note = f", haircut ${haircut:.0f}" if haircut else ""
     dll_note = f", DLL ${dll_amount:.0f}" if dll_amount else ""
+    rule_notes = []
+    if args.payout_cap is not None:
+        rule_notes.append(f"payout_cap=${args.payout_cap}")
+    if args.profit_share is not None:
+        rule_notes.append(f"profit_share={args.profit_share}")
+    if args.xfa_mll_distance is not None:
+        rule_notes.append(f"xfa_mll=${args.xfa_mll_distance}")
+    if args.combine_mll_distance is not None:
+        rule_notes.append(f"combine_mll=${args.combine_mll_distance}")
+    rule_note = (", " + " ".join(rule_notes)) if rule_notes else ""
     print(
         f"COMBINE: attempts {c['attempts']} | passes {c['passes']} | "
         f"busts {c['busts']} | median days-to-pass {c['median_days_to_pass']}\n"
         f"XFA:     accounts {x['accounts']} | busts {x['busts']} | "
         f"payouts ${x['gross_payouts']:.0f} gross / ${x['net_payouts']:.0f} net (90%)\n"
-        f"(daily granularity — intraday MLL touches understated{haircut_note}{dll_note})"
+        f"(daily granularity — intraday MLL touches understated{haircut_note}{dll_note}{rule_note})"
     )
 
     if args.bootstrap > 0:
@@ -89,6 +126,8 @@ def main() -> None:
             block_len=args.block_len,
             haircut=haircut,
             combine_gap_days=args.combine_gap_days,
+            xfa_rules=xfa_rules,
+            combine_rules=combine_rules,
         )
         for metric, cis in [
             ("xfa_net ($)", bs["xfa_net"]),

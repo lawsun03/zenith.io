@@ -248,6 +248,8 @@ def bootstrap_pipeline(
     seed: int = 42,
     haircut: Decimal = Decimal("0"),
     combine_gap_days: int = 0,
+    xfa_rules: XfaRules | None = None,
+    combine_rules: CombineRules | None = None,
 ) -> dict:
     """Block-bootstrap CIs for funded-pipeline headline metrics.
 
@@ -291,9 +293,9 @@ def bootstrap_pipeline(
         # Original timestamps, resampled P&L values — preserves calendar shape.
         resampled = [(timestamps[i], pnl_vals[src[i]]) for i in range(n)]
 
-        c = simulate_combines(resampled, haircut=haircut)
+        c = simulate_combines(resampled, rules=combine_rules, haircut=haircut)
         x = simulate_xfa_chain(
-            resampled, haircut=haircut, combine_gap_days=combine_gap_days
+            resampled, rules=xfa_rules, haircut=haircut, combine_gap_days=combine_gap_days
         )
         xfa_net.append(float(x["net_payouts"]))
         xfa_busts_s.append(float(x["busts"]))

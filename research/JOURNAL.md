@@ -3937,3 +3937,46 @@ Added `--dll DOLLARS` flag to `scripts/funded_sim.py`. Backward-compatible: `--d
 - **Learned:** DLL modeling of ORB-reentry r0.75 reveals the existing funded_sim is conservative (overcounts busts by 7-12), not optimistic as the external reviewer predicted. The DLL acts as a loss cap on catastrophic trading days, reducing the cumulative drawdown that would otherwise bust accounts through MLL. Strategy- and sizing-specific: the directionality of DLL effect depends on whether post-DLL trades are net positive (DLL hurts) or net negative (DLL helps) on average. Always measure, don't assume.
 - **Tests:** full suite **854 passed, 3 skipped, 0 failures** (+11 new B103 tests). findings.json #122.
 - **Next:** B104 (firm-rule shock grid, pending) or B105 (report lived variance, pending).
+
+---
+
+## 2026-06-15T23:45Z -- session wk7-b104 -- B104 (firm-rule shock grid -- SHIPPED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- infra only).
+- **Claimed:** B104 (top pending item; no orphan in-progress). Last 2 sessions (B102, B103) were builds; however, no pending research/ideation item exists in the backlog (B104-B107 all infra), so proceeded with the top item per protocol.
+
+**Method:** Added `--payout-cap`, `--profit-share`, `--xfa-mll-distance`, `--combine-mll-distance` CLI flags to `scripts/funded_sim.py`. Each flag overrides the corresponding `XfaRules` / `CombineRules` field via `dataclasses.replace()`. `bootstrap_pipeline()` also updated to accept `xfa_rules`/`combine_rules` overrides. Ran `scripts/_b104_shock_grid.py` on B21 ORB-reentry r0.75 per-year equity (2021/23/24/25/26 excl 2022 holdout, h200 primary).
+
+**Shock grid results (ORB-reentry r0.75, h200, Phase A ref = 34 passes):**
+
+| Config | XFA busts | $/mo | sust |
+|--------|-----------|------|------|
+| BASELINE (current rules) | 16 | $635 | 2.12x |
+| payout_cap=$1,000 | 10 | $540 | 3.40x |
+| payout_cap=$1,500 | 13 | $652 | 2.62x |
+| payout_cap=$3,000 | 17 | $649 | 2.00x |
+| **payout_cap=$5,000 (old rule)** | **17** | **$651** | **2.00x** |
+| xfa_mll_distance=$1,500 (TIGHTER) | 21 | $668 | 1.62x |
+| xfa_mll_distance=$2,500 | 12 | $665 | 2.83x |
+| xfa_mll_distance=$3,000 | 10 | $634 | 3.40x |
+| profit_share=0.80 | 16 | $565 | 2.12x |
+| profit_share=0.95 | 16 | $670 | 2.12x |
+| combine_mll=$1,500 | 16 | $635 | 2.12x |
+| combine_mll=$2,500 | 16 | $635 | 2.12x |
+
+**Key findings:**
+
+1. **Dominant risk is XFA MLL tightening.** If Topstep cuts XFA MLL from $2k to $1.5k, sust drops from 2.12x to 1.62x (21 busts vs 16). This is the counterparty change with the largest pipeline impact by far. The $2.5k-$3k MLL scenario (wider cushion) shows the inverse -- sust improves to 2.83-3.40x.
+
+2. **The payout cap cut ($5k -> $2k, realized 2026-04-28) cost only +$16/mo and IMPROVED sust (2.12x vs 2.00x old rule).** Mechanism: smaller payouts = more balance retained in the funded account = fewer subsequent busts. The counterintuitive finding: the cap cut was pipeline-neutral to slightly beneficial for the trader. Lawrence's concern (and the B104 spec's framing) that the cap cut was a "dominant unhedged tail" is refuted -- it was a minor positive.
+
+3. **Profit share is pure linear scaling.** Each percentage-point cut costs ~$7/mo in net payouts with zero effect on busts or sust. A 90->80% cut costs $70/mo (11%). Predictable, no pipeline dynamics.
+
+4. **Combine MLL distance has zero effect on XFA pipeline metrics.** It changes standalone combine passes (15-18 range) but since we're using a fixed Phase A reference (34 passes from B21), the XFA busts/net are entirely determined by the funded phase rules.
+
+5. **Cap sweep anomaly:** payout_cap=$1k gives LOWER $/mo ($540) but BETTER sust (3.40x) than the current $2k cap ($635/mo, 2.12x). Mechanism: smaller payouts = more account balance retained = even fewer busts (10 vs 16), but each payout is capped at $1k so absolute earnings drop. This shows the sust/$/mo tradeoff is tunable via the cap -- but that is Topstep's lever, not ours.
+
+- **Verdict: SHIPPED.** 4 new CLI flags in scripts/funded_sim.py + bootstrap_pipeline update; 8 defining-behavior tests (test_b104_firm_rule_shock.py); scripts/_b104_shock_grid.py; Lessons 175-177.
+- **Learned:** Counterparty risk is not symmetric across rule dimensions: XFA MLL tightening is structurally dangerous (direct path to bust rate increase), while payout cap cuts are self-limiting (smaller payouts retain balance, reducing subsequent busts). Profit share cuts are the clearest financial signal and the easiest to hedge against (pure linear reduction in net).
+- **Tests:** full suite **862 passed, 3 skipped, 0 failures** (+8 new B104 tests). findings.json #123. Databento untouched.
+- **Next:** B105 (report lived variance, pending) or B106 (iFVGxORB ALIGNMENT benchmark-gated) or B107 (walk-forward degenerate fix).
