@@ -196,6 +196,7 @@ def _build_runner(
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
             require_pm_break=s.orb_require_pm_break,
+            fib_target_ext=s.orb_fib_target_ext,
         ))
         _sr_det = SweepReentryDetector(SweepReentryConfig(
             instrument=instrument,
@@ -262,6 +263,7 @@ def _build_runner(
             skip_trading_days=s.skip_trading_days,
             signal_window_mins=s.orb_signal_window_mins,
             require_pm_break=s.orb_require_pm_break,
+            fib_target_ext=s.orb_fib_target_ext,
         ))
         return ORBRunner(
             instrument=instrument,
@@ -315,11 +317,26 @@ def _build_runner(
                 max_short_rank=s.ifvg_max_short_rank,
                 silver_bullet_only=s.silver_bullet_only,
                 suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                fib_target_ext=s.ifvg_fib_target_ext,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,
             zones=kz_zones,
             signal_instrument=signal_instrument or "",
+        )
+    if s.engine == "forbes":
+        from app.strategy.forbes import ForbesConfig, ForbesDetector, ForbesRunner
+        return ForbesRunner(
+            instrument=instrument,
+            timeframe=timeframe,
+            detector=ForbesDetector(ForbesConfig.from_params(instrument, s)),
+            strategy_cfg=s,
+            signal_instrument=signal_instrument or "",
+        )
+    if s.engine != "ifvg":
+        raise ValueError(
+            f"_build_runner: unknown engine {s.engine!r} — no dispatch branch matched. "
+            "Refusing to silently fall back to iFVG (Rule 12)."
         )
     return StrategyRunner(
         instrument=instrument,
@@ -362,6 +379,7 @@ def _build_runner(
             max_short_rank=s.ifvg_max_short_rank,
             silver_bullet_only=s.silver_bullet_only,
             suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+            fib_target_ext=s.ifvg_fib_target_ext,
         )),
         grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
         strategy_cfg=s,
@@ -537,7 +555,7 @@ def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     return on_bar
 
 
-def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_scheduler: Any = None, cpi_dates=None):
+def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_instrument: str = "", broker: Any = None, news_straddle_schedulers: Any = None, cpi_dates=None, base_suppress: bool = True):
     """Build the on_bar subscriber that emits strategy_state for the StrategyDebug panel.
 
     Reads pre-computed grader state — no heavy computation on the hot path.
@@ -604,7 +622,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             pos_excursion = broker.live_excursion(runner.instrument)
 
         from app.strategy.cpi_day import router_state as _cpi_router_state
-        cpi_router = _cpi_router_state(bar.ts, cpi_dates) if cpi_dates else None
+        cpi_router = _cpi_router_state(bar.ts, cpi_dates, base_suppress) if cpi_dates else None
 
         journal.publish_strategy_state(
             instrument=runner.instrument,
@@ -617,7 +635,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
             phase=phase_data,
             orb_state=orb_state,
             pos_excursion=pos_excursion,
-            news_straddle=news_straddle_scheduler.state() if news_straddle_scheduler is not None else None,
+            news_straddle=[s.state() for s in news_straddle_schedulers] if news_straddle_schedulers else None,
             cpi_day_router=cpi_router,
         )
 
@@ -1230,20 +1248,21 @@ async def _async_main() -> int:
     # observation, writes excursions.csv via emit; never touches orders.
     excursion_tracker = ExcursionTracker(emit=_append_excursion_csv)
 
-    # CPI-day router (B92 straddle ownership on CPI days). Default-off; only a
-    # populated date set when cpi_day_router_enabled. Empty set => never blocks.
-    from app.strategy.cpi_day import load_cpi_dates
+    # Multi-event straddle router. Default-off; populated only when cpi_day_router_enabled.
+    from app.strategy.cpi_day import suppress_dates, all_event_dates
+    from app.strategy.news_straddle import resolve_straddle_specs
     _router_on = bot_cfg.strategy.cpi_day_router_enabled
-    cpi_dates = (
-        load_cpi_dates(bot_cfg.strategy.news_straddle_events_path,
-                       bot_cfg.strategy.news_straddle_event_type)
-        if _router_on else frozenset()
-    )
+    # Resolve unconditionally (cheap, safe): empty news_straddle_events => legacy single spec.
+    _straddle_specs = resolve_straddle_specs(bot_cfg.strategy, cfg.instrument)
+    _events_path = bot_cfg.strategy.news_straddle_events_path
+    base_suppress_dates = suppress_dates(_straddle_specs, _events_path) if _router_on else frozenset()
+    cpi_dates = all_event_dates(_straddle_specs, _events_path) if _router_on else frozenset()
     if _router_on:
         log.warning(
-            "CPI-day router ENABLED: %d CPI day(s) loaded — base engine suppressed "
-            "on those days, CPI straddle owns the session (engine stays '%s').",
-            len(cpi_dates), bot_cfg.strategy.engine,
+            "Straddle router ENABLED: %d event spec(s) %s; base suppressed on %d day(s).",
+            len(_straddle_specs),
+            [(s.event_type, s.instrument, s.contracts) for s in _straddle_specs],
+            len(base_suppress_dates),
         )
 
     engine = ExecutionEngine(
@@ -1264,42 +1283,32 @@ async def _async_main() -> int:
         flatten_time_ct=bot_cfg.flatten_time_ct,
         entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
         phase=(tracker_from_config(bot_cfg) if bot_cfg.account_phase != "practice" else None),
-        cpi_event_dates=cpi_dates,
+        cpi_event_dates=base_suppress_dates,
     )
     # Subscribe the journal to broker fills and bars.
     broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
     # For multi-symbol, let bars display their own instrument; for single-symbol
     # override is needed when signal_instrument != execution_instrument (e.g. GC→MGC).
     exec_instr = cfg.instrument if len(instruments_list) == 1 else ""
-    # news_straddle LIVE resting-OCO scheduler (B92). Default-OFF; only constructed
-    # when engine="news_straddle" AND news_straddle_live_enabled. Never auto-enables.
-    news_straddle_scheduler = None
+    # news_straddle LIVE resting-OCO schedulers (B92), one per event spec.
+    news_straddle_schedulers = []
     _ns = bot_cfg.strategy
     if (_ns.engine == "news_straddle" and _ns.news_straddle_live_enabled) or _ns.cpi_day_router_enabled:
-        from app.broker.paper import TICK_SIZE
-        from app.strategy.news_straddle import load_event_times
-        from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
-        _ns_events = load_event_times(_ns.news_straddle_events_path, _ns.news_straddle_event_type)
-        news_straddle_scheduler = NewsStraddleScheduler(
-            broker,
-            instrument=cfg.instrument,
-            event_times=_ns_events,
-            offset_ticks=_ns.news_straddle_offset_ticks,
-            tp_r=_ns.news_straddle_tp_r,
-            tick=TICK_SIZE.get(cfg.instrument, Decimal("0.25")),
-            size=_ns.news_straddle_contracts,
-            arm_lead_seconds=_ns.news_straddle_arm_lead_seconds,
+        from app.strategy.news_straddle import build_news_straddle_schedulers
+        news_straddle_schedulers = build_news_straddle_schedulers(
+            broker, _straddle_specs,
+            _ns.news_straddle_events_path, _ns.news_straddle_arm_lead_seconds,
         )
-        broker.on_bar(news_straddle_scheduler.on_bar)
-        log.warning(
-            "news_straddle LIVE path ENABLED: %d %s events, %d contract(s), arm %ds "
-            "pre-release on %s — resting OCO stop straddle placed at each event.",
-            len(_ns_events), _ns.news_straddle_event_type, _ns.news_straddle_contracts,
-            _ns.news_straddle_arm_lead_seconds, cfg.instrument,
-        )
+        for _sch in news_straddle_schedulers:
+            broker.on_bar(_sch.on_bar)
+            log.warning(
+                "news_straddle LIVE: %d events, %d contract(s), arm %ds on %s "
+                "(offset %s) — resting OCO straddle.",
+                len(_sch._events), _sch.size, _sch.arm_lead_seconds, _sch.instrument, _sch.offset,
+            )
 
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
-    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_scheduler=news_straddle_scheduler, cpi_dates=cpi_dates))
+    broker.on_bar(_make_strategy_state_publisher(journal, engine, execution_instrument=exec_instr, broker=broker, news_straddle_schedulers=news_straddle_schedulers, cpi_dates=cpi_dates, base_suppress=bot_cfg.strategy.cpi_base_suppress))
 
     # broker.on_bar handlers are async in this codebase; on_bar() itself is sync.
     async def _excursion_on_bar(b):
@@ -1408,8 +1417,8 @@ async def _async_main() -> int:
                 engine.phase.mll, engine.phase.cushion,
             )
         await reconciler.start()
-        if news_straddle_scheduler is not None:
-            await news_straddle_scheduler.start()
+        for _sch in news_straddle_schedulers:
+            await _sch.start()
         if notifier.enabled or discord.enabled:
             await eod_scheduler.start()
         if notifier.enabled:
@@ -1490,10 +1499,10 @@ async def _async_main() -> int:
             pass
         return 1
     finally:
-        if news_straddle_scheduler is not None:
+        for _sch in news_straddle_schedulers:
             log.info("Stopping news_straddle scheduler...")
             try:
-                await news_straddle_scheduler.stop()
+                await _sch.stop()
             except Exception:
                 log.exception("news_straddle scheduler stop failed")
         log.info("Stopping EOD scheduler...")

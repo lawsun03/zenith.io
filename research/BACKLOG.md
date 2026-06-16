@@ -4011,7 +4011,7 @@ untouched; Lawrence decides go-live.
 
 ---
 
-## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [done -- CANDIDATE: additive overlay +$304/mo (+55%) at h200/gap0; sust 3.23x->2.80x (+2 busts); at gap=24 realistic model +$327/mo sust unchanged 3.50x; oracle 46/47 fills 67% win PF=5.99 mean=+1.68R; script scripts/b93_cpi_overlay.py; Lesson 162; 2026-06-15]
+## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [done -- CANDIDATE: additive overlay +$304/mo (+55%) at h200/gap0; sust 3.23x->2.80x (+2 busts); at gap=24 realistic model +$327/mo sust unchanged 3.50x; oracle 46/47 fills 67% win PF=5.99 mean=+1.68R; script scripts/b93_cpi_overlay.py; Lesson 162; 2026-06-15. 2022 HOLDOUT (wk9): oracle PF=8.98 WR=75% n=12 PASS; 6y overlay +$291/mo +0.17x sust; CONFIRMED. Lessons 189-190.]
 
 **Hypothesis:** ~9 CPI/yr is too sparse for the Combine alone, but adding
 CPI-straddle days ON TOP of the B42/B57 funded pipeline may raise $/mo without
@@ -4148,7 +4148,7 @@ deployed-combined dataset or an equity_export --trade-csv):
 2. **RSI-pullback-in-uptrend**: within price>200-SMA, does short-RSI(2/14) oversold-
    then-recover precede better long outcomes? Same localize() pass.
 
-## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [pending -- Lawrence-requested 2026-06-15; model:opus]
+## B99 -- ORB target-R sweep (1.0/1.5/2.0/2.5R) + entry-mechanic & OR-width variants  [done -- CANDIDATE (r1.5 funded): r2.5 hits target only 11.2% of trades (Lawrence intuition confirmed); r1.5 is expectancy optimum (PF 1.24, $47.9/tr +9%, year-stable), ties r2.5 on funded payouts while halving maxDD; no R clears 13/61 combine so combine stays r2.5. Secondary entry/OR-width variants flagged+skipped (need builds) -> B100. doc: trade_analysis/2026-06-15_B99_orb_target_r_sweep.md]
 
 Lawrence reviewed a LIVE wide-OR ORB trade (long MNQ, OR=30601.75-30735.5=133.75pt,
 entry=30780.5 breakout CLOSE, stop=OR low 30601.75=178.75pt, target=2.5R=447pt) and
@@ -4181,7 +4181,7 @@ r2.5 baseline; entry/width variants reported if run. "r2.5 still best" is a vali
 Deliverable: trade_analysis doc + findings entries.
 **Source:** Lawrence-requested 2026-06-15 (live ORB trade review).
 
-## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [pending — Lawrence-requested 2026-06-15; model:opus]
+## B97 -- Full strategy re-run on MGC + MES (instrument-transfer confirmation)  [done — CONFIRMATORY REJECT (wk7-b97 2026-06-15): 5/6 cells PF<1 (0.46-0.91), every cell busts ~all XFA accounts; MES ORB lone PF>1 (1.03=breakeven, pipeline-catastrophic); gold ORB longs loss-making (PF 0.72) -> bias FLIPS, fails structurally. Session edge is NQ-specific. Lesson 167; doc trade_analysis/2026-06-15_b97_mgc_mes_transfer.md]
 
 Lawrence wants the full strategy set re-tested on MGC and MES. DO NOT blindly
 re-derive — CONFIRM against prior receipts and report deltas:
@@ -4231,3 +4231,334 @@ because the framing differs slightly and the check is nearly free.
 
 **Source:** Lawrence-requested 2026-06-15 (MA/EMA/RSI batch). Curated to a single cheap
 falsification because the bulk re-treads already-rejected mechanism classes.
+
+## B101 -- Fibonacci-EXTENSION target levels (vs fixed-R) on iFVG + ORB  [done -- REJECTED (wk7-b101 reclaim 2026-06-15): iFVG Fib ext 1.272-2.618 all improve PF marginally (+0.01-0.02) but reduce XFA net payouts vs fixed-r2.5 baseline ($62-90k vs $100k). ORB Fib cross-check: Fib 1.618 (eff ~r1.5) hits PF=1.23/exp=$43.9 vs B99 r1.5 PF=1.24/exp=$47.9 -- fixed-R wins. Feature ships default-off; fixed-R framework remains optimal for both engines. Lesson 168-169.]
+
+Lawrence: test Fib EXTENSION levels as the take-profit TARGET (a measured-move target that
+scales with the entry leg), see if profitable, then whether it helps the funded (combine
+pass + XFA payout) goals. PRIOR: Fib as a FILTER/gate was REJECTED (no edge, 2.5y MGC, all
+buckets equally negative; do NOT re-test Fib gating). Fib as a TARGET = NEW, untested.
+
+MECHANISM (pre-registered 5-point grid, the single sanctioned param):
+- target = entry +/- ext * L, ext in {1.272, 1.414, 1.618, 2.0, 2.618}. Direction-aware.
+- L (the "entry move" length) per engine:
+  - iFVG: the displacement leg = |sweep_extreme -> displacement-bar extreme| (the leg the
+    grader already measures for Rule E / ifvg_min_displacement_mult).
+  - ORB: the opening-range width = |OR_high - OR_low|; target = entry +/- ext * OR_width.
+- Stop unchanged per engine (iFVG: sweep/structure stop; ORB: opposite OR boundary).
+
+FRAMING (apples-to-apples vs B99): a Fib-ext target is an EFFECTIVE variable R
+(target_dist / stop_dist = effective R) -- REPORT the effective-R distribution per ext.
+For ORB, ext*OR_width ~= a fixed-R sweep (stop ~= OR_width), so ORB Fib-targets largely
+OVERLAP B99's R-sweep -> treat ORB as a CROSS-CHECK vs B99 (esp. the r1.5 expectancy
+optimum / 11.2% r2.5 hit-rate), do not redo from scratch. The NOVEL test is iFVG (target
+scales with the displacement leg, not a fixed R off the stop).
+
+DATA/METHOD: bars_MNQ_dbv_2021_2026.csv, MNQ 5min, EXCLUDE 2022. Per ext report: target-hit%
+/ stop% / EOD-flat%, win%, PF, mean R/trade, effective-R, expectancy $, trades/mo, AND
+funded metric (combine pass-rate + XFA payout via funded_sim, haircut 0/200/400). Baselines:
+fixed-R (iFVG r2.5 deployed; ORB r2.5 and the B99 r1.5 result). OVERFIT GUARD: per-year
+(2021/2023/2024/2025-26); chosen ext must be year-stable.
+
+SUCCESS: any Fib-ext target beating the fixed-R baseline on expectancy AND the funded metric,
+year-stable. "Fixed-R still best / Fib-target adds nothing" is a valid result (matches the
+Fib-filter prior). Deliverable: per-ext table per engine, trade_analysis doc, findings.
+Build a default-off knob ONLY if it wins.
+**Source:** Lawrence-requested 2026-06-15 (Fib levels as a target).
+
+## B100 -- ORB OR-width filter: skip/cap abnormally wide opening-range days  [done -- rejected: Q4_wide (>102pt) PF=1.19 at r2.5 -- positive, not net-negative; A4_bloated OR/ATR PF=1.10 fails 2/5 year robustness; OR width joins B5/B35 day-level gate rejection class; r1.5 target (B99) already fixes the wide-OR economics (Q4_wide improves to PF=1.25 4/5 yrs at r1.5)]
+
+Spun out of B99 secondary. Lawrence's live wide-OR trade (OR 133.75pt, 2.5R target=447pt)
+is exactly the case where the target balloons past NQ's realistic daily range. B99 showed
+r2.5 hits target only 11.2% of trades; wide-OR days likely concentrate the never-reached
+targets. CHEAP Phase-1 cut FIRST (no engine build): tag the existing B99 ORB per-trade
+CSVs (research/equity_b99/trades_r2p5.csv etc.) with each trade's OR width (recompute from
+bars or expose via runner) and run edge_diagnostics.localize on pnl across OR-width
+buckets (e.g. quartiles, or OR/ATR ratio). Question: is there a robust width threshold
+(PF>=1.2, n>=30, +ve in >=60% of years) above which ORB trades are net-negative? If YES ->
+queue a default-off `orb_max_or_atr` gate as a build item. If NO (width doesn't predict
+trade quality, like prior-day-range in B5/Lesson 26) -> REJECT, no build. Pair the cut with
+the r1.5 finding: a tighter target may already neutralise the wide-OR problem.
+**Source:** B99 secondary (2026-06-15).
+
+## B102 -- funded_sim: bootstrap confidence intervals on every headline number  [done -- shipped: bootstrap_pipeline in funded_sim.py; --bootstrap flag in scripts/funded_sim.py; B99 r1.5 vs r2.5 = CI TIE (CIs fully overlap); CIs required in PROTOCOL before calling a winner; Lessons 171-172]
+Review #5: funded_sim.py:80,131 replays ONE deterministic P&L path; decisions get made on
+13-vs-14-bust deltas with NO CI anywhere -> we may be chasing noise. Wrap the pure
+simulate_combines/simulate_xfa_chain in a seeded BLOCK-bootstrap (~1000 resamples, block
+length preserving loss clustering); report 5th/25th/median $/mo + sustainability CIs. Add a
+"CIs must SEPARATE to call a winner" rule to research/PROTOCOL.md. Success: re-score the
+recent candidate stack (incl. B99 r1.5-vs-r2.5) under CIs; expect several past "wins" -> ties.
+**Source:** external review (opus ultracode) 2026-06-15.
+
+## B103 -- funded_sim: model the intraday daily-loss-limit (DLL) bust  [done -- SHIPPED, DLL reduces busts (protective, not busting); Lessons 173-174]
+Review #6: funded_sim.py:48 collapses each day to one EOD delta; is_dead() (account_phase.py
+:134-136) checks only the MLL; the DLL exists only in the live path (state.py:257). So the sim
+UNDERCOUNTS busts -- the "13/61 combine" sustainability denominator is optimistic. Add an
+intraday DLL-bust check per day (feed each day's running-low equity from equity_export); report
+busts WITH vs WITHOUT DLL across the {h0,h200,h400}x{gap0,12,24} grid. Success: quantify the
+denominator shift; it can only move down. **Source:** external review 2026-06-15.
+
+## B104 -- Firm-rule / counterparty shock grid (the dominant unhedged tail)  [done -- SHIPPED (wk7-b104 2026-06-15): XFA MLL tightening is dominant risk (mll=$1.5k -> sust 1.62x vs 2.12x baseline); payout cap cut ($5k->$2k) cost only +$16/mo AND improved sust (2.12x vs 2.00x old rule); profit_share linear ~$7/mo/pp; combine_mll has zero XFA impact. CLI flags: --payout-cap, --xfa-mll-distance, --combine-mll-distance, --profit-share. Lessons 175-177.]
+Review #8: account_phase.py:6-7 notes Topstep changed rules 8x in 5mo; the payout-cap cut
+$5k->$2k was fixed in the sim but never SWEPT. funded_sim already takes XfaRules/CombineRules.
+Add a firm-rule shock grid (CLI flags on scripts/funded_sim.py): sweep payout_cap, mll_distance,
+profit-share; back-test the realized cap cut as a proof-of-concept. Success: a table of $/mo +
+sust vs each rule shock = the counterparty tail quantified. **Source:** external review 2026-06-15.
+
+## B105 -- Report lived variance, not just the headline mean  [done -- SHIPPED (wk7-b105 2026-06-16): pipeline_variance_summary() in funded_sim.py; per_account_net_payouts + monthly_net_payouts + series_start/end_month added to simulate_xfa_chain; --monthly-cost CLI flag in scripts/funded_sim.py; 18 defining-behavior tests. Key numbers on ORB-reentry r0.75 (B21 per-year h200): mean $3,131 vs median $2,114 vs p25 $0/acct; 61% zero-payout months; max real dry spell 7mo (2025-06 to 2025-12); reserve rec 8mo; $200/mo fixed cost reduces 5y net 28% ($43,835->$31,635). Lessons 178-180.]
+Review #9: Phase-B has ~33% flat/negative months + multi-month dry spells; mean $/account
+$3,131 vs median ~$2,114; no recurring subscription/fixed cost modeled (only $150/attempt reset).
+Add to pipeline summaries: median + p25 $/account, dry-spell cadence, a ~3mo cash-reserve figure,
+and subtract a recurring monthly fixed cost from EVERY month incl. idle. Success: honest net +
+drought map so a working strategy isn't abandoned mid-dry-spell. **Source:** external review 2026-06-15.
+
+## B106 -- iFVGxORB ALIGNMENT as up-only sizing (matched-risk benchmark)  [done -- REJECTED (2026-06-16): gate PASS (aligned PF=1.730 WR=48.6% 4/5 yrs), but funded_sim REJECTED -- no variant beats matched-risk control on BOTH metrics; all variants worse sust than baseline (3.23x->1.75x at best); selective up-sizing concentrates loss variance on aligned days, increasing MLL busts vs uniform risk at same average. Lesson 181.]
+Review #10: the ONE untested variant. mfe_mae_deployed_combined_clean.csv: ORB trades ALIGNED
+with iFVG show PF 1.73 / WR 48.6% vs 1.25/1.20 unaligned; causal (Lesson 92), >1.0 PF all 5 yrs.
+Distinct from B58 (which DOWN-sized correlated features). Benchmark up-sizing aligned setups at
+MATCHED AVERAGE RISK on funded_sim (neutralizes the B63a "more risk->more busts" confound); judge
+on PF/WR/r_mfe NOT avg-$; keep a never-below-1.0x floor; ship default-off only if it wins. Success:
++0.2-0.5x sustainability with zero volume cut, or a clean reject. **Source:** external review 2026-06-15.
+
+## B107 -- Walk-forward optimizer is statistically degenerate (fix or retire)  [done -- SHIPPED (wk7-b107 2026-06-16): scores_are_degenerate() guard suppresses false-confidence RECOMMENDED CONFIG; _score_config_by_expectancy() diagnostic fallback; default --test-days raised 10->20; 5 defining-behavior tests; 885 total tests green. Lesson 182.]
+Review #12: walkforward.py:74-81 -- 30/10-day windows can't clear a +$3k Combine, so all 108 configs
+score 0.000 and "RECOMMENDED CONFIG" is just grid order (false confidence). Score on per-window
+net/PF/expectancy (or lengthen test windows to >=20 trading days); GUARD against emitting a
+recommendation when the score is constant. Or retire the tool. Success: no false-confidence
+recommendation; one-line LESSONS.md entry. **Source:** external review 2026-06-15.
+
+## B108 -- ORB-reentry orb_r_multiple=1.5 two-phase pipeline (close B99 candidate)  [done -- rejected: h=200 busts 20 vs 13 ref; two-phase $496/mo 2.10x vs $549/mo 3.23x; CIs overlap (TIE) but point estimate 54% more busts; r_mult=2.5 confirmed Phase B optimum]
+
+B99 declared orb_r_multiple=1.5 the funded-standalone expectancy optimum (PF=1.24, +9% vs
+r2.5, year-stable). B102 bootstrap confirmed r1.5 ties r2.5 on XFA net CIs but has fewer
+funded busts (p50=24 vs 33). B70 tested plain-ORB Phase B at r_multiple=1.5 and rejected
+it ($496/mo, sust=2.10x) -- but B70 used PLAIN ORB (no reentry). ORB-REENTRY at
+r_multiple=1.5 has never been run in the two-phase pipeline. equity_b21/ has r0.75/r1.0/r1.25
+(all at r_multiple=2.5); r_multiple=1.5 files do not exist. This item closes the B99
+candidate gap.
+
+Mechanism: same as B21 (ORB-reentry Phase B, risk_pct=0.75%) but with orb_r_multiple=1.5
+instead of 2.5. At r_multiple=1.5, the exit target is 1.5R from the stop (reached on ~37%
+of trades per B99, vs 11.2% at r_multiple=2.5). The reentry mechanism fires after the first
+ORB stop-out (same as B21). Both signals use r_multiple=1.5.
+
+Method (no new engine code -- benchmark only):
+1. Generate per-year equity CSVs: run equity_export.py with engine=orb orb_r_multiple=1.5
+   orb_reentry=true risk_pct=0.75 partial_profit_r=0 swing_stop_lookback=0 for years
+   {2021, 2023, 2024, 2025, 2026} (EXCLUDE 2022 holdout) using the B21/B99 override set.
+   Save to research/equity_b108/orb_reentry_rm1p5_YYYY.csv.
+2. Run two-phase funded_sim with Phase A reference from B42 (deployed Phase A, 42 passes):
+   funded_sim.py research/equity_b108/*.csv --haircut 200 --bootstrap 1000 --block-len 20
+   Also run haircut 0 and 400 for sensitivity.
+3. Report: $/mo, sust, XFA busts (point + 90% CI), per-year breakdown.
+
+Success criteria: B108 (r_mult=1.5) improves on B21 r_mult=2.5 baseline ($549/mo, 3.23x
+sust, 13 busts p50 via bootstrap) on sustainability (fewer busts OR lower bust variance,
+i.e., lower p95 busts) while CIs do NOT strongly favor r2.5 on net payouts. "Fewer busts +
+CI-tied on net" => r1.5 is the new Phase B optimum. "Both worse OR higher busts" => B70
+plain-ORB finding extends to reentry, r2.5 confirmed as Phase B optimum.
+
+Priors: B99 r1.5 has lower busts standalone (p50=24 vs 33 at r2.5); the two-phase model
+may amplify the bust difference (per-year stitching restores within-year path-dependence).
+B70 plain-ORB r1.5 was worse ($496/mo, sust=2.10x), but plain ORB has no reentry and
+depends more on 2.5R targets for full P&L -- the reentry mechanism adds a second entry that
+benefits from a reachable 1.5R target more than plain ORB does. MODERATE prior (~50%)
+that r1.5 reentry improves sust; uncertain direction on $/mo.
+Source: B99 candidate gap + B102 bootstrap finding (r1.5 has lower bust variance; 2026-06-16).
+
+## B109 -- ORB breakout-bar volume Phase-1 data mining  [done -- REJECTED (PF ratio 1.201 < 1.40 gate; non-monotonic V-shape, extends quality-predictor rejection series)]
+
+The ORB quality-predictor rejection series (B45 OR width, B49 breakout extension, B62
+CLV orderflow proxy, B100 OR/ATR) has tested geometry-based single-bar metrics but NOT
+raw trading volume. Volume is orthogonal to price geometry: a strong-conviction ORB
+breakout may be accompanied by above-average participation regardless of OR width or
+extension magnitude. This Phase-1 cut checks if breakout-bar volume predicts ORB quality
+before committing to an engine build.
+
+Mechanism: for each ORB trade in the deployed MFE/MAE dataset
+(research/mfe_mae_deployed_combined_clean.csv, n=862 ORB trades, 5y excl 2022), extract
+the 5-min bar volume at the signal timestamp from bars/bars_MNQ_dbv_2021_2026.csv (join
+on ts). Compute vol_ratio = bar_volume / 20-day rolling median of "ORB signal-bar volume"
+(rolling over only bars where ORB signals fire, to control for time-of-day effects; ORB
+fires ~9:30-10:30 ET). Quartile-bin trades on vol_ratio; run edge_diagnostics.localize
+across {Q1_low, Q2, Q3, Q4_high} dimensions, plus side x vol_quartile cross-cut.
+
+GO/NO-GO gate (from edge_diagnostics robust bar):
+- PF ratio top-40% vs bottom-40% >= 1.40, BOTH groups n >= 30, consistent >= 3/5 years.
+If GO -> queue Phase-2 ORB engine gate as new B111.
+If NO-GO -> REJECT (extends the ORB quality predictor rejection class); log lesson.
+
+No engine code either way -- Phase-1 analysis only.
+
+Defining-behavior test (if Phase-2 ever builds): that a high-volume breakout bar is
+correctly recognized and suppresses/keeps the trade per the threshold.
+
+Priors: LOW (~15%). B45/B49/B62/B100 all failed with non-monotonic patterns. Lesson 88
+established that ORB quality lives in the 4h+ EOD-flatten cohort, not in breakout-bar
+characteristics. The EOD-flatten mechanism dominates any single-bar attribute at signal
+time. Expect non-monotonic PF pattern (same V-shape as prior rejections).
+Source: natural gap in ORB quality-predictor series (2026-06-16 research session).
+
+## B110 -- NFP 8:30 ET straddle Phase-1 (Non-Farm Payrolls)  [done -- REJECTED: PF=0.00 at 3R, whipsaw=30%, 0% win rate, 0/5 years positive -- NFP multi-component releases do not produce clean directional moves; CPI mechanism does not transfer]
+
+B85/B89/B92 confirmed the CPI 8:30 ET straddle mechanism: resting stop entries
++/-0.5*ATR5 above/below pre-release price, 3R target, tight stop at opposite leg's
+strike, 100% fill rate, PF=5.99, 67% WR, 5/5 years on MNQ. B83 originally tested a
+1:1 RR straddle across 124 CPI/PPI/FOMC events and found CPI "least bad" (weakly
+negative at 1:1 but the only event worth extending to 3R). NFP (Non-Farm Payrolls,
+first Friday of each month, 8:30 ET) was NOT in B83's event list. ~12 events/year =
+~55-60 events over 2021 H2 + 2023-2026 (excl 2022 holdout).
+
+NFP vs CPI structural comparison:
+- Same release time (8:30 ET), same exchange reaction mechanism (directional spike)
+- NFP is arguably the most-anticipated US macro release; moves are often larger
+- Key risk: NFP can be "buy the rumor sell the news" -- market may be more one-sided
+  going into NFP, increasing whipsaw vs CPI (where analysts are genuinely uncertain)
+- CPI's PF=5.99 is partly from its clean binary (inflation up/down); NFP reaction
+  depends on headline + revisions + wage growth + participation rate simultaneously
+
+Method:
+1. Compile NFP release dates for 2021 H2, 2023, 2024, 2025, 2026 from BLS calendar.
+   (Note: may need to exclude early-close Fridays or holiday-adjacent events.)
+2. Run the 1-min oracle analysis (identical to scripts/news_straddle_cpi_1s.py but
+   parameterized for NFP date list): offset=0.5*ATR5 pre-release, tp_r=3.0, arm
+   window=15min before 8:30 ET, cancel loser on first fill. Report at 1R, 2R, 3R.
+3. Per-year breakdown: 2021 H2, 2023, 2024, 2025, 2026 separate PF and WR.
+4. Report: fill rate, whipsaw rate, WR at 3R, PF at 3R, net expectancy R/event.
+
+Success gate (same as B85 CPI gate): PF >= 3.0 at 3R, whipsaw <= 30%, positive in
+>= 4/5 years, n >= 25. If all cleared -> estimate pipeline overlay (same method as B93;
+use the B42 baseline Phase A + B21 ORB-reentry Phase B with additive straddle). Queue
+a B92-style broker build item. If any gate fails -> REJECT; lesson added; no NFP engine.
+
+Note: 2022 holdout applies (exclude 2022 NFP dates per protocol). This is Phase-1 only;
+the 2022 holdout run happens if and only if this item produces a candidate.
+Source: natural extension of confirmed B85 mechanism to untested 8:30 ET event type;
+B83 data gap confirmed (NFP not in the 124-event B83 list). (2026-06-16 research session.)
+
+## B111 -- combine_ramp_multiplier Phase-A benchmark  [done -- REJECTED: combine_ramp reduces absolute Phase-A passes 21% (34 vs 43, h=200) over 5y; stop rule fires (both passes and sust degrade); B50 mechanism confirmed on per-year equity_b57 CSVs; --risk-policy CLI flag shipped; 1 test added (886 total green); Lesson 147 added]
+
+**Mechanism:** Test the B50-built `combine_ramp` risk policy on the Phase-A combine
+objective. The policy (already in `app/backtest/risk_policy.py` and wired into
+`app/backtest/funded_sim.py::simulate_combines()`) scales risk dynamically within each
+combine attempt:
+- Ramp phase (gain < $1500): risk_pct = 1.5%  (vs 1.25% baseline)
+- Protect phase (gain >= $1500): risk_pct = 0.75%
+- Survival zone (balance within $750 of MLL): risk_pct = 0.5%
+
+The CLI `scripts/funded_sim.py` has no `--risk-policy` flag -- this infrastructure was
+built in B50 but has never been benchmarked.
+
+**Exact rules (pre-declared, fixed defaults from risk_policy.py):**
+- `combine_ramp` policy uses `ramp_risk_pct=1.5`, `protect_risk_pct=0.75`,
+  `survival_risk_pct=0.5`, `gain_threshold=1500`, `mll_cushion=750`.
+- Baseline: `risk_policy="constant"` at `base_risk_pct=1.25%` (B57 baseline).
+
+**Implementation steps:**
+1. Add `--risk-policy {constant,combine_ramp}` argument to `scripts/funded_sim.py`
+   (passes through to `simulate_combines()`, existing parameter, no app-code change).
+2. Concatenate `research/equity_b57/r2p5_{2021,2023,2024,2025,2026}.csv` into a
+   single temp file (exclude 2022 holdout for exploratory phase).
+3. Run `scripts/funded_sim.py <combined_b57.csv> --risk-policy combine_ramp --haircut 200`.
+4. Also run `--haircut 0` and `--haircut 400` for sensitivity.
+5. Report: combine attempts/passes/busts, pass_rate, MLL_busts, median_days_to_pass.
+6. Add 1 defining-behavior test: `simulate_combines(..., risk_policy="combine_ramp")`
+   returns a different pass count than `risk_policy="constant"` on a synthetic
+   daily_pnl series with a $1500 gain crossed mid-run.
+
+**Success criteria (vs B57 baseline: combine pass_rate ~6/17 test, same MLL busts):**
+- combine pass_rate strictly above 6/17 on the test period (2025-26) without
+  increasing MLL_busts vs baseline.
+- Stop rule: if combine pass_rate <= 6/17 on BOTH train AND test -> REJECTED.
+
+**Priors:** LOW-MEDIUM. B87 showed `funded_survival` was strictly worse for Phase B
+XFA (both metrics). But `combine_ramp` targets Phase A pass rate (a different
+objective) and trades higher early risk for faster target-crossing. The protect phase
+(0.75% once ahead $1500) is more conservative than baseline after half-target is
+reached, which may reduce MLL busts late in the month. The asymmetry
+(aggressive early, defensive late) is untested.
+
+**Databento:** $0 (reuse existing equity_b57/r2p5_*.csv).
+**Model:** Sonnet (CLI extension + benchmark only; no engine building).
+(2026-06-16 research/ideation session wk8-r2.)
+
+---
+
+## wk9-holdout-cpi — 2022 confirmatory holdout for B93/B94 CPI straddle overlay  [done — CONFIRMED 2026-06-16: 2022 oracle PF=8.98 WR=75% n=12 (PASS); 6y funded overlay +$291/mo +0.17x sust vs 6y base; straddle anti-correlates with base engine drought in 2022; deployment decision validated. Lessons 189-190. doc: trade_analysis/2026-06-16_wk9_cpi_2022_holdout.md]
+
+Protocol-required 2022 holdout for the B93/B94 candidate (CPI straddle additive overlay). The
+overlay was shipped and ENABLED LIVE on 2026-06-15 without the 2022 confirmatory run (skipped
+before deployment). This session runs it retrospectively. $0 Databento: 2022 1-min bars in
+bars_MNQ_dbv_2021_2026.csv; 2022 Phase A + B equity CSVs exist (equity_b42/deployed_r1p0_2022.csv
++ equity_b21/orb_reentry_r0p75_2022.csv from B42 holdout).
+
+Method: 1-min oracle (news_straddle_cpi_sweep.simulate, offset=60t, stop_mode=range, tp_r=3)
+on 2022 CPI events → inject 2022 straddle P&L into existing 2022 equity stream → run 6-year
+funded_sim (2021-2026 incl 2022) vs 5-year result. Report: 2022 oracle PF/WR, 6y pipeline
+$/mo + sust vs 5y, bust delta.
+
+---
+
+## RESEARCH -- Session wk9-r1  [done -- 1 item appended: B112 corrected Phase A two-phase pipeline benchmark]
+
+Backlog exhausted after wk9-holdout-cpi. Protocol mandates research/ideation. Constraint: Lawrence
+consolidation guidance (2026-06-15) -- keep new topics minimal; only infrastructure-completing and
+directly-actionable items qualify.
+
+**Key gap identified:** B26/Lessons 58-59 found that target_clarity_mode="reject" + swing_stop_lookback=0
+lifts Phase A combine pass rate 6/61→11/61 (+83%), but the EFFECT ON THE FULL TWO-PHASE PIPELINE
+was never benchmarked. equity_b42/ has the deployed Phase A (42 funded_sim passes, 5y, h=$200).
+This is the last actionable gap before consolidation pause.
+
+**Items ruled out:** PPI/FOMC straddle (fail 1:1 gate in B83 -- low prior for 3R); second ORB
+re-entry (structurally weaker by Lesson 35); CPI on second instrument (out of scope); long-only
+ORB+reentry combination (no new mechanism); additional timing filters (B22 exhausted range_minutes).
+
+## B112 -- Corrected Phase A two-phase pipeline benchmark  [done -- rejected: corrected Phase A (target_clarity=reject + lookback=0) yields 25 funded_sim passes vs 42 deployed (-40%); pipeline $495/mo 1.92x sust vs deployed $549/mo 3.23x -- both metrics worse; DO NOT change deployed config; Lesson 191]
+
+Hypothesis: B26 (Lessons 58-59) found target_clarity_mode="reject" + swing_stop_lookback=0
+raise Phase A calendar-month pass rate from 6/61 (10%, deployed) to 11/61 (18%, corrected) --
+an 83% improvement with zero code changes. The deployed equity_b42/ (close+lookback=30+
+target_clarity=off) produced 42 funded_sim passes over 5y (h=$200, sust=3.50x). The corrected
+config has never been benchmarked in the two-phase pipeline. This benchmark quantifies the
+pipeline improvement from the two config changes Lawrence can make on Monday.
+
+Method (no new code -- pure benchmark):
+1. Generate per-year corrected Phase A equity CSVs (research/equity_b112/):
+   For years {2021, 2023, 2024, 2025, 2026} (excl 2022 holdout):
+   equity_export.py --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ
+   --timeframe 5min --risk-pct 1.0 --partial-r 1.5
+   --set target_clarity_mode=reject --set swing_stop_lookback=0
+   --out research/equity_b112/corrected_r1p0_{year}.csv
+   Note: partial_r=1.5 matches deployed bot (NOT research baseline 0); all other params
+   unchanged (close mode, all_day killzones, min_absolute_body=5.0, stop_buffer=3.0,
+   r_multiple=3.5, risk_pct=1.0). This isolates the effect of ONLY the two config changes.
+
+2. Run funded_sim Phase A analysis: stitch per-year CSVs -> simulate_combines() ->
+   count passes/busts vs B42 deployed (42 passes, 5y, h=$200). Report the delta.
+
+3. Write scripts/run_b112_pipeline.py (model: run_b42_pipeline.py) adding corrected
+   config as a Phase A variant alongside B42 deployed and B31 reference configs;
+   output two-phase matrix.
+
+4. Phase B: keep equity_b21/orb_reentry_r0p75_{year}.csv (B21 baseline, 13 busts).
+
+5. Two-phase comparison (corrected Phase A + B21 Phase B) vs deployed (B42 Phase A +
+   B21 Phase B) and vs B31 winner ($508/mo, sust 2.85x).
+
+No defining-behavior tests (no code changes). Databento: $0 (all yearly bars on disk).
+Model: Sonnet (pure benchmark; no engine building).
+
+Fixed test settings: target_clarity_mode=reject, swing_stop_lookback=0.
+All other params: deployed bot config (close mode, all_day, partial_r=1.5,
+min_absolute_body=5.0, stop_buffer=3.0, r_multiple=3.5, risk_pct=1.0).
+
+Success criteria (vs B42 deployed Phase A + ORB-reentry baseline from wk9-holdout table):
+- Corrected Phase A funded_sim passes > 42 (expected ~55-65 based on +83% calendar-month lift)
+- Pipeline $/mo or sust improves vs B42 deployed Phase A + B21 ORB-reentry r0.75
+- This benchmark is informational regardless of direction: the corrected pass count is the
+  key input for Lawrence's Monday config decision.
+
+Source: Lessons 58-59 (B26 corrected Phase A finding); wk9-holdout-cpi table (B42 deployed
+5y: $387/mo, 3.50x sust, 42 Phase A passes). Monday action: change target_clarity_mode and
+swing_stop_lookback in bot_config.json. (2026-06-16 ideation session wk9-r1.)

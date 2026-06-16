@@ -231,6 +231,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 skip_trading_days=s.skip_trading_days,
                 signal_window_mins=s.orb_signal_window_mins,
                 require_pm_break=s.orb_require_pm_break,
+                fib_target_ext=s.orb_fib_target_ext,
             ))
             _sr_det = SweepReentryDetector(SweepReentryConfig(
                 instrument=cfg.instrument,
@@ -260,6 +261,14 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                     band_sigma=s.vwap_band_sigma,
                     stop_sigma=s.vwap_stop_sigma,
                 )),
+                strategy_cfg=s,
+            )
+        if s.engine == "forbes":
+            from app.strategy.forbes import ForbesConfig, ForbesDetector, ForbesRunner
+            return ForbesRunner(
+                instrument=cfg.instrument,
+                timeframe=cfg.timeframe,
+                detector=ForbesDetector(ForbesConfig.from_params(cfg.instrument, s)),
                 strategy_cfg=s,
             )
         if s.engine == "news_straddle":
@@ -294,6 +303,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 skip_trading_days=s.skip_trading_days,
                 signal_window_mins=s.orb_signal_window_mins,
                 require_pm_break=s.orb_require_pm_break,
+                fib_target_ext=s.orb_fib_target_ext,
             ))
             return ORBRunner(
                 instrument=cfg.instrument,
@@ -347,6 +357,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                     max_short_rank=s.ifvg_max_short_rank,
                     silver_bullet_only=s.silver_bullet_only,
                     suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                    fib_target_ext=s.ifvg_fib_target_ext,
                 )),
                 grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
                 strategy_cfg=s,
@@ -396,6 +407,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 max_short_rank=s.ifvg_max_short_rank,
                 silver_bullet_only=s.silver_bullet_only,
                 suppress_same_direction_repeat=s.ifvg_suppress_same_direction_repeat,
+                fib_target_ext=s.ifvg_fib_target_ext,
             )),
             grader=SetupGrader(target_clarity_mode=s.target_clarity_mode),
             strategy_cfg=s,
@@ -507,6 +519,18 @@ def _compute_stats(
         by_killzone=by_killzone,
         by_side=by_side,
     )
+
+
+def _merge_excursion(trade: dict, exc: tuple) -> None:
+    """Attach MFE/MAE/stop_dist (raw points) and R-normalised excursions to a
+    trade dict. stop_dist is the entry-to-initial-stop distance — exposed raw so
+    downstream analysis can recover per-trade realised R without re-deriving it."""
+    mfe, mae, stop_dist = exc
+    trade["mfe_pts"] = str(mfe)
+    trade["mae_pts"] = str(mae)
+    trade["stop_dist"] = str(stop_dist)
+    trade["r_mfe"] = round(float(mfe / stop_dist), 4) if stop_dist else 0.0
+    trade["r_mae"] = round(float(mae / stop_dist), 4) if stop_dist else 0.0
 
 
 def _reconstruct_trades(fills: list[dict]) -> list[dict]:
@@ -734,11 +758,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         oid = trade.pop("_entry_order_id", "")
         exc = excursions.get(oid)
         if exc is not None:
-            mfe, mae, stop_dist = exc
-            trade["mfe_pts"] = str(mfe)
-            trade["mae_pts"] = str(mae)
-            trade["r_mfe"] = round(float(mfe / stop_dist), 4) if stop_dist else 0.0
-            trade["r_mae"] = round(float(mae / stop_dist), 4) if stop_dist else 0.0
+            _merge_excursion(trade, exc)
 
     return BacktestResult(
         config=cfg,

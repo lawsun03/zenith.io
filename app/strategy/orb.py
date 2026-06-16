@@ -50,6 +50,9 @@ class ORBConfig:
     # When True and PM data exists, long signals require close > pm_high; short require close < pm_low.
     # No PM bars (holiday/early-open) → allow all signals (graceful fallback). Default off.
     require_pm_break: bool = False
+    # B101: Fibonacci-extension target. 0 = off (fixed r_multiple). >0 = measured move off the
+    # OR width: target = entry ± ext × (or_high − or_low). Stop (opposite OR edge) unchanged.
+    fib_target_ext: Decimal = Decimal("0")
 
 
 class ORBDetector:
@@ -191,8 +194,13 @@ class ORBDetector:
         r = abs(entry - stop)
         if r == 0:
             return None
-        target = entry + r * self.config.r_multiple if side == "long" \
-            else entry - r * self.config.r_multiple
+        if self.config.fib_target_ext > 0:
+            or_width = self._or_high - self._or_low
+            ext = self.config.fib_target_ext * or_width
+            target = entry + ext if side == "long" else entry - ext
+        else:
+            target = entry + r * self.config.r_multiple if side == "long" \
+                else entry - r * self.config.r_multiple
         self._fired += 1
         log.info("ORB breakout: %s %s close=%s OR=[%s-%s] stop=%s target=%s pdr_enabled=%s",
                  self.config.instrument, side, entry,

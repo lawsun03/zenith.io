@@ -81,6 +81,32 @@ def _score_config(windows: list[WindowResult]) -> float:
     return passes / n - 2 * fails / n
 
 
+def _score_config_by_expectancy(windows: list[WindowResult]) -> float:
+    """Fallback score: avg per-trade net P&L across all windows.
+
+    Used when combine-pass scoring is degenerate (all INCOMPLETE). A 10-day
+    test window cannot reach the $3k combine target, so expectancy is the only
+    meaningful differentiator.
+    """
+    total_pnl = sum(float(w.net_pnl) for w in windows if w.trades > 0)
+    total_trades = sum(w.trades for w in windows if w.trades > 0)
+    if total_trades == 0:
+        return float("-inf")
+    return total_pnl / total_trades
+
+
+def scores_are_degenerate(scores: list[ConfigScore]) -> bool:
+    """True if all configs have identical combine-pass scores (no differentiation).
+
+    This occurs when test windows are too short for any config to reach the combine
+    target — every window is INCOMPLETE and every score is 0.000. In that case the
+    RECOMMENDED CONFIG block is meaningless (it's just grid-iteration order).
+    """
+    if len(scores) < 2:
+        return False
+    return all(s.score == scores[0].score for s in scores[1:])
+
+
 def _classify_outcome_from_stats(stats) -> CombineOutcome:
     if stats.passed_combine:
         return CombineOutcome.PASS

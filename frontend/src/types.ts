@@ -253,7 +253,7 @@ export interface StrategyStatePayload {
       range_high: string | null
       range_low: string | null
     }[]
-  } | null
+  }[] | null
   cpi_day_router?: {
     today_is_cpi_day: boolean
     next_cpi_date: string | null

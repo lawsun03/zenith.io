@@ -71,7 +71,7 @@ def load_config() -> AppConfig:
 
     # bot_config.json overrides env vars for instrument and timeframes.
     bot_config_path = Path(os.environ.get("BOT_CONFIG_PATH", "bot_config.json"))
-    bot_cfg: BotConfig = load_bot_config(bot_config_path)
+    bot_cfg: BotConfig = load_bot_config(bot_config_path, strict=True)
 
     env_instrument = _required_env("TOPSTEP_BOT_INSTRUMENT").upper()
     instrument = bot_cfg.instrument.upper() if bot_cfg.instrument else env_instrument

@@ -11,11 +11,25 @@ Changes take effect on the next run.
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+log = logging.getLogger(__name__)
+
+
+class NewsStraddleEvent(BaseModel):
+    """One scheduled news event the live straddle arms on. Lets CPI→MNQ and
+    FOMC→MGC coexist in one process with per-event instrument, offset, and size."""
+    event_type: str                       # matches news_events.csv event_type column
+    instrument: str
+    offset_ticks: int = 60                # stop-entry offset past the range; R = offset
+    tp_r: Decimal = Decimal("3.0")
+    contracts: int = 1
+    suppress_base: bool = False           # block the base engine on this event's days
 
 
 class StrategyParams(BaseModel):
@@ -44,6 +58,10 @@ class StrategyParams(BaseModel):
     # iFVG grader configuration
     ifvg_sweep_window_bars: int = 10                   # bars since sweep for Rule A
     ifvg_min_displacement_mult: Decimal = Decimal("1.0")  # Fibonacci displacement quality (Rule E)
+    # B101: Fibonacci-extension target. 0 = off (fixed r_multiple). >0 = target is a measured
+    # move off the displacement leg: target = entry ± ext × |sweep_extreme − displacement_bar_extreme|.
+    # Stop unchanged. The leg is the same one the grader measures for Rule E.
+    ifvg_fib_target_ext: Decimal = Decimal("0")
     # iFVG session / news filters (Rule G, H)
     ifvg_macro_windows: list[str] = Field(default_factory=list)
     ifvg_news_blackout: list[str] = Field(default_factory=list)  # UTC ISO ranges "YYYY-MM-DDTHH:MM/..."
@@ -112,7 +130,17 @@ class StrategyParams(BaseModel):
     # → iFVG continuation. combined = iFVG + ORB simultaneously.
     # regime_switch = daily-range gate between ORB/iFVG. sweep_bos = sweep +
     # break-of-structure, no displacement/FVG leg (Revelio's simple chain).
+    # Higher-timeframe SWING engines (research): "ob_swing" (order block),
+    # "fvg_swing" (FVG continuation), "ifvg_swing" (FVG inversion, no killzone),
+    # "sweep_swing" (liquidity-sweep reversal). These hold overnight and gate
+    # entries to swing_entry_start_ct..swing_entry_end_ct (no flatten); backtest
+    # only — not wired to the live bot.
     engine: str = "ifvg"
+
+    # Swing-engine entry window (CT). Window [start, end) crosses midnight by
+    # design (afternoon through the overnight session into next morning).
+    swing_entry_start_ct: str = "12:00"
+    swing_entry_end_ct: str = "08:00"
     orb_open_et: str = "09:30"            # "09:30" cash open | "08:30" data open
     orb_range_minutes: int = 15
     orb_r_multiple: Decimal = Decimal("2.0")
@@ -120,6 +148,9 @@ class StrategyParams(BaseModel):
     orb_pdr_enabled: bool = False         # prior-day-range qualifier (default-off)
     orb_reentry_after_stop: bool = False  # re-arm detector once per day after a confirmed stop
     orb_long_only: bool = False           # suppress ORB short signals (funded PF improvement, B17)
+    # B101: Fibonacci-extension target. 0 = off (fixed orb_r_multiple). >0 = target is a
+    # measured move off the OR width: target = entry ± ext × (or_high − or_low). Stop unchanged.
+    orb_fib_target_ext: Decimal = Decimal("0")
     vwap_anchor_et: str = "09:30"         # "09:30" cash open | "18:00" futures day
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")
@@ -137,11 +168,36 @@ class StrategyParams(BaseModel):
     news_straddle_live_enabled: bool = False
     news_straddle_contracts: int = 1               # size for the live straddle
     news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
+    # Per-event straddle specs. When non-empty, this is the source of truth and
+    # the legacy single news_straddle_* fields above are ignored (resolve_straddle_specs).
+    # Empty (default) = legacy single-event behavior, so existing CPI/MNQ live config is untouched.
+    news_straddle_events: list[NewsStraddleEvent] = Field(default_factory=list)
     # CPI-day router (in-process day-gate). Default-OFF. When True, the base
     # engine takes NO new entries on CPI trading days (pretrade CPI_DAY_BLOCK)
     # and the news_straddle scheduler is constructed to own those days, while
     # engine stays "combined". Phase-agnostic (combine and shadow alike).
     cpi_day_router_enabled: bool = False
+    # B94/Lesson 163: the ADDITIVE overlay (base keeps trading on CPI days + straddle on
+    # top) made +$304/mo vs the mode-SWITCH (suppress base) +$8/mo (~40x). Default FALSE =
+    # additive (recommended): the straddle still arms on CPI days, but the base is NOT
+    # suppressed. True = the switch (base suppressed via the CPI_DAY_BLOCK pretrade gate).
+    cpi_base_suppress: bool = False
+
+    # Forbes Model (ICT session-liquidity engine; engine="forbes"). Backtest-only,
+    # default-off. All discretionary rules are params (spec 2026-06-15-forbes-model).
+    forbes_killzone_et: str = "09:30-10:30"      # active window (ET); outside it: no trades
+    forbes_or_open_et: str = "09:30"             # opening-range start (ET) = 06:30 PST
+    forbes_or_minutes: int = 15                  # OR length (first 15 1-min candles)
+    forbes_or_min_fvgs: int = 1                  # OR must hold >= this many FVGs, else stand aside
+    forbes_poi_swing_tf_min: int = 15            # timeframe (min) for swing-POI detection
+    forbes_target_mode: str = "liquidity"        # "liquidity" | "or_top" | "midway_poi"
+    forbes_min_rr: Decimal = Decimal("1.4")      # skip setups whose RR is below this
+    forbes_stop_mode: str = "beyond_wick"        # "beyond_wick" | "beyond_or"
+    forbes_max_trades_per_day: int = 1
+    # session windows (ET) for the liquidity map; comma "HH:MM-HH:MM" per session
+    forbes_asia_et: str = "18:00-00:00"
+    forbes_london_et: str = "02:00-05:00"
+    forbes_prior_ny_et: str = "09:30-16:00"
 
     # chop_breakout engine (all cb_*; spec: fixed defaults, NO sweeps)
     cb_regime_metric: str = "compression"      # "compression" | "vwap_cross"
@@ -351,12 +407,20 @@ def strategy_for(config: BotConfig, instrument: str) -> StrategyParams:
     return StrategyParams(**{**config.strategy.model_dump(), **overrides})
 
 
-def load_bot_config(path: Path) -> BotConfig:
+def load_bot_config(path: Path, strict: bool = False) -> BotConfig:
     if not path.exists():
         return BotConfig()
     try:
         return BotConfig.model_validate(json.loads(path.read_text(encoding="utf-8-sig")))
     except Exception:
+        # Rule 12: never SILENTLY substitute the default config — defaults are a
+        # different strategy entirely. strict=True (startup) re-raises so the bot won't
+        # run the wrong strategy for a whole session; runtime callers log loud + fall back.
+        log.error("bot_config.json at %s failed to parse — %s", path,
+                  "RAISING (startup)" if strict else "falling back to DEFAULTS (WRONG strategy!)",
+                  exc_info=True)
+        if strict:
+            raise
         return BotConfig()
 
 
@@ -381,6 +445,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "flatten_enabled": config.flatten_enabled,
         "flatten_time_ct": config.flatten_time_ct,
         "entry_cutoff_time_ct": config.entry_cutoff_time_ct,
+        "commission_per_contract": config.commission_per_contract,
         "enabled_killzones": config.enabled_killzones,
         "strategy": {k: _conv(v) for k, v in config.strategy.model_dump().items()},
         "strategy_overrides": {

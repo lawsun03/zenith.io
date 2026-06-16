@@ -77,6 +77,40 @@ def load_event_times(path: str, event_type: str) -> list[datetime]:
     return sorted(out)
 
 
+@dataclass(frozen=True)
+class ResolvedStraddleSpec:
+    event_type: str
+    instrument: str
+    offset_ticks: int
+    tp_r: Decimal
+    contracts: int
+    suppress_base: bool
+
+
+def resolve_straddle_specs(strategy_cfg, default_instrument: str) -> list[ResolvedStraddleSpec]:
+    """Per-event specs when news_straddle_events is populated; otherwise a single
+    spec built from the legacy single-event fields (back-compat — keeps the existing
+    CPI/MNQ live config working when the list is empty)."""
+    events = getattr(strategy_cfg, "news_straddle_events", None) or []
+    if events:
+        return [
+            ResolvedStraddleSpec(
+                event_type=e.event_type, instrument=e.instrument,
+                offset_ticks=e.offset_ticks, tp_r=e.tp_r,
+                contracts=e.contracts, suppress_base=e.suppress_base,
+            )
+            for e in events
+        ]
+    return [ResolvedStraddleSpec(
+        event_type=strategy_cfg.news_straddle_event_type,
+        instrument=default_instrument,
+        offset_ticks=strategy_cfg.news_straddle_offset_ticks,
+        tp_r=strategy_cfg.news_straddle_tp_r,
+        contracts=strategy_cfg.news_straddle_contracts,
+        suppress_base=strategy_cfg.cpi_base_suppress,
+    )]
+
+
 @dataclass
 class NewsStraddleConfig:
     instrument: str
@@ -252,3 +286,24 @@ class NewsStraddleRunner:
             self.exit_request = self.detector.exit_request
             self.detector.exit_request = None
         return sig
+
+
+def build_news_straddle_schedulers(broker, specs, events_path: str, arm_lead_seconds: int):
+    """One NewsStraddleScheduler per resolved spec — each single-instrument with its
+    own offset/tp_r/size and only its own event_type's release times."""
+    from app.broker.paper import TICK_SIZE
+    from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
+
+    schedulers = []
+    for s in specs:
+        schedulers.append(NewsStraddleScheduler(
+            broker,
+            instrument=s.instrument,
+            event_times=load_event_times(events_path, s.event_type),
+            offset_ticks=s.offset_ticks,
+            tp_r=s.tp_r,
+            tick=TICK_SIZE.get(s.instrument, Decimal("0.25")),
+            size=s.contracts,
+            arm_lead_seconds=arm_lead_seconds,
+        ))
+    return schedulers

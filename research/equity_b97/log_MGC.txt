@@ -1,0 +1,19 @@
+### MGC combined — equity_export
+wrote 8344 equity points -> research\equity_b97\MGC_combined.csv (trades=4428, net=-54934.420, pf=0.8051372513686827)
+--- MGC combined funded h0
+COMBINE: attempts 47 | passes 1 | busts 45 | median days-to-pass 8
+XFA:     accounts 46 | busts 45 | payouts $1860 gross / $1674 net (90%)
+--- MGC combined funded h200
+COMBINE: attempts 52 | passes 2 | busts 49 | median days-to-pass 11.0
+XFA:     accounts 51 | busts 50 | payouts $3247 gross / $2922 net (90%)
+--- MGC combined funded h400
+COMBINE: attempts 58 | passes 2 | busts 55 | median days-to-pass 11.0
+XFA:     accounts 56 | busts 55 | payouts $3247 gross / $2922 net (90%)
+### MGC orb — equity_export
+--- MGC orb funded h0
+--- MGC orb funded h200
+--- MGC orb funded h400
+### MGC ifvg — equity_export
+--- MGC ifvg funded h0
+--- MGC ifvg funded h200
+--- MGC ifvg funded h400

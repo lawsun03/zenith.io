@@ -117,6 +117,20 @@ go through the engine's `runner.exit_request` channel (already supported).
 - Save Combine-objective runs to the UI registry with `--save-id` so they
   render in the dashboard (`backtests/<id>.json`).
 
+## Confidence intervals and winner declaration (B102 rule)
+
+Before calling one funded config a winner over another, run the block-bootstrap
+(`funded_sim.py --bootstrap 1000 --block-len 20`) on both configs. Two configs
+are a **tie** unless their 90% CIs (p5–p95) on the primary metric **do not
+overlap**. For funded-objective comparisons the primary metric is `xfa_net`
+(total net payouts); secondary tiebreaker is `xfa_busts` (fewer = better sust).
+
+Quick bootstrap: `--bootstrap 100` for exploration, `--bootstrap 1000` for
+journal-level claims. Always report `(n_resamples, block_len, seed)` alongside
+CI tables so results are reproducible. A within-noise point advantage should be
+disclosed as a tie; prefer the config with lower bust variance (lower p95 busts)
+when two configs are CI-tied on net payouts.
+
 ## findings.json entry schema (append to the JSON array)
 
 {"ts": "<iso>", "session": "<short id>", "item": "B1", "variant": "orb r2.5",

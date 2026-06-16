@@ -1,0 +1,180 @@
+FLATTEN WINDOW: closing all positions at 2021-06-18 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-06-21 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-06-28 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-07-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 382.700000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2021-08-09 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-08-24 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-08-25 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-08-31 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-09-03 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-09-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-09-13 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-09-23 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-09-27 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-10-07 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-10-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 499.460000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2021-11-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 491.400000 remaining to MLL. Threshold 500.. open_contracts=-4
+FLATTEN WINDOW: closing all positions at 2021-12-06 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-12-08 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2021-12-14 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 433.140000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2022-01-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-01-14 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 471.480000 remaining to MLL. Threshold 500.. open_contracts=-1
+LOCKOUT: Soft buffer hit: 447.680000 remaining to MLL. Threshold 500.. open_contracts=-4
+FLATTEN WINDOW: closing all positions at 2022-03-04 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 479.440000 remaining to MLL. Threshold 500.. open_contracts=2
+FLATTEN WINDOW: closing all positions at 2022-04-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-04-11 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-05-10 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-05-13 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Daily loss limit hit: -1015.16000.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2022-06-03 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 476.460000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2022-07-06 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-07-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-07-11 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-07-13 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 472.380000 remaining to MLL. Threshold 500.. open_contracts=4
+FLATTEN WINDOW: closing all positions at 2022-08-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 425.700000 remaining to MLL. Threshold 500.. open_contracts=2
+FLATTEN WINDOW: closing all positions at 2022-09-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-10-06 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-10-17 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-10-25 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-10-31 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-11-04 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 421.580000 remaining to MLL. Threshold 500.. open_contracts=-2
+FLATTEN WINDOW: closing all positions at 2022-12-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-12-08 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2022-12-09 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 379.960000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2023-01-17 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 326.980000 remaining to MLL. Threshold 500.. open_contracts=-4
+FLATTEN WINDOW: closing all positions at 2023-02-03 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 460.140000 remaining to MLL. Threshold 500.. open_contracts=-5
+FLATTEN WINDOW: closing all positions at 2023-03-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 435.680000 remaining to MLL. Threshold 500.. open_contracts=-2
+FLATTEN WINDOW: closing all positions at 2023-04-11 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2023-04-17 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 213.020000 remaining to MLL. Threshold 500.. open_contracts=0
+LOCKOUT: Soft buffer hit: 441.800000 remaining to MLL. Threshold 500.. open_contracts=8
+FLATTEN WINDOW: closing all positions at 2023-06-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 454.880000 remaining to MLL. Threshold 500.. open_contracts=4
+FLATTEN WINDOW: closing all positions at 2023-07-05 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 355.460000 remaining to MLL. Threshold 500.. open_contracts=0
+LOCKOUT: Soft buffer hit: 452.360000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2023-09-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 400.68000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2023-10-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 378.640000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2023-11-06 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2023-11-14 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 441.920000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2023-12-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2023-12-08 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2023-12-19 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2023-12-28 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-01-02 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-01-03 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 474.82000 remaining to MLL. Threshold 500.. open_contracts=3
+FLATTEN WINDOW: closing all positions at 2024-02-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-02-08 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-02-20 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-03-12 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-03-13 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-03-14 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-03-15 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-03-27 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 457.480000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2024-04-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-04-03 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-04-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 425.960000 remaining to MLL. Threshold 500.. open_contracts=5
+LOCKOUT: Soft buffer hit: 282.12000 remaining to MLL. Threshold 500.. open_contracts=4
+LOCKOUT: Soft buffer hit: 403.780000 remaining to MLL. Threshold 500.. open_contracts=-6
+FLATTEN WINDOW: closing all positions at 2024-07-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-07-19 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-08-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-08-05 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 480.640000 remaining to MLL. Threshold 500.. open_contracts=0
+LOCKOUT: Soft buffer hit: 324.800000 remaining to MLL. Threshold 500.. open_contracts=-2
+FLATTEN WINDOW: closing all positions at 2024-10-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-10-17 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-10-18 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 439.340000 remaining to MLL. Threshold 500.. open_contracts=3
+FLATTEN WINDOW: closing all positions at 2024-11-04 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-11-11 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-11-14 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-11-21 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 488.680000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2024-12-02 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2024-12-06 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 325.540000 remaining to MLL. Threshold 500.. open_contracts=4
+FLATTEN WINDOW: closing all positions at 2025-01-03 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-01-10 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-01-15 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-01-17 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-01-29 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-02-07 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-02-11 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-02-18 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-03-18 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-03-27 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-04-14 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 471.140000 remaining to MLL. Threshold 500.. open_contracts=-3
+LOCKOUT: Soft buffer hit: 337.380000 remaining to MLL. Threshold 500.. open_contracts=0
+LOCKOUT: Soft buffer hit: 467.120000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2025-08-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-08-04 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-08-14 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-08-15 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 287.400000 remaining to MLL. Threshold 500.. open_contracts=0
+FLATTEN WINDOW: closing all positions at 2025-09-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-09-11 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-09-16 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-09-18 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-09-25 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-10-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-10-06 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-10-13 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-10-24 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 454.460000 remaining to MLL. Threshold 500.. open_contracts=1
+LOCKOUT: Soft buffer hit: 410.840000 remaining to MLL. Threshold 500.. open_contracts=-4
+FLATTEN WINDOW: closing all positions at 2025-12-03 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-12-04 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-12-09 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-12-18 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-12-19 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2025-12-22 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 485.440000 remaining to MLL. Threshold 500.. open_contracts=7
+FLATTEN WINDOW: closing all positions at 2026-01-05 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-08 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-12 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-14 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-22 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-26 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-01-27 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-02 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-05 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-13 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-20 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-24 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-25 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-02-27 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-03-02 21:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 465.240000 remaining to MLL. Threshold 500.. open_contracts=2
+FLATTEN WINDOW: closing all positions at 2026-04-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-04-08 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 452.040000 remaining to MLL. Threshold 500.. open_contracts=-3
+FLATTEN WINDOW: closing all positions at 2026-05-01 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-05-05 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-05-11 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-05-14 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 498.980000 remaining to MLL. Threshold 500.. open_contracts=-1
+FLATTEN WINDOW: closing all positions at 2026-06-02 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+FLATTEN WINDOW: closing all positions at 2026-06-03 20:09:00+00:00 (rule: flat by 3:10 PM CT)
+LOCKOUT: Soft buffer hit: 493.420000 remaining to MLL. Threshold 500.. open_contracts=1
