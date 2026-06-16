@@ -4507,74 +4507,115 @@
                   }
     },
     {
-        "ts": "2026-06-15T23:45:00Z",
-        "session": "wk8-b108",
-        "item": "B108",
-        "variant": "ORB-reentry orb_r_multiple=1.5 r=0.75% two-phase pipeline",
-        "objective": "funded",
-        "metrics": {
-            "phase_b_standalone_busts_h200": 20,
-            "phase_b_standalone_net_per_acct_h200": 2304,
-            "phase_b_standalone_sust_h200": 1.00,
-            "two_phase_net_per_month_h200": 496,
-            "two_phase_sust_h200": 2.10,
-            "two_phase_busts_h200": 20,
-            "ref_busts_h200": 13,
-            "ref_two_phase_net_per_month": 549,
-            "ref_two_phase_sust": 3.23,
-            "bootstrap_b108_busts_p50": 17,
-            "bootstrap_ref_busts_p50": 19,
-            "bootstrap_net_ci_overlap": true,
-            "bootstrap_busts_ci_overlap": true,
-            "pf_2021": 1.625,
-            "pf_2023": 1.067,
-            "pf_2024": 1.151,
-            "pf_2025": 1.225,
-            "pf_2026": 1.326,
-            "total_tests": 885,
-            "databento_spend": 0
-        },
-        "verdict": "rejected",
-        "learned": "ORB-reentry at r_mult=1.5 has 54% more funded busts (20 vs 13) and lower per-account earnings ($2,304 vs $3,131) than r_mult=2.5 at h=$200, despite CI-tied on xfa_net and xfa_busts (CIs fully overlap). Faster account cycling (49d vs 73.5d) from shorter 1.5R exits means accounts hit MLL more often under the haircut model. r_mult=2.5 is confirmed as Phase B optimum for ORB-reentry in the two-phase pipeline.",
-        "links": {
-            "doc": null,
-            "runs": ["equity_b108"],
-            "src": null
-        }
+        "ts":  "2026-06-15T23:45:00Z",
+        "session":  "wk8-b108",
+        "item":  "B108",
+        "variant":  "ORB-reentry orb_r_multiple=1.5 r=0.75% two-phase pipeline",
+        "objective":  "funded",
+        "metrics":  {
+                        "phase_b_standalone_busts_h200":  20,
+                        "phase_b_standalone_net_per_acct_h200":  2304,
+                        "phase_b_standalone_sust_h200":  1.00,
+                        "two_phase_net_per_month_h200":  496,
+                        "two_phase_sust_h200":  2.10,
+                        "two_phase_busts_h200":  20,
+                        "ref_busts_h200":  13,
+                        "ref_two_phase_net_per_month":  549,
+                        "ref_two_phase_sust":  3.23,
+                        "bootstrap_b108_busts_p50":  17,
+                        "bootstrap_ref_busts_p50":  19,
+                        "bootstrap_net_ci_overlap":  true,
+                        "bootstrap_busts_ci_overlap":  true,
+                        "pf_2021":  1.625,
+                        "pf_2023":  1.067,
+                        "pf_2024":  1.151,
+                        "pf_2025":  1.225,
+                        "pf_2026":  1.326,
+                        "total_tests":  885,
+                        "databento_spend":  0
+                    },
+        "verdict":  "rejected",
+        "learned":  "ORB-reentry at r_mult=1.5 has 54% more funded busts (20 vs 13) and lower per-account earnings ($2,304 vs $3,131) than r_mult=2.5 at h=$200, despite CI-tied on xfa_net and xfa_busts (CIs fully overlap). Faster account cycling (49d vs 73.5d) from shorter 1.5R exits means accounts hit MLL more often under the haircut model. r_mult=2.5 is confirmed as Phase B optimum for ORB-reentry in the two-phase pipeline.",
+        "links":  {
+                      "doc":  null,
+                      "runs":  [
+                                   "equity_b108"
+                               ],
+                      "src":  null
+                  }
     },
     {
-        "ts": "2026-06-15T23:55:00Z",
-        "session": "wk8-b109",
-        "item": "B109",
-        "variant": "ORB breakout-bar vol_ratio quartiles (20-trade rolling median)",
-        "objective": "dataset",
-        "metrics": {
-            "n_orb_trades": 862,
-            "vol_ratio_q25": 0.794,
-            "vol_ratio_q50": 1.012,
-            "vol_ratio_q75": 1.228,
-            "pf_Q1_low": 1.175,
-            "pf_Q2": 1.724,
-            "pf_Q3": 1.568,
-            "pf_Q4_high": 1.561,
-            "pf_top40pct": 1.678,
-            "pf_bot40pct": 1.397,
-            "pf_ratio_top_bot": 1.201,
-            "gate_pf_ratio_pass": false,
-            "gate_n_pass": true,
-            "gate_years_pass": true,
-            "pattern": "non-monotonic V-shape (Q2>Q3>Q4>Q1)",
-            "short_Q1_low_pf": 0.98,
-            "long_Q4_high_pf": 1.94,
-            "total_tests": 885,
-            "databento_spend": 0
-        },
-        "verdict": "rejected",
-        "learned": "Breakout-bar volume does not predict ORB trade quality in a monotonic or gatable way. The PF ratio top-40%/bottom-40% is 1.201, below the 1.40 gate. The non-monotonic V-shape (Q2 best at PF=1.724, Q4_high third at PF=1.561, Q1_low worst at PF=1.175) is identical to B45/B49/B62/B100. Lesson 88 is confirmed: ORB quality lives in the 4h+ EOD-flatten cohort, not in breakout-bar characteristics at signal time.",
-        "links": {
-            "doc": null,
-            "runs": [],
-            "src": null
-        }
+        "ts":  "2026-06-15T23:55:00Z",
+        "session":  "wk8-b109",
+        "item":  "B109",
+        "variant":  "ORB breakout-bar vol_ratio quartiles (20-trade rolling median)",
+        "objective":  "dataset",
+        "metrics":  {
+                        "n_orb_trades":  862,
+                        "vol_ratio_q25":  0.794,
+                        "vol_ratio_q50":  1.012,
+                        "vol_ratio_q75":  1.228,
+                        "pf_Q1_low":  1.175,
+                        "pf_Q2":  1.724,
+                        "pf_Q3":  1.568,
+                        "pf_Q4_high":  1.561,
+                        "pf_top40pct":  1.678,
+                        "pf_bot40pct":  1.397,
+                        "pf_ratio_top_bot":  1.201,
+                        "gate_pf_ratio_pass":  false,
+                        "gate_n_pass":  true,
+                        "gate_years_pass":  true,
+                        "pattern":  "non-monotonic V-shape (Q2\u003eQ3\u003eQ4\u003eQ1)",
+                        "short_Q1_low_pf":  0.98,
+                        "long_Q4_high_pf":  1.94,
+                        "total_tests":  885,
+                        "databento_spend":  0
+                    },
+        "verdict":  "rejected",
+        "learned":  "Breakout-bar volume does not predict ORB trade quality in a monotonic or gatable way. The PF ratio top-40%/bottom-40% is 1.201, below the 1.40 gate. The non-monotonic V-shape (Q2 best at PF=1.724, Q4_high third at PF=1.561, Q1_low worst at PF=1.175) is identical to B45/B49/B62/B100. Lesson 88 is confirmed: ORB quality lives in the 4h+ EOD-flatten cohort, not in breakout-bar characteristics at signal time.",
+        "links":  {
+                      "doc":  null,
+                      "runs":  [
+
+                               ],
+                      "src":  null
+                  }
+    },
+    {
+        "ts":  "2026-06-16T00:10:00Z",
+        "session":  "wk8-b110",
+        "item":  "B110",
+        "variant":  "NFP 8:30 ET straddle -- tight stop, offset=0.5*ATR5, tp_r=1/2/3, 48 events 5y excl 2022",
+        "objective":  "dataset",
+        "metrics":  {
+                        "n_events":  48,
+                        "n_filled":  46,
+                        "fill_rate":  0.96,
+                        "whipsaw_rate_pct":  30,
+                        "win_rate_1r_pct":  2,
+                        "win_rate_3r_pct":  0,
+                        "pf_1r":  0.02,
+                        "pf_2r":  0.04,
+                        "pf_3r":  0,
+                        "r_per_trade_3r":  -1.076,
+                        "total_r_3r":  -49.5,
+                        "yrs_positive":  0,
+                        "n_years":  5,
+                        "gate_pf_pass":  false,
+                        "gate_whip_pass":  false,
+                        "gate_yrs_pass":  false,
+                        "gate_n_pass":  true,
+                        "cpi_pf_reference":  5.99,
+                        "databento_spend":  0
+                    },
+        "verdict":  "rejected",
+        "learned":  "NFP straddle (same offset/stop/target mechanism as CPI) fails at every target level: PF=0.00 at 3R, 30% whipsaw rate, 0% win rate, negative in 5/5 years. Zero of 46 filled events reach the 3R target in 5 years. The CPI mechanism does not transfer to NFP; NFP multi-component releases (headline + revisions + wages + participation) create higher whipsaw rates and lower clean directional moves than CPI\u0027s simpler binary inflation signal.",
+        "links":  {
+                      "doc":  null,
+                      "runs":  [
+
+                               ],
+                      "src":  null
+                  }
     }
 ]

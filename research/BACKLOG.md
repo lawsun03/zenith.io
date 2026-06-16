@@ -4399,7 +4399,7 @@ characteristics. The EOD-flatten mechanism dominates any single-bar attribute at
 time. Expect non-monotonic PF pattern (same V-shape as prior rejections).
 Source: natural gap in ORB quality-predictor series (2026-06-16 research session).
 
-## B110 -- NFP 8:30 ET straddle Phase-1 (Non-Farm Payrolls)  [pending]
+## B110 -- NFP 8:30 ET straddle Phase-1 (Non-Farm Payrolls)  [done -- REJECTED: PF=0.00 at 3R, whipsaw=30%, 0% win rate, 0/5 years positive -- NFP multi-component releases do not produce clean directional moves; CPI mechanism does not transfer]
 
 B85/B89/B92 confirmed the CPI 8:30 ET straddle mechanism: resting stop entries
 +/-0.5*ATR5 above/below pre-release price, 3R target, tight stop at opposite leg's

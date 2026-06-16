@@ -4276,3 +4276,44 @@ Lesson 88 stands: ORB quality is driven by how far price travels AFTER entry (4h
 - **What we learned:** Volume at the ORB breakout bar has a non-monotonic relationship with trade quality -- the V-shape (Q2 best, not Q4_high) suggests medium-volume breakouts are cleanest. But the effect is too weak (PF ratio 1.20x) to gate on. Volume as an ORB quality signal joins OR-width, extension, CLV, and OR/ATR ratio as rejected predictors.
 - **Next:** B110 (NFP 8:30 ET straddle Phase-1 -- natural extension of confirmed CPI mechanism to untested event type).
 - **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes -- analysis script only). findings.json #129. Lesson 185 added.
+
+---
+
+## 2026-06-16T00:10Z -- session wk8-b110 -- B110 (NFP 8:30 ET straddle Phase-1 -- REJECTED)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- analysis-only).
+- **Claimed:** B110 (only pending item).
+
+**Method:** Pure Phase-1 data mining. No engine code changes. 1-min MNQ bars (bars_MNQ_dbv_2021_2026.csv, 5y excl 2022). 48 NFP events hardcoded from BLS calendar (2021 H2, 2023-2026). Simulation identical to news_straddle_cpi_1s.py: tight stop at pre-release range boundary (R = offset), offset = 0.5 * ATR5(14), entry on buy/sell-stop triggers, 30-min entry window, 180-min max hold. Script: scripts/_b110_nfp_straddle.py.
+
+**Results (46 filled events of 48 dates, n=46):**
+
+| tp_r | fill% | whip% | win% | PF | R/trade | yrs+ |
+|------|-------|-------|------|----|---------|------|
+| 1R | 96% | 30% | 2% | 0.02 | -1.031 | 0/5 |
+| 2R | 96% | 30% | 2% | 0.04 | -1.009 | 0/5 |
+| 3R | 96% | 30% | 0% | 0.00 | -1.076 | 0/5 |
+
+**Per-year (tp_r=3.0):**
+
+| Year | n | wins | PF | totR |
+|------|---|------|----|------|
+| 2021 | 6 | 0/6 | 0.00 | -6.8 |
+| 2023 | 12 | 0/12 | 0.00 | -13.0 |
+| 2024 | 12 | 0/12 | 0.00 | -12.6 |
+| 2025 | 11 | 0/11 | 0.00 | -11.6 |
+| 2026 | 5 | 0/5 | 0.00 | -5.3 |
+
+**Gate check (tp_r=3.0):**
+- PF >= 3.0: 0.00 FAIL
+- whipsaw <= 30%: 30% FAIL (on boundary)
+- yrs+ >= 4/5: 0/5 FAIL
+- n >= 25: 46 PASS
+
+VERDICT: **PHASE-1 NO-GO / REJECTED**
+
+**Root cause:** NFP is a multi-component release -- headline jobs + prior-month revisions + wage growth + participation rate all release simultaneously. Markets often spike in the headline direction, then rapidly reverse as the full picture is processed. This produces 30% same-minute whipsaw rate vs CPI's ~10%, and virtually zero clean runs to the 3R target (0 of 46 events in 5 years). CPI's edge comes from a clean binary (hot/cold inflation) that creates unambiguous rate expectations. NFP's complexity destroys this directionality. No edge_diagnostics run (results are decisively negative across all 5 years, not a near-miss).
+
+- **Learned:** NFP straddle fails entirely -- 0/5 years positive, 30% whipsaw, 0% win rate at 3R. The CPI straddle's 5.99 PF is release-type-specific; the mechanism relies on a single dominant directional catalyst that NFP does not provide. The 8:30 ET straddle class is now closed: CPI is the only confirmed event-driven strategy on this mechanism.
+- **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes; scripts/_b110_nfp_straddle.py added). findings.json #130. Lessons 186-187 added.
+- **Next:** Backlog fully exhausted (B110 was the last pending item). Next session must replenish with a research/ideation pass.
