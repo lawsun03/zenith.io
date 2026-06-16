@@ -286,3 +286,24 @@ class NewsStraddleRunner:
             self.exit_request = self.detector.exit_request
             self.detector.exit_request = None
         return sig
+
+
+def build_news_straddle_schedulers(broker, specs, events_path: str, arm_lead_seconds: int):
+    """One NewsStraddleScheduler per resolved spec — each single-instrument with its
+    own offset/tp_r/size and only its own event_type's release times."""
+    from app.broker.paper import TICK_SIZE
+    from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
+
+    schedulers = []
+    for s in specs:
+        schedulers.append(NewsStraddleScheduler(
+            broker,
+            instrument=s.instrument,
+            event_times=load_event_times(events_path, s.event_type),
+            offset_ticks=s.offset_ticks,
+            tp_r=s.tp_r,
+            tick=TICK_SIZE.get(s.instrument, Decimal("0.25")),
+            size=s.contracts,
+            arm_lead_seconds=arm_lead_seconds,
+        ))
+    return schedulers

@@ -82,3 +82,30 @@ def test_all_event_dates_is_union(tmp_path):
     )
     ad = all_event_dates(_specs(), str(csv))
     assert ad == frozenset({date(2026, 7, 14), date(2026, 6, 17)})
+
+
+from app.strategy.news_straddle import build_news_straddle_schedulers
+
+
+def test_build_schedulers_one_per_spec_with_right_params(tmp_path):
+    csv = tmp_path / "news.csv"
+    csv.write_text(
+        "event_type,ts_utc\n"
+        "CPI,2026-07-14T12:30:00+00:00\n"
+        "FOMC,2026-06-17T18:00:00+00:00\n"
+    )
+    specs = [
+        ResolvedStraddleSpec("CPI", "MNQ", 60, D("3.0"), 1, suppress_base=False),
+        ResolvedStraddleSpec("FOMC", "MGC", 20, D("3.0"), 20, suppress_base=True),
+    ]
+    scheds = build_news_straddle_schedulers(
+        broker=object(), specs=specs, events_path=str(csv), arm_lead_seconds=120,
+    )
+    assert [s.instrument for s in scheds] == ["MNQ", "MGC"]
+    assert scheds[1].size == 20
+    # offset = offset_ticks * tick; MGC tick = 0.10 → 20 * 0.10 = 2.0
+    assert scheds[1].offset == D("2.0")
+    # MNQ tick = 0.25 → 60 * 0.25 = 15.0
+    assert scheds[0].offset == D("15.0")
+    # each scheduler only loaded its own event_type
+    assert len(scheds[1]._events) == 1
