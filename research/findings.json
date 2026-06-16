@@ -4532,5 +4532,35 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-16T01:45:00Z",
+    "session": "wk9-holdout-cpi",
+    "item": "B93/B94-2022holdout",
+    "variant": "2022 CPI oracle (1-min, offset=60t, range-stop, tp_r=3) + 6y funded overlay",
+    "objective": "funded",
+    "metrics": {
+      "oracle_pf_2022": 8.98,
+      "oracle_wr_2022": 75.0,
+      "oracle_n_2022": 12,
+      "oracle_pf_5y_1min": 5.02,
+      "funded_5y_base_mo": 387,
+      "funded_5y_overlay_mo": 701,
+      "funded_5y_sust_base": 3.5,
+      "funded_5y_sust_overlay": 3.82,
+      "funded_6y_base_mo": 305,
+      "funded_6y_overlay_mo": 596,
+      "funded_6y_sust_base": 2.71,
+      "funded_6y_sust_overlay": 2.88,
+      "haircut": 200,
+      "gap": 24
+    },
+    "verdict": "shipped",
+    "learned": "2022 was the CPI straddle best year (PF 8.98, 75% WR): the high-inflation rate-hike era produced clean directional CPI moves, hitting 3R targets on 9/12 events. The straddle anti-correlates with the base engine drought in 2022 -- it most helps in the years the base engine struggles.",
+    "links": {
+      "doc": "trade_analysis/2026-06-16_wk9_cpi_2022_holdout.md",
+      "runs": [],
+      "src": null
+    }
   }
 ]

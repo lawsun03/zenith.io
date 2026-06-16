@@ -4011,7 +4011,7 @@ untouched; Lawrence decides go-live.
 
 ---
 
-## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [done -- CANDIDATE: additive overlay +$304/mo (+55%) at h200/gap0; sust 3.23x->2.80x (+2 busts); at gap=24 realistic model +$327/mo sust unchanged 3.50x; oracle 46/47 fills 67% win PF=5.99 mean=+1.68R; script scripts/b93_cpi_overlay.py; Lesson 162; 2026-06-15]
+## B93 -- CPI-straddle funded-overlay framing (does it raise $/mo without busting?)  [done -- CANDIDATE: additive overlay +$304/mo (+55%) at h200/gap0; sust 3.23x->2.80x (+2 busts); at gap=24 realistic model +$327/mo sust unchanged 3.50x; oracle 46/47 fills 67% win PF=5.99 mean=+1.68R; script scripts/b93_cpi_overlay.py; Lesson 162; 2026-06-15. 2022 HOLDOUT (wk9): oracle PF=8.98 WR=75% n=12 PASS; 6y overlay +$291/mo +0.17x sust; CONFIRMED. Lessons 189-190.]
 
 **Hypothesis:** ~9 CPI/yr is too sparse for the Combine alone, but adding
 CPI-straddle days ON TOP of the B42/B57 funded pipeline may raise $/mo without
@@ -4481,3 +4481,18 @@ reached, which may reduce MLL busts late in the month. The asymmetry
 **Databento:** $0 (reuse existing equity_b57/r2p5_*.csv).
 **Model:** Sonnet (CLI extension + benchmark only; no engine building).
 (2026-06-16 research/ideation session wk8-r2.)
+
+---
+
+## wk9-holdout-cpi — 2022 confirmatory holdout for B93/B94 CPI straddle overlay  [done — CONFIRMED 2026-06-16: 2022 oracle PF=8.98 WR=75% n=12 (PASS); 6y funded overlay +$291/mo +0.17x sust vs 6y base; straddle anti-correlates with base engine drought in 2022; deployment decision validated. Lessons 189-190. doc: trade_analysis/2026-06-16_wk9_cpi_2022_holdout.md]
+
+Protocol-required 2022 holdout for the B93/B94 candidate (CPI straddle additive overlay). The
+overlay was shipped and ENABLED LIVE on 2026-06-15 without the 2022 confirmatory run (skipped
+before deployment). This session runs it retrospectively. $0 Databento: 2022 1-min bars in
+bars_MNQ_dbv_2021_2026.csv; 2022 Phase A + B equity CSVs exist (equity_b42/deployed_r1p0_2022.csv
++ equity_b21/orb_reentry_r0p75_2022.csv from B42 holdout).
+
+Method: 1-min oracle (news_straddle_cpi_sweep.simulate, offset=60t, stop_mode=range, tp_r=3)
+on 2022 CPI events → inject 2022 straddle P&L into existing 2022 equity stream → run 6-year
+funded_sim (2021-2026 incl 2022) vs 5-year result. Report: 2022 oracle PF/WR, 6y pipeline
+$/mo + sust vs 5y, bust delta.
