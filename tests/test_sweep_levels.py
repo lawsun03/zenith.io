@@ -31,3 +31,20 @@ def test_asian_high_low_locked_after_session_close():
     t.on_bar(_bar(22, 30, 21070, 21075, 21060, 21065, day="2026-06-15"))
     assert t.levels()["asian_high"] == Decimal("21080")
     assert t.levels()["asian_low"] == Decimal("20990")
+
+def test_tag_matches_within_tolerance_else_swing_only():
+    # Pre-bar at 09:00 seeds weekly_open=21000 (distinct from daily_open=21020).
+    # Ensures the tag test only matches daily_open, not weekly_open.
+    t = SweepLevelTracker()
+    t.on_bar(_bar(9, 0, 21000, 21010, 20990, 21005))
+    t.on_bar(_bar(9, 30, 21020, 21030, 21015, 21025))
+    tick = Decimal("0.25")
+    assert t.tag(Decimal("21020.50"), tick, 4) == ["daily_open"]
+    assert t.tag(Decimal("20800"), tick, 4) == ["swing_only"]
+
+def test_tag_determinism_same_input_same_output():
+    t = SweepLevelTracker()
+    t.on_bar(_bar(9, 0, 21000, 21010, 20990, 21005))
+    t.on_bar(_bar(9, 30, 21020, 21030, 21015, 21025))
+    tick = Decimal("0.25")
+    assert t.tag(Decimal("21021"), tick, 4) == t.tag(Decimal("21021"), tick, 4)
