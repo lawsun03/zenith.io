@@ -1252,9 +1252,8 @@ async def _async_main() -> int:
     from app.strategy.cpi_day import suppress_dates, all_event_dates
     from app.strategy.news_straddle import resolve_straddle_specs
     _router_on = bot_cfg.strategy.cpi_day_router_enabled
-    _straddle_specs = (
-        resolve_straddle_specs(bot_cfg.strategy, cfg.instrument) if _router_on else []
-    )
+    # Resolve unconditionally (cheap, safe): empty news_straddle_events => legacy single spec.
+    _straddle_specs = resolve_straddle_specs(bot_cfg.strategy, cfg.instrument)
     _events_path = bot_cfg.strategy.news_straddle_events_path
     base_suppress_dates = suppress_dates(_straddle_specs, _events_path) if _router_on else frozenset()
     cpi_dates = all_event_dates(_straddle_specs, _events_path) if _router_on else frozenset()
@@ -1297,8 +1296,7 @@ async def _async_main() -> int:
     if (_ns.engine == "news_straddle" and _ns.news_straddle_live_enabled) or _ns.cpi_day_router_enabled:
         from app.strategy.news_straddle import build_news_straddle_schedulers
         news_straddle_schedulers = build_news_straddle_schedulers(
-            broker, _straddle_specs if _straddle_specs
-            else resolve_straddle_specs(_ns, cfg.instrument),
+            broker, _straddle_specs,
             _ns.news_straddle_events_path, _ns.news_straddle_arm_lead_seconds,
         )
         for _sch in news_straddle_schedulers:
