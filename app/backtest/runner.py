@@ -569,6 +569,8 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 trade["displacement_ts"] = open_entry["displacement_ts"]
             if open_entry.get("fvg_zone_pts") is not None:
                 trade["fvg_zone_pts"] = open_entry["fvg_zone_pts"]
+            if open_entry.get("swept_level_type") is not None:
+                trade["swept_level_type"] = open_entry["swept_level_type"]
             trades.append(trade)
             open_entry = None
     if open_entry is not None:
@@ -622,6 +624,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     _order_displacement_ts: dict[str, str] = {}
     # B88: maps entry order_id → fvg_zone_pts string for zone-width analysis.
     _order_fvg_zone_pts: dict[str, str] = {}
+    # PO3-A: maps entry order_id → swept_level_type pipe-string for tag analysis.
+    _order_swept_level_type: dict[str, str] = {}
 
     def _kz_for_fill(broker_order_id: str | None) -> str:
         if not broker_order_id:
@@ -666,6 +670,8 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
                 _order_displacement_ts[outcome.broker_order_id] = signal.displacement_ts.isoformat()
             if signal.fvg_zone_pts is not None:
                 _order_fvg_zone_pts[outcome.broker_order_id] = str(signal.fvg_zone_pts)
+            if signal.swept_level_type is not None:
+                _order_swept_level_type[outcome.broker_order_id] = "|".join(signal.swept_level_type)
 
     async def on_fill(fill: Fill) -> None:
         fill_dict: dict = {
@@ -753,6 +759,9 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             z = _order_fvg_zone_pts.get(fill_dict["order_id"])
             if z:
                 fill_dict["fvg_zone_pts"] = z
+            slt = _order_swept_level_type.get(fill_dict["order_id"])
+            if slt:
+                fill_dict["swept_level_type"] = slt
     stats = _compute_stats(fills_captured, risk_state, cfg.starting_balance)
     trades = _reconstruct_trades(fills_captured)
 
