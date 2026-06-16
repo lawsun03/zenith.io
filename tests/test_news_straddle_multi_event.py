@@ -47,3 +47,38 @@ def test_resolve_falls_back_to_legacy_single_event():
     assert specs[0].instrument == "MNQ"
     assert specs[0].offset_ticks == 60
     assert specs[0].suppress_base is False
+
+
+from datetime import date
+from app.strategy.cpi_day import suppress_dates, all_event_dates
+from decimal import Decimal as D
+
+
+def _specs():
+    return [
+        ResolvedStraddleSpec("CPI", "MNQ", 60, D("3.0"), 1, suppress_base=False),
+        ResolvedStraddleSpec("FOMC", "MGC", 20, D("3.0"), 20, suppress_base=True),
+    ]
+
+
+def test_suppress_dates_only_includes_suppress_base_specs(tmp_path):
+    csv = tmp_path / "news.csv"
+    csv.write_text(
+        "event_type,ts_utc\n"
+        "CPI,2026-07-14T12:30:00+00:00\n"
+        "FOMC,2026-06-17T18:00:00+00:00\n"
+    )
+    sd = suppress_dates(_specs(), str(csv))
+    assert sd == frozenset({date(2026, 6, 17)})          # FOMC only (suppress_base=True)
+    assert date(2026, 7, 14) not in sd                    # CPI stays additive
+
+
+def test_all_event_dates_is_union(tmp_path):
+    csv = tmp_path / "news.csv"
+    csv.write_text(
+        "event_type,ts_utc\n"
+        "CPI,2026-07-14T12:30:00+00:00\n"
+        "FOMC,2026-06-17T18:00:00+00:00\n"
+    )
+    ad = all_event_dates(_specs(), str(csv))
+    assert ad == frozenset({date(2026, 7, 14), date(2026, 6, 17)})
