@@ -102,6 +102,13 @@ class StrategyParams(BaseModel):
     # (current behavior: stop just past sweep_extreme).
     swing_stop_lookback: int = 0
 
+    # PO3 Feature A (Phase 1, default-off): tag each signal with which time-anchored
+    # level (daily/weekly open, prior-Asian H/L) its sweep extreme is within
+    # tolerance of. Measurement only — no behavior change. Phase-3 gate fields are
+    # deferred until the tag report justifies a filter.
+    sweep_levels_tag_enabled: bool = False
+    sweep_levels_tag_tolerance_ticks: int = 4
+
     # Displacement body threshold uses the ATR from N bars ago (0 = off).
     # Anti-pro-cyclical: a flush inflates ATR exactly when the reversal
     # displacement prints; the lagged reference keeps the pre-flush bar.
