@@ -392,6 +392,21 @@ _CT = ZoneInfo("America/Chicago")
 HTF_REFRESH_SECONDS = 60  # 4h/30min structure barely moves intraday; 60s is ample
 
 
+def _session_pnl_from_trades(trades: "list[dict]") -> Decimal:
+    """Sum realized P&L over settled trades from a /Trade/search response.
+
+    Excludes voided trades and half-turn trades (profitAndLoss is None) —
+    counting either would seed the daily-loss gate with phantom P&L.
+    """
+    total = Decimal("0")
+    for t in trades:
+        pnl = t.get("profitAndLoss")
+        if pnl is None or t.get("voided"):
+            continue
+        total += Decimal(str(pnl))
+    return total
+
+
 def _daily_pnl_from_csv(session_start: "datetime") -> Decimal:
     """
     Fallback: derive session P&L from the local trades CSV when the TopstepX
@@ -483,27 +498,35 @@ async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Dec
         balance = Decimal(str(account.balance))
         name    = account.name
 
-        # Bootstrap daily P&L from today's session trades.
+        # Bootstrap daily P&L from today's session trades. The SDK's
+        # search_trades() hits a stale path (GET /trades/search -> 404), so
+        # call the gateway endpoint directly, mirroring _raw_positions'
+        # _make_request("POST", "/Position/searchOpen", ...). The CSV fallback
+        # is account-blind (no account column), so it can carry another
+        # account's P&L after a mid-session account switch — only trust it if
+        # the API genuinely fails, and log the real exception when it does.
         daily_pnl = Decimal("0")
         try:
-            trades = await client.search_trades(
-                start_date=session_start,
-                end_date=now_utc,
-                account_id=account.id,
-                limit=500,
+            resp = await client._make_request(
+                "POST", "/Trade/search",
+                data={
+                    "accountId": account.id,
+                    "startTimestamp": session_start.astimezone(timezone.utc).isoformat(),
+                    "endTimestamp": now_utc.isoformat(),
+                },
             )
-            raw_pnl = sum(
-                t.profitAndLoss for t in trades
-                if t.profitAndLoss is not None and not t.voided
-            )
-            daily_pnl = Decimal(str(raw_pnl))
+            if not isinstance(resp, dict) or not resp.get("success"):
+                raise RuntimeError(f"/Trade/search returned {resp}")
+            trades = resp.get("trades") or []
+            daily_pnl = _session_pnl_from_trades(trades)
             log.info(
                 "Session daily P&L bootstrapped from %d trades since %s: $%s",
                 len(trades), session_start.strftime("%H:%M CT"), daily_pnl,
             )
         except Exception:
-            log.warning(
-                "Could not fetch session trades for daily P&L bootstrap — falling back to CSV."
+            log.exception(
+                "Could not fetch session trades for daily P&L bootstrap — falling "
+                "back to account-blind CSV (may carry another account's P&L)."
             )
             daily_pnl = _daily_pnl_from_csv(session_start)
 
