@@ -998,6 +998,22 @@ class TopstepXBroker:
         # Place stop and target simultaneously — no window where one exists without the other.
         stop_id, target_id = await asyncio.gather(_place_stop(), _place_target())
 
+        # A position with no stop is naked on the loss side. If the stop leg was
+        # rejected, cancel any orphan target and flatten immediately rather than
+        # holding an unprotected position until the reconciler heals it (Rule 12).
+        if stop_id is None:
+            log.error(
+                "_place_bracket_after_fill: STOP LEG FAILED — flattening to avoid a "
+                "naked position (orphan target_id=%s)", target_id,
+            )
+            if target_id:
+                await self._cancel_order(target_id)
+            try:
+                await self.flatten(bracket.get("instrument", ""))
+            except Exception:
+                log.exception("_place_bracket_after_fill: flatten after stop failure raised")
+            return
+
         # Register as OCO pair. Store entry context so whichever leg fills
         # can compute realized P&L from the price difference.
         if stop_id and target_id:
@@ -1104,7 +1120,14 @@ class TopstepXBroker:
         # 1) Stop (full size) FIRST.
         stop_id = await self._place_stop(close_sdk_side, size, stop, account_id, suite=_suite)
         if stop_id is None:
-            log.error("_place_partial_bracket_after_fill: stop placement failed — position UNPROTECTED")
+            log.error(
+                "_place_partial_bracket_after_fill: STOP LEG FAILED — flattening to "
+                "avoid a naked position"
+            )
+            try:
+                await self.flatten(instrument)
+            except Exception:
+                log.exception("_place_partial_bracket_after_fill: flatten after stop failure raised")
             return
 
         # 2) Final target at remaining size.
