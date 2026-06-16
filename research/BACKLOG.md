@@ -4435,3 +4435,49 @@ Note: 2022 holdout applies (exclude 2022 NFP dates per protocol). This is Phase-
 the 2022 holdout run happens if and only if this item produces a candidate.
 Source: natural extension of confirmed B85 mechanism to untested 8:30 ET event type;
 B83 data gap confirmed (NFP not in the 124-event B83 list). (2026-06-16 research session.)
+
+## B111 -- combine_ramp_multiplier Phase-A benchmark  [pending]
+
+**Mechanism:** Test the B50-built `combine_ramp` risk policy on the Phase-A combine
+objective. The policy (already in `app/backtest/risk_policy.py` and wired into
+`app/backtest/funded_sim.py::simulate_combines()`) scales risk dynamically within each
+combine attempt:
+- Ramp phase (gain < $1500): risk_pct = 1.5%  (vs 1.25% baseline)
+- Protect phase (gain >= $1500): risk_pct = 0.75%
+- Survival zone (balance within $750 of MLL): risk_pct = 0.5%
+
+The CLI `scripts/funded_sim.py` has no `--risk-policy` flag -- this infrastructure was
+built in B50 but has never been benchmarked.
+
+**Exact rules (pre-declared, fixed defaults from risk_policy.py):**
+- `combine_ramp` policy uses `ramp_risk_pct=1.5`, `protect_risk_pct=0.75`,
+  `survival_risk_pct=0.5`, `gain_threshold=1500`, `mll_cushion=750`.
+- Baseline: `risk_policy="constant"` at `base_risk_pct=1.25%` (B57 baseline).
+
+**Implementation steps:**
+1. Add `--risk-policy {constant,combine_ramp}` argument to `scripts/funded_sim.py`
+   (passes through to `simulate_combines()`, existing parameter, no app-code change).
+2. Concatenate `research/equity_b57/r2p5_{2021,2023,2024,2025,2026}.csv` into a
+   single temp file (exclude 2022 holdout for exploratory phase).
+3. Run `scripts/funded_sim.py <combined_b57.csv> --risk-policy combine_ramp --haircut 200`.
+4. Also run `--haircut 0` and `--haircut 400` for sensitivity.
+5. Report: combine attempts/passes/busts, pass_rate, MLL_busts, median_days_to_pass.
+6. Add 1 defining-behavior test: `simulate_combines(..., risk_policy="combine_ramp")`
+   returns a different pass count than `risk_policy="constant"` on a synthetic
+   daily_pnl series with a $1500 gain crossed mid-run.
+
+**Success criteria (vs B57 baseline: combine pass_rate ~6/17 test, same MLL busts):**
+- combine pass_rate strictly above 6/17 on the test period (2025-26) without
+  increasing MLL_busts vs baseline.
+- Stop rule: if combine pass_rate <= 6/17 on BOTH train AND test -> REJECTED.
+
+**Priors:** LOW-MEDIUM. B87 showed `funded_survival` was strictly worse for Phase B
+XFA (both metrics). But `combine_ramp` targets Phase A pass rate (a different
+objective) and trades higher early risk for faster target-crossing. The protect phase
+(0.75% once ahead $1500) is more conservative than baseline after half-target is
+reached, which may reduce MLL busts late in the month. The asymmetry
+(aggressive early, defensive late) is untested.
+
+**Databento:** $0 (reuse existing equity_b57/r2p5_*.csv).
+**Model:** Sonnet (CLI extension + benchmark only; no engine building).
+(2026-06-16 research/ideation session wk8-r2.)

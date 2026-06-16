@@ -4317,3 +4317,31 @@ VERDICT: **PHASE-1 NO-GO / REJECTED**
 - **Learned:** NFP straddle fails entirely -- 0/5 years positive, 30% whipsaw, 0% win rate at 3R. The CPI straddle's 5.99 PF is release-type-specific; the mechanism relies on a single dominant directional catalyst that NFP does not provide. The 8:30 ET straddle class is now closed: CPI is the only confirmed event-driven strategy on this mechanism.
 - **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes; scripts/_b110_nfp_straddle.py added). findings.json #130. Lessons 186-187 added.
 - **Next:** Backlog fully exhausted (B110 was the last pending item). Next session must replenish with a research/ideation pass.
+
+---
+
+## 2026-06-16T00:20Z -- session wk8-r2 -- research/ideation (backlog replenishment)
+
+- **Bot health:** :5175/api/status 200 -- XFA shadow $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento $11.20/$20 (no fetch -- analysis-only).
+- **Trigger:** Backlog exhausted through B110 (B108/B109/B110 all rejected in prior sessions). Research/ideation pass per protocol.
+
+**Consolidation note:** Per Lawrence's 2026-06-15 guidance ("stop creating new research topics for now"), this ideation is kept minimal. Only infrastructure-completing items are queued. The primary frontier improvement (B57: remove MNQ r_multiple=3.5 override in bot_config.json to 2.5) remains a Monday manual action -- no research item needed for that. The loop is at a clear parameter plateau on strategy hypotheses; if Lawrence wants to pause or reduce loop frequency after B111, that is the right call.
+
+**Exploration performed this session:**
+
+**1. ORB partial profit (pre-answered):**
+Data mining on `research/mfe_mae_deployed_b88.csv` (862 ORB trades, excl 2022):
+- P(target_hit | MFE >= 1.5R) = 45.8% vs 11.3% baseline (4x lift); 4/5 years consistent
+- Breakdown of trades reaching 1.5R MFE: 45.8% hit target, 45.3% EOD flatten (mean $1,427), 9.4% reversed to SL
+- However: `partial_profit_r` is a UNIFIED `StrategyParams` field applied to both iFVG and ORB by the `PaperBroker`. The deployed config already has `partial_profit_r=1.5`, meaning ORB trades already take partials at 1.5R. B57 baseline already includes ORB partials. No new hypothesis.
+
+**2. combine_ramp_multiplier benchmark (QUEUED as B111):**
+The B50-built `combine_ramp_multiplier()` in `app/backtest/risk_policy.py` is wired into `app/backtest/funded_sim.py::simulate_combines()` under `risk_policy="combine_ramp"`, but `scripts/funded_sim.py` has no `--risk-policy` CLI flag. The policy ramps risk to 1.5% early (vs 1.25% baseline), protects at 0.75% after $1500 gain, drops to 0.5% near MLL. Data exists (equity_b57/r2p5_*.csv). This is a pure infrastructure benchmark -- B50 built the code, nobody ever ran the test. Queued as B111.
+
+**What we learned:**
+- ORB partial profit was already baked into the deployed config (partial_profit_r applies to all engines). The MFE conditional analysis (P(target|MFE>=1.5R)=45.8%) is informative but pre-answered.
+- The combine_ramp policy is the last untested infrastructure item from B50. It targets the combine pass rate (current bottleneck at 6/17 test), which is the right objective.
+- 8:30 ET straddle class closed (B110). ORB single-bar quality-predictor class exhausted (B109). Parameter plateau confirmed across B108-B110.
+
+- **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes this session). findings.json #131.
+- **Next:** B111 (combine_ramp benchmark -- add --risk-policy to funded_sim CLI, run, compare to B57 baseline). If REJECTED, consider pausing the loop per Lawrence's consolidation preference.
