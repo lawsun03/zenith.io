@@ -330,3 +330,38 @@ def test_phase_aware_sizing_uses_tracker_not_broker_equity():
     # (1% of broker 153k would give 15 - the bug this test pins)
     assert engine._entry_size(sig) == 5
 
+
+class TestStartupReconcile:
+    """Why: the broker's TradingSuite isn't created until subscribe() (which
+    runs later, inside _run_live), so the startup reconcile MUST adopt the
+    balance already fetched by _fetch_live_state — never broker.account_balance(),
+    which raises 'not subscribed' at this point. That call failing silently left
+    the governor running on the configured starting_balance instead of the real
+    account balance, on EVERY startup."""
+
+    def test_adopts_prefetched_live_balance_when_not_shadow(self):
+        from app.risk.account_phase import reconcile_phase_at_startup
+        t = combine_tracker()
+        drifted = reconcile_phase_at_startup(t, False, "50KTC-V2-X", D("51200"))
+        assert drifted
+        assert t.balance == D("51200")
+        assert t.mll == D("49200")          # trails the adopted balance
+
+    def test_shadow_does_not_reconcile(self):
+        from app.risk.account_phase import reconcile_phase_at_startup
+        t = combine_tracker()
+        # Practice account has unrelated capital; shadow must keep the fresh $50k.
+        drifted = reconcile_phase_at_startup(t, True, "PRAC-V2-X", D("153350"))
+        assert not drifted
+        assert t.balance == D("50000")
+
+    def test_signature_has_no_broker_param(self):
+        # Structural regression guard: the function cannot call
+        # broker.account_balance() because no broker is in scope. This is the
+        # exact mistake that broke startup — encode it so it can't come back.
+        import inspect
+        from app.risk.account_phase import reconcile_phase_at_startup
+        params = set(inspect.signature(reconcile_phase_at_startup).parameters)
+        assert "broker" not in params
+        assert "live_balance" in params
+

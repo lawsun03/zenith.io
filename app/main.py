@@ -1391,24 +1391,15 @@ async def _async_main() -> int:
         await broker.connect()
         await engine.start()
         if bot_cfg.account_phase != "practice" and engine.phase is not None:
-            from app.risk.account_phase import reconcile_with_broker
-            if bot_cfg.phase_shadow:
-                log.warning(
-                    "SHADOW %s on account %s: tracker simulates a fresh account "
-                    "from %s — broker balance deliberately NOT reconciled.",
-                    bot_cfg.account_phase.upper(), bot_cfg.account_name,
-                    engine.phase.balance,
-                )
-            else:
-                try:
-                    broker_bal = await broker.account_balance()
-                    reconcile_with_broker(engine.phase, broker_bal)
-                except Exception:
-                    log.exception(
-                        "ACCOUNT PHASE %s: broker-balance reconcile FAILED — tracker is "
-                        "running on configured starting_balance; verify vs TopstepX "
-                        "dashboard before trusting governor gates.", bot_cfg.account_phase,
-                    )
+            from app.risk.account_phase import reconcile_phase_at_startup
+            # Reconcile against the balance already fetched at startup
+            # (_fetch_live_state above). The broker suite isn't created until
+            # subscribe() runs in _run_live, so broker.account_balance() would
+            # raise "not subscribed" here.
+            reconcile_phase_at_startup(
+                engine.phase, bot_cfg.phase_shadow,
+                bot_cfg.account_name, live_balance,
+            )
             log.warning(
                 "ACCOUNT PHASE %s active: balance %s, MLL %s, cushion %s — confirm "
                 "these match the TopstepX dashboard (high-water/best-day history "

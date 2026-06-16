@@ -261,3 +261,32 @@ def reconcile_with_broker(tracker: PhaseTracker, broker_balance: Decimal) -> boo
     if broker_balance > tracker.eod_high_water:
         tracker.eod_high_water = broker_balance
     return True
+
+
+def reconcile_phase_at_startup(
+    tracker: PhaseTracker,
+    phase_shadow: bool,
+    account_name: str | None,
+    live_balance: Decimal,
+) -> bool:
+    """Adopt the startup live balance into the phase tracker.
+
+    Takes a pre-fetched balance (from _fetch_live_state) on purpose: at startup
+    the broker's TradingSuite isn't created until subscribe() runs (later, in
+    _run_live), so broker.account_balance() would raise "not subscribed" here.
+    live_balance is the same authoritative figure that seeds RiskState, so the
+    governor and the risk state reconcile to one number.
+
+    In shadow mode the tracker deliberately simulates a fresh account, so the
+    real (often unrelated, e.g. practice) balance is NOT adopted.
+
+    Returns True if the tracker balance drifted and was reconciled, else False.
+    """
+    if phase_shadow:
+        log.warning(
+            "SHADOW %s on account %s: tracker simulates a fresh account from %s "
+            "— broker balance deliberately NOT reconciled.",
+            tracker.phase.upper(), account_name, tracker.balance,
+        )
+        return False
+    return reconcile_with_broker(tracker, live_balance)
