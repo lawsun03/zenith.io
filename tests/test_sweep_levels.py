@@ -48,3 +48,12 @@ def test_tag_determinism_same_input_same_output():
     t.on_bar(_bar(9, 30, 21020, 21030, 21015, 21025))
     tick = Decimal("0.25")
     assert t.tag(Decimal("21021"), tick, 4) == t.tag(Decimal("21021"), tick, 4)
+
+
+from app.strategy.composer import Signal
+
+def test_signal_has_swept_level_type_field_default_none():
+    import dataclasses
+    fields = {f.name: f for f in dataclasses.fields(Signal)}
+    assert "swept_level_type" in fields
+    assert fields["swept_level_type"].default is None

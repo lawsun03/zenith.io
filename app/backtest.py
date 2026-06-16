@@ -82,6 +82,8 @@ def _build_runner(instrument: str, s, enabled_killzones: list[str] | None = None
             stop_buffer=s.stop_buffer,
             r_multiple=s.r_multiple,
             killzones=zones,
+            sweep_levels_tag_enabled=s.sweep_levels_tag_enabled,
+            sweep_levels_tag_tolerance_ticks=s.sweep_levels_tag_tolerance_ticks,
         )),
         grader=SetupGrader(),
         strategy_cfg=strategy_params,

@@ -52,6 +52,7 @@ from app.risk.pretrade import Side
 
 from .displacement import DisplacementDetector, DisplacementEvent, FairValueGap
 from .killzone import Killzone, default_killzones, in_killzone
+from .sweep_levels import SweepLevelTracker
 from .liquidity import LiquidityTracker, SweepEvent, Swing
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,9 @@ class Signal:
     # B88: width of the inverted FVG zone (fvg_high - fvg_low) in price points.
     # None for non-iFVG engines, displacement-only signals, and hand-built signals.
     fvg_zone_pts: "Decimal | None" = None
+    # PO3 Feature A (Phase 1): time-anchored levels the sweep extreme matched
+    # (e.g. ["daily_open"]), or ["swing_only"]. None when tagging disabled.
+    swept_level_type: "list[str] | None" = None
 
 
 @dataclass
@@ -208,6 +212,11 @@ class ComposerConfig:
     # Stop is unchanged (this only overrides the target). Applied after all stop adjustments.
     fib_target_ext: Decimal = Decimal("0")
 
+    # PO3 Feature A (Phase 1): tag signals by which anchored level the sweep extreme matched.
+    # Default-off — zero behavior change when False.
+    sweep_levels_tag_enabled: bool = False
+    sweep_levels_tag_tolerance_ticks: int = 4
+
 
 @dataclass
 class _Awaiting:
@@ -286,6 +295,7 @@ class SweepDisplacementComposer:
         # None = no iFVG signal emitted today yet (or day just reset).
         self._last_ifvg_dir: "str | None" = None
         self._last_ifvg_dir_day: "date | None" = None
+        self._sweep_levels = SweepLevelTracker() if config.sweep_levels_tag_enabled else None
 
     # ------------------------------------------------------------------
     # Read-only — for tests and dashboards.
@@ -597,6 +607,8 @@ class SweepDisplacementComposer:
         Call this AFTER on_sweep/on_displacement for the bar — otherwise
         a sweep that fires on bar N would be aged by 1 immediately.
         """
+        if self._sweep_levels is not None:
+            self._sweep_levels.on_bar(bar)
         # B35: daily bias gate OHLC tracking — commit day transitions and update running data.
         if self.config.daily_bias_gate_enabled:
             _et_day = bar.ts.astimezone(_ET).date()
@@ -779,6 +791,13 @@ class SweepDisplacementComposer:
         fvg_zone_pts = (zone_high - zone_low
                         if zone_low is not None and zone_high is not None
                         else None)
+        swept_level_type = None
+        if self._sweep_levels is not None:
+            from app.broker.paper import TICK_SIZE
+            tick = TICK_SIZE.get(cfg.instrument, Decimal("0.25"))
+            swept_level_type = self._sweep_levels.tag(
+                awaiting.sweep.sweep_extreme, tick, cfg.sweep_levels_tag_tolerance_ticks,
+            )
         return Signal(
             instrument=cfg.instrument,
             side=side,
@@ -796,4 +815,5 @@ class SweepDisplacementComposer:
             confluence_count=confluence_count,
             displacement_ts=event.fvg.created_at if event.fvg is not None else None,
             fvg_zone_pts=fvg_zone_pts,
+            swept_level_type=swept_level_type,
         )
