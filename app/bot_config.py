@@ -21,6 +21,17 @@ from pydantic import BaseModel, Field
 log = logging.getLogger(__name__)
 
 
+class NewsStraddleEvent(BaseModel):
+    """One scheduled news event the live straddle arms on. Lets CPI→MNQ and
+    FOMC→MGC coexist in one process with per-event instrument, offset, and size."""
+    event_type: str                       # matches news_events.csv event_type column
+    instrument: str
+    offset_ticks: int = 60                # stop-entry offset past the range; R = offset
+    tp_r: Decimal = Decimal("3.0")
+    contracts: int = 1
+    suppress_base: bool = False           # block the base engine on this event's days
+
+
 class StrategyParams(BaseModel):
     swing_lookback: int = 2
     min_penetration: Decimal = Decimal("0.20")
@@ -119,7 +130,17 @@ class StrategyParams(BaseModel):
     # → iFVG continuation. combined = iFVG + ORB simultaneously.
     # regime_switch = daily-range gate between ORB/iFVG. sweep_bos = sweep +
     # break-of-structure, no displacement/FVG leg (Revelio's simple chain).
+    # Higher-timeframe SWING engines (research): "ob_swing" (order block),
+    # "fvg_swing" (FVG continuation), "ifvg_swing" (FVG inversion, no killzone),
+    # "sweep_swing" (liquidity-sweep reversal). These hold overnight and gate
+    # entries to swing_entry_start_ct..swing_entry_end_ct (no flatten); backtest
+    # only — not wired to the live bot.
     engine: str = "ifvg"
+
+    # Swing-engine entry window (CT). Window [start, end) crosses midnight by
+    # design (afternoon through the overnight session into next morning).
+    swing_entry_start_ct: str = "12:00"
+    swing_entry_end_ct: str = "08:00"
     orb_open_et: str = "09:30"            # "09:30" cash open | "08:30" data open
     orb_range_minutes: int = 15
     orb_r_multiple: Decimal = Decimal("2.0")
@@ -147,6 +168,10 @@ class StrategyParams(BaseModel):
     news_straddle_live_enabled: bool = False
     news_straddle_contracts: int = 1               # size for the live straddle
     news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
+    # Per-event straddle specs. When non-empty, this is the source of truth and
+    # the legacy single news_straddle_* fields above are ignored (resolve_straddle_specs).
+    # Empty (default) = legacy single-event behavior, so existing CPI/MNQ live config is untouched.
+    news_straddle_events: list[NewsStraddleEvent] = Field(default_factory=list)
     # CPI-day router (in-process day-gate). Default-OFF. When True, the base
     # engine takes NO new entries on CPI trading days (pretrade CPI_DAY_BLOCK)
     # and the news_straddle scheduler is constructed to own those days, while
