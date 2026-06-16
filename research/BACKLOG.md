@@ -4496,3 +4496,69 @@ Method: 1-min oracle (news_straddle_cpi_sweep.simulate, offset=60t, stop_mode=ra
 on 2022 CPI events → inject 2022 straddle P&L into existing 2022 equity stream → run 6-year
 funded_sim (2021-2026 incl 2022) vs 5-year result. Report: 2022 oracle PF/WR, 6y pipeline
 $/mo + sust vs 5y, bust delta.
+
+---
+
+## RESEARCH -- Session wk9-r1  [done -- 1 item appended: B112 corrected Phase A two-phase pipeline benchmark]
+
+Backlog exhausted after wk9-holdout-cpi. Protocol mandates research/ideation. Constraint: Lawrence
+consolidation guidance (2026-06-15) -- keep new topics minimal; only infrastructure-completing and
+directly-actionable items qualify.
+
+**Key gap identified:** B26/Lessons 58-59 found that target_clarity_mode="reject" + swing_stop_lookback=0
+lifts Phase A combine pass rate 6/61→11/61 (+83%), but the EFFECT ON THE FULL TWO-PHASE PIPELINE
+was never benchmarked. equity_b42/ has the deployed Phase A (42 funded_sim passes, 5y, h=$200).
+This is the last actionable gap before consolidation pause.
+
+**Items ruled out:** PPI/FOMC straddle (fail 1:1 gate in B83 -- low prior for 3R); second ORB
+re-entry (structurally weaker by Lesson 35); CPI on second instrument (out of scope); long-only
+ORB+reentry combination (no new mechanism); additional timing filters (B22 exhausted range_minutes).
+
+## B112 -- Corrected Phase A two-phase pipeline benchmark  [pending]
+
+Hypothesis: B26 (Lessons 58-59) found target_clarity_mode="reject" + swing_stop_lookback=0
+raise Phase A calendar-month pass rate from 6/61 (10%, deployed) to 11/61 (18%, corrected) --
+an 83% improvement with zero code changes. The deployed equity_b42/ (close+lookback=30+
+target_clarity=off) produced 42 funded_sim passes over 5y (h=$200, sust=3.50x). The corrected
+config has never been benchmarked in the two-phase pipeline. This benchmark quantifies the
+pipeline improvement from the two config changes Lawrence can make on Monday.
+
+Method (no new code -- pure benchmark):
+1. Generate per-year corrected Phase A equity CSVs (research/equity_b112/):
+   For years {2021, 2023, 2024, 2025, 2026} (excl 2022 holdout):
+   equity_export.py --bars bars/yearly/bars_MNQ_dbv_{year}.csv --instrument MNQ
+   --timeframe 5min --risk-pct 1.0 --partial-r 1.5
+   --set target_clarity_mode=reject --set swing_stop_lookback=0
+   --out research/equity_b112/corrected_r1p0_{year}.csv
+   Note: partial_r=1.5 matches deployed bot (NOT research baseline 0); all other params
+   unchanged (close mode, all_day killzones, min_absolute_body=5.0, stop_buffer=3.0,
+   r_multiple=3.5, risk_pct=1.0). This isolates the effect of ONLY the two config changes.
+
+2. Run funded_sim Phase A analysis: stitch per-year CSVs -> simulate_combines() ->
+   count passes/busts vs B42 deployed (42 passes, 5y, h=$200). Report the delta.
+
+3. Write scripts/run_b112_pipeline.py (model: run_b42_pipeline.py) adding corrected
+   config as a Phase A variant alongside B42 deployed and B31 reference configs;
+   output two-phase matrix.
+
+4. Phase B: keep equity_b21/orb_reentry_r0p75_{year}.csv (B21 baseline, 13 busts).
+
+5. Two-phase comparison (corrected Phase A + B21 Phase B) vs deployed (B42 Phase A +
+   B21 Phase B) and vs B31 winner ($508/mo, sust 2.85x).
+
+No defining-behavior tests (no code changes). Databento: $0 (all yearly bars on disk).
+Model: Sonnet (pure benchmark; no engine building).
+
+Fixed test settings: target_clarity_mode=reject, swing_stop_lookback=0.
+All other params: deployed bot config (close mode, all_day, partial_r=1.5,
+min_absolute_body=5.0, stop_buffer=3.0, r_multiple=3.5, risk_pct=1.0).
+
+Success criteria (vs B42 deployed Phase A + ORB-reentry baseline from wk9-holdout table):
+- Corrected Phase A funded_sim passes > 42 (expected ~55-65 based on +83% calendar-month lift)
+- Pipeline $/mo or sust improves vs B42 deployed Phase A + B21 ORB-reentry r0.75
+- This benchmark is informational regardless of direction: the corrected pass count is the
+  key input for Lawrence's Monday config decision.
+
+Source: Lessons 58-59 (B26 corrected Phase A finding); wk9-holdout-cpi table (B42 deployed
+5y: $387/mo, 3.50x sust, 42 Phase A passes). Monday action: change target_clarity_mode and
+swing_stop_lookback in bot_config.json. (2026-06-16 ideation session wk9-r1.)

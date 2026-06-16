@@ -4426,3 +4426,28 @@ Oracle gate (PF>=3.0): PASS (8.98 >> threshold). 6y overlay delta: +$291/mo (+95
 - **Learned:** High-inflation rate-hike regimes (2022) produce the CPI straddle's best operating environment: unambiguous directional moves, minimal whipsaw, 9/12 TP hits. This anti-correlation with the base engine (straddle best when base engine worst) is a genuine portfolio benefit, not a coincidence. The strategy is regime-robust: normal years PF 5+, inflation-shock years PF 9+.
 - **Tests:** 886 passed, 3 skipped, 0 failures. findings.json #133. Lessons 189-190.
 - **Next:** Backlog exhausted + parameter plateau confirmed through B111. Per Lawrence's consolidation guidance, loop is pausing. Resume if Lawrence queues new hypotheses or wants a research/ideation pass.
+
+---
+
+## 2026-06-16T02:30Z -- session wk9-r1 -- RESEARCH/IDEATION (minimal backlog replenishment)
+
+- **Bot health:** /api/status 200 -- XFA shadow, equity $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento: $11.20/$20.00 (no fetch -- analysis-only ideation session).
+- **Claimed:** No pending item (backlog exhausted through wk9-holdout-cpi). Protocol mandates research/ideation when backlog is empty. Lawrence consolidation guidance applied: keep new topics minimal.
+
+**Research performed:**
+- Reviewed LESSONS.md 1-190, all prior B1-B111 + wk9-holdout-cpi journal entries.
+- Reviewed equity_b42/ + scripts/run_b42_pipeline.py: deployed Phase A (close+lookback=30+target_clarity=off) produced 42 funded_sim passes over 5y (h=$200, sust=3.50x per wk9-holdout-cpi table).
+- Key gap confirmed: B26/Lessons 58-59 identified that target_clarity_mode="reject" + swing_stop_lookback=0 raise Phase A combine pass rate from 6/61 (10%) to 11/61 (18%, +83%), but this corrected config was NEVER benchmarked in the full two-phase pipeline to quantify the $/mo and sust improvement. This is the last directly-actionable research gap before consolidation pause.
+
+**Items ruled out and why:**
+- PPI/FOMC straddle at 3R: B83 found both events fail even the 1:1 gate; extending to 3R has very low prior when 1:1 already fails
+- Second ORB re-entry (after second stop): Lesson 35 establishes first reentry is structurally weaker; second reentry would be weaker still
+- CPI straddle on ES/MES: Phase-1 confirmed (B91), but deploying requires second instrument/account -- out of scope for consolidation
+- Long-only ORB + reentry combined: B17 (long-only ORB rejected) and B21 (reentry candidate); no new mechanism from combining them
+- Additional timing filters: B22 exhausted orb_range_minutes; no untested ORB timing parameter remains
+
+**New item appended:** B112 (corrected Phase A two-phase pipeline benchmark). One item only per Lawrence's consolidation guidance.
+
+- **Learned:** After 111+ backlog items, all productive mechanism classes (iFVG, ORB, event-driven, quality predictors, session filters, risk policies) are exhausted. The remaining actionable gap is a config-level two-phase benchmark (no code changes) that quantifies Lawrence's Monday config decision in pipeline $/mo and sust terms. The loop should pause after B112 is executed.
+- **Tests:** 886 passed, 3 skipped, 0 failures (no code changes this session). findings.json #134.
+- **Next:** B112 (corrected Phase A pipeline benchmark -- generate per-year corrected Phase A equity CSVs with target_clarity=reject + lookback=0, run two-phase pipeline vs B42 deployed baseline; no engine code needed; Sonnet).
