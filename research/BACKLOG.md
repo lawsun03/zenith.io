@@ -4514,7 +4514,7 @@ This is the last actionable gap before consolidation pause.
 re-entry (structurally weaker by Lesson 35); CPI on second instrument (out of scope); long-only
 ORB+reentry combination (no new mechanism); additional timing filters (B22 exhausted range_minutes).
 
-## B112 -- Corrected Phase A two-phase pipeline benchmark  [pending]
+## B112 -- Corrected Phase A two-phase pipeline benchmark  [done -- rejected: corrected Phase A (target_clarity=reject + lookback=0) yields 25 funded_sim passes vs 42 deployed (-40%); pipeline $495/mo 1.92x sust vs deployed $549/mo 3.23x -- both metrics worse; DO NOT change deployed config; Lesson 191]
 
 Hypothesis: B26 (Lessons 58-59) found target_clarity_mode="reject" + swing_stop_lookback=0
 raise Phase A calendar-month pass rate from 6/61 (10%, deployed) to 11/61 (18%, corrected) --

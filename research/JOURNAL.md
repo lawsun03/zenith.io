@@ -4451,3 +4451,38 @@ Oracle gate (PF>=3.0): PASS (8.98 >> threshold). 6y overlay delta: +$291/mo (+95
 - **Learned:** After 111+ backlog items, all productive mechanism classes (iFVG, ORB, event-driven, quality predictors, session filters, risk policies) are exhausted. The remaining actionable gap is a config-level two-phase benchmark (no code changes) that quantifies Lawrence's Monday config decision in pipeline $/mo and sust terms. The loop should pause after B112 is executed.
 - **Tests:** 886 passed, 3 skipped, 0 failures (no code changes this session). findings.json #134.
 - **Next:** B112 (corrected Phase A pipeline benchmark -- generate per-year corrected Phase A equity CSVs with target_clarity=reject + lookback=0, run two-phase pipeline vs B42 deployed baseline; no engine code needed; Sonnet).
+
+---
+
+## 2026-06-16T01:45Z -- session wk9-b112 -- B112 (Corrected Phase A pipeline benchmark -- REJECTED)
+
+- **Bot health:** /api/status OK -- XFA shadow, equity $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento: $11.20/$20.00 (no fetch -- all yearly bars already on disk).
+- **Claimed:** B112 (top and only pending item -- corrected Phase A config benchmark).
+
+**Ran:**
+1. Wrote scripts/run_b112_pipeline.py (modeled on run_b42_pipeline.py); generates corrected_r1p0_{year}.csv via equity_export.py with --set target_clarity_mode=reject --set swing_stop_lookback=0.
+2. Generated 5 per-year corrected Phase A equity CSVs (research/equity_b112/corrected_r1p0_{year}.csv for 2021/2023/2024/2025/2026).
+3. Ran two-phase pipeline analysis against B42 deployed Phase A and B21 ORB-reentry r0.75 Phase B.
+
+**Numbers:**
+
+| Phase A Config | Passes | Attempts | Pass% | d/attempt | $/mo | Sust |
+|---|---|---|---|---|---|---|
+| B112 corrected (target_clarity=reject, lookback=0) | 25 | 71 | 35.2% | 14.5d | $495 | 1.92x |
+| B42 deployed (target_clarity=off, lookback=30) | 42 | 159 | 26.4% | 6.5d | $549 | 3.23x |
+
+Phase B (ORB-reentry r0.75): 13 busts / 14 accounts, $3,131/acct, 73.5d/acct.
+
+Corrected Phase A pass count delta: -17 passes (-40.5% vs deployed).
+Pipeline delta: -$54/mo, -1.31x sust (both metrics WORSE).
+
+Stop rule fires: both metrics (passes, pipeline) are WORSE for corrected config.
+
+- **Verdict:** REJECTED -- deployed config is the funded-pipeline optimum. The B26 calendar-month harness finding (+83% per-attempt pass rate from correction) does NOT transfer to the funded pipeline.
+
+- **Learned:** The calendar-month harness (B26: 6/61 -> 11/61) measures per-attempt quality in isolation. The funded pipeline measures total passes over 5y in continuous operation. Higher-quality filters (target_clarity=reject + lookback=0) reduce trade frequency -> fewer monthly P&L events -> longer attempt duration (6.5d -> 14.5d) -> fewer total pipeline attempts (159 -> 71) -> fewer total passes (42 -> 25). This is an exact reproduction of Lesson 83 (B41: combined-engine monthly pass rate 2x better, but funded-pipeline passes 4x worse). The deployed config's higher trade frequency is not a flaw -- it is the mechanism that produces more funded pipeline throughput. Rule: the calendar-month harness overstates pipeline throughput for filtering configs; always verify in continuous funded_sim before recommending a quality gate.
+
+- **Monday action for Lawrence: DO NOT change target_clarity_mode or swing_stop_lookback. The deployed values (off and 30 respectively) are already the funded-pipeline-optimal settings.**
+
+- **Lesson 191 added.** Test suite: **886 passed, 3 skipped, 0 failures** (no code changes). findings.json #135.
+- **Next:** Backlog exhausted. Loop pauses here per Lawrence's consolidation guidance. Resume when Lawrence queues new hypotheses.
