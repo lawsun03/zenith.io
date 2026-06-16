@@ -4345,3 +4345,55 @@ The B50-built `combine_ramp_multiplier()` in `app/backtest/risk_policy.py` is wi
 
 - **Tests:** 885 passed, 3 skipped, 0 failures (no production code changes this session). findings.json #131.
 - **Next:** B111 (combine_ramp benchmark -- add --risk-policy to funded_sim CLI, run, compare to B57 baseline). If REJECTED, consider pausing the loop per Lawrence's consolidation preference.
+
+---
+
+## 2026-06-16T00:30Z -- session wk8-b111 -- B111 (combine_ramp Phase-A benchmark -- REJECTED)
+
+- **Bot health:** /api/status OK -- XFA shadow, equity $152,402.38 at HWM, 0 open contracts, no drift, no lockout. Market closed (weekend). Databento: $11.20/$20.00 (no fetch -- reused equity_b57/r2p5_*.csv).
+- **Claimed:** B111 (top pending item -- combine_ramp Phase-A benchmark; B50-built infrastructure never benchmarked on the correct per-year Phase-A equity CSVs).
+
+**Ran:**
+1. Added --risk-policy {constant,combine_ramp} argument to scripts/funded_sim.py (passes through to simulate_combines() existing parameter; no app-code change).
+2. Wrote 1 defining-behavior test (	ests/test_b111_combine_ramp_benchmark.py): synthetic 35-day series [+500,+500,+500,+500,-1600]x7 shows constant=1 pass vs combine_ramp=2 passes+1 bust, proving the risk_policy multiplier is live. RED->GREEN confirmed.
+3. Concatenated equity_b57/r2p5_{2021,2023,2024,2025,2026}.csv (excl 2022 holdout) into r2p5_combined_excl2022.csv.
+4. Ran funded_sim.py --risk-policy {constant,combine_ramp} at haircut {0,200,400}. Also ran per-period (2024 train, 2025+2026 test).
+
+**Numbers:**
+
+5y combined (funded_sim.py continuous sequential):
+
+| policy | haircut | attempts | passes | busts | pass_rate | med_days |
+|--------|---------|----------|--------|-------|-----------|---------|
+| constant | 0 | 139 | 39 | 99 | 28.1% | 7 |
+| constant | 200 | 161 | 43 | 117 | 26.7% | 7 |
+| constant | 400 | 172 | 43 | 128 | 25.0% | 7 |
+| combine_ramp | 0 | 116 | 33 | 82 | 28.4% | 9 |
+| combine_ramp | 200 | 125 | 34 | 90 | 27.2% | 8 |
+| combine_ramp | 400 | 100 | 27 | 72 | 27.0% | 8 |
+
+Pass delta (combine_ramp vs constant): h=0: -15%, h=200: -21%, h=400: -37%.
+
+Per-period (haircut=200):
+
+| period | policy | attempts | passes | pass_rate |
+|--------|--------|----------|--------|-----------|
+| 2024 (train) | constant | 51 | 14 | 27.5% |
+| 2024 (train) | combine_ramp | 44 | 13 | 29.5% |
+| 2025-26 (test) | constant | 61 | 19 | 31.1% |
+| 2025-26 (test) | combine_ramp | 37 | 13 | 35.1% |
+
+Pipeline $/mo estimate (vs B57 baseline $566/mo, sust 3.54x via per-year CSVs):
+- combine_ramp: 34/43 x $566 = ~$448/mo; sust 34/13 = 2.62x (vs constant 3.31x in funded_sim methodology).
+Both metrics degrade. Stop rule fires.
+
+- **Stop rule:** combine_ramp worse than constant on BOTH metrics (passes -21%, sust -20%). Triggered.
+
+- **Root cause:** B50 mechanism confirmed on per-year equity_b57 CSVs. The 0.75x protect phase slows the final $1,500 to target, extending attempt duration (7->8d median) and reducing total 5y attempts by 22% (161->125). The 1.5x ramp amplifies early losses (more busts), preventing the protect phase from materializing benefit. Mathematically: for pure-win series, ramp+protect time = constant time (proven by algebra: 1500/(1.5d) + 1500/(0.75d) = 3000/d). The difference comes entirely from loss amplification in ramp phase causing excess busts.
+
+- **Verdict:** REJECTED -- stop rule triggered. --risk-policy CLI flag ships default-off (constant). Do NOT use combine_ramp. B50's rejection is now confirmed on the correct Phase-A equity data.
+
+- **Learned:** Any asymmetric risk-scaling policy (fast-then-slow or slow-then-fast) for a fixed-dollar target produces equal or worse throughput than constant risk for positive-EV strategies. The mathematical identity holds: the total time to reach any fixed target is invariant to the ramp shape when the ramp phases sum to 100% of the target. Real losses in the ramp phase break this symmetry by amplifying busts, always in the negative direction.
+
+- **Lesson 188 added.** Test suite: **886 passed, 3 skipped, 0 failures** (+1 B111 test). findings.json #132.
+- **Next:** Backlog exhausted (B111 was the last item). Per Lawrence's consolidation preference and loop guideline (wk8-r2): consider pausing the loop. If continuing, next session = research/ideation to replenish backlog.

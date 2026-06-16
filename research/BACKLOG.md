@@ -4436,7 +4436,7 @@ the 2022 holdout run happens if and only if this item produces a candidate.
 Source: natural extension of confirmed B85 mechanism to untested 8:30 ET event type;
 B83 data gap confirmed (NFP not in the 124-event B83 list). (2026-06-16 research session.)
 
-## B111 -- combine_ramp_multiplier Phase-A benchmark  [pending]
+## B111 -- combine_ramp_multiplier Phase-A benchmark  [done -- REJECTED: combine_ramp reduces absolute Phase-A passes 21% (34 vs 43, h=200) over 5y; stop rule fires (both passes and sust degrade); B50 mechanism confirmed on per-year equity_b57 CSVs; --risk-policy CLI flag shipped; 1 test added (886 total green); Lesson 147 added]
 
 **Mechanism:** Test the B50-built `combine_ramp` risk policy on the Phase-A combine
 objective. The policy (already in `app/backtest/risk_policy.py` and wired into

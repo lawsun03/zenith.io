@@ -74,6 +74,12 @@ def main() -> None:
                     help="Recurring monthly fixed cost to subtract from every month "
                          "in the backtest window (incl. idle months with no payouts). "
                          "Yields net_after_costs for honest comparison. Default 0.")
+    ap.add_argument("--risk-policy", default="constant",
+                    choices=["constant", "combine_ramp"],
+                    help="Phase-A risk policy for simulate_combines(): "
+                         "'constant' (default) = fixed 1x multiplier; "
+                         "'combine_ramp' = 1.5x ramp early, 0.75x protect after $1500 gain, "
+                         "0.5x survival near MLL (B50 infrastructure, B111 benchmark).")
     args = ap.parse_args()
 
     haircut = Decimal(args.haircut)
@@ -104,7 +110,8 @@ def main() -> None:
 
     monthly_cost = float(args.monthly_cost)
 
-    c = simulate_combines(daily, rules=combine_rules, haircut=haircut)
+    c = simulate_combines(daily, rules=combine_rules, haircut=haircut,
+                          risk_policy=args.risk_policy)
     x = simulate_xfa_chain(daily, rules=xfa_rules, haircut=haircut, combine_gap_days=args.combine_gap_days)
 
     haircut_note = f", haircut ${haircut:.0f}" if haircut else ""

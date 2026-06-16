@@ -4505,5 +4505,32 @@
       "runs": [],
       "src": null
     }
+  },
+  {
+    "ts": "2026-06-16T00:30:00Z",
+    "session": "wk8-b111",
+    "item": "B111",
+    "variant": "combine_ramp vs constant (equity_b57/r2p5)",
+    "objective": "combine",
+    "metrics": {
+      "constant_passes_h200": 43,
+      "constant_attempts_h200": 161,
+      "ramp_passes_h200": 34,
+      "ramp_attempts_h200": 125,
+      "pass_rate_constant": 0.267,
+      "pass_rate_ramp": 0.272,
+      "test_2526_constant_passes": 19,
+      "test_2526_ramp_passes": 13,
+      "train_2024_constant_passes": 14,
+      "train_2024_ramp_passes": 13,
+      "ramp_passes_delta_pct": -21
+    },
+    "verdict": "rejected",
+    "learned": "combine_ramp policy reduces absolute Phase-A passes by 21% (34 vs 43, h=200) over 5y, confirming B50 mechanism: the 0.75x protect phase extends attempt duration (8d vs 7d median) and reduces total attempts by 22%, more than offsetting the 1.5x early ramp. Stop rule fires: both absolute passes and pipeline sust degrade vs constant baseline.",
+    "links": {
+      "doc": null,
+      "runs": [],
+      "src": null
+    }
   }
 ]
