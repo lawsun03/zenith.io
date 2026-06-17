@@ -44,6 +44,18 @@ class TestAnchorLong:
                        sweep_extreme=Decimal("99.0"), swing_anchor=Decimal("98.5")) == Decimal("99.0")
 
 
+def test_default_basis_is_noop():
+    # The default sentinel must return None for every side so the existing
+    # swing_stop_lookback code path is provably unchanged (no behavior drift).
+    from app.strategy.composer import _stop_anchor_for_basis
+    for side in ("long", "short"):
+        assert _stop_anchor_for_basis(
+            basis="default", side=side,
+            zone_low=Decimal("100"), zone_high=Decimal("101"),
+            sweep_extreme=Decimal("99"), swing_anchor=Decimal("98"),
+            entry=Decimal("101"), atr=Decimal("2"), atr_mult=Decimal("1")) is None
+
+
 class TestAnchorShort:
     # short: entry below zone; iFVG edge = zone_high, sweep extreme above it
     def test_ifvg_edge(self):
