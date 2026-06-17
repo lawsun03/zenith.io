@@ -47,3 +47,9 @@ app/api/static/
 
 # Misc
 Capture.PNG
+
+# scratch / debug artifacts
+/*.png
+.playwright-mcp/
+scripts/_*.py
+research/STOP
