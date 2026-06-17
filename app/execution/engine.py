@@ -429,6 +429,8 @@ class ExecutionEngine:
         flatten_time_ct: str = "15:05",
         entry_cutoff_time_ct: str = "14:30",
         flatten_wallclock_enabled: bool = True,
+        feed_watchdog_enabled: bool = True,
+        on_feed_status: "Callable[[dict], Awaitable[None]] | None" = None,
         phase: "PhaseTracker | None" = None,
         cpi_event_dates: "frozenset[date] | None" = None,
     ) -> None:
@@ -456,6 +458,12 @@ class ExecutionEngine:
         self.flatten_time_ct = flatten_time_ct
         self.entry_cutoff_time_ct = entry_cutoff_time_ct
         self.flatten_wallclock_enabled = flatten_wallclock_enabled  # startup-only; restart to change
+        # Feed-dead watchdog: alerts when bars stop during expected hours.
+        self.feed_watchdog_enabled = feed_watchdog_enabled  # hot-applied via PATCH /api/config
+        self.on_feed_status = on_feed_status
+        self._last_bar_at: "datetime | None" = None
+        self._feed_status: str = "LIVE"   # LIVE | QUIET_EXPECTED | DEAD
+        self._watchdog_task: "asyncio.Task | None" = None
         self.phase = phase  # hot-applied via PATCH /api/config
         # CPI-day router: ET dates on which the base engine takes no new entries.
         # Empty/None => router off => never blocks (cpi_day_router_enabled gates
@@ -631,6 +639,75 @@ class ExecutionEngine:
                 log.exception("flatten clock check failed")
 
     # ------------------------------------------------------------------
+    # Feed-dead watchdog
+    # ------------------------------------------------------------------
+
+    def _watchdog_threshold_s(self) -> int:
+        """Gap (seconds) without a bar that counts as feed-dead: max(3×tf, 600s)."""
+        tfs = [_tf_seconds(r.timeframe) for r in self.runners.values()]
+        base = max(tfs) if tfs else 300
+        return max(3 * base, 600)
+
+    def _watchdog_step(self, now: datetime) -> dict:
+        """Pure-ish feed-watchdog transition. Updates self._feed_status and returns
+        a payload with a one-shot `transition` ∈ {None,'dead','recovered'}."""
+        from app.risk.flatten import bars_expected
+        threshold = self._watchdog_threshold_s()
+        expected = bars_expected(now)
+        gap = None if self._last_bar_at is None else (now - self._last_bar_at).total_seconds()
+        transition = None
+
+        if self._last_bar_at is None:
+            self._feed_status = "LIVE"          # not armed yet
+        elif self._feed_status == "DEAD":
+            if gap is not None and gap <= threshold:   # a fresh bar arrived
+                self._feed_status = "LIVE"
+                transition = "recovered"
+            # else stay DEAD (no re-alert)
+        else:  # LIVE or QUIET_EXPECTED
+            if not expected:
+                self._feed_status = "QUIET_EXPECTED"
+            elif gap is not None and gap > threshold:
+                self._feed_status = "DEAD"
+                transition = "dead"
+            else:
+                self._feed_status = "LIVE"
+
+        status_str = {"LIVE": "live", "QUIET_EXPECTED": "quiet", "DEAD": "dead"}[self._feed_status]
+        return {
+            "kind": "feed_watchdog",
+            "status": status_str,
+            "transition": transition,
+            "last_bar_at": self._last_bar_at.isoformat() if self._last_bar_at else None,
+            "seconds_since": round(gap, 1) if gap is not None else None,
+            "threshold_s": threshold,
+            "expected": expected,
+        }
+
+    async def _watchdog_tick(self) -> None:
+        """One watchdog evaluation: step, log transitions, fire the callback."""
+        payload = self._watchdog_step(datetime.now(timezone.utc))
+        if payload["transition"] == "dead":
+            log.warning("FEED DEAD: no bar for %ss (threshold %ss), last bar %s",
+                        payload["seconds_since"], payload["threshold_s"], payload["last_bar_at"])
+        elif payload["transition"] == "recovered":
+            log.info("FEED RECOVERED: bar arrived after going dark")
+        if self.on_feed_status is not None:
+            try:
+                await self.on_feed_status(payload)
+            except Exception:
+                log.exception("on_feed_status callback raised")
+
+    async def _watchdog_clock(self) -> None:
+        """Live feed-dead detector: check every 30s of wall time."""
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await self._watchdog_tick()
+            except Exception:
+                log.exception("watchdog clock check failed")
+
+    # ------------------------------------------------------------------
     # Event handlers — registered with the broker
     # ------------------------------------------------------------------
 
@@ -645,6 +722,7 @@ class ExecutionEngine:
         and a fill arriving during that window only changes state
         the NEXT signal will see — which is correct behavior.
         """
+        self._last_bar_at = datetime.now(timezone.utc)  # feed-watchdog: wall-clock arrival
         await self._enforce_flatten(bar.ts)
         td = trading_day_ct(bar.ts)
         if self._phase_day is None:

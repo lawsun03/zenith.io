@@ -46,3 +46,57 @@ class TestBarsExpected:
     def test_early_close_day_morning_open(self):
         # 2026-07-03 10:00 CT CDT == 15:00 UTC — still open before noon
         assert bars_expected(_utc(2026, 7, 3, 15, 0))
+
+
+class TestWatchdogStep:
+    def _engine(self, tf="5min"):
+        from types import SimpleNamespace
+        from app.broker.paper import PaperBroker
+        from app.execution.engine import ExecutionEngine
+        from app.risk.config import fifty_k_combine
+        from app.risk.state import RiskState
+        runner = SimpleNamespace(instrument="MNQ", timeframe=tf, signal_instrument="")
+        return ExecutionEngine(
+            broker=PaperBroker(), risk_state=RiskState(config=fifty_k_combine()),
+            runners=[runner], replay_mode=True, feed_watchdog_enabled=True)
+
+    def test_threshold_5min(self):
+        assert self._engine("5min")._watchdog_threshold_s() == 900   # max(3*300, 600)
+
+    def test_threshold_1min_floor(self):
+        assert self._engine("1min")._watchdog_threshold_s() == 600   # max(3*60, 600)
+
+    def test_live_to_dead_when_expected(self):
+        eng = self._engine()
+        eng._last_bar_at = _utc(2026, 1, 15, 16, 0)          # 10:00 CT
+        out = eng._watchdog_step(_utc(2026, 1, 15, 16, 20))  # 20 min later, expected
+        assert out["status"] == "dead" and out["transition"] == "dead"
+        assert eng._feed_status == "DEAD"
+
+    def test_dead_does_not_realert(self):
+        eng = self._engine()
+        eng._last_bar_at = _utc(2026, 1, 15, 16, 0)
+        eng._watchdog_step(_utc(2026, 1, 15, 16, 20))        # -> dead
+        out = eng._watchdog_step(_utc(2026, 1, 15, 16, 25))  # still dead
+        assert out["transition"] is None and eng._feed_status == "DEAD"
+
+    def test_recovery_on_bar(self):
+        eng = self._engine()
+        eng._last_bar_at = _utc(2026, 1, 15, 16, 0)
+        eng._watchdog_step(_utc(2026, 1, 15, 16, 20))        # dead
+        eng._last_bar_at = _utc(2026, 1, 15, 16, 26)         # a bar arrived
+        out = eng._watchdog_step(_utc(2026, 1, 15, 16, 26))
+        assert out["transition"] == "recovered" and eng._feed_status == "LIVE"
+
+    def test_quiet_suppressed_in_break(self):
+        eng = self._engine()
+        eng._last_bar_at = _utc(2026, 1, 15, 22, 0)          # 16:00 CT
+        out = eng._watchdog_step(_utc(2026, 1, 15, 22, 40))  # 16:40 CT, gap but break
+        assert out["status"] == "quiet" and out["transition"] is None
+        assert eng._feed_status == "QUIET_EXPECTED"
+
+    def test_not_armed_never_alerts(self):
+        eng = self._engine()
+        eng._last_bar_at = None
+        out = eng._watchdog_step(_utc(2026, 1, 15, 16, 20))
+        assert out["transition"] is None and eng._feed_status == "LIVE"
