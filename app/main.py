@@ -1305,6 +1305,28 @@ async def _async_main() -> int:
             len(base_suppress_dates),
         )
 
+    async def _on_feed_status(payload: dict) -> None:
+        # UI: push every tick (independent of bars) so the panel reflects DEAD.
+        try:
+            journal.publish_feed_watchdog(payload)
+        except Exception:
+            log.exception("publish_feed_watchdog failed")
+        # Alerts: only on a transition edge.
+        t = payload.get("transition")
+        if t == "dead":
+            title = "🔴 FEED DEAD"
+            body = (f"No bars for {payload['seconds_since']}s "
+                    f"(threshold {payload['threshold_s']}s). Last bar {payload['last_bar_at']}.")
+        elif t == "recovered":
+            title = "🟢 FEED RECOVERED"
+            body = f"Bars resumed. Last bar {payload['last_bar_at']}."
+        else:
+            return
+        if discord.enabled:
+            await discord.send_alert(title, body)
+        if notifier.enabled:
+            await notifier.send(title, body)
+
     engine = ExecutionEngine(
         broker=broker,
         risk_state=risk_state,
@@ -1319,6 +1341,8 @@ async def _async_main() -> int:
         commission_per_contract=Decimal(str(bot_cfg.commission_per_contract)),
         max_contracts_override=bot_cfg.max_contracts_override,
         forming_bar_entries=bot_cfg.forming_bar_entries,
+        feed_watchdog_enabled=bot_cfg.feed_watchdog_enabled,
+        on_feed_status=_on_feed_status,
         flatten_enabled=bot_cfg.flatten_enabled,
         flatten_time_ct=bot_cfg.flatten_time_ct,
         entry_cutoff_time_ct=bot_cfg.entry_cutoff_time_ct,
