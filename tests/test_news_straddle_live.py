@@ -308,6 +308,18 @@ def test_preflight_ok_when_enough_bars():
     assert not any(a["kind"] == "early_warning" for a in alerts)
 
 
+def test_scheduler_state_includes_reason():
+    event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
+    broker = FakeBroker(raise_on_fetch=True)
+    sched = _sched(broker, event)
+    asyncio.run(sched._arm_event(sched._events[0]))  # -> skipped, reason set
+    st = sched.state()
+    assert st["event_type"] == "CPI"
+    ev0 = st["events"][0]
+    assert ev0["status"] == "skipped"
+    assert ev0["reason"] == "fetch_error"
+
+
 # ------------------------------- config gate --------------------------------
 
 def test_live_path_is_default_off():

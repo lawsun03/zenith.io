@@ -255,6 +255,7 @@ class NewsStraddleScheduler:
         """Live dashboard view (Rule 13). Pure read."""
         return {
             "instrument": self.instrument,
+            "event_type": self.event_type,
             "offset": str(self.offset),
             "tp_r": str(self.tp_r),
             "size": self.size,
@@ -262,6 +263,7 @@ class NewsStraddleScheduler:
                 {
                     "ts": ev.ts.isoformat(),
                     "status": ev.status,
+                    "reason": ev.reason,
                     "range_high": str(ev.rhigh) if ev.rhigh is not None else None,
                     "range_low": str(ev.rlow) if ev.rlow is not None else None,
                 }
