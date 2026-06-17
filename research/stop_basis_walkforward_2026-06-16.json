@@ -1,0 +1,38 @@
+{
+  "train_2024": {
+    "default": {
+      "trades": 478,
+      "win_rate": 49.8,
+      "profit_factor": 1.0391627728521295,
+      "net_pnl": 1282.02,
+      "max_drawdown": 8009.82,
+      "expectancy": 2.682050209205021
+    },
+    "sweep_extreme": {
+      "trades": 482,
+      "win_rate": 47.1,
+      "profit_factor": 0.9684369405257052,
+      "net_pnl": -833.54,
+      "max_drawdown": 6771.26,
+      "expectancy": -1.7293360995850622
+    }
+  },
+  "test_2025_2026": {
+    "default": {
+      "trades": 611,
+      "win_rate": 47.0,
+      "profit_factor": 1.0072619889885202,
+      "net_pnl": 417.96,
+      "max_drawdown": 5618.09,
+      "expectancy": 0.6840589198036007
+    },
+    "sweep_extreme": {
+      "trades": 625,
+      "win_rate": 46.2,
+      "profit_factor": 1.0978778575010393,
+      "net_pnl": 4200.44,
+      "max_drawdown": 3408.81,
+      "expectancy": 6.720704
+    }
+  }
+}
