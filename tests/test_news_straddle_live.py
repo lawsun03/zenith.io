@@ -296,3 +296,14 @@ def test_straddle_preflight_config_defaults():
     s = StrategyParams()
     assert s.news_straddle_preflight_lead_seconds == 300
     assert s.news_straddle_retry_interval_seconds == 60
+
+
+def test_journal_publish_straddle_event():
+    from app.api.journal import Journal
+    captured = []
+    j = Journal()
+    j._publish = lambda entry: captured.append(entry)   # stub the broadcast
+    j.publish_straddle_event({"kind": "armed", "event_type": "FOMC"})
+    assert len(captured) == 1
+    assert captured[0].kind == "straddle_event"
+    assert captured[0].payload["kind"] == "armed"

@@ -302,6 +302,13 @@ class Journal:
             ts=datetime.now(timezone.utc), kind="feed_watchdog", payload=payload,
         ))
 
+    def publish_straddle_event(self, payload: dict) -> None:
+        """Broadcast a news-straddle lifecycle event (early_warning | skipped |
+        armed | recovered) to dashboard clients so a skip is never silent."""
+        self._publish(JournalEntry(
+            ts=datetime.now(timezone.utc), kind="straddle_event", payload=payload,
+        ))
+
     def publish_strategy_state(
         self,
         instrument: str,
