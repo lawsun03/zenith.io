@@ -231,6 +231,22 @@ class _Awaiting:
     killzone_name: str
 
 
+def _stop_anchor_for_basis(*, basis, side, zone_low, zone_high, sweep_extreme,
+                           swing_anchor, entry, atr, atr_mult):
+    """Stop ANCHOR (pre-buffer) for the chosen stop_basis. Returns None for
+    "default" (and for an unknown basis, or when the chosen anchor is unavailable)
+    so the caller keeps its existing swing_stop_lookback logic untouched."""
+    if basis == "ifvg_edge":
+        return zone_low if side == "long" else zone_high
+    if basis == "sweep_extreme":
+        return sweep_extreme
+    if basis == "atr":
+        if atr is None or atr <= 0:
+            return None
+        return (entry - atr_mult * atr) if side == "long" else (entry + atr_mult * atr)
+    return None  # "default" or unknown -> existing logic
+
+
 class SweepDisplacementComposer:
     """
     Composes sweep + displacement events into Signals.
@@ -695,6 +711,13 @@ class SweepDisplacementComposer:
                 stop_anchor = min(swing_anchor, awaiting.sweep.sweep_extreme)
             else:
                 stop_anchor = awaiting.sweep.sweep_extreme
+            _basis_anchor = _stop_anchor_for_basis(
+                basis=cfg.stop_basis, side="long",
+                zone_low=zone_low, zone_high=zone_high,
+                sweep_extreme=awaiting.sweep.sweep_extreme, swing_anchor=None,
+                entry=entry, atr=event.atr_at_event, atr_mult=cfg.atr_stop_mult)
+            if _basis_anchor is not None:
+                stop_anchor = _basis_anchor
             buf = (stop_anchor * cfg.stop_buffer_pct
                    if cfg.stop_buffer_pct > 0
                    else cfg.stop_buffer)
@@ -709,6 +732,13 @@ class SweepDisplacementComposer:
                 stop_anchor = max(swing_anchor, awaiting.sweep.sweep_extreme)
             else:
                 stop_anchor = awaiting.sweep.sweep_extreme
+            _basis_anchor = _stop_anchor_for_basis(
+                basis=cfg.stop_basis, side="short",
+                zone_low=zone_low, zone_high=zone_high,
+                sweep_extreme=awaiting.sweep.sweep_extreme, swing_anchor=None,
+                entry=entry, atr=event.atr_at_event, atr_mult=cfg.atr_stop_mult)
+            if _basis_anchor is not None:
+                stop_anchor = _basis_anchor
             buf = (stop_anchor * cfg.stop_buffer_pct
                    if cfg.stop_buffer_pct > 0
                    else cfg.stop_buffer)
