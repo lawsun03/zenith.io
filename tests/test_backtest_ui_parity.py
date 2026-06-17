@@ -29,3 +29,20 @@ def test_result_carries_fills():
     result = asyncio.run(run_backtest(_mini_cfg()))
     assert hasattr(result, "fills"), "BacktestResult must expose fills"
     assert isinstance(result.fills, list)
+
+
+def test_result_to_dict_has_frontend_contract_keys():
+    import json
+    from app.backtest.runner import result_to_dict
+    result = asyncio.run(run_backtest(_mini_cfg()))
+    d = result_to_dict(result, id="abc", label="lbl",
+                       started_at="2026-06-16T00:00:00Z",
+                       completed_at="2026-06-16T00:01:00Z")
+    for key in ("id", "label", "started_at", "completed_at",
+                "stats", "trades", "signals", "fills",
+                "config", "bars_processed", "rejected_signals"):
+        assert key in d, f"missing top-level key: {key}"
+    for key in ("trades", "win_rate", "net_pnl"):
+        assert key in d["stats"], f"missing stats key: {key}"
+    # Must be JSON-serializable (no Decimal/datetime leaking through):
+    json.dumps(d)

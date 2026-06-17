@@ -790,6 +790,57 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
     )
 
 
+def _json_safe(obj):
+    """Recursively coerce Decimal/datetime/tuple into JSON-serializable types."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def result_to_dict(result: BacktestResult, *, id: str, label: str,
+                   started_at: str, completed_at: str) -> dict:
+    """Serialize a BacktestResult into the dict shape the UI/frontend reads.
+
+    Contract (load-bearing): top-level id/label/started_at/completed_at/stats/
+    trades/signals/fills/config/bars_processed/rejected_signals; stats must
+    contain trades/win_rate/net_pnl. See docs plan 2026-06-16-ui-backtest-parity.
+
+    `config` is built manually (not dataclasses.asdict): BacktestConfig.bars is a
+    consumed generator that can't be deep-copied, and strategy_params is a pydantic
+    model — both break asdict. We emit the scalar settings + strategy_params dump.
+    """
+    cfg = result.config
+    config = {
+        "instrument": cfg.instrument,
+        "timeframe": cfg.timeframe,
+        "starting_balance": float(cfg.starting_balance),
+        "contracts": cfg.contracts,
+        "enforce_risk_limits": cfg.enforce_risk_limits,
+        "enabled_killzones": cfg.enabled_killzones,
+        "strategy_params": (cfg.strategy_params.model_dump(mode="json")
+                            if cfg.strategy_params is not None else None),
+    }
+    return {
+        "id": id,
+        "label": label or result.label,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "stats": _json_safe(dataclasses.asdict(result.stats)),
+        "trades": _json_safe(result.trades),
+        "signals": _json_safe(result.signals),
+        "fills": _json_safe(result.fills),
+        "config": _json_safe(config),
+        "bars_processed": result.bars_processed,
+        "rejected_signals": result.rejected_signals,
+    }
+
+
 def _apply_sweep_dim(cfg: BacktestConfig, dim: SweepDimension, value: Any) -> BacktestConfig:
     """Return a new BacktestConfig with one param overridden."""
     if dim.container == "strategy":
