@@ -1,5 +1,13 @@
 # Forming-Bar-Aware Backtest Replay Implementation Plan
 
+> **STATUS: WON'T DO (decided 2026-06-16).** Kept for reference, not scheduled. The
+> harness is a backtest-fidelity tool that would only *measure* whether re-enabling
+> forming-bar entries is +EV — and the priors say it isn't worth building (path was
+> gated off for noise; deployed closed-bar config is walk-forward-validated at PF 1.15;
+> extra mid-bar fills add drag; Tasks 1-2 touch the live engine/broker). Revisit only
+> if a concrete goal (e.g. higher trade frequency for faster Combine passes) justifies
+> it. See memory [[forming-bar-entries-gate]] for the full rationale.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replay 5s intrabar data through the real strategy + engine so the backtest reproduces live's forming-bar entries, with bracket fills resolved at 5s resolution.
