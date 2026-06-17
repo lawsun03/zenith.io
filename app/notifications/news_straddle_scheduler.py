@@ -196,24 +196,56 @@ class NewsStraddleScheduler:
                 return ev
         return None
 
+    async def _preflight(self, ev: _SchedEvent) -> bool:
+        """Readiness check ~preflight_lead before release. Fires an early-warning
+        alert (with time to react) if at risk. Returns True if ready/on-track."""
+        ok, n, reason = await self._is_ready()
+        if ok:
+            log.info("news_straddle scheduler preflight OK %s (%d bars)", ev.ts, n)
+            return True
+        log.warning("news_straddle scheduler preflight AT-RISK %s: %s", ev.ts, reason)
+        await self._alert("early_warning", ev, reason=reason)
+        return False
+
+    async def _sleep_until(self, when: datetime) -> bool:
+        """Sleep until `when` (interruptible by stop). Returns True if stop was set."""
+        secs = max(0.0, (when - self._now()).total_seconds())
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout=secs)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
     async def _run(self) -> None:
         while not self._stop_event.is_set():
             ev = self._next_pending()
             if ev is None:
-                # No upcoming events — idle, re-checking hourly (events file may
-                # be reloaded, and we avoid a tight spin).
-                sleep_s = 3600.0
-            else:
-                arm_ts = ev.ts - timedelta(seconds=self.arm_lead_seconds)
-                sleep_s = max(0.0, (arm_ts - self._now()).total_seconds())
-            try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=sleep_s)
-                break  # stop requested
-            except asyncio.TimeoutError:
-                pass
+                if await self._sleep_until(self._now() + timedelta(hours=1)):
+                    break
+                continue
+            preflight_ts = ev.ts - timedelta(seconds=self.preflight_lead_seconds)
+            arm_ts = ev.ts - timedelta(seconds=self.arm_lead_seconds)
+            if await self._sleep_until(preflight_ts):
+                break
+            if ev.status != _PENDING:
+                continue
+            # Pre-flight; on trouble, retry until arm time.
+            if not await self._preflight(ev):
+                while not self._stop_event.is_set() and self._now() < arm_ts:
+                    nxt = min(self._now() + timedelta(seconds=self.retry_interval_seconds), arm_ts)
+                    if await self._sleep_until(nxt):
+                        break
+                    ok, _, _ = await self._is_ready()
+                    if ok:
+                        log.info("news_straddle scheduler preflight RECOVERED %s", ev.ts)
+                        await self._alert("recovered", ev, reason="")
+                        break
             if self._stop_event.is_set():
                 break
-            if ev is not None and ev.status == _PENDING:
+            # Arm at the validated arm time regardless of preflight outcome.
+            if await self._sleep_until(arm_ts):
+                break
+            if ev.status == _PENDING:
                 try:
                     await self._arm_event(ev)
                 except Exception:

@@ -285,6 +285,29 @@ def test_scheduler_does_not_rearm_fired_event():
     assert len(broker.oco_calls) == 1
 
 
+def test_preflight_alerts_early_when_not_ready():
+    event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
+    broker = FakeBroker(raise_on_fetch=True)   # feed unavailable
+    alerts = []
+    sched = _sched(broker, event, alerts=alerts)
+    ok = asyncio.run(sched._preflight(sched._events[0]))
+    assert ok is False
+    assert any(a["kind"] == "early_warning" for a in alerts)
+
+
+def test_preflight_ok_when_enough_bars():
+    event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
+    # _is_ready uses [now-15min, now); supply 15 bars ending ~now.
+    now = datetime.now(UTC)
+    bars = _window_bars(now, 15, [105] * 15, [95] * 15)
+    broker = FakeBroker(bars=bars)
+    alerts = []
+    sched = _sched(broker, event, alerts=alerts)
+    ok = asyncio.run(sched._preflight(sched._events[0]))
+    assert ok is True
+    assert not any(a["kind"] == "early_warning" for a in alerts)
+
+
 # ------------------------------- config gate --------------------------------
 
 def test_live_path_is_default_off():
