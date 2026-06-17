@@ -1,7 +1,7 @@
 # Forming-Bar-Aware Backtest Replay — Design Spec
 
 **Date:** 2026-05-27
-**Status:** Approved (pending spec review)
+**Status:** Approved — readiness re-verified 2026-06-16 (see plan's "2026-06-16 Refresh"); ready to execute
 **Parent:** `docs/superpowers/specs/2026-05-27-backtest-data-pipeline-scope.md` (sub-project B)
 **Goal:** Make the backtest reproduce live signal generation by replaying sub-minute (5s) data as forming bars and resolving bracket fills at 5s resolution — closing the fidelity gap where completed-1min-bar replay generates ~0.3 signals/day vs ~5/day live.
 

@@ -834,3 +834,28 @@ git add -A && git commit -m "test: forming-bar replay full regression green"
 - `_build_runner`, `_compute_stats`, `_reconstruct_trades`, `BacktestConfig`, `BacktestResult` — existing in `app/backtest/runner.py`, imported in Task 4/5.
 
 **Dedup test note:** the per-`b2.ts` dedup is exercised indirectly (Task 1 reuse + Task 7 acceptance). If a unit test is wanted, add one feeding two consecutive identical forming samples to a primed fake runner and asserting one placement — but the fake-runner setup in Task 1 already covers the single-fire path.
+
+---
+
+## 2026-06-16 Refresh — readiness verified against current master
+
+This plan predates a large runner/backtest refactor. Re-verified today; **still
+executable as written**, with these deltas the implementer must apply:
+
+**Anchors confirmed present (no rewrite needed):**
+- `ExecutionEngine._poll_forming_bars` + `_forming_signal_fired` + `try_signal_from_forming` — live forming path intact (Task 1 extraction still valid).
+- `PaperBroker.inject_bar` (`app/broker/paper.py:398`) — Task 2 `_resolve_bracket` extraction target intact.
+- `app/backtest/runner.py`: `_build_runner(cfg)` (`:143`), `_compute_stats(...)` (`:439`), `_reconstruct_trades(fills)` (`:545`) — all present.
+
+**Deltas since 2026-05-27 (apply during execution):**
+1. **Exact helper signatures for Task 5** (the design predates them):
+   - `_compute_stats(fills: list[dict], risk_state: RiskState, starting_balance: Decimal) -> BacktestStats`
+   - `_reconstruct_trades(fills: list[dict]) -> list[dict]`
+   The driver builds a `RiskState` (use `fifty_k_combine(...)` / `_no_limits_risk_config` per `cfg.enforce_risk_limits`, mirroring `run_backtest`) and passes `cfg.starting_balance`.
+2. **`BacktestResult` now has a `fills` field** (added this session for UI parity). Task 5's `run_intrabar_backtest` should populate `fills=fills_captured` in its returned `BacktestResult` for parity with the canonical `run_backtest`.
+3. **The backtest path is now singular.** The dead `app/backtest.py` shadow module was deleted (UI-parity work, commit on master 2026-06-16); `app.backtest` is unambiguously the package. "Reuse from `app/backtest/runner.py`" has no ambiguity now. The UI entry `app/backtest/__main__.py` delegates to `runner.run_backtest` — if forming-bar replay should be reachable from the UI later, add a `--intrabar` switch there in a follow-up (out of scope here).
+4. **Validation data is now far deeper** (Task 7): three captured intrabar CSVs exist in repo root — `intrabar_MGC.csv` (~201k rows), `intrabar_MNQ.csv` (~145k), `intrabar_MES.csv` (~62k) — vs the single small MGC session the design assumed. Strengthen Task 7: run the acceptance per instrument and check rate-sanity (several signals/session, not ~0.3/day) on all three, not just MGC. The ±1 count tolerance still applies only where a live ground-truth log exists for that session.
+
+**Caution flag (unchanged but emphasized):** Tasks 1 and 2 modify the **live** `ExecutionEngine` and `PaperBroker` via behavior-preserving extractions. These are real-money paths — the behavior-preserving tests (Task 1 Step 4 full engine suite; Task 2 broker+partials+backtest suites) are load-bearing gates, not formalities. Run the full suite (currently ~936 tests) green before merge.
+
+**Status:** Ready to execute. Recommend `superpowers:executing-plans` on a `feat/forming-bar-replay` branch; merge only after the full suite is green and the Task 7 acceptance shows live-like signal rates.
