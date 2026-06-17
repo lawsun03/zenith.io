@@ -115,8 +115,9 @@ async def _run_backtest(
         "stats": stats,
         "funded_pipeline": funded_pipeline,
         "trades": result.trades,
-        "signals": [],
-        "fills": [],
+        "signals": _to_jsonable(result.signals),
+        "fills": _to_jsonable(result.fills),
+        "rejected_signals": result.rejected_signals,
     }
 
 
