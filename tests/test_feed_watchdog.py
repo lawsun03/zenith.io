@@ -154,3 +154,8 @@ def test_discord_send_alert_noop_when_disabled():
     d = DiscordNotifier(webhook_url="")   # disabled
     assert d.enabled is False
     assert asyncio.run(d.send_alert("Feed dead", "no bars 20m")) is False
+
+
+def test_config_default():
+    from app.bot_config import BotConfig
+    assert BotConfig().feed_watchdog_enabled is True

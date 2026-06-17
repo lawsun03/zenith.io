@@ -352,6 +352,8 @@ class BotConfig(BaseModel):
     # backtest/walk-forward validates. True = enter the moment the forming
     # bar satisfies the inversion price (touch, not close) — unvalidated.
     forming_bar_entries: bool = False
+    # Feed-dead watchdog: alert when bars stop arriving during expected hours.
+    feed_watchdog_enabled: bool = True
     contracts: int = 1              # number of contracts per signal
     risk_per_trade_pct: Decimal = Decimal("0.25")  # 0 = disabled (use fixed contracts); else % of equity risked per trade
     partial_profit_r: Decimal = Decimal("0")  # 0 = disabled; e.g. 1.5 = take half at 1.5R then move stop to break-even (BE-only for 1-lots)
@@ -450,6 +452,7 @@ def save_bot_config(config: BotConfig, path: Path) -> None:
         "account_name": config.account_name,
         "entry_mode": config.entry_mode,
         "forming_bar_entries": config.forming_bar_entries,
+        "feed_watchdog_enabled": config.feed_watchdog_enabled,
         "contracts": config.contracts,
         "risk_per_trade_pct": _conv(config.risk_per_trade_pct),
         "partial_profit_r": _conv(config.partial_profit_r),

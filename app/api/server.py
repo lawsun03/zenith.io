@@ -505,6 +505,7 @@ def build_app(
             "account_name": cfg.account_name,
             "entry_mode": cfg.entry_mode,
             "forming_bar_entries": cfg.forming_bar_entries,
+            "feed_watchdog_enabled": cfg.feed_watchdog_enabled,
             "contracts": cfg.contracts,
             "risk_per_trade_pct": float(cfg.risk_per_trade_pct),
             "partial_profit_r": float(cfg.partial_profit_r),
@@ -537,6 +538,13 @@ def build_app(
             _engine.contracts = body.contracts
             _engine.risk_per_trade_pct = body.risk_per_trade_pct
             _engine.forming_bar_entries = body.forming_bar_entries
+            # Feed-dead watchdog: hot-apply by reconciling the task to the flag.
+            _engine.feed_watchdog_enabled = body.feed_watchdog_enabled
+            if body.feed_watchdog_enabled and _engine._watchdog_task is None:
+                _engine._watchdog_task = asyncio.create_task(_engine._watchdog_clock())
+            elif not body.feed_watchdog_enabled and _engine._watchdog_task is not None:
+                _engine._watchdog_task.cancel()
+                _engine._watchdog_task = None
             _engine.strategy_cfg = body.strategy
             _engine.commission_per_contract = Decimal(str(body.commission_per_contract))
             _engine.max_contracts_override = body.max_contracts_override
