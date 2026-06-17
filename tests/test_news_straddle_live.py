@@ -344,3 +344,22 @@ def test_journal_publish_straddle_event():
     assert len(captured) == 1
     assert captured[0].kind == "straddle_event"
     assert captured[0].payload["kind"] == "armed"
+
+
+def test_build_schedulers_threads_event_type_and_alert():
+    import asyncio as _aio
+    from app.strategy.news_straddle import build_news_straddle_schedulers, ResolvedStraddleSpec
+    specs = [ResolvedStraddleSpec(event_type="FOMC", instrument="MGC", offset_ticks=20,
+                                  tp_r=Decimal("3.0"), contracts=20, suppress_base=False)]
+    seen = []
+    async def alert_fn(p): seen.append(p)
+    scheds = build_news_straddle_schedulers(
+        broker=FakeBroker(), specs=specs, events_path="data/news_events.csv",
+        arm_lead_seconds=120, alert_fn=alert_fn,
+        preflight_lead_seconds=300, retry_interval_seconds=60,
+    )
+    assert len(scheds) == 1
+    s = scheds[0]
+    assert s.event_type == "FOMC" and s.instrument == "MGC" and s.size == 20
+    assert s.preflight_lead_seconds == 300 and s.retry_interval_seconds == 60
+    assert s._alert_fn is alert_fn
