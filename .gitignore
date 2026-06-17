@@ -53,3 +53,9 @@ Capture.PNG
 .playwright-mcp/
 scripts/_*.py
 research/STOP
+
+# live account config + trade logs (kept local, never tracked)
+bot_config.json
+config_presets.json
+trades/
+backtests/_config_*.json
