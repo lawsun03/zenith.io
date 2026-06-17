@@ -1,5 +1,12 @@
 # topstep-bot
 
+> **Zenith** — a local-first algorithmic trading bot for the Topstep $50K Combine,
+> built in Python (FastAPI/asyncio) with a React + TypeScript live dashboard. Includes
+> an autonomous research loop that backtests strategy ideas against 5 years of tick
+> data and rejects the losers via walk-forward validation. 819 automated tests.
+
+![Live dashboard](docs/assets/dashboard.png)
+
 Sweep/displacement futures bot for the Topstep $50K Combine. Runs locally
 per Topstep's no-VPS rule.
 
@@ -93,7 +100,7 @@ there override the corresponding env vars.
 .venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-All 65 tests should pass.
+All 819 tests should pass.
 
 ## Backtest
 
