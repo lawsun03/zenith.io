@@ -42,6 +42,11 @@ class StrategyParams(BaseModel):
     min_absolute_body: Decimal = Decimal("1.0")
     displacement_window_bars: int = 5
     stop_buffer: Decimal = Decimal("0.30")
+    # Stop anchor selector for the iFVG path. "default" preserves the existing
+    # swing_stop_lookback logic (no behavior change). Other values are for the
+    # stop-basis A/B sweep: "ifvg_edge" | "sweep_extreme" | "atr".
+    stop_basis: str = "default"
+    atr_stop_mult: Decimal = Decimal("1.0")  # ATR multiple; only when stop_basis == "atr"
     r_multiple: Decimal = Decimal("2.5")
     trend_ema_period: int = 50  # 0 = disabled; N = only take signals with the N-bar EMA trend
     min_atr_filter: Decimal = Decimal("0")  # 0 = no floor; N = require ATR >= N before entering

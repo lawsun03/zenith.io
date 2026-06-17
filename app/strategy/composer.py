@@ -186,6 +186,10 @@ class ComposerConfig:
     # "fvg_mid" = FVG zone midpoint (tighter, target scaled by new r).
     # "fvg_mid_abs" = FVG midpoint stop, original absolute target (higher R).
     stop_mode: str = "swing"
+    # Stop anchor selector (see StrategyParams.stop_basis). "default" = existing
+    # logic untouched; "ifvg_edge" | "sweep_extreme" | "atr" for the A/B sweep.
+    stop_basis: str = "default"
+    atr_stop_mult: Decimal = Decimal("1.0")
 
     # B44: iFVG mid-session block by ET hour. Empty list = no blocking (default).
     # Suppress iFVG signal emission when bar.ts ET hour is in this list. Sweep state
