@@ -105,13 +105,20 @@ gitignored, `.env.example` exists. Remaining work:
 2. **README polish** — fix the stale "All 65 tests should pass" line (now 819),
    add a one-paragraph project summary + one embedded screenshot, make it
    recruiter-readable. Keep existing setup instructions.
-3. **Clean the repo root** — the loose debug PNGs (`account-switcher-*.png`,
+3. **Untrack `frontend/node_modules`** — 3,723 files are committed (verified
+   2026-06-16). `git rm -r --cached frontend/node_modules`, add it to
+   `.gitignore`, commit. Must happen before the repo goes public.
+4. **Clean the repo root** — the loose debug PNGs (`account-switcher-*.png`,
    `dashboard-before-config.png`, `backtests-page.png`, `config-panel-open.png`,
    `dark-brutalist-preview.png`, `design-options.png`) and scratch scripts
    (`scripts/_*.py`) clutter the tree. Move screenshots to a `docs/` or `assets/`
    folder (or gitignore), so a visitor sees a clean root. Read/cleanup only.
-4. **Repo visibility** — confirm with Lawrence whether `zenith.io` should be made
-   public; not done automatically.
+5. **Repo visibility — make public (confirmed).** `github.com/lawsun03/zenith.io`
+   is made public as the **final** step, after items 1–4. `gh` CLI is not
+   installed locally (verified 2026-06-16), so this is a manual step by Lawrence
+   (GitHub web UI → Settings → Change visibility) or via `gh` if installed.
+   Secrets scan of tracked files came back clean (only env-var *names* and
+   placeholders, no real values).
 
 ## Part C — Screenshots (redacted)
 
@@ -130,8 +137,12 @@ gitignored, `.env.example` exists. Remaining work:
 - No real account numbers visible in any screenshot.
 - Bot repo: no secrets, clean root, README renders well and reflects 819 tests.
 
+## Confirmed decisions
+
+- GitHub link: `github.com/lawsun03/zenith.io`.
+- Repo will be made **public** (final step, post-cleanup).
+
 ## Open items to confirm during implementation
 
 - Exact verified stats for the results grid (see Part A table).
-- Whether `zenith.io` is made public (Part B item 4).
 - Final screenshot selection after redaction review.
