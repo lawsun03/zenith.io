@@ -275,12 +275,40 @@ class Reconciler:
     # One tick
     # ------------------------------------------------------------------
 
+    def _sentinel_report(self, ts: datetime, notes: str) -> ReconcileReport:
+        """A tick that happened but produced no broker truth. broker_open_contracts
+        = -1 signals 'unknown' so callers never act on it (no drift, no flatten)."""
+        report = ReconcileReport(
+            ts=ts,
+            broker_open_contracts=-1,
+            broker_balance=Decimal("0"),
+            internal_open_contracts=self.risk_state.open_contracts,
+            internal_balance=self.risk_state.realized_balance,
+            drift_detected=False,
+            drift_kind=None,
+            flattened=False,
+            notes=notes,
+        )
+        self._last_report = report
+        return report
+
     async def tick(self) -> ReconcileReport:
         """
         Run one reconcile pass. Returns the report so callers (tests)
         can assert behavior.
         """
         ts = datetime.now(timezone.utc)
+
+        # Don't reconcile against a broker that isn't ready. At startup the
+        # TradingSuite isn't created until subscribe() runs, so a pull would
+        # raise "not subscribed"; during a feed outage the broker's view is
+        # stale and the engine already blocks trading. Skip quietly and let
+        # the next tick recover — same philosophy as the query-failure path
+        # below: never act on partial data. (PaperBroker reports healthy once
+        # connect() has run, so backtests are unaffected.)
+        if not self.broker.feed_is_healthy():
+            log.debug("Reconciler: broker feed not healthy — skipping tick")
+            return self._sentinel_report(ts, "broker feed not healthy")
 
         # Pull broker truth. If either call fails, abort the tick;
         # we'd rather skip than make decisions on partial data.
@@ -289,21 +317,7 @@ class Reconciler:
             broker_balance = await self.broker.account_balance()
         except Exception as e:
             log.warning("Reconciler could not pull broker state: %s", e)
-            # Build a sentinel report so callers know the tick happened
-            # but produced no information.
-            report = ReconcileReport(
-                ts=ts,
-                broker_open_contracts=-1,
-                broker_balance=Decimal("0"),
-                internal_open_contracts=self.risk_state.open_contracts,
-                internal_balance=self.risk_state.realized_balance,
-                drift_detected=False,
-                drift_kind=None,
-                flattened=False,
-                notes=f"broker query failed: {e}",
-            )
-            self._last_report = report
-            return report
+            return self._sentinel_report(ts, f"broker query failed: {e}")
 
         # Signed net contracts: long = +size, short = -size. The comparison
         # MUST be signed, not magnitude. A sign-flipped/orphaned position

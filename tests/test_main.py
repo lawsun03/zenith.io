@@ -330,3 +330,19 @@ def test_fill_journaler_opens_trade_excursion(monkeypatch, tmp_path):
     assert opened and opened[0]["key"] == "OID9"
     assert opened[0]["kind"] == "trade" and opened[0]["side"] == "long"
     assert opened[0]["stop"] == Decimal("98")
+
+
+def test_session_pnl_excludes_voided_and_half_turn():
+    """Daily P&L bootstrap seeds the daily-loss gate, so it must count only
+    settled trades: voided trades and half-turn trades (profitAndLoss=None)
+    must be excluded, or the gate is seeded with phantom P&L."""
+    from app.main import _session_pnl_from_trades
+
+    trades = [
+        {"profitAndLoss": 100.0, "voided": False},
+        {"profitAndLoss": -40.0, "voided": False},
+        {"profitAndLoss": 999.0, "voided": True},     # voided -> excluded
+        {"profitAndLoss": None, "voided": False},      # half-turn -> skipped
+    ]
+    assert _session_pnl_from_trades(trades) == Decimal("60")
+    assert _session_pnl_from_trades([]) == Decimal("0")

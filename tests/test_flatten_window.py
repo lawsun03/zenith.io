@@ -56,6 +56,86 @@ class TestEntryCutoff:
         assert not past_entry_cutoff(_utc(2026, 1, 16, 0, 0), "14:30")
 
 
+class TestEarlyCloseAutoFlatten:
+    """CME early-close days (12:00 PM CT close). The bot must auto-shift the
+    flatten window AND entry cutoff earlier without manual config, because the
+    configured 15:05 flatten fires *after* CME has already auto-closed at noon
+    — which on a funded account looks like an uncontrolled exit through the
+    close. Behavior: on a known early-close trading day, flatten from 11:50 CT
+    and block entries from 11:30 CT, regardless of the (later) configured times.
+    """
+
+    # --- flatten window auto-shifts earlier on early-close days ---
+    def test_early_close_in_window_after_1150_cdt(self):
+        # 2026-07-03 (day before July 4) is CDT (UTC-5): 11:55 CT == 16:55 UTC
+        assert in_flatten_window(_utc(2026, 7, 3, 16, 55), "15:05")
+
+    def test_early_close_not_in_window_before_1150_cdt(self):
+        # 11:45 CT == 16:45 UTC, before the 11:50 early flatten
+        assert not in_flatten_window(_utc(2026, 7, 3, 16, 45), "15:05")
+
+    def test_early_close_in_window_cst(self):
+        # 2026-12-24 (Christmas Eve) is CST (UTC-6): 11:55 CT == 17:55 UTC
+        assert in_flatten_window(_utc(2026, 12, 24, 17, 55), "15:05")
+
+    def test_normal_day_window_unaffected_at_same_clock_time(self):
+        # Regression guard: 2026-07-15 is NOT early-close. 11:55 CT == 16:55 UTC
+        # must remain OUTSIDE the window — configured 15:05 still governs.
+        assert not in_flatten_window(_utc(2026, 7, 15, 16, 55), "15:05")
+
+    # --- entry cutoff auto-shifts earlier on early-close days ---
+    def test_early_close_entry_blocked_after_1130_cdt(self):
+        # 11:35 CT == 16:35 UTC, past the 11:30 early cutoff
+        assert past_entry_cutoff(_utc(2026, 7, 3, 16, 35), "14:30")
+
+    def test_early_close_entry_allowed_before_1130_cdt(self):
+        # 11:25 CT == 16:25 UTC, before the early cutoff
+        assert not past_entry_cutoff(_utc(2026, 7, 3, 16, 25), "14:30")
+
+    def test_normal_day_entry_cutoff_unaffected(self):
+        # Regression guard: 2026-07-15 11:35 CT == 16:35 UTC must stay allowed.
+        assert not past_entry_cutoff(_utc(2026, 7, 15, 16, 35), "14:30")
+
+    def test_is_early_close_day_detects_known_date(self):
+        from app.risk.flatten import is_early_close_day
+        assert is_early_close_day(_utc(2026, 7, 3, 16, 0))      # 11:00 CT
+        assert not is_early_close_day(_utc(2026, 7, 15, 16, 0))
+
+
+def test_engine_flattens_early_close_at_noon():
+    """On an early-close day the engine must flatten at ~noon CT, not 15:05.
+
+    Why: the configured 15:05 flatten is after the 12:00 CT CME close, so on
+    early-close days a position would ride through the close uncontrolled. The
+    auto-shifted window must catch it at 11:50 CT.
+    """
+    import asyncio
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+
+    broker = PaperBroker(slippage_ticks_market=0, commission_per_side=Decimal("0"))
+    engine = ExecutionEngine(
+        broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+        runners=[], replay_mode=True,
+        flatten_enabled=True, flatten_time_ct="15:05", entry_cutoff_time_ct="14:30",
+    )
+
+    async def go():
+        await broker.connect()
+        await engine.start()
+        # Open at 11:00 CT on 2026-07-03 (CDT): 16:00 UTC
+        await broker.inject_bar(_bar(_utc(2026, 7, 3, 16, 0)))
+        await broker.place_bracket("MGC", "long", 1,
+                                   Decimal("100"), Decimal("95"), Decimal("110"))
+        assert len(broker.open_brackets()) == 1
+        # Bar at 11:55 CT (16:55 UTC) is inside the auto-shifted window
+        await broker.inject_bar(_bar(_utc(2026, 7, 3, 16, 55)))
+        return broker.open_brackets()
+
+    assert asyncio.run(go()) == [], "engine must flatten on early-close day at noon"
+
+
 # ---------------------------------------------------------------------------
 # Engine integration tests
 # ---------------------------------------------------------------------------

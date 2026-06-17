@@ -335,6 +335,9 @@ class FailingBroker:
         raise RuntimeError("simulated network error")
 
     # Stubs for the rest of the protocol; reconciler only calls the two above.
+    # feed_is_healthy=True so the tick attempts the pull and exercises the
+    # query-failure path (a real error), not the feed-not-ready skip.
+    def feed_is_healthy(self): return True
     async def connect(self): pass
     async def disconnect(self): pass
     async def place_bracket(self, *a, **kw): raise NotImplementedError
@@ -391,6 +394,35 @@ async def test_broker_failure_then_recovery():
     ok = await rec.tick()
     assert ok.drift_detected is False
     assert state.locked_out is None
+
+
+async def test_skips_tick_when_feed_not_healthy():
+    """At startup the TradingSuite isn't created until subscribe(), so a
+    broker pull raises 'not subscribed'. The reconciler must skip quietly
+    when the feed isn't healthy — never attempt a pull, never warn, never
+    act — and recover on the next tick once the feed is up. This is what
+    produced the spurious 'could not pull broker state' warning on every
+    startup before the broker was subscribed."""
+    class NotReadyBroker:
+        def __init__(self) -> None:
+            self.pulled = False
+        def feed_is_healthy(self) -> bool:
+            return False
+        async def get_positions(self):
+            self.pulled = True
+            raise AssertionError("must not pull broker state when feed is down")
+        async def account_balance(self):
+            self.pulled = True
+            raise AssertionError("must not pull broker state when feed is down")
+
+    broker = NotReadyBroker()
+    state = fresh_state()
+    rec = Reconciler(broker, state, no_grace())
+
+    report = await rec.tick()
+    assert broker.pulled is False              # no pull attempted
+    assert report.broker_open_contracts == -1  # sentinel: no info
+    assert report.flattened is False           # no corrective action
 
 
 # =====================================================================

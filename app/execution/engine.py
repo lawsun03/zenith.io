@@ -51,7 +51,7 @@ from app.broker.protocol import Broker
 from app.broker.pricing import _point_value
 from app.bot_config import StrategyParams
 from app.risk.account_phase import PhaseTracker
-from app.risk.flatten import in_flatten_window, past_entry_cutoff, trading_day_ct
+from app.risk.flatten import in_flatten_window, is_early_close_day, past_entry_cutoff, trading_day_ct
 from app.risk.pretrade import Allow, Deny, ProposedOrder, check
 from app.risk.sizing import risk_based_size
 from app.risk.state import CT, RiskState
@@ -595,7 +595,8 @@ class ExecutionEngine:
         if not open_insts:
             self._flattened_today = day_key
             return
-        log.warning("FLATTEN WINDOW: closing all positions at %s (rule: flat by 3:10 PM CT)", ts)
+        early = " [EARLY-CLOSE DAY: auto-shifted to 11:50 CT]" if is_early_close_day(ts) else ""
+        log.warning("FLATTEN WINDOW: closing all positions at %s (rule: flat by 3:10 PM CT)%s", ts, early)
         all_closed = True
         for inst in open_insts:
             try:
@@ -1012,7 +1013,8 @@ class ExecutionEngine:
             return OrderOutcome(placed=False, reason="reversal_pending")
 
         if self.flatten_enabled and past_entry_cutoff(signal.created_at, self.entry_cutoff_time_ct):
-            log.info("Entry blocked: past %s CT entry cutoff (flatten rule)", self.entry_cutoff_time_ct)
+            cutoff = "11:30 (early-close)" if is_early_close_day(signal.created_at) else self.entry_cutoff_time_ct
+            log.info("Entry blocked: past %s CT entry cutoff (flatten rule)", cutoff)
             return OrderOutcome(placed=False, reason="entry_cutoff")
 
         order = ProposedOrder(
