@@ -77,6 +77,7 @@ export interface BotConfig {
   account_name: string | null
   entry_mode: string
   forming_bar_entries?: boolean  // false = closed-bar confirmation only (validated path)
+  feed_watchdog_enabled?: boolean  // alert when bars stop during expected hours
   enabled_killzones: string[]
   signal_instrument: string | null
   contracts: number
@@ -199,6 +200,14 @@ export interface VpProfile {
   hvns: string[]
   total_volume: number
   bins: [string, number][]  // [price, volume] pairs sorted ascending
+}
+
+export interface FeedWatchdogPayload {
+  status: 'live' | 'quiet' | 'dead'
+  last_bar_at: string | null
+  seconds_since: number | null
+  threshold_s: number
+  expected: boolean
 }
 
 export interface StrategyStatePayload {

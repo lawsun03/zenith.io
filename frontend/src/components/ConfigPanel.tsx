@@ -359,6 +359,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       account_name:         config.account_name ?? '',
       entry_mode:           config.entry_mode ?? 'market',
       forming_bar_entries:  String(config.forming_bar_entries ?? false),
+      feed_watchdog_enabled: String(config.feed_watchdog_enabled ?? true),
       contracts:            String(config.contracts ?? 1),
       risk_per_trade_pct:   String(config.risk_per_trade_pct ?? 0.25),
       partial_profit_r:     String(config.partial_profit_r ?? 0),
@@ -487,6 +488,7 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
       account_name:         form.account_name?.trim() || null,
       entry_mode:           form.entry_mode || 'market',
       forming_bar_entries:  form.forming_bar_entries === 'true',
+      feed_watchdog_enabled: form.feed_watchdog_enabled !== 'false',
       contracts:            parseInt(form.contracts) || 1,
       risk_per_trade_pct:   parseFloat(form.risk_per_trade_pct) || 0,
       partial_profit_r:     parseFloat(form.partial_profit_r) || 0,
@@ -667,6 +669,32 @@ export function ConfigPanel({ isOpen, onClose, config, onSave, saving, saveError
                 {form.forming_bar_entries === 'true'
                   ? 'Enters mid-bar the moment the forming bar touches the inversion price. NOT covered by the backtest validation.'
                   : 'Waits for the confirmation bar to close before entering — the path the walk-forward validated. Hot-applied.'}
+              </p>
+            </div>
+            {/* Feed-dead watchdog — inline toggle */}
+            <div>
+              <label className="block text-[10px] tracking-wider text-dim uppercase mb-2">
+                Feed-Dead Watchdog
+              </label>
+              <div className="flex gap-0">
+                {(['true', 'false'] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => set('feed_watchdog_enabled', v)}
+                    className={`flex-1 text-[10px] tracking-widest uppercase px-3 py-2 border ${
+                      (form.feed_watchdog_enabled ?? 'true') === v
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-border text-dim hover:text-ink'
+                    } ${v === 'true' ? 'border-r-0' : ''}`}
+                  >
+                    {v === 'true' ? 'On' : 'Off'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-dim/80 mt-1 leading-relaxed">
+                Alerts (Discord + email) when bars stop arriving during expected hours,
+                suppressed during the daily break, weekends, and early-close days. Hot-applied.
               </p>
             </div>
             {/* account_phase + phase_shadow from FIELDS */}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BarEvent, JournalItem, StatusPayload, StrategyStatePayload } from '../types'
+import type { BarEvent, FeedWatchdogPayload, JournalItem, StatusPayload, StrategyStatePayload } from '../types'
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
 
@@ -18,6 +18,7 @@ export function useStream(
   const [fills, setFills] = useState<JournalItem[]>([])
   const [reconciles, setReconciles] = useState<JournalItem[]>([])
   const [strategyState, setStrategyState] = useState<StrategyStatePayload | null>(null)
+  const [feedWatchdog, setFeedWatchdog] = useState<FeedWatchdogPayload | null>(null)
   const [connState, setConnState] = useState<ConnState>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -83,6 +84,10 @@ export function useStream(
           })
           return
         }
+        if (msg.kind === 'feed_watchdog') {
+          setFeedWatchdog(msg.payload as FeedWatchdogPayload)
+          return
+        }
         const item: JournalItem = { ts: msg.ts, kind: msg.kind, payload: msg.payload }
         if (msg.kind === 'signal') {
           setSignals(prev => [item, ...prev].slice(0, 50))
@@ -127,5 +132,5 @@ export function useStream(
     }
   }, [])
 
-  return { status, signals, fills, reconciles, strategyState, connState }
+  return { status, signals, fills, reconciles, strategyState, feedWatchdog, connState }
 }

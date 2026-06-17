@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { StrategyStatePayload } from '../types'
+import type { FeedWatchdogPayload, StrategyStatePayload } from '../types'
 
 function LabeledValue({ label, value }: { label: string; value: string }) {
   return (
@@ -30,10 +30,13 @@ function PhaseSection({ phase }: { phase: NonNullable<StrategyStatePayload['phas
   )
 }
 
-export function StrategyDebug({ state }: { state: StrategyStatePayload | null }) {
+export function StrategyDebug({ state, feedWatchdog }: { state: StrategyStatePayload | null; feedWatchdog?: FeedWatchdogPayload | null }) {
   const [open, setOpen] = useState(false)
 
   if (!state) return null
+
+  const feedColor = feedWatchdog?.status === 'dead' ? 'text-red-500'
+    : feedWatchdog?.status === 'quiet' ? 'text-dim' : 'text-ink'
 
   const hasPhase = state.phase != null
 
@@ -49,6 +52,20 @@ export function StrategyDebug({ state }: { state: StrategyStatePayload | null })
 
       {open && (
         <div className="border-t border-border">
+          {/* Feed-dead watchdog */}
+          {feedWatchdog && (
+            <div>
+              <div className="px-3 pt-2 pb-1 text-[9px] text-faint font-mono tracking-widest uppercase">Feed</div>
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+                <span className="text-[10px] text-dim font-mono tracking-wide">status</span>
+                <span className={`text-[10px] font-mono ${feedColor}`}>
+                  {feedWatchdog.status}
+                  {feedWatchdog.seconds_since != null ? ` · ${Math.round(feedWatchdog.seconds_since)}s` : ''}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Grader */}
           {state.grade != null && (
             <div>

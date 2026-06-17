@@ -58,7 +58,7 @@ function LiveDashboard() {
   const activeSymbolRef = useRef(activeSymbol)
   useEffect(() => { activeSymbolRef.current = activeSymbol }, [activeSymbol])
 
-  const { status, signals, fills, reconciles, strategyState, connState } = useStream(chartCbRef, activeSymbolRef)
+  const { status, signals, fills, reconciles, strategyState, feedWatchdog, connState } = useStream(chartCbRef, activeSymbolRef)
   const [configOpen, setConfigOpen] = useState(false)
 
   const [positions, setPositions] = useState<Position[]>([])
@@ -146,7 +146,7 @@ function LiveDashboard() {
               <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
                 <OpenPositions positions={positions} />
                 <ActivityFeed signals={signals} fills={fills} reconciles={reconciles} activeSymbol={activeSymbol} />
-                <StrategyDebug state={strategyState} />
+                <StrategyDebug state={strategyState} feedWatchdog={feedWatchdog} />
               </div>
 
             </div>
