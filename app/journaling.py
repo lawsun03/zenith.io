@@ -168,6 +168,10 @@ _TRADES_HEADERS = [
     "body_atr_multiple", "vp_enabled",
     # Grade + execution quality (ENTRY rows)
     "grade", "grade_reason", "score", "slippage", "exec_slippage",
+    # Account that owns the fill — lets the session-P&L CSV fallback scope to
+    # the live account across shadow/combine switches. Appended last so older
+    # ledgers (whose header lacks it) stay column-aligned on the prefix.
+    "account",
 ]
 
 # Keyed by instrument (written in on_pre_place, before HTTP round-trip) then
@@ -233,7 +237,7 @@ def _make_bar_close_watcher():
     return on_bar
 
 
-def _append_fill_csv(fill: Fill) -> None:
+def _append_fill_csv(fill: Fill, account_id: "str | int | None" = None) -> None:
     """Append one fill row to master trades.csv and today's daily CSV."""
     if fill.is_entry:
         # Try broker_order_id first (normal path: journal_signal re-keyed it).
@@ -285,6 +289,7 @@ def _append_fill_csv(fill: Fill) -> None:
         meta.get("score", ""),
         _entry_slippage(fill, meta),
         _exec_slippage(fill, meta),
+        str(account_id) if account_id is not None else "",
     ]
     for path in (_TRADES_CSV, _daily_csv_path()):
         try:
@@ -399,8 +404,14 @@ def _make_fill_journaler(
     notifier: EmailNotifier | None = None,
     discord: DiscordNotifier | None = None,
     excursion_tracker=None,
+    account_id_getter=None,
 ):
-    """Build the on_fill broker subscriber bound to a specific Journal."""
+    """Build the on_fill broker subscriber bound to a specific Journal.
+
+    account_id_getter, if given, is a zero-arg callable returning the current
+    account id; it is read per-fill so account switches are reflected in the
+    `account` column without rebuilding the journaler.
+    """
 
     async def on_fill(fill: Fill) -> None:
         # Provisional fills are the early-arrival fanout used to keep risk
@@ -421,7 +432,13 @@ def _make_fill_journaler(
                 stop=Decimal(stp) if stp else None, window_bars=_MFE_WINDOW_BARS,
                 instrument=_root_instrument(fill.instrument),
             )
-        _append_fill_csv(fill)
+        acct = None
+        if account_id_getter is not None:
+            try:
+                acct = account_id_getter()
+            except Exception:
+                acct = None
+        _append_fill_csv(fill, account_id=acct)
         await journal.record_fill(fill)
         if discord is not None and discord.enabled:
             await discord.send_fill(fill)

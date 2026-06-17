@@ -411,22 +411,35 @@ def _session_pnl_from_trades(trades: "list[dict]") -> Decimal:
     return total
 
 
-def _daily_pnl_from_csv(session_start: "datetime") -> Decimal:
+def _daily_pnl_from_csv(
+    session_start: "datetime",
+    account_id: "str | int | None" = None,
+    csv_path: "Path | None" = None,
+) -> Decimal:
     """
     Fallback: derive session P&L from the local trades CSV when the TopstepX
     API call fails. Reads EXIT rows whose timestamp falls within the session window.
+
+    When account_id is given, rows are scoped to that account: a row counts only
+    if its `account` column matches, OR the row predates the column (empty/absent
+    `account`) — the latter keeps legacy ledgers from silently zeroing out.
     """
     import csv as _csv
     from pathlib import Path as _Path
     total = Decimal("0")
-    csv_path = _Path("trades/trades.csv")
-    if not csv_path.exists():
+    path = _Path(csv_path) if csv_path is not None else _Path("trades/trades.csv")
+    if not path.exists():
         return total
+    acct = str(account_id) if account_id is not None else None
     try:
-        with open(csv_path, newline="", encoding="utf-8") as fh:
+        with open(path, newline="", encoding="utf-8") as fh:
             for row in _csv.DictReader(fh):
                 if row.get("type") != "EXIT":
                     continue
+                if acct is not None:
+                    row_acct = (row.get("account") or "").strip()
+                    if row_acct and row_acct != acct:
+                        continue
                 try:
                     ts = datetime.fromisoformat(row["ts"])
                     if ts.tzinfo is None:
@@ -530,9 +543,9 @@ async def _fetch_live_state(account_name: str | None) -> tuple[Decimal, str, Dec
         except Exception:
             log.exception(
                 "Could not fetch session trades for daily P&L bootstrap — falling "
-                "back to account-blind CSV (may carry another account's P&L)."
+                "back to account-scoped CSV for account %s.", account.id,
             )
-            daily_pnl = _daily_pnl_from_csv(session_start)
+            daily_pnl = _daily_pnl_from_csv(session_start, account_id=account.id)
 
         # Bootstrap open contracts from live positions so a mid-session restart
         # doesn't zero out the position count.
@@ -1313,7 +1326,7 @@ async def _async_main() -> int:
         cpi_event_dates=base_suppress_dates,
     )
     # Subscribe the journal to broker fills and bars.
-    broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker))
+    broker.on_fill(_make_fill_journaler(journal, notifier, discord=discord, excursion_tracker=excursion_tracker, account_id_getter=getattr(broker, "_get_account_id", None)))
     # For multi-symbol, let bars display their own instrument; for single-symbol
     # override is needed when signal_instrument != execution_instrument (e.g. GC→MGC).
     exec_instr = cfg.instrument if len(instruments_list) == 1 else ""
