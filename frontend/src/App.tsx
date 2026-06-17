@@ -5,6 +5,7 @@ import type { ChartCallbacks } from './hooks/useStream'
 import { useConfig } from './hooks/useConfig'
 import { useKillzone } from './hooks/useKillzone'
 import type { StrategyConfig, Position } from './types'
+import { BuilderPage } from './builder/BuilderPage'
 
 function ConfigFlags({ strategy, partialR }: { strategy: StrategyConfig; partialR?: string }) {
   const ema = strategy.trend_ema_period > 0
@@ -182,6 +183,7 @@ export default function App() {
         <Route path="/todos" element={<TodosPage />} />
         <Route path="/trade-analysis/:date" element={<TADetail />} />
         <Route path="/trade-analysis" element={<TradeAnalysisPage />} />
+        <Route path="/builder" element={<BuilderPage />} />
         <Route path="/*" element={<LiveDashboard />} />
       </Routes>
     </BrowserRouter>
