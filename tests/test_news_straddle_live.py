@@ -289,3 +289,10 @@ def test_live_path_is_default_off():
     from app.bot_config import StrategyParams
     s = StrategyParams()
     assert s.news_straddle_live_enabled is False
+
+
+def test_straddle_preflight_config_defaults():
+    from app.bot_config import StrategyParams
+    s = StrategyParams()
+    assert s.news_straddle_preflight_lead_seconds == 300
+    assert s.news_straddle_retry_interval_seconds == 60

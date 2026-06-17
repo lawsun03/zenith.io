@@ -180,6 +180,11 @@ class StrategyParams(BaseModel):
     news_straddle_live_enabled: bool = False
     news_straddle_contracts: int = 1               # size for the live straddle
     news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
+    # Pre-flight readiness check: warn this far before release if the straddle is
+    # at risk of not arming (feed/data unavailable), with time to react. Retry the
+    # readiness check this often until arm time. Arm timing itself is unchanged.
+    news_straddle_preflight_lead_seconds: int = 300
+    news_straddle_retry_interval_seconds: int = 60
     # Per-event straddle specs. When non-empty, this is the source of truth and
     # the legacy single news_straddle_* fields above are ignored (resolve_straddle_specs).
     # Empty (default) = legacy single-event behavior, so existing CPI/MNQ live config is untouched.
