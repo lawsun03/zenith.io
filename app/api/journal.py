@@ -294,6 +294,14 @@ class Journal:
         )
         self._publish(entry)
 
+    def publish_feed_watchdog(self, payload: dict) -> None:
+        """Broadcast feed-dead watchdog status to dashboard WS clients. Pushed on
+        the watchdog's own timer (not bar-driven) so the panel reflects DEAD even
+        when bars have stopped."""
+        self._publish(JournalEntry(
+            ts=datetime.now(timezone.utc), kind="feed_watchdog", payload=payload,
+        ))
+
     def publish_strategy_state(
         self,
         instrument: str,

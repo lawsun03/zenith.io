@@ -146,3 +146,11 @@ def test_watchdog_clock_invokes_callback():
         await eng.stop()
     asyncio.run(go())
     assert seen and seen[0]["kind"] == "feed_watchdog"
+
+
+def test_discord_send_alert_noop_when_disabled():
+    import asyncio
+    from app.notifications.discord import DiscordNotifier
+    d = DiscordNotifier(webhook_url="")   # disabled
+    assert d.enabled is False
+    assert asyncio.run(d.send_alert("Feed dead", "no bars 20m")) is False

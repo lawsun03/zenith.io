@@ -155,6 +155,15 @@ class DiscordNotifier:
         }
         await self._post({"embeds": [embed]})
 
+    async def send_alert(self, title: str, message: str) -> bool:
+        """Generic operational alert (e.g. feed dead/recovered). No-op + False
+        when disabled; returns True on a successful webhook post."""
+        if not self.enabled:
+            return False
+        embed = {"title": title, "description": message, "color": _COLOR_SHORT}
+        await self._post({"embeds": [embed]})
+        return True
+
     async def send_fill(self, fill: "Fill") -> None:
         """
         Post exit fills only. Entry fills are already covered by send_signal
