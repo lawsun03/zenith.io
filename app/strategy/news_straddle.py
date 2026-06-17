@@ -288,7 +288,10 @@ class NewsStraddleRunner:
         return sig
 
 
-def build_news_straddle_schedulers(broker, specs, events_path: str, arm_lead_seconds: int):
+def build_news_straddle_schedulers(
+    broker, specs, events_path: str, arm_lead_seconds: int,
+    alert_fn=None, preflight_lead_seconds: int = 300, retry_interval_seconds: int = 60,
+):
     """One NewsStraddleScheduler per resolved spec — each single-instrument with its
     own offset/tp_r/size and only its own event_type's release times."""
     from app.broker.paper import TICK_SIZE
@@ -299,11 +302,15 @@ def build_news_straddle_schedulers(broker, specs, events_path: str, arm_lead_sec
         schedulers.append(NewsStraddleScheduler(
             broker,
             instrument=s.instrument,
+            event_type=s.event_type,
             event_times=load_event_times(events_path, s.event_type),
             offset_ticks=s.offset_ticks,
             tp_r=s.tp_r,
             tick=TICK_SIZE.get(s.instrument, Decimal("0.25")),
             size=s.contracts,
             arm_lead_seconds=arm_lead_seconds,
+            preflight_lead_seconds=preflight_lead_seconds,
+            retry_interval_seconds=retry_interval_seconds,
+            alert_fn=alert_fn,
         ))
     return schedulers

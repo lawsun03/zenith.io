@@ -1359,16 +1359,49 @@ async def _async_main() -> int:
     _ns = bot_cfg.strategy
     if (_ns.engine == "news_straddle" and _ns.news_straddle_live_enabled) or _ns.cpi_day_router_enabled:
         from app.strategy.news_straddle import build_news_straddle_schedulers
+
+        async def _on_straddle_event(payload: dict) -> None:
+            try:
+                journal.publish_straddle_event(payload)
+            except Exception:
+                log.exception("publish_straddle_event failed")
+            kind = payload.get("kind")
+            inst = payload.get("instrument")
+            et = payload.get("event_type")
+            rel = payload.get("release_ts")
+            if kind == "early_warning":
+                title = "🟠 STRADDLE AT RISK"
+                body = f"{et}/{inst} {rel}: may not arm — {payload.get('reason')}"
+            elif kind == "skipped":
+                title = "🔴 STRADDLE SKIPPED"
+                body = f"{et}/{inst} {rel}: no OCO placed — {payload.get('reason')}"
+            elif kind == "armed":
+                title = "🟢 STRADDLE ARMED"
+                body = (f"{et}/{inst} {payload.get('size')}x: range "
+                        f"[{payload.get('range_low')}–{payload.get('range_high')}]")
+            elif kind == "recovered":
+                title = "🟢 STRADDLE FEED RECOVERED"
+                body = f"{et}/{inst} {rel}: data healthy again, on track."
+            else:
+                return
+            if discord.enabled:
+                await discord.send_alert(title, body)
+            if notifier.enabled:
+                await notifier.send(title, body)
+
         news_straddle_schedulers = build_news_straddle_schedulers(
             broker, _straddle_specs,
             _ns.news_straddle_events_path, _ns.news_straddle_arm_lead_seconds,
+            alert_fn=_on_straddle_event,
+            preflight_lead_seconds=_ns.news_straddle_preflight_lead_seconds,
+            retry_interval_seconds=_ns.news_straddle_retry_interval_seconds,
         )
         for _sch in news_straddle_schedulers:
-            broker.on_bar(_sch.on_bar)
             log.warning(
-                "news_straddle LIVE: %d events, %d contract(s), arm %ds on %s "
+                "news_straddle LIVE: %d events, %d contract(s), arm %ds (preflight %ds) on %s "
                 "(offset %s) — resting OCO straddle.",
-                len(_sch._events), _sch.size, _sch.arm_lead_seconds, _sch.instrument, _sch.offset,
+                len(_sch._events), _sch.size, _sch.arm_lead_seconds,
+                _sch.preflight_lead_seconds, _sch.instrument, _sch.offset,
             )
 
     broker.on_bar(_make_bar_journaler(journal, execution_instrument=exec_instr))
