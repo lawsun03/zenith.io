@@ -1,0 +1,38 @@
+[
+  {
+    "stop_basis": "default",
+    "trades": 4616,
+    "win_rate": 47.2,
+    "profit_factor": 0.9924669094993224,
+    "net_pnl": -2190.3,
+    "max_drawdown": 26445.2,
+    "expectancy": -0.474501733102253
+  },
+  {
+    "stop_basis": "sweep_extreme",
+    "trades": 4700,
+    "win_rate": 44.4,
+    "profit_factor": 0.9405391089982192,
+    "net_pnl": -12869.5,
+    "max_drawdown": 25044.66,
+    "expectancy": -2.7381914893617023
+  },
+  {
+    "stop_basis": "ifvg_edge",
+    "trades": 5286,
+    "win_rate": 39.9,
+    "profit_factor": 0.7338888285929414,
+    "net_pnl": -15692.15,
+    "max_drawdown": 20759.13,
+    "expectancy": -2.968624668936814
+  },
+  {
+    "stop_basis": "atr",
+    "trades": 4734,
+    "win_rate": 41.7,
+    "profit_factor": 0.8214934121642019,
+    "net_pnl": -27058.856303644312,
+    "max_drawdown": 32307.307810302897,
+    "expectancy": -5.715854732497742
+  }
+]
