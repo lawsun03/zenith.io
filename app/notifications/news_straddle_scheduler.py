@@ -21,19 +21,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Awaitable, Callable
-
-from app.broker.events import Bar
 
 log = logging.getLogger(__name__)
 
 _PENDING = "pending"
 _ARMED = "armed"
 _SKIPPED = "skipped"
-_RECOVERED = "recovered"   # informational, not terminal
 
 
 @dataclass
