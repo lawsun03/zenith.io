@@ -130,6 +130,7 @@ class BacktestResult:
     rejected_signals: int
     label: str
     signals: list[dict] = field(default_factory=list)  # placed signals (parity diffing)
+    fills: list[dict] = field(default_factory=list)     # raw fill rows (UI JSON parity)
 
 
 @dataclass
@@ -785,6 +786,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         rejected_signals=rejected_signals,
         label=cfg.label,
         signals=signals_captured,
+        fills=fills_captured,
     )
 
 
