@@ -100,3 +100,49 @@ class TestWatchdogStep:
         eng._last_bar_at = None
         out = eng._watchdog_step(_utc(2026, 1, 15, 16, 20))
         assert out["transition"] is None and eng._feed_status == "LIVE"
+
+
+def _mk_engine(*, replay, enabled, cb=None):
+    from app.broker.paper import PaperBroker
+    from app.execution.engine import ExecutionEngine
+    from app.risk.config import fifty_k_combine
+    from app.risk.state import RiskState
+    broker = PaperBroker()
+    eng = ExecutionEngine(broker=broker, risk_state=RiskState(config=fifty_k_combine()),
+                          runners=[], replay_mode=replay, feed_watchdog_enabled=enabled,
+                          on_feed_status=cb)
+    return broker, eng
+
+
+def test_watchdog_disabled_no_task():
+    import asyncio
+    broker, eng = _mk_engine(replay=False, enabled=False)
+    async def go():
+        await broker.connect(); await eng.start()
+        assert eng._watchdog_task is None
+        await eng.stop()
+    asyncio.run(go())
+
+
+def test_watchdog_enabled_starts_and_stops_task():
+    import asyncio
+    broker, eng = _mk_engine(replay=False, enabled=True)
+    async def go():
+        await broker.connect(); await eng.start()
+        assert eng._watchdog_task is not None
+        await eng.stop()
+        assert eng._watchdog_task is None
+    asyncio.run(go())
+
+
+def test_watchdog_clock_invokes_callback():
+    import asyncio
+    seen = []
+    async def cb(payload): seen.append(payload)
+    broker, eng = _mk_engine(replay=True, enabled=True, cb=cb)
+    async def go():
+        await broker.connect(); await eng.start()
+        await eng._watchdog_tick()      # one tick directly, no sleep
+        await eng.stop()
+    asyncio.run(go())
+    assert seen and seen[0]["kind"] == "feed_watchdog"

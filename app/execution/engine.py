@@ -550,6 +550,10 @@ class ExecutionEngine:
             self._poll_task = asyncio.create_task(self._poll_forming_bars())
             if self._flatten_task is None and self.flatten_wallclock_enabled:
                 self._flatten_task = asyncio.create_task(self._flatten_clock())
+            if self._watchdog_task is None and self.feed_watchdog_enabled:
+                self._watchdog_task = asyncio.create_task(self._watchdog_clock())
+            elif not self.feed_watchdog_enabled:
+                log.info("Feed-dead watchdog disabled (feed_watchdog_enabled=False)")
         log.info(
             "ExecutionEngine started: %d instruments tracked, forming_bar_entries=%s",
             len(self.runners), self.forming_bar_entries,
@@ -573,6 +577,13 @@ class ExecutionEngine:
             except asyncio.CancelledError:
                 pass
             self._flatten_task = None
+        if self._watchdog_task is not None:
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
+            self._watchdog_task = None
         # Cancel only — we do NOT flatten on stop. The operator may be
         # restarting the bot mid-position; auto-flattening would be
         # surprising. The kill-switch endpoint is for that.
