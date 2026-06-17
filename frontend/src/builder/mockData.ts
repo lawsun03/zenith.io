@@ -29,12 +29,17 @@ function rng(seed: number) {
   }
 }
 
-// Generate ~200 5-min bars: a gently rising trend with periodic pullbacks that
-// dip to the rising EMA and resolve with a strong bullish "displacement" candle
-// (which naturally forms a bullish FVG just above the EMA) — so an
-// "EMA bounce into FVG" long setup reliably exists for the demo.
-export function generateBars(seed = 20260616): Candle[] {
-  const rand = rng(seed)
+export type Timeframe = '1m' | '5m' | '15m' | '1h'
+export const TF_SECONDS: Record<Timeframe, number> = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600 }
+
+// Generate bars for a timeframe: a gently rising trend with periodic pullbacks
+// that dip to the rising EMA and resolve with a strong bullish "displacement"
+// candle (which naturally forms a bullish FVG just above the EMA) — so an
+// "EMA bounce into FVG" long setup reliably exists for the demo. Each timeframe
+// gets its own deterministic series (seed varies by TF) and bar spacing.
+export function generateBars(tf: Timeframe = '5m', seed = 20260616): Candle[] {
+  const tfSec = TF_SECONDS[tf]
+  const rand = rng(seed + tfSec)
   const bars: Candle[] = []
   const start = Math.floor(Date.UTC(2026, 5, 16, 13, 30, 0) / 1000) // arbitrary
   let price = 100
@@ -43,7 +48,7 @@ export function generateBars(seed = 20260616): Candle[] {
   const setups = new Set([28, 60, 96, 132, 168])
 
   for (let i = 0; i < n; i++) {
-    const time = start + i * 300
+    const time = start + i * tfSec
     let drift = 0.06 + (rand() - 0.5) * 0.12 // mild up-drift + noise
     let range = 0.5 + rand() * 0.5
 
@@ -89,6 +94,17 @@ export function ema(bars: Candle[], period: number): (number | null)[] {
     }
     out.push(+prev.toFixed(3))
   })
+  return out
+}
+
+export function sma(vals: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = []
+  let sum = 0
+  for (let i = 0; i < vals.length; i++) {
+    sum += vals[i]
+    if (i >= period) sum -= vals[i - period]
+    out.push(i >= period - 1 ? +(sum / period).toFixed(3) : null)
+  }
   return out
 }
 
