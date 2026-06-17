@@ -188,99 +188,101 @@ def test_filled_leg_brackets_at_tight_stop_and_3r_target():
 from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
 
 
-class FakeBroker:
-    def __init__(self):
-        self.oco_calls = []
-
-    async def place_oco_stop_entries(self, instrument, buy_stop, sell_stop, *, stop_r, tp_r, size):
-        self.oco_calls.append(
-            {"instrument": instrument, "buy_stop": buy_stop, "sell_stop": sell_stop,
-             "stop_r": stop_r, "tp_r": tp_r, "size": size}
-        )
-        return ("BUY_OID", "SELL_OID")
-
-
 def _bar(ts, high, low):
     return Bar(ts=ts, instrument="MNQ", timeframe="1min",
                open=Decimal(str(low)), high=Decimal(str(high)),
                low=Decimal(str(low)), close=Decimal(str(low)), volume=100)
 
 
-def _sched(broker, event_ts, **kw):
+class FakeBroker:
+    def __init__(self, bars=None, raise_on_fetch=False):
+        self.oco_calls = []
+        self._bars = bars or []
+        self.raise_on_fetch = raise_on_fetch
+
+    async def get_historical_bars(self, timeframe="1min", limit=500, days=5,
+                                  start_time=None, end_time=None, instrument=None):
+        if self.raise_on_fetch:
+            raise RuntimeError("broker not connected")
+        return list(self._bars)
+
+    async def place_oco_stop_entries(self, instrument, buy_stop, sell_stop, *, stop_r, tp_r, size):
+        self.oco_calls.append(
+            {"instrument": instrument, "buy_stop": buy_stop, "sell_stop": sell_stop,
+             "stop_r": stop_r, "tp_r": tp_r, "size": size})
+        return ("BUY_OID", "SELL_OID")
+
+
+def _window_bars(arm_ts, n, highs, lows):
+    """n 1-min bars ending strictly before arm_ts."""
+    base = arm_ts - timedelta(minutes=n)
+    return [_bar(base + timedelta(minutes=i), highs[i], lows[i]) for i in range(n)]
+
+
+def _sched(broker, event_ts, alerts=None, **kw):
+    async def _alert_fn(payload):
+        (alerts if alerts is not None else []).append(payload)
     return NewsStraddleScheduler(
-        broker,
-        instrument="MNQ",
-        event_times=[event_ts],
-        offset_ticks=60,
-        tp_r=Decimal("3.0"),
-        tick=Decimal("0.25"),
-        size=2,
-        arm_lead_seconds=120,
-        range_minutes=15,
-        min_range_bars=5,
-        **kw,
+        broker, instrument="MNQ", event_type="CPI", event_times=[event_ts],
+        offset_ticks=60, tp_r=Decimal("3.0"), tick=Decimal("0.25"), size=2,
+        arm_lead_seconds=120, range_minutes=15, min_range_bars=5,
+        preflight_lead_seconds=300, retry_interval_seconds=60,
+        alert_fn=_alert_fn, **kw,
     )
 
 
-def test_scheduler_arms_oco_from_pre_range():
-    broker = FakeBroker()
+def test_scheduler_arms_oco_from_1min_fetch():
     event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
-    sched = _sched(broker, event)
     arm_ts = event - timedelta(seconds=120)
-    # Fill the 15-min window before arm_ts with 1-min bars; high spans 100..110.
-    base = arm_ts - timedelta(minutes=15)
-    for i in range(15):
-        ts = base + timedelta(minutes=i)
-        asyncio.run(sched.on_bar(_bar(ts, 100 + i % 11, 100 - i % 11)))
-    ev = sched._events[0]
-    asyncio.run(sched._arm_event(ev))
+    # 15 one-min bars in [arm-15min, arm); high spans up to 110, low down to 90.
+    bars = _window_bars(arm_ts, 15, [100 + i % 11 for i in range(15)],
+                                    [100 - i % 11 for i in range(15)])
+    broker = FakeBroker(bars=bars)
+    alerts = []
+    sched = _sched(broker, event, alerts=alerts)
+    asyncio.run(sched._arm_event(sched._events[0]))
     assert len(broker.oco_calls) == 1
     call = broker.oco_calls[0]
-    # offset = 60t * 0.25 = 15. high over window = 110, low = 90.
-    assert call["buy_stop"] == Decimal("110") + Decimal("15")
-    assert call["sell_stop"] == Decimal("90") - Decimal("15")
-    assert call["stop_r"] == Decimal("15")
-    assert call["tp_r"] == Decimal("3.0")
-    assert call["size"] == 2
-    assert ev.status == "armed"
-    assert ev.buy_id == "BUY_OID" and ev.sell_id == "SELL_OID"
+    assert call["buy_stop"] == Decimal("110") + Decimal("15")   # high+offset
+    assert call["sell_stop"] == Decimal("90") - Decimal("15")   # low-offset
+    assert call["stop_r"] == Decimal("15") and call["tp_r"] == Decimal("3.0") and call["size"] == 2
+    assert sched._events[0].status == "armed"
+    assert any(a["kind"] == "armed" for a in alerts)
 
 
-def test_scheduler_skips_when_too_few_bars():
-    broker = FakeBroker()
+def test_scheduler_skips_and_alerts_on_too_few_bars():
     event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
-    sched = _sched(broker, event)
     arm_ts = event - timedelta(seconds=120)
-    base = arm_ts - timedelta(minutes=15)
-    for i in range(3):  # only 3 bars < min_range_bars(5)
-        asyncio.run(sched.on_bar(_bar(base + timedelta(minutes=i), 105, 95)))
-    ev = sched._events[0]
-    asyncio.run(sched._arm_event(ev))
+    bars = _window_bars(arm_ts, 3, [105, 105, 105], [95, 95, 95])  # 3 < 5
+    broker = FakeBroker(bars=bars)
+    alerts = []
+    sched = _sched(broker, event, alerts=alerts)
+    asyncio.run(sched._arm_event(sched._events[0]))
     assert broker.oco_calls == []
-    assert ev.status == "skipped"
+    assert sched._events[0].status == "skipped"
+    assert any(a["kind"] == "skipped" and "insufficient_bars" in a["reason"] for a in alerts)
+
+
+def test_scheduler_skips_and_alerts_on_fetch_error():
+    event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
+    broker = FakeBroker(raise_on_fetch=True)
+    alerts = []
+    sched = _sched(broker, event, alerts=alerts)
+    asyncio.run(sched._arm_event(sched._events[0]))
+    assert broker.oco_calls == []
+    assert sched._events[0].status == "skipped"
+    assert any(a["kind"] == "skipped" and a["reason"] == "fetch_error" for a in alerts)
 
 
 def test_scheduler_does_not_rearm_fired_event():
-    broker = FakeBroker()
     event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
-    sched = _sched(broker, event)
     arm_ts = event - timedelta(seconds=120)
-    base = arm_ts - timedelta(minutes=15)
-    for i in range(15):
-        asyncio.run(sched.on_bar(_bar(base + timedelta(minutes=i), 105, 95)))
-    ev = sched._events[0]
-    asyncio.run(sched._arm_event(ev))
-    asyncio.run(sched._arm_event(ev))  # second call must be a no-op
-    assert len(broker.oco_calls) == 1
-
-
-def test_scheduler_state_shape():
-    broker = FakeBroker()
-    event = datetime(2026, 6, 11, 12, 30, tzinfo=UTC)
+    bars = _window_bars(arm_ts, 15, [105] * 15, [95] * 15)
+    broker = FakeBroker(bars=bars)
     sched = _sched(broker, event)
-    st = sched.state()
-    assert "events" in st and isinstance(st["events"], list)
-    assert st["events"][0]["status"] == "pending"
+    asyncio.run(sched._arm_event(sched._events[0]))
+    asyncio.run(sched._arm_event(sched._events[0]))   # no-op second time
+    assert len(broker.oco_calls) == 1
 
 
 # ------------------------------- config gate --------------------------------

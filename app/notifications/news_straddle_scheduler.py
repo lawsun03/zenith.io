@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Callable
+from typing import Awaitable, Callable
 
 from app.broker.events import Bar
 
@@ -33,16 +33,18 @@ log = logging.getLogger(__name__)
 _PENDING = "pending"
 _ARMED = "armed"
 _SKIPPED = "skipped"
+_RECOVERED = "recovered"   # informational, not terminal
 
 
 @dataclass
 class _SchedEvent:
-    ts: datetime                      # release timestamp, UTC-aware
+    ts: datetime
     status: str = _PENDING
     buy_id: str | None = None
     sell_id: str | None = None
     rhigh: Decimal | None = None
     rlow: Decimal | None = None
+    reason: str | None = None
 
 
 class NewsStraddleScheduler:
@@ -53,6 +55,7 @@ class NewsStraddleScheduler:
         broker,
         *,
         instrument: str,
+        event_type: str,
         event_times: list[datetime],
         offset_ticks: int,
         tp_r: Decimal,
@@ -61,50 +64,91 @@ class NewsStraddleScheduler:
         arm_lead_seconds: int = 120,
         range_minutes: int = 15,
         min_range_bars: int = 5,
+        preflight_lead_seconds: int = 300,
+        retry_interval_seconds: int = 60,
+        alert_fn: "Callable[[dict], Awaitable[None]] | None" = None,
         now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self.broker = broker
         self.instrument = instrument
+        self.event_type = event_type
         self.offset = Decimal(offset_ticks) * tick
         self.tp_r = tp_r
         self.size = size
         self.arm_lead_seconds = arm_lead_seconds
         self.range_minutes = range_minutes
         self.min_range_bars = min_range_bars
+        self.preflight_lead_seconds = preflight_lead_seconds
+        self.retry_interval_seconds = retry_interval_seconds
+        self._alert_fn = alert_fn
         self._now = now_fn or (lambda: datetime.now(timezone.utc))
         self._events = [_SchedEvent(ts=t) for t in sorted(event_times)]
-        # Rolling (ts, high, low) buffer; trimmed to ~2× the range window.
-        self._buffer: list[tuple[datetime, Decimal, Decimal]] = []
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
-    # ---- bar intake (registered via broker.on_bar) ----
-    async def on_bar(self, bar: Bar) -> None:
-        if bar.instrument and bar.instrument != self.instrument:
+    async def _alert(self, kind: str, ev: _SchedEvent, reason: str = "", **extra) -> None:
+        ev.reason = reason or None
+        if self._alert_fn is None:
             return
-        self._buffer.append((bar.ts, bar.high, bar.low))
-        cutoff = bar.ts - timedelta(minutes=self.range_minutes * 2)
-        if self._buffer[0][0] < cutoff:
-            self._buffer = [b for b in self._buffer if b[0] >= cutoff]
+        payload = {
+            "kind": kind,
+            "event_type": self.event_type,
+            "instrument": self.instrument,
+            "release_ts": ev.ts.isoformat(),
+            "reason": reason,
+            "range_high": str(ev.rhigh) if ev.rhigh is not None else None,
+            "range_low": str(ev.rlow) if ev.rlow is not None else None,
+            "size": self.size,
+            **extra,
+        }
+        try:
+            await self._alert_fn(payload)
+        except Exception:
+            log.exception("news_straddle scheduler: alert_fn raised")
 
-    def _compute_range(self, arm_ts: datetime) -> "tuple[Decimal, Decimal] | None":
+    async def _fetch_range(self, arm_ts: datetime) -> "tuple[Decimal | None, Decimal | None, int]":
         start = arm_ts - timedelta(minutes=self.range_minutes)
-        bars = [b for b in self._buffer if start <= b[0] < arm_ts]
-        if len(bars) < self.min_range_bars:
-            return None
-        return max(b[1] for b in bars), min(b[2] for b in bars)
+        bars = await self.broker.get_historical_bars(
+            timeframe="1min", start_time=start, end_time=arm_ts, instrument=self.instrument,
+        )
+        window = [b for b in bars if start <= b.ts < arm_ts]
+        if len(window) < self.min_range_bars:
+            return None, None, len(window)
+        return max(b.high for b in window), min(b.low for b in window), len(window)
+
+    async def _is_ready(self) -> "tuple[bool, int, str]":
+        """Pre-flight readiness on data-so-far: enough 1-min bars in the last
+        range_minutes. Any fetch error (incl. broker not connected) = not ready."""
+        now = self._now()
+        start = now - timedelta(minutes=self.range_minutes)
+        try:
+            bars = await self.broker.get_historical_bars(
+                timeframe="1min", start_time=start, end_time=now, instrument=self.instrument,
+            )
+        except Exception:
+            return False, 0, "broker_unavailable"
+        n = len([b for b in bars if start <= b.ts < now])
+        if n < self.min_range_bars:
+            return False, n, f"insufficient_bars:{n}/{self.min_range_bars}"
+        return True, n, ""
 
     async def _arm_event(self, ev: _SchedEvent) -> None:
         if ev.status != _PENDING:
             return  # one straddle per event — never re-arm
         arm_ts = ev.ts - timedelta(seconds=self.arm_lead_seconds)
-        rng = self._compute_range(arm_ts)
-        if rng is None:
+        try:
+            high, low, n = await self._fetch_range(arm_ts)
+        except Exception:
             ev.status = _SKIPPED
-            log.warning("news_straddle scheduler: %s skipped (< %d pre-range bars in buffer)",
-                        ev.ts, self.min_range_bars)
+            log.exception("news_straddle scheduler: range fetch failed for %s", ev.ts)
+            await self._alert("skipped", ev, reason="fetch_error")
             return
-        high, low = rng
+        if high is None:
+            ev.status = _SKIPPED
+            log.warning("news_straddle scheduler: %s skipped (%d/%d 1-min bars)",
+                        ev.ts, n, self.min_range_bars)
+            await self._alert("skipped", ev, reason=f"insufficient_bars:{n}/{self.min_range_bars}")
+            return
         ev.rhigh, ev.rlow = high, low
         buy_stop = high + self.offset
         sell_stop = low - self.offset
@@ -118,12 +162,15 @@ class NewsStraddleScheduler:
         except Exception:
             ev.status = _SKIPPED
             log.exception("news_straddle scheduler: place_oco_stop_entries failed for %s", ev.ts)
+            await self._alert("skipped", ev, reason="oco_error")
             return
         if not (buy_id and sell_id):
             ev.status = _SKIPPED
             log.error("news_straddle scheduler: OCO not placed for %s", ev.ts)
+            await self._alert("skipped", ev, reason="oco_not_placed")
             return
         ev.buy_id, ev.sell_id, ev.status = buy_id, sell_id, _ARMED
+        await self._alert("armed", ev, reason="")
 
     # ---- lifecycle ----
     async def start(self) -> None:
