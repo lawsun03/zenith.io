@@ -61,6 +61,40 @@ def is_early_close_day(ts: datetime) -> bool:
     return trading_day_ct(ts) in _EARLY_CLOSE_DATES
 
 
+_DAILY_BREAK_START = time(16, 0)   # 16:00 CT — daily maintenance break begins
+_EARLY_CLOSE_TIME = time(12, 0)    # noon CT — close on early-close days
+
+
+def bars_expected(ts: datetime) -> bool:
+    """True when live bars should be arriving for CME equity/metal futures.
+
+    False during: the 16:00-17:00 CT daily maintenance break; the weekend gap
+    (Fri 16:00 CT -> Sun 17:00 CT); and after the noon close on early-close days.
+    DST-correct via CT. Used by the feed-dead watchdog to suppress false alarms.
+    """
+    ct = ts.astimezone(CT)
+    t = ct.time()
+    wd = ct.weekday()  # Mon=0 .. Sun=6
+
+    # Daily maintenance break 16:00-17:00 CT (every trading day)
+    if _DAILY_BREAK_START <= t < _SESSION_OPEN:
+        return False
+
+    # Weekend gap: Fri 16:00 CT -> Sun 17:00 CT
+    if wd == 5:                                  # Saturday: closed all day
+        return False
+    if wd == 4 and t >= _DAILY_BREAK_START:      # Friday after 16:00 CT
+        return False
+    if wd == 6 and t < _SESSION_OPEN:            # Sunday before 17:00 CT
+        return False
+
+    # Early-close days: no bars from noon CT close to the 17:00 reopen
+    if is_early_close_day(ts) and _EARLY_CLOSE_TIME <= t < _SESSION_OPEN:
+        return False
+
+    return True
+
+
 def in_flatten_window(ts: datetime, flatten_time_ct: str) -> bool:
     """True when positions must be flat: [flatten_time, 5:00 PM CT).
 
