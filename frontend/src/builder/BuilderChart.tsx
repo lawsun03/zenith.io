@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts'
-import type { Candle, Zone } from './mockData'
+import type { Candle, Zone, Swing } from './mockData'
 import type { LinePoint, IKind } from './indicators'
 import type { Drawing } from './drawings'
 import type { MenuTarget } from './rules'
@@ -13,7 +13,10 @@ export type Tool = 'cursor' | 'rect' | 'trend' | 'hline'
 interface Props {
   bars: Candle[]
   overlays: PriceOverlay[]
-  fvgs: Zone[]; obs: Zone[]; showFvg: boolean; showOb: boolean
+  fvgs: Zone[]; obs: Zone[]; ifvgs: Zone[]; showFvg: boolean; showOb: boolean; showIfvg: boolean
+  swings: Swing[]; showLiquidity: boolean
+  news: { time: number; name: string }[]
+  straddleLevels: { t1: number; t2: number; price: number; color: string; label: string }[]
   drawings: Drawing[]
   tool: Tool
   onAddDrawing: (d: Omit<Drawing, 'id'>) => void
@@ -27,7 +30,7 @@ interface RectGeo { key: string; left: number; top: number; w: number; h: number
 interface LineGeo { key: string; x1: number; y1: number; x2: number; y2: number; color: string; target: MenuTarget; label?: string; flash: boolean }
 
 export function BuilderChart(props: Props) {
-  const { bars, overlays, fvgs, obs, showFvg, showOb, drawings, tool, onAddDrawing, markers, lines, flashId, onRequestMenu } = props
+  const { bars, overlays, fvgs, obs, ifvgs, showFvg, showOb, showIfvg, swings, showLiquidity, news, straddleLevels, drawings, tool, onAddDrawing, markers, lines, flashId, onRequestMenu } = props
   const elRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef = useRef<any>(null); const candleRef = useRef<any>(null)
@@ -35,6 +38,8 @@ export function BuilderChart(props: Props) {
   const overlaySeriesRef = useRef<any[]>([]); const markersApiRef = useRef<any>(null); const priceLinesRef = useRef<any[]>([])
   const [rects, setRects] = useState<RectGeo[]>([])
   const [lineGeos, setLineGeos] = useState<LineGeo[]>([])
+  const [newsGeo, setNewsGeo] = useState<{ x: number; name: string }[]>([])
+  const [straddleGeo, setStraddleGeo] = useState<{ x1: number; x2: number; y: number; color: string; label: string }[]>([])
   const [draft, setDraft] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   // live refs so the static chart-effect closures read current props
   const liveRef = useRef(props); liveRef.current = props
@@ -93,25 +98,27 @@ export function BuilderChart(props: Props) {
   function drawGeo() {
     const chart = chartRef.current, candle = candleRef.current, el = elRef.current
     if (!chart || !candle || !el) return
-    const { bars, fvgs, obs, showFvg, showOb, drawings, flashId } = liveRef.current
+    const { bars, fvgs, obs, ifvgs, showFvg, showOb, showIfvg, swings, showLiquidity, news, straddleLevels, drawings, flashId } = liveRef.current
     const w = el.clientWidth
     const lastTime = bars.length ? bars[bars.length - 1].time : 0
     const tx = (t: number) => chart.timeScale().timeToCoordinate(t as never)
     const py = (p: number) => candle.priceToCoordinate(p)
 
     const rg: RectGeo[] = []
-    const zoneRect = (zs: Zone[], on: boolean, det: 'fvg' | 'ob') => {
+    const zoneRect = (zs: Zone[], on: boolean, det: 'fvg' | 'ob' | 'ifvg') => {
       if (!on) return
       zs.forEach((z, idx) => {
         if (!bars[z.startIdx] || bars[z.startIdx].time > lastTime) return
         const x0 = tx(bars[z.startIdx].time), yt = py(z.top), yb = py(z.bottom)
         if (x0 == null || yt == null || yb == null) return
-        const c = det === 'ob' ? '245,158,11' : z.side === 'bull' ? '110,231,183' : '248,113,113'
-        rg.push({ key: `${det}-${idx}`, left: x0, top: yt, w: Math.max(8, w - x0), h: Math.max(2, yb - yt), color: `rgba(${c},0.45)`, fill: `rgba(${c},0.10)`, target: { kind: 'detector', det, name: det.toUpperCase() }, flash: false })
+        const c = det === 'ob' ? '245,158,11' : det === 'ifvg' ? '167,139,250' : z.side === 'bull' ? '110,231,183' : '248,113,113'
+        const name = det === 'ifvg' ? 'iFVG' : det.toUpperCase()
+        rg.push({ key: `${det}-${idx}`, left: x0, top: yt, w: Math.max(8, w - x0), h: Math.max(2, yb - yt), color: `rgba(${c},0.45)`, fill: `rgba(${c},0.10)`, target: { kind: 'detector', det, name }, flash: false })
       })
     }
     zoneRect(fvgs.filter(z => bars[z.startIdx] && bars[z.startIdx].time <= lastTime), showFvg, 'fvg')
     zoneRect(obs.filter(z => bars[z.startIdx] && bars[z.startIdx].time <= lastTime), showOb, 'ob')
+    zoneRect(ifvgs.filter(z => bars[z.startIdx] && bars[z.startIdx].time <= lastTime), showIfvg, 'ifvg')
 
     const lg: LineGeo[] = []
     drawings.forEach(d => {
@@ -130,7 +137,18 @@ export function BuilderChart(props: Props) {
         lg.push({ key: d.id, x1: lx1, y1: ly1, x2: lx2, y2: ly2, color: '#7aa2f7', target: { kind: 'drawing', drawingId: d.id, dtype: 'trend', name: 'Trendline' }, flash })
       }
     })
-    setRects(rg); setLineGeos(lg)
+    if (showLiquidity) swings.forEach((sw, idx) => {
+      if (!bars[sw.idx] || bars[sw.idx].time > lastTime) return
+      const x0 = tx(bars[sw.idx].time), yy = py(sw.price)
+      if (x0 == null || yy == null) return
+      const col = sw.side === 'high' ? '#f87171' : '#3ee0a5'
+      lg.push({ key: `sw-${idx}`, x1: x0, y1: yy, x2: w, y2: yy, color: col, target: { kind: 'detector', det: 'liquidity', name: 'Liquidity' }, label: sw.side === 'high' ? 'SH' : 'SL', flash: false })
+    })
+    const ng: { x: number; name: string }[] = []
+    news.forEach(n => { const x = tx(n.time); if (x != null) ng.push({ x, name: n.name }) })
+    const sg: { x1: number; x2: number; y: number; color: string; label: string }[] = []
+    straddleLevels.forEach(s => { const x1 = tx(s.t1), x2 = tx(s.t2), y = py(s.price); if (x1 != null && x2 != null && y != null) sg.push({ x1, x2, y, color: s.color, label: s.label }) })
+    setRects(rg); setLineGeos(lg); setNewsGeo(ng); setStraddleGeo(sg)
   }
 
   // overlays (price-pane indicator lines) — recreate on change
@@ -154,7 +172,7 @@ export function BuilderChart(props: Props) {
     candle.setData(bars.map(b => ({ time: b.time as any, open: b.open, high: b.high, low: b.low, close: b.close })))
     drawGeo()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bars, fvgs, obs, showFvg, showOb, drawings, flashId])
+  }, [bars, fvgs, obs, ifvgs, showFvg, showOb, showIfvg, swings, showLiquidity, news, straddleLevels, drawings, flashId])
 
   useEffect(() => { try { markersApiRef.current?.setMarkers(markers.slice().sort((a, b) => a.time - b.time)) } catch {} }, [markers])
 
@@ -201,6 +219,18 @@ export function BuilderChart(props: Props) {
           <g key={l.key}>
             <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.color} strokeWidth={l.flash ? 3 : 1.5} strokeDasharray={l.label ? '4 3' : undefined} />
             {l.label && <text x={l.x2 - 4} y={l.y1 - 4} fontSize="9" fill={l.color} textAnchor="end" fontFamily="monospace">{l.label}</text>}
+          </g>
+        ))}
+        {newsGeo.map((n, i) => (
+          <g key={`news-${i}`}>
+            <line x1={n.x} y1="0" x2={n.x} y2="100%" stroke="rgba(251,191,36,0.4)" strokeWidth="1" strokeDasharray="2 3" />
+            <text x={n.x + 3} y="12" fontSize="9" fill="#fbbf24" fontFamily="monospace">▲ {n.name}</text>
+          </g>
+        ))}
+        {straddleGeo.map((s, i) => (
+          <g key={`str-${i}`}>
+            <line x1={s.x1} y1={s.y} x2={s.x2} y2={s.y} stroke={s.color} strokeWidth="1.5" strokeDasharray="5 3" />
+            <text x={s.x1 + 3} y={s.y - 3} fontSize="8" fill={s.color} fontFamily="monospace">{s.label}</text>
           </g>
         ))}
         {draft && tool === 'rect' && <rect x={Math.min(draft.x1, draft.x2)} y={Math.min(draft.y1, draft.y2)} width={Math.abs(draft.x2 - draft.x1)} height={Math.abs(draft.y2 - draft.y1)} fill="rgba(124,162,247,0.15)" stroke="#7aa2f7" />}

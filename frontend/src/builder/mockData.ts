@@ -37,30 +37,25 @@ export const TF_SECONDS: Record<Timeframe, number> = { '1m': 60, '5m': 300, '15m
 // candle (which naturally forms a bullish FVG just above the EMA) — so an
 // "EMA bounce into FVG" long setup reliably exists for the demo. Each timeframe
 // gets its own deterministic series (seed varies by TF) and bar spacing.
-export function generateBars(tf: Timeframe = '5m', seed = 20260616): Candle[] {
+export function generateBars(tf: Timeframe = '5m', seed = 20260616, n = 200): Candle[] {
   const tfSec = TF_SECONDS[tf]
   const rand = rng(seed + tfSec)
   const bars: Candle[] = []
   const start = Math.floor(Date.UTC(2026, 5, 16, 13, 30, 0) / 1000) // arbitrary
   let price = 100
-  const n = 200
-  // setup anchors: indices where a pullback+bounce sequence is injected
-  const setups = new Set([28, 60, 96, 132, 168])
+  // recurring setup anchors every ~34 bars (EMA-bounce-into-FVG long setups)
+  const isSetup = (i: number) => i > 20 && i % 34 === 0
 
   for (let i = 0; i < n; i++) {
     const time = start + i * tfSec
     let drift = 0.06 + (rand() - 0.5) * 0.12 // mild up-drift + noise
     let range = 0.5 + rand() * 0.5
 
-    // Pullback: 4 bars before a setup anchor, push price down toward the EMA.
-    for (const s of setups) {
-      if (i >= s - 4 && i < s) drift = -0.28 - rand() * 0.12
-      if (i === s) {
-        // displacement candle: strong bullish gap-up body -> creates a FVG
-        drift = 2.4 + rand() * 0.8
-        range = 0.4
-      }
-    }
+    // Pullback toward the EMA for 4 bars, then a bullish displacement candle
+    // (which forms an FVG) on the setup anchor.
+    const nm = (Math.floor(i / 34) + 1) * 34
+    if (isSetup(i)) { drift = 2.4 + rand() * 0.8; range = 0.4 }
+    else if (isSetup(nm) && i >= nm - 4 && i < nm) drift = -0.28 - rand() * 0.12
 
     const open = price
     const close = +(open + drift).toFixed(2)
@@ -170,4 +165,55 @@ export function detectOBs(bars: Candle[]): Zone[] {
     }
   }
   return zones
+}
+
+// Average True Range (Wilder).
+export function atr(bars: Candle[], period = 14): (number | null)[] {
+  const tr = bars.map((b, i) => i === 0 ? b.high - b.low
+    : Math.max(b.high - b.low, Math.abs(b.high - bars[i - 1].close), Math.abs(b.low - bars[i - 1].close)))
+  const out: (number | null)[] = []
+  let prev: number | null = null
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    prev = prev === null ? tr.slice(0, period).reduce((a, b) => a + b, 0) / period : (prev * (period - 1) + tr[i]) / period
+    out.push(+prev.toFixed(3))
+  }
+  return out
+}
+
+// Pivot swing highs/lows: extreme over ±lookback bars. Confirmed `lookback`
+// bars after the pivot (caller reveals accordingly).
+export interface Swing { idx: number; price: number; side: 'high' | 'low' }
+export function detectSwings(bars: Candle[], lookback = 3): Swing[] {
+  const sw: Swing[] = []
+  for (let i = lookback; i < bars.length - lookback; i++) {
+    let isHigh = true, isLow = true
+    for (let k = 1; k <= lookback; k++) {
+      if (bars[i - k].high >= bars[i].high || bars[i + k].high >= bars[i].high) isHigh = false
+      if (bars[i - k].low <= bars[i].low || bars[i + k].low <= bars[i].low) isLow = false
+    }
+    if (isHigh) sw.push({ idx: i, price: bars[i].high, side: 'high' })
+    if (isLow) sw.push({ idx: i, price: bars[i].low, side: 'low' })
+  }
+  return sw
+}
+
+// Inverse FVG: a FVG that price closes THROUGH (inverts) becomes opposite-side
+// support/resistance from the inversion bar onward. Returned as a Zone whose
+// startIdx is the inversion bar and side is the inverted (new) direction.
+export function detectIFVGs(bars: Candle[]): Zone[] {
+  const out: Zone[] = []
+  for (const z of detectFVGs(bars)) {
+    for (let j = z.startIdx; j < bars.length; j++) {
+      if (z.side === 'bear' && bars[j].close > z.top) { out.push({ startIdx: j, side: 'bull', top: z.top, bottom: z.bottom }); break }
+      if (z.side === 'bull' && bars[j].close < z.bottom) { out.push({ startIdx: j, side: 'bear', top: z.top, bottom: z.bottom }); break }
+    }
+  }
+  return out
+}
+
+// Filter FVG-like zones by minimum height in ATR multiples (0 = no filter).
+export function filterByAtr(zones: Zone[], atrArr: (number | null)[], minMult: number): Zone[] {
+  if (minMult <= 0) return zones
+  return zones.filter(z => { const a = atrArr[z.startIdx]; return a != null && a > 0 && (z.top - z.bottom) >= minMult * a })
 }

@@ -1,20 +1,21 @@
 // Mock rule model + pure evaluator. Conditions reference a "source": a built-in
 // FVG/OB detector, a catalog indicator instance, or a user drawing. Throwaway.
 
-import type { Candle, Zone } from './mockData'
+import type { Candle, Zone, Swing } from './mockData'
 import type { Computed, IKind, CondDef } from './indicators'
 import { indicatorHeld } from './indicators'
 import type { Drawing, DrawingType } from './drawings'
 import { drawingHeld } from './drawings'
 
+export type Detector = 'fvg' | 'ob' | 'ifvg' | 'liquidity'
 export type CondSource =
-  | { type: 'detector'; det: 'fvg' | 'ob' }
+  | { type: 'detector'; det: Detector }
   | { type: 'indicator'; instId: string; ikind: IKind }
   | { type: 'drawing'; drawingId: string; dtype: DrawingType }
 
 // what the right-click context menu was opened on (carries display name)
 export type MenuTarget =
-  | { kind: 'detector'; det: 'fvg' | 'ob'; name: string }
+  | { kind: 'detector'; det: Detector; name: string }
   | { kind: 'indicator'; instId: string; ikind: IKind; name: string }
   | { kind: 'drawing'; drawingId: string; dtype: DrawingType; name: string }
 
@@ -45,6 +46,9 @@ export interface EvalCtx {
   bars: Candle[]
   fvgs: Zone[]
   obs: Zone[]
+  ifvgs: Zone[]
+  swings: Swing[]
+  liqLookback: number
   computed: Record<string, Computed>
   drawings: Record<string, Drawing>
 }
@@ -57,10 +61,29 @@ const recentBull = (zones: Zone[], i: number): Zone | null => {
   return null
 }
 
-function detectorHeld(det: 'fvg' | 'ob', predKind: string, ctx: EvalCtx, i: number): boolean {
+function recentSwing(swings: Swing[], side: 'high' | 'low', i: number, lookback: number): Swing | null {
+  for (let s = swings.length - 1; s >= 0; s--) {
+    const sw = swings[s]
+    if (sw.side === side && sw.idx + lookback <= i && sw.idx < i && i - sw.idx <= 40) return sw
+  }
+  return null
+}
+
+function detectorHeld(det: Detector, predKind: string, ctx: EvalCtx, i: number): boolean {
   if (i < 1) return false
-  const b = ctx.bars[i]
-  const z = recentBull(det === 'fvg' ? ctx.fvgs : ctx.obs, i)
+  const b = ctx.bars[i], pb = ctx.bars[i - 1]
+  if (det === 'liquidity') {
+    if (predKind === 'sweep_high' || predKind === 'break_high') {
+      const sw = recentSwing(ctx.swings, 'high', i, ctx.liqLookback); if (!sw) return false
+      if (predKind === 'sweep_high') return b.high > sw.price && b.close < sw.price
+      return pb.close <= sw.price && b.close > sw.price
+    }
+    const sw = recentSwing(ctx.swings, 'low', i, ctx.liqLookback); if (!sw) return false
+    if (predKind === 'sweep_low') return b.low < sw.price && b.close > sw.price
+    return pb.close >= sw.price && b.close < sw.price // break_low
+  }
+  const zones = det === 'fvg' ? ctx.fvgs : det === 'ob' ? ctx.obs : ctx.ifvgs
+  const z = recentBull(zones, i)
   if (!z) return false
   const overlaps = b.low <= z.top && b.high >= z.bottom
   switch (predKind) {

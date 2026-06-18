@@ -11,9 +11,11 @@ interface Props {
   onClose: () => void
 }
 
-const DETECTOR_CONDS: Record<'fvg' | 'ob', CondDef[]> = {
+const DETECTOR_CONDS: Record<string, CondDef[]> = {
   fvg: [{ kind: 'enter', label: 'price enters' }, { kind: 'reject', label: 'price rejects from' }, { kind: 'fill', label: 'price fills' }],
   ob: [{ kind: 'tap', label: 'price taps' }, { kind: 'reject', label: 'price rejects from' }],
+  ifvg: [{ kind: 'enter', label: 'price retests' }, { kind: 'reject', label: 'price rejects from' }, { kind: 'fill', label: 'price fills through' }],
+  liquidity: [{ kind: 'sweep_high', label: 'sweeps prior high' }, { kind: 'sweep_low', label: 'sweeps prior low' }, { kind: 'break_high', label: 'breaks swing high' }, { kind: 'break_low', label: 'breaks swing low' }],
 }
 
 export function ContextMenu({ target, x, y, onPick, onClose }: Props) {

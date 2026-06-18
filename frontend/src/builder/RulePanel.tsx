@@ -3,16 +3,27 @@ import type { Rule, StopBasis } from './rules'
 interface Props {
   rule: Rule
   onChange: (r: Rule) => void
+  filters?: string[]
 }
 
 const STOP_LABEL: Record<StopBasis, string> = { fvg: 'below FVG', swing: 'swing low', points: 'fixed pts' }
 
-export function RulePanel({ rule, onChange }: Props) {
+export function RulePanel({ rule, onChange, filters = [] }: Props) {
   const set = (patch: Partial<Rule>) => onChange({ ...rule, ...patch })
   const removeCond = (id: string) => set({ conditions: rule.conditions.filter(c => c.id !== id) })
 
   return (
-    <div className="w-[290px] shrink-0 flex flex-col gap-3">
+    <div className="w-[290px] shrink-0 flex flex-col gap-3 overflow-y-auto">
+      {filters.length > 0 && (
+        <div>
+          <div className="text-[9px] uppercase tracking-widest text-faint font-mono px-1 mb-1">Filters</div>
+          <div className="flex flex-wrap gap-1">
+            {filters.map((f, i) => (
+              <span key={i} className="text-[10px] font-mono text-amber-300 bg-amber-400/10 border border-amber-400/25 rounded-[6px] px-2 py-0.5">{f}</span>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="text-[9px] uppercase tracking-widest text-faint font-mono px-1">Entry Rule</div>
 
       <div className="bg-panel-hi border border-border rounded-[9px] p-3 flex flex-col gap-2.5">
