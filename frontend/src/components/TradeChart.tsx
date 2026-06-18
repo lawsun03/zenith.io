@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
+import { readChartTheme } from '../lib/chartTheme'
 
 interface TradeChartTrade {
   entry_ts: string
@@ -80,26 +81,27 @@ export function TradeChart({ runId, tradeIndex, onNavigate, onClose }: Props) {
         timeZone: PT, hour: 'numeric', minute: '2-digit', hour12: true,
       })
 
+    const ct = readChartTheme()
     const chart = createChart(el, {
       autoSize: true,
       height: 360,
       layout: {
         background: { color: 'transparent' },
-        textColor: '#6c82a8',
+        textColor: ct.text,
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.03)' },
-        horzLines: { color: 'rgba(255,255,255,0.03)' },
+        vertLines: { color: ct.grid },
+        horzLines: { color: ct.grid },
       },
       crosshair: {
-        vertLine: { color: 'rgba(37,99,235,0.4)', labelBackgroundColor: '#1e3a8a' },
-        horzLine: { color: 'rgba(37,99,235,0.4)', labelBackgroundColor: '#1e3a8a' },
+        vertLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
+        horzLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
       },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)' },
+      rightPriceScale: { borderColor: ct.axis },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.05)',
+        borderColor: ct.axis,
         timeVisible: true,
         secondsVisible: false,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -108,9 +110,9 @@ export function TradeChart({ runId, tradeIndex, onNavigate, onClose }: Props) {
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const series = chart.addSeries(CandlestickSeries as any, {
-      upColor: '#3ee0a5', downColor: '#f87171',
-      borderUpColor: '#3ee0a5', borderDownColor: '#f87171',
-      wickUpColor: 'rgba(62,224,165,0.6)', wickDownColor: 'rgba(248,113,113,0.6)',
+      upColor: ct.up, downColor: ct.down,
+      borderUpColor: ct.up, borderDownColor: ct.down,
+      wickUpColor: ct.wickUp, wickDownColor: ct.wickDown,
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     series.setData(payload.bars as any)
@@ -140,7 +142,7 @@ export function TradeChart({ runId, tradeIndex, onNavigate, onClose }: Props) {
         time: exitBar,
         position: isLong ? 'aboveBar' : 'belowBar',
         shape: 'circle',
-        color: win ? '#3ee0a5' : '#f87171',
+        color: win ? ct.up : ct.down,
         text: `${win ? '+' : '-'}$${Math.abs(pnl).toFixed(0)}`,
         size: 1.5,
       },
@@ -149,9 +151,9 @@ export function TradeChart({ runId, tradeIndex, onNavigate, onClose }: Props) {
     try { markersApi.setMarkers(markers) } catch { /* same-bar entry/exit */ }
 
     if (!isNaN(entryPrice))
-      series.createPriceLine({ price: entryPrice, color: 'rgba(255,255,255,0.35)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'E' })
+      series.createPriceLine({ price: entryPrice, color: ct.entry, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'E' })
     if (!isNaN(exitPrice))
-      series.createPriceLine({ price: exitPrice, color: win ? '#3ee0a5' : '#f87171', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'X' })
+      series.createPriceLine({ price: exitPrice, color: win ? ct.up : ct.down, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'X' })
 
     chart.timeScale().fitContent()
     return () => { chart.remove() }

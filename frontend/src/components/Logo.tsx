@@ -8,14 +8,14 @@ export function Logo({ size = 18 }: Props) {
     <svg width={size} height={size} viewBox="0 0 28 28" aria-label="Zenith">
       <polyline
         points="3,23 8,16 12,18.5 18,7 24,12"
-        fill="none" stroke="#6a85b0" strokeWidth="2.2"
+        fill="none" stroke="rgb(var(--c-dim))" strokeWidth="2.2"
         strokeLinecap="square" strokeLinejoin="miter"
       />
       <polyline
         points="12,18.5 18,7"
-        fill="none" stroke="#6ee7b7" strokeWidth="2.2" strokeLinecap="square"
+        fill="none" stroke="rgb(var(--c-accent))" strokeWidth="2.2" strokeLinecap="square"
       />
-      <circle cx="18" cy="7" r="2.6" fill="#6ee7b7" />
+      <circle cx="18" cy="7" r="2.6" fill="rgb(var(--c-accent))" />
     </svg>
   )
 }

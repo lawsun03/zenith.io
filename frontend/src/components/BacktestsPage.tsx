@@ -1010,24 +1010,24 @@ export function BacktestsPage() {
     <div className="min-h-screen bg-bg scanlines" style={{ fontFamily: 'inherit' }}>
       {/* Nav */}
       <div style={{
-        borderBottom: '1px solid #1d2a42', padding: '20px 24px',
+        borderBottom: '1px solid rgb(var(--c-border))', padding: '20px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <Logo size={16} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: '#6a85b0' }}>ZENITH</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.3em', color: 'rgb(var(--c-dim))' }}>ZENITH</span>
         </Link>
         <div style={{ display: 'flex', gap: 24 }}>
           <Link to="/analytics"
-            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
-            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
-            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: 'rgb(var(--c-dim))', textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = 'rgb(var(--c-ink))')}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = 'rgb(var(--c-dim))')}>
             ANALYTICS
           </Link>
           <Link to="/"
-            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#6a85b0', textDecoration: 'none' }}
-            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#e8f0ff')}
-            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = '#6a85b0')}>
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: 'rgb(var(--c-dim))', textDecoration: 'none' }}
+            onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = 'rgb(var(--c-ink))')}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = 'rgb(var(--c-dim))')}>
             ← LIVE
           </Link>
         </div>
@@ -1036,10 +1036,10 @@ export function BacktestsPage() {
       <main className="p-6 max-w-[1400px] mx-auto space-y-6">
         {/* Title */}
         <div style={{ marginBottom: 40 }}>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 60, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', marginBottom: 10, color: '#e8f0ff' }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 60, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', marginBottom: 10, color: 'rgb(var(--c-ink))' }}>
             BACKTEST<br />ENGINE
           </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6a85b0', letterSpacing: '0.15em' }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgb(var(--c-dim))', letterSpacing: '0.15em' }}>
             STRATEGY SIMULATION · PARAMETER SEARCH
           </div>
         </div>
@@ -1874,9 +1874,9 @@ function EquityCurve({ curve, startingBalance }: { curve: [string, string][]; st
       <div className="bg-bg border border-border p-2">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-20" preserveAspectRatio="none">
           <line x1="0" y1={zeroY.toFixed(1)} x2={W} y2={zeroY.toFixed(1)}
-            stroke="#333" strokeWidth="1" strokeDasharray="4 4" />
+            stroke="rgb(var(--c-faint))" strokeWidth="1" strokeDasharray="4 4" />
           <polyline points={pts} fill="none"
-            stroke={positive ? '#00ff41' : '#ff4444'} strokeWidth="1.5" />
+            stroke={positive ? 'rgb(var(--c-up))' : 'rgb(var(--c-down))'} strokeWidth="1.5" />
         </svg>
         <div className="flex justify-between text-[9px] text-dim font-mono mt-1">
           <span>${min.toFixed(0)}</span>

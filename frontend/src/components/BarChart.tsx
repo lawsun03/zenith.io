@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
 import type { ChartCallbacks } from '../hooks/useStream'
 import type { Position } from '../types'
+import { readChartTheme, observeChartTheme } from '../lib/chartTheme'
 
 const TF_SECONDS: Record<string, number> = {
   '1min': 60, '3min': 180, '5min': 300,
@@ -113,30 +114,31 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
       return `${date} ${fmtChartTime(timeSecs)}`
     }
 
+    const ct = readChartTheme()
     const chart = createChart(el, {
       autoSize: true,
       height: 320,
       layout: {
         background: { color: 'transparent' },
-        textColor:  '#6c82a8',
+        textColor:  ct.text,
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize:   11,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.03)' },
-        horzLines: { color: 'rgba(255,255,255,0.03)' },
+        vertLines: { color: ct.grid },
+        horzLines: { color: ct.grid },
       },
       crosshair: {
-        vertLine: { color: 'rgba(37,99,235,0.4)', labelBackgroundColor: '#1e3a8a' },
-        horzLine: { color: 'rgba(37,99,235,0.4)', labelBackgroundColor: '#1e3a8a' },
+        vertLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
+        horzLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
       },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)' },
+      rightPriceScale: { borderColor: ct.axis },
       localization: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         timeFormatter: ((time: any) => fmtChartDateTime(Number(time))) as any,
       },
       timeScale: {
-        borderColor:    'rgba(255,255,255,0.05)',
+        borderColor:    ct.axis,
         timeVisible:    true,
         secondsVisible: false,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,12 +148,12 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const series = chart.addSeries(CandlestickSeries as any, {
-      upColor:         '#3ee0a5',
-      downColor:       '#f87171',
-      borderUpColor:   '#3ee0a5',
-      borderDownColor: '#f87171',
-      wickUpColor:     'rgba(62,224,165,0.6)',
-      wickDownColor:   'rgba(248,113,113,0.6)',
+      upColor:         ct.up,
+      downColor:       ct.down,
+      borderUpColor:   ct.up,
+      borderDownColor: ct.down,
+      wickUpColor:     ct.wickUp,
+      wickDownColor:   ct.wickDown,
     })
     seriesRef.current = series
     chartRef.current = chart
@@ -230,7 +232,7 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
             time,
             position: side === 'long' ? 'belowBar' : 'aboveBar',
             shape:    side === 'long' ? 'arrowUp'  : 'arrowDown',
-            color:    side === 'long' ? '#3ee0a5'  : '#f87171',
+            color:    side === 'long' ? ct.up       : ct.down,
             text:     side === 'long' ? 'BUY'      : 'SELL',
             size: 1,
           })
@@ -240,7 +242,7 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
             time,
             position: side === 'long' ? 'aboveBar' : 'belowBar',
             shape:    'circle',
-            color:    win ? '#3ee0a5' : '#f87171',
+            color:    win ? ct.up : ct.down,
             text:     (win ? '+' : '') + '$' + Math.abs(pnl).toFixed(0),
             size: 1,
           })
@@ -311,12 +313,13 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
     const targetPrice = parseFloat(position.target)
     const entryPrice  = parseFloat(position.entry)
 
+    const ct = readChartTheme()
     if (!isNaN(stopPrice))
-      pl.stop = series.createPriceLine({ price: stopPrice, color: '#f87171', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' })
+      pl.stop = series.createPriceLine({ price: stopPrice, color: ct.down, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' })
     if (!isNaN(targetPrice))
-      pl.target = series.createPriceLine({ price: targetPrice, color: '#3ee0a5', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' })
+      pl.target = series.createPriceLine({ price: targetPrice, color: ct.up, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' })
     if (!isNaN(entryPrice))
-      pl.entry = series.createPriceLine({ price: entryPrice, color: 'rgba(255,255,255,0.35)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'E' })
+      pl.entry = series.createPriceLine({ price: entryPrice, color: ct.entry, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'E' })
     if (position.partial) {
       const partialPrice = parseFloat(position.partial)
       if (!isNaN(partialPrice))
@@ -345,6 +348,27 @@ export function BarChart({ callbacksRef, timeframe, activeSymbol, position }: Pr
       markersPluginRef.current?.setPositionMarkers([])
     }
   }, [position])
+
+  // Re-theme the live chart in place when the palette changes (no recreation,
+  // so streaming bars aren't dropped). Price-line/marker colors refresh on
+  // their next position/fill update.
+  useEffect(() => observeChartTheme(ct => {
+    chartRef.current?.applyOptions({
+      layout: { textColor: ct.text },
+      grid: { vertLines: { color: ct.grid }, horzLines: { color: ct.grid } },
+      crosshair: {
+        vertLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
+        horzLine: { color: ct.cross, labelBackgroundColor: ct.crossLabelBg },
+      },
+      rightPriceScale: { borderColor: ct.axis },
+      timeScale: { borderColor: ct.axis },
+    })
+    seriesRef.current?.applyOptions({
+      upColor: ct.up, downColor: ct.down,
+      borderUpColor: ct.up, borderDownColor: ct.down,
+      wickUpColor: ct.wickUp, wickDownColor: ct.wickDown,
+    })
+  }), [])
 
   const instLabel = activeSymbol ? (INSTRUMENT_NAMES[activeSymbol] ?? activeSymbol) : ''
   return (

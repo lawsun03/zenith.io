@@ -17,12 +17,12 @@ const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" }
 const sans: CSSProperties = { fontFamily: "'Space Grotesk', sans-serif" }
 
 const C = {
-  bg:    '#070c1a',
-  bd:    '#1d2a42',
-  bdh:   '#2c3e5c',
-  ink:   '#e8f0ff',
-  dim:   '#6a85b0',
-  faint: '#3d5070',
+  bg:    'rgb(var(--c-bg))',
+  bd:    'rgb(var(--c-border))',
+  bdh:   'rgb(var(--c-border-hi))',
+  ink:   'rgb(var(--c-ink))',
+  dim:   'rgb(var(--c-dim))',
+  faint: 'rgb(var(--c-faint))',
 }
 
 interface Todo {

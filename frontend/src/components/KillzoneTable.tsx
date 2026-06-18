@@ -1,15 +1,15 @@
 import type { CSSProperties } from 'react'
 
 const C = {
-  bg:    '#070c1a',
-  surf:  '#0d1628',
-  bd:    '#1d2a42',
-  bdh:   '#2c3e5c',
-  ink:   '#e8f0ff',
-  dim:   '#6a85b0',
-  faint: '#3d5070',
-  green: '#6ee7b7',
-  red:   '#fca5a5',
+  bg:    'rgb(var(--c-bg))',
+  surf:  'rgb(var(--c-panel))',
+  bd:    'rgb(var(--c-border))',
+  bdh:   'rgb(var(--c-border-hi))',
+  ink:   'rgb(var(--c-ink))',
+  dim:   'rgb(var(--c-dim))',
+  faint: 'rgb(var(--c-faint))',
+  green: 'rgb(var(--c-accent))',
+  red:   'rgb(var(--c-danger))',
 }
 
 const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" }

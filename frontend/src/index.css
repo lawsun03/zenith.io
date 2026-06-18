@@ -2,13 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme tokens — RGB channel triples consumed by Tailwind as
+ * rgb(var(--c-x) / <alpha-value>). :root is the default (zenith);
+ * [data-theme] blocks override for the other palettes. Each palette is
+ * AA-checked for ink / accent / danger on bg and panel-hi.
+ */
+:root {
+  --c-bg:         7 12 26;
+  --c-panel:      13 22 40;
+  --c-panel-hi:   19 30 53;
+  --c-border:     29 42 66;
+  --c-border-hi:  44 62 92;
+  --c-ink:        232 240 255;
+  --c-dim:        106 133 176;
+  --c-faint:      61 80 112;
+  --c-accent:     110 231 183;
+  --c-accent-ink: 167 243 208;
+  --c-good:       110 231 183;
+  --c-warn:       251 191 36;
+  --c-danger:     252 165 165;
+  --c-up:         62 224 165;
+  --c-down:       248 113 113;
+  --c-grid:       255 255 255;
+}
+
+[data-theme='matrix'] {
+  --c-bg:         0 0 0;
+  --c-panel:      6 14 8;
+  --c-panel-hi:   10 22 12;
+  --c-border:     20 44 26;
+  --c-border-hi:  32 68 40;
+  --c-ink:        209 255 214;
+  --c-dim:        86 209 122;
+  --c-faint:      42 120 64;
+  --c-accent:     0 255 65;
+  --c-accent-ink: 134 255 158;
+  --c-good:       0 255 65;
+  --c-warn:       245 205 70;
+  --c-danger:     255 110 110;
+  --c-up:         0 230 102;
+  --c-down:       255 99 99;
+  --c-grid:       0 255 65;
+}
+
+[data-theme='amber'] {
+  --c-bg:         10 7 0;
+  --c-panel:      24 16 2;
+  --c-panel-hi:   33 23 5;
+  --c-border:     64 44 10;
+  --c-border-hi:  92 64 18;
+  --c-ink:        255 224 168;
+  --c-dim:        201 156 86;
+  --c-faint:      130 96 42;
+  --c-accent:     255 176 0;
+  --c-accent-ink: 255 201 92;
+  --c-good:       122 214 138;
+  --c-warn:       255 201 92;
+  --c-danger:     245 120 105;
+  --c-up:         255 194 74;
+  --c-down:       245 120 105;
+  --c-grid:       255 176 0;
+}
+
 @layer base {
   html, body {
-    background-color: #070c1a;
+    background-color: rgb(var(--c-bg));
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 400;
     font-feature-settings: "tnum" 1;
-    color: #f0f0f0;
+    color: rgb(var(--c-ink));
   }
 }
 
@@ -17,8 +80,8 @@
   .hatch {
     background-image: repeating-linear-gradient(
       45deg,
-      rgba(252,165,165,0.06) 0,
-      rgba(252,165,165,0.06) 4px,
+      rgb(var(--c-danger) / 0.06) 0,
+      rgb(var(--c-danger) / 0.06) 4px,
       transparent 4px,
       transparent 12px
     );
@@ -26,19 +89,27 @@
 
   .feed::-webkit-scrollbar        { width: 3px; }
   .feed::-webkit-scrollbar-track  { background: transparent; }
-  .feed::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.06); border-radius: 2px; }
+  .feed::-webkit-scrollbar-thumb  { background: rgb(var(--c-ink) / 0.06); border-radius: 2px; }
 
   .slider-accent {
     -webkit-appearance: none; appearance: none;
-    height: 4px; background: rgba(110,231,183,0.12); border-radius: 2px; outline: none;
+    height: 4px; background: rgb(var(--c-accent) / 0.12); border-radius: 2px; outline: none;
   }
   .slider-accent::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 14px; height: 14px; border-radius: 50%;
-    background: #6ee7b7; cursor: pointer; border: 2px solid #0f0f0f;
+    background: rgb(var(--c-accent)); cursor: pointer; border: 2px solid rgb(var(--c-bg));
   }
   .slider-accent::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%;
-    background: #6ee7b7; cursor: pointer; border: 2px solid #0f0f0f;
+    background: rgb(var(--c-accent)); cursor: pointer; border: 2px solid rgb(var(--c-bg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
