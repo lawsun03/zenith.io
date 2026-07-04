@@ -25,6 +25,7 @@ from app.bot_config import StrategyParams
 from app.broker.events import Bar
 from app.strategy.composer import Signal
 from app.strategy.grader import SetupGrader
+from app.strategy.order_flow import order_flow_gate
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,12 @@ class ORBConfig:
     # B101: Fibonacci-extension target. 0 = off (fixed r_multiple). >0 = measured move off the
     # OR width: target = entry ± ext × (or_high − or_low). Stop (opposite OR edge) unchanged.
     fib_target_ext: Decimal = Decimal("0")
+    # Order-flow confirmation gate. When enabled and an OrderFlowSeries is
+    # injected (of_ctx), the breakout bar's aggressor delta must confirm the
+    # breakout direction, else the signal is suppressed (stop-run filter).
+    # Default-off; live path unaffected until of_ctx is wired.
+    of_gate_enabled: bool = False
+    of_min_delta: int = 0        # min |delta| (contracts) required in breakout direction
 
 
 class ORBDetector:
@@ -76,6 +83,9 @@ class ORBDetector:
         # B82: pre-market range accumulator (08:00-09:29 ET), reset daily.
         self._pm_high: Decimal | None = None
         self._pm_low: Decimal | None = None
+        # Order-flow series (delta/CVD) for the of_gate. Injected by the runner
+        # when order-flow data is available; None keeps the gate a no-op.
+        self.of_ctx = None
         # B47: injected by CombinedRunner when confluence_gate=True.
         self.session_ctx = None
         # B56: injected by CombinedRunner when alignment_gate=True.
@@ -174,6 +184,16 @@ class ORBDetector:
             if side == "short" and bar.close >= self._pm_low:
                 log.info("ORB suppressed: B82 PM-break gate — short close %s >= pm_low %s",
                          bar.close, self._pm_low)
+                return None
+
+        # Order-flow gate — require the breakout bar's aggressor delta to confirm
+        # the breakout direction. Filters stop-runs that close beyond the edge on
+        # flat/opposite delta. Graceful when no order-flow row exists for the bar.
+        if self.config.of_gate_enabled and self.of_ctx is not None:
+            of_bar = self.of_ctx.for_bar(bar.ts)
+            allowed, reason = order_flow_gate(side, of_bar, self.config.of_min_delta)
+            if not allowed:
+                log.info("ORB suppressed: order-flow gate — %s breakout, %s", side, reason)
                 return None
 
         # B47: Gate 1 — suppress ORB when all prior same-day iFVG signals oppose ORB.

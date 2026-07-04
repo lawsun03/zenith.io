@@ -18,6 +18,9 @@ frontend/node_modules/
 bars/
 intrabar_*.csv
 
+# Order-flow sidecars (large trade-derived CSVs, re-fetchable from Databento)
+orderflow/
+
 # Live trade logs (regenerated from broker every session)
 # trades/ intentionally tracked — CSVs committed daily for cloud analysis
 
