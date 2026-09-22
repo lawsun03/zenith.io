@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/research-loop/strategy-ir.schema.json",
+  "title": "Strategy IR",
+  "description": "A strategy is data. The engine interprets this document; no generated code is ever executed. Rules are pooled across all instruments — there is deliberately no per-instrument parameter block.",
+  "type": "object",
+  "required": ["ir_version", "name", "instruments", "session", "entry", "exit", "stop", "sizing"],
+  "additionalProperties": false,
+
+  "properties": {
+    "ir_version": { "const": "1.0" },
+    "name": { "type": "string", "minLength": 3, "maxLength": 80 },
+
+    "instruments": {
+      "description": "Always all three. Per-instrument fitting is banned (see CLAUDE.md rule 2).",
+      "type": "array",
+      "items": { "enum": ["NQ", "ES", "GC"] },
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+
+    "session": {
+      "type": "object",
+      "required": ["start", "end", "tz"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "end":   { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "tz":    { "const": "America/New_York" }
+      }
+    },
+
+    "entry": {
+      "description": "Entry composes ONLY from recognizable predicates (gate 9).",
+      "$ref": "#/$defs/recognizablePredicate"
+    },
+
+    "exit": { "$ref": "#/$defs/anyPredicate" },
+
+    "stop": {
+      "description": "Volatility-derived only. Account size must never appear here (CLAUDE.md rule 4).",
+      "type": "object",
+      "required": ["type", "multiple", "lookback"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "enum": ["atr", "realised_sigma", "structural"] },
+        "multiple": { "type": "number", "minimum": 0.25, "maximum": 5.0 },
+        "lookback": { "type": "integer", "minimum": 5, "maximum": 100 },
+        "anchor":   { "enum": ["swing_low", "swing_high", "sweep_extreme", "entry_bar"] }
+      }
+    },
+
+    "target": {
+      "type": "object",
+      "required": ["type", "multiple"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "enum": ["atr", "r_multiple", "session_level"] },
+        "multiple": { "type": "number", "minimum": 0.5, "maximum": 10.0 }
+      }
+    },
+
+    "forecast": {
+      "description": "Optional Carver-style scaled conviction rather than a binary signal. Average absolute value is normalised to 10 and capped at ±20.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scaled": { "type": "boolean", "default": false },
+        "cap":    { "type": "number", "const": 20 }
+      }
+    },
+
+    "sizing": {
+      "description": "The ONLY place account rules enter. The rule above knows nothing about this.",
+      "type": "object",
+      "required": ["family", "vol_target_annual"],
+      "additionalProperties": false,
+      "properties": {
+        "family":            { "enum": ["micro", "mini", "full"], "default": "micro" },
+        "vol_target_annual": { "type": "number", "minimum": 0.05, "maximum": 0.40 },
+        "max_contracts":     { "type": "integer", "minimum": 1, "maximum": 50 }
+      }
+    }
+  },
+
+  "$defs": {
+    "level": {
+      "enum": [
+        "prior_day_high", "prior_day_low",
+        "prior_session_high", "prior_session_low",
+        "session_open", "midnight_open", "London_open", "NY_open",
+        "opening_range_high", "opening_range_low",
+        "swing_high", "swing_low",
+        "prior_week_high", "prior_week_low"
+      ]
+    },
+
+    "recognizablePredicate": {
+      "description": "Predicates a human can identify on a chart in real time. Entry conditions compose only from these.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "operands"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["and", "or"] },
+            "operands": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/recognizablePredicate" },
+              "minItems": 2,
+              "maxItems": 4
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op"],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "sweep_of",
+                "displacement",
+                "fvg",
+                "close_beyond",
+                "retrace_to",
+                "cross_of",
+                "inside_range",
+                "time_window",
+                "consecutive_closes"
+              ]
+            },
+            "level":      { "$ref": "#/$defs/level" },
+            "level_b":    { "$ref": "#/$defs/level" },
+            "direction":  { "enum": ["up", "down", "either"] },
+            "min_atr":    { "type": "number", "minimum": 0.1, "maximum": 5.0 },
+            "pct":        { "type": "number", "minimum": 0, "maximum": 1 },
+            "n":          { "type": "integer", "minimum": 1, "maximum": 5 },
+            "within_bars":{ "type": "integer", "minimum": 1, "maximum": 20 },
+            "start":      { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+            "end":        { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+            "recognizable": { "const": true }
+          }
+        }
+      ]
+    },
+
+    "anyPredicate": {
+      "description": "Exits and stops may additionally use non-recognizable predicates — the framework handles those for the trader, so they need not be chart-readable.",
+      "oneOf": [
+        { "$ref": "#/$defs/recognizablePredicate" },
+        {
+          "type": "object",
+          "required": ["op"],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "bars_elapsed",
+                "session_end",
+                "atr_multiple_move",
+                "trailing_stop",
+                "rolling_quantile"
+              ]
+            },
+            "n":          { "type": "integer", "minimum": 1, "maximum": 500 },
+            "multiple":   { "type": "number" },
+            "quantile":   { "type": "number", "minimum": 0, "maximum": 1 },
+            "lookback":   { "type": "integer", "minimum": 5, "maximum": 500 },
+            "recognizable": { "const": false }
+          }
+        }
+      ]
+    }
+  },
+
+  "$comment": "BANNED from every position in the IR: any reference to regime_label, account balance, daily loss limit, trailing drawdown, or a per-instrument parameter override. Regime labels are classification metadata only (CLAUDE.md rule 5); account values enter at sizing and the combine simulator only (rule 4)."
+}

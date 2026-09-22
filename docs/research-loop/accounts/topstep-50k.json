@@ -1,0 +1,49 @@
+{
+  "account_id": "topstep-50k-combine",
+  "display_name": "Topstep $50K Trading Combine",
+  "_note": "Verify these against your live account before trusting a gate-8 result. Prop firms change rules; this file is the single place they are encoded.",
+  "_verified_on": "2026-09-22",
+
+  "starting_balance": "50000.00",
+  "profit_target": "3000.00",
+
+  "daily_loss_limit": {
+    "amount": "1000.00",
+    "measured_from": "prior_day_closing_balance",
+    "includes_unrealised": true
+  },
+
+  "max_loss_limit": {
+    "amount": "2000.00",
+    "type": "trailing",
+    "trails_on": "end_of_day",
+    "_note": "EOD trailing: the threshold adjusts at market close, not intraday. It ratchets up with equity high-water marks and never falls back below the starting balance.",
+    "floor_at_starting_balance": true
+  },
+
+  "position_limits": {
+    "max_mini_contracts": 5,
+    "max_micro_contracts": 50
+  },
+
+  "consistency_rule": {
+    "enabled": true,
+    "max_single_day_pct_of_total": 0.40,
+    "_note": "Best single day must not exceed this fraction of total profit at payout time."
+  },
+
+  "instruments": {
+    "MNQ": { "tick_value": "0.50",  "tick_size": "0.25", "point_value": "2.00",  "underlying": "NQ" },
+    "MES": { "tick_value": "1.25",  "tick_size": "0.25", "point_value": "5.00",  "underlying": "ES" },
+    "MGC": { "tick_value": "1.00",  "tick_size": "0.10", "point_value": "10.00", "underlying": "GC" },
+    "NQ":  { "tick_value": "5.00",  "tick_size": "0.25", "point_value": "20.00" },
+    "ES":  { "tick_value": "12.50", "tick_size": "0.25", "point_value": "50.00" },
+    "GC":  { "tick_value": "10.00", "tick_size": "0.10", "point_value": "100.00" }
+  },
+
+  "simulation": {
+    "monte_carlo_paths": 5000,
+    "resample": "trade_order",
+    "pass_threshold_payout_prob": 0.60
+  }
+}
