@@ -21,7 +21,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Union
 
-from app.broker.pricing import _point_value
+from app.sim.pricing import _point_value
 from app.risk.account_phase import PhaseTracker
 from .config import Money
 from .state import RiskState

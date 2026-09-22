@@ -114,7 +114,7 @@ so the be_trail mostly converts winners to scratches without saving many full-lo
 
 | File | Change |
 |------|--------|
-| `app/broker/paper.py` | MFE/MAE tracking, be_trail_r mechanism, `excursions_by_order_id()` |
+| `app/sim/paper.py` | MFE/MAE tracking, be_trail_r mechanism, `excursions_by_order_id()` |
 | `app/backtest/runner.py` | Merge excursions into trade dicts, wire be_trail_r from config |
 | `app/bot_config.py` | `be_trail_r: Decimal = Decimal("0")` in StrategyParams |
 | `tests/test_mfe_mae.py` | 11 defining-behavior tests (new file) |

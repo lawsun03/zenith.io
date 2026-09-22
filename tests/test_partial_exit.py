@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.broker.pricing import PartialPlan, _partial_plan
+from app.sim.pricing import PartialPlan, _partial_plan
 from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 
 
@@ -137,7 +137,7 @@ def test_partial_plan_short_r_based():
 
 def _make_broker_stub(entry_mode: str = "market"):
     """Build the minimal TopstepXBroker-like object needed to test pending_brackets."""
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     # Minimal internal state needed by place_market_bracket
@@ -379,7 +379,7 @@ def _make_bar(
     o: str, h: str, l: str, c: str,
     instrument: str = "MGC",
 ) -> "Bar":
-    from app.broker.events import Bar
+    from app.sim.events import Bar
     return Bar(
         instrument=instrument,
         timeframe="1min",
@@ -456,7 +456,7 @@ async def test_premature_liquidity_no_cancel_when_tp1_not_hit():
 
 def _make_partial_broker_stub():
     """Broker stub wired for _place_partial_bracket_after_fill tests."""
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     broker._connected = True

@@ -98,7 +98,7 @@ never dies silently. A `CancelledError` exits the loop cleanly on disconnect.
 
 | Action | Path | Change |
 |--------|------|--------|
-| Modify | `app/broker/topstepx.py` | `_intrabar_task` init; module constant; sampler loop; start in `subscribe()`; cancel in `disconnect()`; CSV append helper |
+| Modify | `app/sim/topstepx.py` | `_intrabar_task` init; module constant; sampler loop; start in `subscribe()`; cancel in `disconnect()`; CSV append helper |
 
 ## Success criteria
 

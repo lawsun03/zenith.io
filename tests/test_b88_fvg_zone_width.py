@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer, _Awaiting
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.liquidity import Swing, SweepEvent

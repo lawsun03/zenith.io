@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Optional
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 from app.strategy.grader import SetupGrader
 from app.strategy.killzone import Killzone, default_killzones, in_killzone

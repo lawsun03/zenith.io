@@ -15,7 +15,7 @@ Reuses the existing backtest machinery (no new backtester):
 Fill convention: PaperBroker's existing intrabar rule is used as-is (the same
 rule every other engine in this repo is measured under). PaperBroker resolves a
 bracket on the bar where the level is hit; on a bar that touches BOTH stop and
-target it resolves stop-first (conservative). See app/broker/paper.py. We do not
+target it resolves stop-first (conservative). See app/sim/paper.py. We do not
 override fill ordering — we report which convention applies.
 
 Realized-R per trade = realized_pnl_usd / risk_usd, where

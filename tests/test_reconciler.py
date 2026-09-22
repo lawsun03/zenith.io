@@ -20,8 +20,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar, BrokerPosition, ExitCoverage
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, BrokerPosition, ExitCoverage
+from app.sim.paper import PaperBroker
 
 
 def _seed_bar(price: str = "2400") -> Bar:
@@ -665,7 +665,7 @@ async def test_first_naked_tick_is_grace_no_action():
 
 @pytest.mark.asyncio
 async def test_naked_since_pruned_when_position_closes():
-    from app.broker.events import BrokerPosition, ExitCoverage
+    from app.sim.events import BrokerPosition, ExitCoverage
     from app.execution.reconciler import Reconciler, ReconcilerConfig
     from app.risk.state import RiskState
     from app.risk.config import fifty_k_combine
@@ -697,7 +697,7 @@ async def test_naked_since_pruned_when_position_closes():
 def _naked_reconciler_multi(instrument, avg, stop_dist, side, position_size,
                             covered_stop, covered_target,
                             stop_ok=True, target_ok=True):
-    from app.broker.events import BrokerPosition, ExitCoverage
+    from app.sim.events import BrokerPosition, ExitCoverage
     from app.execution.reconciler import Reconciler, ReconcilerConfig
     from app.risk.state import RiskState
     from app.risk.config import fifty_k_combine

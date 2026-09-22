@@ -20,7 +20,7 @@ from app.backtest.runner import (
     _apply_sweep_dim,
     run_backtest,
 )
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 log = logging.getLogger(__name__)
 

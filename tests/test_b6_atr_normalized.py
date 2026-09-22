@@ -15,7 +15,7 @@ Calibration constants (match 2024+ behavior at ~21k NQ by construction):
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.composer import ComposerConfig
 from app.bot_config import StrategyParams

@@ -16,7 +16,7 @@ from decimal import Decimal
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.paper import PaperBroker
+from app.sim.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, _confluence_multiplier
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState

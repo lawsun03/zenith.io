@@ -38,7 +38,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from app.bot_config import load_bot_config, strategy_for
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.replay import load_bars_csv
 from app.strategy.killzone import all_day, killzones_from_names
 from app.strategy.sweep_bos import SweepBOSConfig, SweepBOSDetector

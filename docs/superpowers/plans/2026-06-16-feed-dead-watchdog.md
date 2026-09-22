@@ -157,7 +157,7 @@ class TestWatchdogStep:
     def _engine(self, tf="5min"):
         from types import SimpleNamespace
         from decimal import Decimal
-        from app.broker.paper import PaperBroker
+        from app.sim.paper import PaperBroker
         from app.execution.engine import ExecutionEngine
         from app.risk.config import fifty_k_combine
         from app.risk.state import RiskState
@@ -307,7 +307,7 @@ git commit -m "feat(watchdog): engine feed-watchdog state machine + threshold"
 def test_watchdog_disabled_no_task():
     import asyncio
     from decimal import Decimal
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState
@@ -324,7 +324,7 @@ def test_watchdog_disabled_no_task():
 def test_watchdog_clock_invokes_callback(monkeypatch):
     """The clock tick must call on_feed_status with the step payload."""
     import asyncio
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState

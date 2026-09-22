@@ -142,8 +142,8 @@ def test_engine_flattens_early_close_at_noon():
 import asyncio
 from decimal import Decimal
 
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar
 
 
 def _bar(ts, price=100.0):

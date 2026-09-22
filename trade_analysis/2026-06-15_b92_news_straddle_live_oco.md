@@ -12,7 +12,7 @@ decides go-live.
 
 ## What was built (all default-off; bot_config.json untouched)
 
-### 1. Broker — `TopstepXBroker.place_oco_stop_entries` (`app/broker/topstepx.py`)
+### 1. Broker — `TopstepXBroker.place_oco_stop_entries` (`app/sim/topstepx.py`)
 Places **two resting stop ENTRY orders**:
 - `buy_stop` (side BUY, above the range) → fills LONG on an upside break.
 - `sell_stop` (side SELL, below the range) → fills SHORT on a downside break.

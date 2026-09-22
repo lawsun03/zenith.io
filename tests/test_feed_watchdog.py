@@ -51,7 +51,7 @@ class TestBarsExpected:
 class TestWatchdogStep:
     def _engine(self, tf="5min"):
         from types import SimpleNamespace
-        from app.broker.paper import PaperBroker
+        from app.sim.paper import PaperBroker
         from app.execution.engine import ExecutionEngine
         from app.risk.config import fifty_k_combine
         from app.risk.state import RiskState
@@ -103,7 +103,7 @@ class TestWatchdogStep:
 
 
 def _mk_engine(*, replay, enabled, cb=None):
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState

@@ -15,7 +15,7 @@
 | Action | Path | Responsibility |
 |---|---|---|
 | Modify | `scripts/fetch_bars.py` | Add `--paginate` loop for 365-day pulls |
-| Modify | `app/broker/paper.py` | Add `slippage_ticks_market`, `commission_per_side` |
+| Modify | `app/sim/paper.py` | Add `slippage_ticks_market`, `commission_per_side` |
 | Create | `app/backtest/__init__.py` | Empty package marker |
 | Create | `app/backtest/runner.py` | `BacktestConfig`, `BacktestResult`, `BacktestStats`, `SweepDimension`, `run_backtest()`, `run_sweep()` |
 | Create | `app/backtest/report.py` | `format_summary()`, `format_sweep_table()`, `write_trades_csv()`, `write_equity_csv()` |
@@ -137,7 +137,7 @@ git commit -m "fix: paginate fetch_bars to pull full 365-day history"
 ## Task 2: Add Slippage + Commission to `PaperBroker`
 
 **Files:**
-- Modify: `app/broker/paper.py`
+- Modify: `app/sim/paper.py`
 - Test: `tests/test_paper_broker_slippage.py` (create)
 
 Without slippage, backtests overstate returns. $0.74/side commission on 100 trades = $148/day unmodeled cost on MGC.
@@ -151,8 +151,8 @@ Create `tests/test_paper_broker_slippage.py`:
 import asyncio
 from decimal import Decimal
 import pytest
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar, Fill
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar, Fill
 from datetime import datetime, timezone
 
 
@@ -254,7 +254,7 @@ Expected: `AttributeError: __init__() got unexpected keyword argument 'slippage_
 
 - [ ] **Step 3: Add tick-size table and modify `PaperBroker.__init__`**
 
-Add at the top of `app/broker/paper.py`, after `TICK_VALUE`:
+Add at the top of `app/sim/paper.py`, after `TICK_VALUE`:
 
 ```python
 # Tick size per instrument (price units). Used for slippage calculation.
@@ -375,7 +375,7 @@ Expected: all pass. If a test breaks because it now expects 0-commission fills, 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/broker/paper.py tests/test_paper_broker_slippage.py
+git add app/sim/paper.py tests/test_paper_broker_slippage.py
 git commit -m "feat: add slippage and commission modeling to PaperBroker"
 ```
 
@@ -406,7 +406,7 @@ from app.backtest.runner import BacktestConfig, BacktestResult, run_backtest
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
 from app.strategy.liquidity import LiquidityConfig
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 def _make_bars(n: int, instrument: str = "MGC") -> list[Bar]:
@@ -537,8 +537,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Iterator
 
-from app.broker.events import Bar, Fill
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, Fill
+from app.sim.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
 from app.replay import load_bars_csv
 from app.risk.config import fifty_k_combine
@@ -1022,7 +1022,7 @@ from app.backtest.runner import (
     _apply_sweep_dim,
     run_backtest,
 )
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.risk.state import RiskState
 
 log = logging.getLogger(__name__)

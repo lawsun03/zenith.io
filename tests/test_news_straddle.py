@@ -20,7 +20,7 @@ from decimal import Decimal
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.news_straddle import (
     NewsStraddleConfig,
     NewsStraddleDetector,

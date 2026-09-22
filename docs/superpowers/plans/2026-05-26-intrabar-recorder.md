@@ -16,7 +16,7 @@
 
 | Action | Path | Responsibility |
 |--------|------|----------------|
-| Modify | `app/broker/topstepx.py` | Module constants (`_INTRABAR_SAMPLE_SECONDS`, `_INTRABAR_HEADERS`); pure helpers `_intrabar_row` + `_append_intrabar_csv`; `self._intrabar_task` init; sampler loop method; start in `subscribe()`; cancel in `disconnect()` |
+| Modify | `app/sim/topstepx.py` | Module constants (`_INTRABAR_SAMPLE_SECONDS`, `_INTRABAR_HEADERS`); pure helpers `_intrabar_row` + `_append_intrabar_csv`; `self._intrabar_task` init; sampler loop method; start in `subscribe()`; cancel in `disconnect()` |
 | Create | `tests/test_intrabar_recorder.py` | Unit tests for row building and CSV append (header-once, append) |
 
 The CSV-writing logic is split into two pure, instance-free module functions so it can be tested with no SDK and no broker instance. The loop method is thin glue (sleep → snapshot → append) and is verified by inspection plus the operational success criteria; its timing is not unit-tested.
@@ -27,7 +27,7 @@ The CSV-writing logic is split into two pure, instance-free module functions so 
 
 **Files:**
 - Create: `tests/test_intrabar_recorder.py`
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -38,8 +38,8 @@ Create `tests/test_intrabar_recorder.py`:
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar
-from app.broker.topstepx import (
+from app.sim.events import Bar
+from app.sim.topstepx import (
     _INTRABAR_HEADERS,
     _append_intrabar_csv,
     _intrabar_row,
@@ -103,11 +103,11 @@ def test_append_writes_header_only_once(tmp_path):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `.venv\Scripts\python.exe -m pytest tests/test_intrabar_recorder.py -v`
-Expected: `ImportError` / `cannot import name '_intrabar_row' from 'app.broker.topstepx'`
+Expected: `ImportError` / `cannot import name '_intrabar_row' from 'app.sim.topstepx'`
 
 - [ ] **Step 3: Add stdlib imports**
 
-In `app/broker/topstepx.py`, the import block at the top currently reads:
+In `app/sim/topstepx.py`, the import block at the top currently reads:
 
 ```python
 import asyncio
@@ -133,7 +133,7 @@ from typing import Iterable
 
 - [ ] **Step 4: Add module constants and pure helpers**
 
-In `app/broker/topstepx.py`, immediately after the `_POINT_VALUE` dict definition (and any related module constants near the top), add:
+In `app/sim/topstepx.py`, immediately after the `_POINT_VALUE` dict definition (and any related module constants near the top), add:
 
 ```python
 # Intrabar recorder: snapshot the forming bar this often (seconds) and append
@@ -181,7 +181,7 @@ Expected: all 3 tests PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_intrabar_recorder.py
+git add app/sim/topstepx.py tests/test_intrabar_recorder.py
 git commit -m "feat: intrabar CSV row + append helpers (pure, tested)"
 ```
 
@@ -190,11 +190,11 @@ git commit -m "feat: intrabar CSV row + append helpers (pure, tested)"
 ## Task 2: Sampler task lifecycle (init, loop, start, cancel)
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 
 - [ ] **Step 1: Initialize the task handle in `__init__`**
 
-In `app/broker/topstepx.py`, find the end of `__init__` where the forming-bar fields are initialized:
+In `app/sim/topstepx.py`, find the end of `__init__` where the forming-bar fields are initialized:
 
 ```python
         self._forming_bar: Bar | None = None
@@ -211,7 +211,7 @@ Add directly below them:
 
 - [ ] **Step 2: Add the sampler loop method**
 
-In `app/broker/topstepx.py`, add this method to the `TopstepXBroker` class. Place it immediately after the `subscribe(...)` method definition (after the `subscribe` method's body ends, before the next method):
+In `app/sim/topstepx.py`, add this method to the `TopstepXBroker` class. Place it immediately after the `subscribe(...)` method definition (after the `subscribe` method's body ends, before the next method):
 
 ```python
     async def _intrabar_sampler_loop(self) -> None:
@@ -287,7 +287,7 @@ Replace it with:
 
 - [ ] **Step 5: Verify import + syntax sanity**
 
-Run: `.venv\Scripts\python.exe -c "import app.broker.topstepx"`
+Run: `.venv\Scripts\python.exe -c "import app.sim.topstepx"`
 Expected: no output, exit code 0 (module imports cleanly; SDK import is lazy so this works without project-x-py loaded).
 
 - [ ] **Step 6: Run the recorder tests + the broker test module**
@@ -301,7 +301,7 @@ Expected: no NEW failures beyond the 5 known pre-existing ones noted in prior pl
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/broker/topstepx.py
+git add app/sim/topstepx.py
 git commit -m "feat: intrabar sampler task (start in subscribe, cancel in disconnect)"
 ```
 

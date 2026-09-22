@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.combined import CombinedRunner
 
 

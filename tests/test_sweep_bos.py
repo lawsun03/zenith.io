@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.sweep_bos import SweepBOSConfig, SweepBOSDetector
 
 ET = ZoneInfo("America/New_York")

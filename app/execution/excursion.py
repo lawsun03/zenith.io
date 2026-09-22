@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable, Literal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 @dataclass

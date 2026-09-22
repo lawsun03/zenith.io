@@ -16,7 +16,7 @@
 
 | Action | Path | Responsibility |
 |--------|------|----------------|
-| Modify | `app/broker/topstepx.py` | `_partial_plan` helper; ctor `partial_profit_r`; stash partial fields in `_pending_brackets`; `_exit_groups`/`_be_watches` state; `_place_partial_bracket_after_fill`; `_handle_group_fill`; `_modify_stop_to_be` failure ladder; `_maybe_move_stop_to_be`; one branch in `_on_fill_event`; one call in `_on_quote_update` |
+| Modify | `app/sim/topstepx.py` | `_partial_plan` helper; ctor `partial_profit_r`; stash partial fields in `_pending_brackets`; `_exit_groups`/`_be_watches` state; `_place_partial_bracket_after_fill`; `_handle_group_fill`; `_modify_stop_to_be` failure ladder; `_maybe_move_stop_to_be`; one branch in `_on_fill_event`; one call in `_on_quote_update` |
 | Modify | `app/bot_config.py` | `BotConfig.partial_profit_r` field + `save_bot_config` serialization |
 | Modify | `app/main.py` | Pass `partial_profit_r` into `TopstepXBroker(...)` |
 | Modify | `app/api/server.py` | `GET /api/config` returns it; `PATCH` hot-applies `_broker.partial_profit_r` |
@@ -52,7 +52,7 @@ No code commit. Proceed to Task 2.
 ## Task 2: Pure `_partial_plan` helper
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Create: `tests/test_topstepx_partials.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -65,7 +65,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.topstepx import _partial_plan
+from app.sim.topstepx import _partial_plan
 
 
 def test_partial_plan_disabled_returns_none():
@@ -112,7 +112,7 @@ Expected: FAIL — `ImportError: cannot import name '_partial_plan'`.
 
 - [ ] **Step 3: Implement the helper**
 
-In `app/broker/topstepx.py`, after the `_point_value` function (around line 67), add:
+In `app/sim/topstepx.py`, after the `_point_value` function (around line 67), add:
 
 ```python
 from dataclasses import dataclass
@@ -161,7 +161,7 @@ Expected: all 5 PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py tests/test_topstepx_partials.py
 git commit -m "feat: pure _partial_plan helper for live partials"
 ```
 
@@ -234,7 +234,7 @@ git commit -m "feat: partial_profit_r field on BotConfig"
 ## Task 4: Broker ctor accepts `partial_profit_r`; main passes it; stash partial fields at entry
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Modify: `app/main.py`
 - Modify: `tests/test_topstepx_partials.py`
 
@@ -243,7 +243,7 @@ git commit -m "feat: partial_profit_r field on BotConfig"
 Append to `tests/test_topstepx_partials.py`:
 
 ```python
-from app.broker.topstepx import TopstepXBroker
+from app.sim.topstepx import TopstepXBroker
 
 
 def test_broker_stores_partial_profit_r():
@@ -262,7 +262,7 @@ Expected: FAIL — `__init__() got an unexpected keyword argument 'partial_profi
 
 - [ ] **Step 3: Add ctor param + init state**
 
-In `app/broker/topstepx.py`, change `TopstepXBroker.__init__` signature (line 146):
+In `app/sim/topstepx.py`, change `TopstepXBroker.__init__` signature (line 146):
 
 ```python
     def __init__(self, account_name: str | None = None, entry_mode: str = "market", partial_profit_r: Decimal = Decimal("0")) -> None:
@@ -323,7 +323,7 @@ Expected: exit 0.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/broker/topstepx.py app/main.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py app/main.py tests/test_topstepx_partials.py
 git commit -m "feat: wire partial_profit_r into broker ctor + entry bracket data"
 ```
 
@@ -332,7 +332,7 @@ git commit -m "feat: wire partial_profit_r into broker ctor + entry bracket data
 ## Task 5: Place the partial legs (size≥2) and register the exit group
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Modify: `tests/test_topstepx_partials.py`
 
 This task adds `_place_partial_bracket_after_fill` and a stub-SDK test harness. It does NOT yet wire the dispatch in `_on_fill_event` (Task 6 does the fill transitions; Task 7 the size-1 path; the entry-fill branch is wired in Task 6 Step 5).
@@ -343,7 +343,7 @@ Append to `tests/test_topstepx_partials.py`:
 
 ```python
 import asyncio
-from app.broker.events import Fill
+from app.sim.events import Fill
 
 
 class FakeResp:
@@ -426,7 +426,7 @@ Expected: FAIL — `_place_partial_bracket_after_fill` not defined.
 
 - [ ] **Step 3: Implement `_place_partial_bracket_after_fill`**
 
-In `app/broker/topstepx.py`, add this method to `TopstepXBroker` immediately AFTER `_place_bracket_after_fill` (after line 617):
+In `app/sim/topstepx.py`, add this method to `TopstepXBroker` immediately AFTER `_place_bracket_after_fill` (after line 617):
 
 ```python
     async def _place_partial_bracket_after_fill(self, bracket: dict) -> None:
@@ -563,7 +563,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py tests/test_topstepx_partials.py
 git commit -m "feat: place partial/final/stop legs + register exit group (size>=2)"
 ```
 
@@ -572,7 +572,7 @@ git commit -m "feat: place partial/final/stop legs + register exit group (size>=
 ## Task 6: Group fill transitions + dispatch in `_on_fill_event`
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Modify: `tests/test_topstepx_partials.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -660,7 +660,7 @@ And in `test_final_target_after_partial_cancels_stop` replace the cancel asserti
 
 - [ ] **Step 4: Implement `_handle_group_fill`**
 
-In `app/broker/topstepx.py`, add to `TopstepXBroker` after `_place_partial_bracket_after_fill`:
+In `app/sim/topstepx.py`, add to `TopstepXBroker` after `_place_partial_bracket_after_fill`:
 
 ```python
     async def _handle_group_fill(self, fill: Fill) -> None:
@@ -752,7 +752,7 @@ NOTE: `_modify_stop_to_be` is implemented in Task 8. For this task, add a tempor
 
 - [ ] **Step 5: Wire dispatch in `_on_fill_event` and the entry-fill branch**
 
-In `app/broker/topstepx.py`, inside `_on_fill_event` (in `subscribe`), find the entry-fill branch `if order_id and order_id in self._pending_brackets:` (line 1077). It currently always calls `_place_bracket_after_fill`. Change the body that creates the task to choose the partials path:
+In `app/sim/topstepx.py`, inside `_on_fill_event` (in `subscribe`), find the entry-fill branch `if order_id and order_id in self._pending_brackets:` (line 1077). It currently always calls `_place_bracket_after_fill`. Change the body that creates the task to choose the partials path:
 
 Replace:
 ```python
@@ -784,7 +784,7 @@ Expected: all PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py tests/test_topstepx_partials.py
 git commit -m "feat: exit-group fill transitions + dispatch (partial->BE, OCO)"
 ```
 
@@ -793,7 +793,7 @@ git commit -m "feat: exit-group fill transitions + dispatch (partial->BE, OCO)"
 ## Task 7: Size-1 break-even watch via the quote stream
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Modify: `tests/test_topstepx_partials.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -845,7 +845,7 @@ Expected: FAIL — `_maybe_move_stop_to_be` not defined.
 
 - [ ] **Step 3: Implement `_maybe_move_stop_to_be`**
 
-In `app/broker/topstepx.py`, add to `TopstepXBroker`:
+In `app/sim/topstepx.py`, add to `TopstepXBroker`:
 
 ```python
     async def _maybe_move_stop_to_be(self, instrument: str, price: Decimal) -> None:
@@ -874,7 +874,7 @@ In `app/broker/topstepx.py`, add to `TopstepXBroker`:
 
 - [ ] **Step 4: Call it from the quote handler**
 
-In `app/broker/topstepx.py`, in `_on_quote_update` (inside `subscribe`), after the mid price is computed (`price = Decimal(...)` ~line 1005), add:
+In `app/sim/topstepx.py`, in `_on_quote_update` (inside `subscribe`), after the mid price is computed (`price = Decimal(...)` ~line 1005), add:
 
 ```python
             await self._maybe_move_stop_to_be(primary, price)
@@ -903,7 +903,7 @@ Expected: all PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py tests/test_topstepx_partials.py
 git commit -m "feat: 1-lot break-even watch on quote stream"
 ```
 
@@ -912,7 +912,7 @@ git commit -m "feat: 1-lot break-even watch on quote stream"
 ## Task 8: Failure ladder for the post-partial stop modify
 
 **Files:**
-- Modify: `app/broker/topstepx.py`
+- Modify: `app/sim/topstepx.py`
 - Modify: `tests/test_topstepx_partials.py`
 
 Replaces the temporary `_modify_stop_to_be` from Task 6 with the full ladder: modify → retry once → cancel-replace → flatten.
@@ -966,7 +966,7 @@ Expected: FAIL — current `_modify_stop_to_be` has no retry/replace/flatten.
 
 - [ ] **Step 3: Replace `_modify_stop_to_be` with the full ladder**
 
-In `app/broker/topstepx.py`, replace the temporary `_modify_stop_to_be` (from Task 6) with:
+In `app/sim/topstepx.py`, replace the temporary `_modify_stop_to_be` (from Task 6) with:
 
 ```python
     async def _modify_stop_to_be(self, group: dict) -> None:
@@ -1036,7 +1036,7 @@ Expected: all PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_topstepx_partials.py
+git add app/sim/topstepx.py tests/test_topstepx_partials.py
 git commit -m "feat: BE-modify failure ladder (retry -> cancel-replace -> flatten)"
 ```
 

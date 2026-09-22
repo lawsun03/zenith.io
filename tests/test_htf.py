@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
 import pytest
 

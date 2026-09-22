@@ -21,7 +21,7 @@
 - **Create** `tests/test_forbes.py` — unit/defining-behavior tests.
 - **Create** `scripts/run_forbes_backtest.py` — 5y backtest + ablations + funded harness, report metrics.
 
-Reference interfaces (read before coding): `app/strategy/composer.py` (`Signal` dataclass, fields: instrument, side, entry, stop, target, created_at, killzone, sweep_pattern, sweep_extreme, fvg_low, fvg_high, rationale), `app/strategy/orb.py` (Detector→`on_bar(bar)->Signal|None`, `state()`; Runner pattern), `app/strategy/liquidity.py` (`LiquidityTracker.on_bar(bar, atr)->list[SweepEvent]`, `.swings()`, `.recent_high_swings()`, `.recent_low_swings()`, `Swing`, `SweepEvent`), `app/strategy/displacement.py` (`DisplacementDetector.on_bar`, `.active_fvgs`, `.peek_displacement()`, `.atr`, `FairValueGap`), `app/strategy/kz_levels.py` (`KillzoneLevelTracker.on_bar`, `_kz_ranges`), `app/strategy/killzone.py` (`asia()`, `london_open()`, `ny_am()`, `ET`, `in_killzone`), `app/broker/events.py` (`Bar`: instrument, timeframe, ts, open, high, low, close, volume).
+Reference interfaces (read before coding): `app/strategy/composer.py` (`Signal` dataclass, fields: instrument, side, entry, stop, target, created_at, killzone, sweep_pattern, sweep_extreme, fvg_low, fvg_high, rationale), `app/strategy/orb.py` (Detector→`on_bar(bar)->Signal|None`, `state()`; Runner pattern), `app/strategy/liquidity.py` (`LiquidityTracker.on_bar(bar, atr)->list[SweepEvent]`, `.swings()`, `.recent_high_swings()`, `.recent_low_swings()`, `Swing`, `SweepEvent`), `app/strategy/displacement.py` (`DisplacementDetector.on_bar`, `.active_fvgs`, `.peek_displacement()`, `.atr`, `FairValueGap`), `app/strategy/kz_levels.py` (`KillzoneLevelTracker.on_bar`, `_kz_ranges`), `app/strategy/killzone.py` (`asia()`, `london_open()`, `ny_am()`, `ET`, `in_killzone`), `app/sim/events.py` (`Bar`: instrument, timeframe, ts, open, high, low, close, volume).
 
 ---
 
@@ -70,7 +70,7 @@ git commit -m "feat(forbes): add forbes_* config params (default-off)"
 # tests/test_forbes.py
 from datetime import datetime, timezone
 from decimal import Decimal
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.forbes import _FifteenMinAggregator
 
 
@@ -111,7 +111,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 class _FifteenMinAggregator:

@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector
 from app.strategy.grader import SetupGrader

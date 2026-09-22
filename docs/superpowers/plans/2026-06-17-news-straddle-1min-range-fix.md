@@ -28,8 +28,8 @@
 ## Notes for the executor
 
 - The scheduler's `_arm_event` and the existing scheduler tests currently rely on a bar **buffer** fed via `on_bar`. This plan **removes** that. The existing tests `test_scheduler_arms_oco_from_pre_range` and `test_scheduler_skips_when_too_few_bars` are **rewritten** (not just added to). Don't leave the old `on_bar`-feeding versions in place — they'll fail once the buffer is gone.
-- `get_historical_bars` signature (in `app/broker/topstepx.py`): `async def get_historical_bars(self, timeframe="1min", limit=500, days=5, start_time=None, end_time=None, instrument=None) -> list[Bar]`.
-- `Bar` (in `app/broker/events.py`) has `.ts` (UTC-aware datetime), `.high`, `.low` (Decimal), `.instrument`, `.timeframe`.
+- `get_historical_bars` signature (in `app/sim/topstepx.py`): `async def get_historical_bars(self, timeframe="1min", limit=500, days=5, start_time=None, end_time=None, instrument=None) -> list[Bar]`.
+- `Bar` (in `app/sim/events.py`) has `.ts` (UTC-aware datetime), `.high`, `.low` (Decimal), `.instrument`, `.timeframe`.
 - `place_oco_stop_entries(instrument, buy_stop, sell_stop, *, stop_r, tp_r, size) -> (buy_id, sell_id)`.
 - `alert_fn` is `Callable[[dict], Awaitable[None]] | None`. The scheduler must tolerate `None` (used in tests that don't care about alerts).
 
@@ -634,7 +634,7 @@ def build_news_straddle_schedulers(
 ):
     """One NewsStraddleScheduler per resolved spec — each single-instrument with its
     own offset/tp_r/size and only its own event_type's release times."""
-    from app.broker.paper import TICK_SIZE
+    from app.sim.paper import TICK_SIZE
     from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
 
     schedulers = []
@@ -766,7 +766,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 async def main():
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     from app.config import load_config
     cfg = load_config()
     broker = TopstepXBroker()

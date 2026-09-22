@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 if TYPE_CHECKING:
-    from app.broker.events import Fill
+    from app.sim.events import Fill
     from app.execution.engine import OrderOutcome
     from app.strategy.composer import Signal
 

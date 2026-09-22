@@ -18,8 +18,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar, MarkToMarket
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, MarkToMarket
+from app.sim.paper import PaperBroker
 from app.execution.engine import (
     ExecutionEngine,
     OrderOutcome,
@@ -76,7 +76,7 @@ def make_runner(instrument: str = "MGC") -> StrategyRunner:
     # Seed a session range for "NY AM" so P/D check has a midpoint.
     # Short signal entry is ~2399.5. Session low set to 2385 → sess_mid=(2410+2385)/2=2397.5.
     # Entry 2399.5 > 2397.5 (sess_mid) AND > 2397.5 (htf_mid) → short is in premium. Passes P/D.
-    from app.broker.events import Bar as _Bar
+    from app.sim.events import Bar as _Bar
     _seed_bar = _Bar(
         instrument=instrument, timeframe="1min", ts=in_ny_am(0),
         open=Decimal("2400"), high=Decimal("2410"), low=Decimal("2385"), close=Decimal("2400"),

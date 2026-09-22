@@ -50,9 +50,9 @@ from zoneinfo import ZoneInfo
 from app.api.journal import Journal
 from app.api.server import build_app
 from app.bot_config import BotConfig, StrategyParams, load_bot_config, strategy_for
-from app.broker.events import Fill
-from app.broker.paper import PaperBroker
-from app.broker.protocol import Broker
+from app.sim.events import Fill
+from app.sim.paper import PaperBroker
+from app.sim.protocol import Broker
 from app.config import AppConfig, load_config
 from app.execution.engine import (
     ExecutionEngine,
@@ -231,7 +231,7 @@ def _build_runner(
             signal_instrument=signal_instrument or "",
         )
     if s.engine == "news_straddle":
-        from app.broker.paper import TICK_SIZE
+        from app.sim.paper import TICK_SIZE
         from app.strategy.news_straddle import (
             NewsStraddleConfig, NewsStraddleDetector, NewsStraddleRunner,
             load_event_times)
@@ -578,14 +578,14 @@ async def _build_broker(cfg: AppConfig) -> Broker:
     if cfg.mode == "paper":
         return PaperBroker(starting_balance=Decimal("50000"))
 
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     bot_cfg = load_bot_config(Path(os.environ.get("BOT_CONFIG_PATH", "bot_config.json")))
     return TopstepXBroker(account_name=bot_cfg.account_name, entry_mode=bot_cfg.entry_mode, partial_profit_r=bot_cfg.partial_profit_r, max_entry_slippage_frac=bot_cfg.max_entry_slippage_frac)
 
 
 def _make_bar_journaler(journal: Journal, execution_instrument: str = ""):
     """Build the on_bar subscriber that streams bars to the chart."""
-    from app.broker.events import Bar as BarEvent
+    from app.sim.events import Bar as BarEvent
 
     async def on_bar(bar: BarEvent) -> None:
         # Re-label signal instrument bars (e.g. GC) as the execution instrument (MGC)
@@ -603,7 +603,7 @@ def _make_strategy_state_publisher(journal: Journal, engine: Any, execution_inst
     guarded so the news_straddle runner (no displacement/composer zones) is
     tolerated — its live state comes from the scheduler instead (B92, Rule 13).
     """
-    from app.broker.events import Bar as BarEvent
+    from app.sim.events import Bar as BarEvent
     from app.strategy.killzone import in_macro_window, in_news_blackout
 
     async def on_bar(bar: BarEvent) -> None:
@@ -915,7 +915,7 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
     If the fetch fails (network, SDK), the tracker starts without a prior
     profile and filters are bypassed (has_prior_profile() returns False).
     """
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     if not isinstance(broker, TopstepXBroker):
         return
 
@@ -972,7 +972,7 @@ def _aggregate_bars(
     if not bars:
         return []
     from datetime import datetime, timezone
-    from app.broker.events import Bar  # local import to avoid module-level cycle
+    from app.sim.events import Bar  # local import to avoid module-level cycle
 
     buckets: dict[int, list] = {}
     for b in bars:
@@ -1004,7 +1004,7 @@ async def _build_htf_trackers(
     Either may be None if its feature is disabled. On fetch failure the tracker
     is returned empty (bias → neutral, find_target → None): fail-open.
     """
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     if not isinstance(broker, TopstepXBroker):
         return None, None
 

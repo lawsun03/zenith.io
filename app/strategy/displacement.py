@@ -35,7 +35,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Deque, Literal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 DisplacementSide = Literal["bullish", "bearish"]
 

@@ -25,7 +25,7 @@
 | Action | Path | Responsibility |
 |--------|------|----------------|
 | Modify | `app/execution/engine.py` | Extract `evaluate_forming_bar(instrument, runner, forming_bar)` from `_poll_forming_bars` (behavior-preserving); poll calls it |
-| Modify | `app/broker/paper.py` | Extract `_resolve_bracket(bracket, high, low, ts)`; `inject_bar` uses it; add `resolve_sample(sample)` |
+| Modify | `app/sim/paper.py` | Extract `_resolve_bracket(bracket, high, low, ts)`; `inject_bar` uses it; add `resolve_sample(sample)` |
 | Create | `app/backtest/intrabar_replay.py` | `IntrabarData`, `load_intrabar_csv`, `run_intrabar_backtest` |
 | Create | `scripts/validate_intrabar_replay.py` | Acceptance: run on `intrabar_MGC.csv`, print signals for count+character check |
 | Create | `tests/test_intrabar_replay.py` | Loader, `resolve_sample`, partials-across-samples, same-minute entry+exit, dedup, driver smoke + determinism |
@@ -50,8 +50,8 @@ def test_evaluate_forming_bar_places_order():
     backtest and live share one forming-entry path."""
     import asyncio
     from types import SimpleNamespace
-    from app.broker.paper import PaperBroker
-    from app.broker.events import Bar
+    from app.sim.paper import PaperBroker
+    from app.sim.events import Bar
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState
@@ -166,11 +166,11 @@ git commit -m "refactor: extract evaluate_forming_bar for live+backtest reuse"
 ## Task 2: Extract `_resolve_bracket` in PaperBroker (behavior-preserving)
 
 **Files:**
-- Modify: `app/broker/paper.py`
+- Modify: `app/sim/paper.py`
 
 - [ ] **Step 1: Add `_resolve_bracket` and route `inject_bar` through it**
 
-In `app/broker/paper.py`, add this method directly above `inject_bar`:
+In `app/sim/paper.py`, add this method directly above `inject_bar`:
 
 ```python
     async def _resolve_bracket(self, bracket: "_OpenBracket", high: Decimal, low: Decimal, ts: datetime) -> None:
@@ -237,7 +237,7 @@ Expected: all pass (behavior-preserving — same fill logic, now factored).
 - [ ] **Step 3: Commit**
 
 ```bash
-git add app/broker/paper.py
+git add app/sim/paper.py
 git commit -m "refactor: extract PaperBroker._resolve_bracket from inject_bar"
 ```
 
@@ -246,7 +246,7 @@ git commit -m "refactor: extract PaperBroker._resolve_bracket from inject_bar"
 ## Task 3: Add `resolve_sample` to PaperBroker
 
 **Files:**
-- Modify: `app/broker/paper.py`
+- Modify: `app/sim/paper.py`
 - Create: `tests/test_intrabar_replay.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -259,8 +259,8 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar, Fill
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar, Fill
 
 
 def _bar(ts, o, h, l, c, instrument="MGC"):
@@ -324,7 +324,7 @@ Expected: FAIL — `AttributeError: 'PaperBroker' object has no attribute 'resol
 
 - [ ] **Step 3: Implement `resolve_sample`**
 
-In `app/broker/paper.py`, add directly after `inject_bar`:
+In `app/sim/paper.py`, add directly after `inject_bar`:
 
 ```python
     async def resolve_sample(self, sample: Bar) -> None:
@@ -350,7 +350,7 @@ Expected: all 4 PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/paper.py tests/test_intrabar_replay.py
+git add app/sim/paper.py tests/test_intrabar_replay.py
 git commit -m "feat: PaperBroker.resolve_sample for 5s intrabar fills"
 ```
 
@@ -418,8 +418,8 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from app.broker.events import Bar, Fill
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, Fill
+from app.sim.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
@@ -852,7 +852,7 @@ executable as written**, with these deltas the implementer must apply:
 
 **Anchors confirmed present (no rewrite needed):**
 - `ExecutionEngine._poll_forming_bars` + `_forming_signal_fired` + `try_signal_from_forming` — live forming path intact (Task 1 extraction still valid).
-- `PaperBroker.inject_bar` (`app/broker/paper.py:398`) — Task 2 `_resolve_bracket` extraction target intact.
+- `PaperBroker.inject_bar` (`app/sim/paper.py:398`) — Task 2 `_resolve_bracket` extraction target intact.
 - `app/backtest/runner.py`: `_build_runner(cfg)` (`:143`), `_compute_stats(...)` (`:439`), `_reconstruct_trades(fills)` (`:545`) — all present.
 
 **Deltas since 2026-05-27 (apply during execution):**

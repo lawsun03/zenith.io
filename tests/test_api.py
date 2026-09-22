@@ -18,14 +18,14 @@ from fastapi.testclient import TestClient
 
 from app.api.journal import Journal
 from app.api.server import build_app
-from app.broker.events import Fill
+from app.sim.events import Fill
 from app.execution.engine import OrderOutcome
 from app.execution.reconciler import (
     ReconcileReport,
     Reconciler,
     ReconcilerConfig,
 )
-from app.broker.paper import PaperBroker
+from app.sim.paper import PaperBroker
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState
 from app.strategy.composer import Signal

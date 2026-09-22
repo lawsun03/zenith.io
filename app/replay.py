@@ -31,7 +31,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterator
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 _TS_KEYS = ("timestamp", "ts", "datetime", "date_time", "time")

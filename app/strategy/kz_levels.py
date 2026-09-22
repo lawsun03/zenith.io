@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Optional
 
 from dataclasses import replace as dc_replace
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementDetector
 from app.strategy.grader import SetupGrader

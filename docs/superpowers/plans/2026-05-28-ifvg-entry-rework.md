@@ -50,7 +50,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector, FairValueGap
 
 BASE_TS = datetime(2026, 5, 28, 9, 30, tzinfo=timezone.utc)
@@ -746,7 +746,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import FairValueGap
 from app.strategy.grader import SetupGrader
 
@@ -840,7 +840,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal, TYPE_CHECKING
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import FairValueGap
 
 if TYPE_CHECKING:

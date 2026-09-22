@@ -21,9 +21,9 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar, Fill
-from app.broker.topstepx import TopstepXBroker
-from app.broker.pricing import SIDE_BUY, SIDE_SELL
+from app.sim.events import Bar, Fill
+from app.sim.topstepx import TopstepXBroker
+from app.sim.pricing import SIDE_BUY, SIDE_SELL
 
 
 UTC = timezone.utc

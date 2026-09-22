@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import datetime, timezone
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.execution.excursion import ExcursionTracker, ExcursionWindow
 
 

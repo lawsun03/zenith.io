@@ -8,7 +8,7 @@ def test_sweep_level_config_defaults_off():
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.sweep_levels import SweepLevelTracker
 
 def _bar(et_hour, et_min, o, h, l, c, day="2026-06-16"):

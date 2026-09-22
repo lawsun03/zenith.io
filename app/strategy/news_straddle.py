@@ -39,7 +39,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 from app.strategy.grader import SetupGrader
 
@@ -294,7 +294,7 @@ def build_news_straddle_schedulers(
 ):
     """One NewsStraddleScheduler per resolved spec — each single-instrument with its
     own offset/tp_r/size and only its own event_type's release times."""
-    from app.broker.paper import TICK_SIZE
+    from app.sim.paper import TICK_SIZE
     from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
 
     schedulers = []

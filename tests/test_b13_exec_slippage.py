@@ -9,7 +9,7 @@ column name `slippage` stays (it IS useful: plan-deviation diagnostic).
 from decimal import Decimal
 from datetime import datetime, timezone
 
-from app.broker.events import Bar, Fill
+from app.sim.events import Bar, Fill
 from app.journaling import (
     _entry_slippage,
     _exec_slippage,

@@ -57,7 +57,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.bot_config import StrategyParams
 from app.strategy.kz_levels import KillzoneLevelTracker
 from app.strategy.killzone import Killzone, london_open, ny_am
@@ -227,7 +227,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.killzone import Killzone, in_killzone
 from app.strategy.liquidity import Swing, SweepEvent
 

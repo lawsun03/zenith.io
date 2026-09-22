@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pandas as pd
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.news_straddle import (NewsStraddleConfig, NewsStraddleDetector)
 from scripts.news_straddle_cpi_1s import load_1s, simulate
 

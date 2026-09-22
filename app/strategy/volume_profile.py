@@ -19,7 +19,7 @@ import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.bot_config import StrategyParams
 from app.strategy.composer import Signal
 

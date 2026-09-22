@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector, FairValueGap
 
 BASE_TS = datetime(2026, 5, 28, 9, 30, tzinfo=timezone.utc)

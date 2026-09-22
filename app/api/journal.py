@@ -30,7 +30,7 @@ from typing import Any, Deque, TYPE_CHECKING
 
 log = logging.getLogger(__name__)
 
-from app.broker.events import Bar, Fill
+from app.sim.events import Bar, Fill
 from app.execution.engine import OrderOutcome
 from app.execution.reconciler import ReconcileReport
 from app.strategy.composer import Signal

@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.grader import SetupGrade, SetupGrader
 

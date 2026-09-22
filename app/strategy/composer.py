@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from app.strategy.grader import SetupGrade
     from app.strategy.armed_zone import ArmedZone
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.risk.pretrade import Side
 
 from .displacement import DisplacementDetector, DisplacementEvent, FairValueGap
@@ -827,7 +827,7 @@ class SweepDisplacementComposer:
                         else None)
         swept_level_type = None
         if self._sweep_levels is not None:
-            from app.broker.paper import TICK_SIZE
+            from app.sim.paper import TICK_SIZE
             tick = TICK_SIZE.get(cfg.instrument, Decimal("0.25"))
             swept_level_type = self._sweep_levels.tag(
                 awaiting.sweep.sweep_extreme, tick, cfg.sweep_levels_tag_tolerance_ticks,

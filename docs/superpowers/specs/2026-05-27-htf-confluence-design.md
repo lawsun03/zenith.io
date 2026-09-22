@@ -35,7 +35,7 @@ filter that would otherwise reject them.
 ## Key constraint discovered during design
 
 The live bar pipeline is **single-timeframe by construction**. The broker's
-`_on_new_bar` handler (`app/broker/topstepx.py`) hardcodes `tf_list[0]` — it only
+`_on_new_bar` handler (`app/sim/topstepx.py`) hardcodes `tf_list[0]` — it only
 fetches and fans out bars for the *first* subscribed timeframe, and the `Bar`
 events it emits carry no usable timeframe routing. Adding `"4h"`/`"30min"` to the
 `subscribe()` call would **not** deliver those bars to the strategy, and

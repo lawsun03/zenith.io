@@ -48,7 +48,7 @@ Add to `PaperBroker` (it's the broker the backtest uses):
 - `commission_per_side_per_contract: Decimal` — deducted from realized P&L on
   each fill. Default $0.74 for micros (TopstepX published rate).
 
-Defaults are configurable per instrument via a small table in `app/broker/paper.py`.
+Defaults are configurable per instrument via a small table in `app/sim/paper.py`.
 
 **Why this matters:** the current backtests fill at exact bar prices and ignore
 commissions. On 100 trades/day that's $74/day in unmodeled cost on MGC alone

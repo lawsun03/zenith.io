@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.pricing import _partial_plan
+from app.sim.pricing import _partial_plan
 
 
 def test_partial_plan_disabled_returns_none():
@@ -43,7 +43,7 @@ def test_partial_plan_odd_size_floors_half():
     assert plan.remaining_size == 2
 
 
-from app.broker.topstepx import TopstepXBroker
+from app.sim.topstepx import TopstepXBroker
 
 
 def test_broker_stores_partial_profit_r():
@@ -56,7 +56,7 @@ def test_broker_default_partial_disabled():
 
 
 import asyncio
-from app.broker.events import Fill
+from app.sim.events import Fill
 
 
 def _run(coro):

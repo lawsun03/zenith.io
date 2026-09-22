@@ -43,7 +43,7 @@ import pytest
 
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementEvent, FairValueGap
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 def _bar(i: int = 0) -> Bar:

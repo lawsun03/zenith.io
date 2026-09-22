@@ -15,8 +15,8 @@ from zoneinfo import ZoneInfo
 log = logging.getLogger(__name__)
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar, Fill
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, Fill
+from app.sim.paper import PaperBroker
 from app.execution.engine import ExecutionEngine, OrderOutcome, StrategyRunner
 from app.strategy.grader import SetupGrader
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
@@ -273,7 +273,7 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 strategy_cfg=s,
             )
         if s.engine == "news_straddle":
-            from app.broker.paper import TICK_SIZE
+            from app.sim.paper import TICK_SIZE
             from app.strategy.news_straddle import (
                 NewsStraddleConfig, NewsStraddleDetector, NewsStraddleRunner,
                 load_event_times)

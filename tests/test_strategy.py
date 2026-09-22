@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
 from app.strategy.displacement import (
     DisplacementConfig,

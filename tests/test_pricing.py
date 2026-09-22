@@ -16,8 +16,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.paper import PaperBroker, TICK_VALUE, TICK_SIZE, _tick_value
-from app.broker.pricing import _point_value, _POINT_VALUE
+from app.sim.paper import PaperBroker, TICK_VALUE, TICK_SIZE, _tick_value
+from app.sim.pricing import _point_value, _POINT_VALUE
 
 
 # Instruments priced by BOTH modules must agree on dollars-per-point.

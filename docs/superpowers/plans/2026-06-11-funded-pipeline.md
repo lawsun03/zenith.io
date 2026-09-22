@@ -20,7 +20,7 @@
 - `app/risk/state.py:296` `in_trading_window` + `CT` tz helper — exists, currently unused by live path.
 - `app/backtest/runner.py` `_trading_day_ct(ts)` — 5pm CT trading-day helper (added 2026-06-11).
 - `app/backtest/report.py:18` — the "Combine target: PASSED" line to replace.
-- `app/broker/pricing.py:38` `_point_value(instrument)` — $/point table.
+- `app/sim/pricing.py:38` `_point_value(instrument)` — $/point table.
 - Equity CSV format: header `ts,equity`, rows `2025-01-02T14:54:00+00:00,49999.26`.
 - `fifty_k_combine()` in `app/risk/config.py:83` — existing account config (DLL $1k is the bot's own soft rule; Topstep removed DLL Aug 2024 — keep ours).
 
@@ -210,8 +210,8 @@ git commit -m "feat: DST-correct flatten/entry-cutoff window helpers"
 import asyncio
 from decimal import Decimal
 
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar
 
 
 def _bar(ts, price=100.0):
@@ -321,7 +321,7 @@ New method on the engine (place near `_handle_bar`); import at top of file:
 ```
 
 NOTE: check the actual `Broker` protocol — if `cancel_all`/`flatten` have
-different names on `app/broker/protocol.py`, use the protocol names. Verify
+different names on `app/sim/protocol.py`, use the protocol names. Verify
 `open_brackets()` exists on PaperBroker (it does) and guard with `getattr`
 for TopstepXBroker (use runner instruments as fallback, as shown).
 
@@ -874,7 +874,7 @@ Add to ProposedOrder: `setup_grade: str = ""  # "A".."F" or "" when ungraded`.
 
 Extend the signature: `def check(order, state, phase=None, ts=None)` with import
 `from app.risk.account_phase import PhaseTracker` (top of file) and
-`from app.broker.pricing import _point_value`. Insert AFTER the lockout gate
+`from app.sim.pricing import _point_value`. Insert AFTER the lockout gate
 (1) and BEFORE the sanity gate (2):
 
 ```python
@@ -964,11 +964,11 @@ def test_engine_feeds_fills_to_phase_tracker():
     """Every realized fill delta must reach the tracker — the governor's
     cushion math is only as good as the balance it sees."""
     import asyncio
-    from app.broker.events import Fill
+    from app.sim.events import Fill
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
 
     tracker = PhaseTracker(phase="combine", combine=CombineRules(), xfa=XfaRules())
     broker = PaperBroker(slippage_ticks_market=0, commission_per_side=Decimal("0"))

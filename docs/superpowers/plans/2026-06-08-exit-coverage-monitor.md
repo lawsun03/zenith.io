@@ -14,10 +14,10 @@
 
 | File | Responsibility | Action |
 |---|---|---|
-| `app/broker/events.py` | `ExitCoverage` dataclass (broker data type, lives by `BrokerPosition`) | Modify |
-| `app/broker/protocol.py` | Protocol method signatures: `exit_coverage`, `place_protective_stop`, `place_protective_target` | Modify |
-| `app/broker/topstepx.py` | Real implementations against the SDK | Modify |
-| `app/broker/paper.py` | Paper/no-op implementations (always covered) so backtests never remediate | Modify |
+| `app/sim/events.py` | `ExitCoverage` dataclass (broker data type, lives by `BrokerPosition`) | Modify |
+| `app/sim/protocol.py` | Protocol method signatures: `exit_coverage`, `place_protective_stop`, `place_protective_target` | Modify |
+| `app/sim/topstepx.py` | Real implementations against the SDK | Modify |
+| `app/sim/paper.py` | Paper/no-op implementations (always covered) so backtests never remediate | Modify |
 | `app/bot_config.py` | New config fields: `emergency_stop_distance`, `emergency_target_r`, `naked_grace_seconds` | Modify |
 | `app/execution/reconciler.py` | Detection (grace) + escalating remediation + report field | Modify |
 | `app/main.py` | Build `ReconcilerConfig` emergency fields from `bot_cfg` | Modify |
@@ -38,7 +38,7 @@
 ## Task 1: `ExitCoverage` dataclass
 
 **Files:**
-- Modify: `app/broker/events.py` (add after `BrokerPosition`, ~line 113)
+- Modify: `app/sim/events.py` (add after `BrokerPosition`, ~line 113)
 - Test: `tests/test_exit_coverage.py` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -48,7 +48,7 @@ Create `tests/test_exit_coverage.py`:
 ```python
 from decimal import Decimal
 
-from app.broker.events import ExitCoverage
+from app.sim.events import ExitCoverage
 
 
 def test_fully_covered_when_stop_and_target_meet_size():
@@ -90,7 +90,7 @@ Expected: FAIL — `ImportError: cannot import name 'ExitCoverage'`.
 
 - [ ] **Step 3: Add the dataclass**
 
-In `app/broker/events.py`, immediately after the `BrokerPosition` dataclass, add:
+In `app/sim/events.py`, immediately after the `BrokerPosition` dataclass, add:
 
 ```python
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ Expected: PASS (4 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/events.py tests/test_exit_coverage.py
+git add app/sim/events.py tests/test_exit_coverage.py
 git commit -m "feat(broker): add ExitCoverage dataclass for exit-coverage monitor"
 ```
 
@@ -139,11 +139,11 @@ git commit -m "feat(broker): add ExitCoverage dataclass for exit-coverage monito
 ## Task 2: Protocol method signatures
 
 **Files:**
-- Modify: `app/broker/protocol.py` (add to the `Broker` Protocol, after `get_positions`, ~line 56)
+- Modify: `app/sim/protocol.py` (add to the `Broker` Protocol, after `get_positions`, ~line 56)
 
 - [ ] **Step 1: Add the import and three method stubs**
 
-In `app/broker/protocol.py`, update the events import line (currently
+In `app/sim/protocol.py`, update the events import line (currently
 `from .events import Bar, BracketResult, BrokerPosition, Fill, MarkToMarket, Side`) to include `ExitCoverage`:
 
 ```python
@@ -183,13 +183,13 @@ Then add these three methods to the `Broker` Protocol, right after `get_position
 
 - [ ] **Step 2: Verify the protocol imports cleanly**
 
-Run: `.venv/Scripts/python.exe -c "import app.broker.protocol"`
+Run: `.venv/Scripts/python.exe -c "import app.sim.protocol"`
 Expected: no output, exit 0.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add app/broker/protocol.py
+git add app/sim/protocol.py
 git commit -m "feat(broker): add exit-coverage + protective-order methods to Broker protocol"
 ```
 
@@ -198,7 +198,7 @@ git commit -m "feat(broker): add exit-coverage + protective-order methods to Bro
 ## Task 3: `TopstepXBroker.exit_coverage`
 
 **Files:**
-- Modify: `app/broker/topstepx.py` (add methods near `get_positions`/`flatten`; add module constants near the SIDE imports)
+- Modify: `app/sim/topstepx.py` (add methods near `get_positions`/`flatten`; add module constants near the SIDE imports)
 - Test: `tests/test_exit_coverage.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -209,7 +209,7 @@ Append to `tests/test_exit_coverage.py`:
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.broker.events import BrokerPosition
+from app.sim.events import BrokerPosition
 
 
 def _order(order_type, side, size, status=1):
@@ -224,7 +224,7 @@ def _order(order_type, side, size, status=1):
 def _coverage_broker(position, open_orders):
     """Stub TopstepXBroker for exit_coverage. position is a BrokerPosition
     or None; open_orders is the list returned by search_open_orders."""
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     broker._connected = True
@@ -288,7 +288,7 @@ Expected: FAIL — `AttributeError: 'TopstepXBroker' object has no attribute 'ex
 
 - [ ] **Step 3: Add module constants + implement `exit_coverage`**
 
-In `app/broker/topstepx.py`, add module-level constants after the `SIDE_SELL` import block (after line ~37):
+In `app/sim/topstepx.py`, add module-level constants after the `SIDE_SELL` import block (after line ~37):
 
 ```python
 # SDK OrderType codes: 1=Limit, 2=Market, 3=StopLimit, 4=Stop, 5=TrailingStop.
@@ -355,7 +355,7 @@ Expected: PASS (7 passed total).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_exit_coverage.py
+git add app/sim/topstepx.py tests/test_exit_coverage.py
 git commit -m "feat(broker): implement TopstepXBroker.exit_coverage via search_open_orders"
 ```
 
@@ -364,7 +364,7 @@ git commit -m "feat(broker): implement TopstepXBroker.exit_coverage via search_o
 ## Task 4: `TopstepXBroker` protective-order primitives
 
 **Files:**
-- Modify: `app/broker/topstepx.py` (add after `exit_coverage`)
+- Modify: `app/sim/topstepx.py` (add after `exit_coverage`)
 - Test: `tests/test_exit_coverage.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -373,7 +373,7 @@ Append to `tests/test_exit_coverage.py`:
 
 ```python
 def _placer_broker(position):
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     broker._connected = True
@@ -436,7 +436,7 @@ Expected: FAIL — `AttributeError: ... has no attribute 'place_protective_stop'
 
 - [ ] **Step 3: Implement the primitives**
 
-In `app/broker/topstepx.py`, after `exit_coverage`, add:
+In `app/sim/topstepx.py`, after `exit_coverage`, add:
 
 ```python
     async def _close_side_for(self, instrument: str) -> "int | None":
@@ -506,7 +506,7 @@ Expected: PASS (10 passed total).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/topstepx.py tests/test_exit_coverage.py
+git add app/sim/topstepx.py tests/test_exit_coverage.py
 git commit -m "feat(broker): add protective stop/target primitives for emergency re-attach"
 ```
 
@@ -515,7 +515,7 @@ git commit -m "feat(broker): add protective stop/target primitives for emergency
 ## Task 5: `PaperBroker` implementations
 
 **Files:**
-- Modify: `app/broker/paper.py` (add after `get_positions`, ~line 156)
+- Modify: `app/sim/paper.py` (add after `get_positions`, ~line 156)
 - Test: `tests/test_exit_coverage.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -527,7 +527,7 @@ Append to `tests/test_exit_coverage.py`:
 async def test_paper_broker_reports_full_coverage():
     """Paper brackets are simulated and never naked — backtests must not
     trigger emergency remediation."""
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
 
     broker = PaperBroker.__new__(PaperBroker)
     pos = BrokerPosition(
@@ -550,7 +550,7 @@ Expected: FAIL — `AttributeError: 'PaperBroker' object has no attribute 'exit_
 
 - [ ] **Step 3: Implement on PaperBroker**
 
-In `app/broker/paper.py`, add the `ExitCoverage` import (extend the existing events import) and these methods after `get_positions`:
+In `app/sim/paper.py`, add the `ExitCoverage` import (extend the existing events import) and these methods after `get_positions`:
 
 ```python
     async def exit_coverage(self, instrument: str) -> ExitCoverage:
@@ -589,7 +589,7 @@ Expected: PASS (11 passed total).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/broker/paper.py tests/test_exit_coverage.py
+git add app/sim/paper.py tests/test_exit_coverage.py
 git commit -m "feat(broker): PaperBroker reports full exit coverage (no backtest remediation)"
 ```
 
@@ -680,7 +680,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
-from app.broker.events import BrokerPosition, ExitCoverage
+from app.sim.events import BrokerPosition, ExitCoverage
 from app.execution.reconciler import Reconciler, ReconcilerConfig
 from app.risk.state import RiskState
 from app.risk.config import fifty_k_combine

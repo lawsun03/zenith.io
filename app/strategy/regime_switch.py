@@ -27,7 +27,7 @@ from statistics import median
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 
 log = logging.getLogger(__name__)

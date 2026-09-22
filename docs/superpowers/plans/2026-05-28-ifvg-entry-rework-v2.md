@@ -516,7 +516,7 @@ Currently `BotConfig.partial_profit_r` exists and `topstepx.py` handles partial 
 - Use TP2 as the full target
 - Wire breakeven stop move on TP1 fill
 
-This requires changes to `app/broker/topstepx.py` and `app/execution/engine.py`'s bracket handling. **Exact diff will be presented for approval before coding.**
+This requires changes to `app/sim/topstepx.py` and `app/execution/engine.py`'s bracket handling. **Exact diff will be presented for approval before coding.**
 
 ### New `StrategyParams` fields (Phase 8)
 ```python

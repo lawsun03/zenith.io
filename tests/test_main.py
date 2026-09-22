@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.events import Fill
+from app.sim.events import Fill
 from app.config import load_config
 from app.main import _async_main, _build_runner
 from app.journaling import _append_fill_csv

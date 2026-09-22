@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.sweep_reentry import (
     SweepReentryComposer,
     SweepReentryConfig,

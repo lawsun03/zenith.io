@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar, Fill
+from app.sim.events import Bar, Fill
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 
 

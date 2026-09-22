@@ -122,7 +122,7 @@ from datetime import datetime, timezone
 
 
 def _bar(ts_utc: datetime, high: float, low: float, close: float, volume: int) -> "Bar":
-    from app.broker.events import Bar
+    from app.sim.events import Bar
     return Bar(
         instrument="MGC", timeframe="1min", ts=ts_utc,
         open=Decimal(str(close)), high=Decimal(str(high)),

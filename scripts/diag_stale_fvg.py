@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.execution.engine import StrategyRunner
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementConfig, DisplacementDetector

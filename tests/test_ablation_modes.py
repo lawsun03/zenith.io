@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.liquidity import SweepEvent, Swing
@@ -98,7 +98,7 @@ class TestAllowedSides:
 
 class TestTrail1R:
     def test_ratchets_at_exact_1r_and_exits_on_stop_only(self):
-        from app.broker.paper import PaperBroker
+        from app.sim.paper import PaperBroker
 
         async def run():
             br = PaperBroker(starting_balance=Decimal("50000"),

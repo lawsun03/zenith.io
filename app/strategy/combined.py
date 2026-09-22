@@ -20,7 +20,7 @@ import logging
 from datetime import date
 from typing import Optional
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 
 log = logging.getLogger(__name__)

@@ -228,7 +228,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.liquidity import SweepEvent, Swing
@@ -414,7 +414,7 @@ Same control comparison. Record the best stack — it becomes the second compari
 ### Task 8: T4 code — `trail_1r` exit mode
 
 **Files:**
-- Modify: `app/broker/paper.py` (`_OpenBracket` ~line 49, `__init__` ~line 112, `place_bracket` ~line 260, `inject_bar` ~line 410)
+- Modify: `app/sim/paper.py` (`_OpenBracket` ~line 49, `__init__` ~line 112, `place_bracket` ~line 260, `inject_bar` ~line 410)
 - Modify: `app/backtest/runner.py` (`BacktestConfig` ~line 91, `run_backtest` PaperBroker ctor ~line 325)
 - Modify: `scripts/run_monthly_combine.py` (argparse + `run_month`)
 - Test: `tests/test_ablation_modes.py`
@@ -426,7 +426,7 @@ Append to `tests/test_ablation_modes.py`:
 ```python
 class TestTrail1R:
     def test_ratchets_at_exact_1r_and_exits_on_stop_only(self):
-        from app.broker.paper import PaperBroker
+        from app.sim.paper import PaperBroker
 
         async def run():
             br = PaperBroker(starting_balance=Decimal("50000"),
@@ -590,7 +590,7 @@ Expected: PASS (default-mode paper-broker behavior unchanged).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/broker/paper.py app/backtest/runner.py scripts/run_monthly_combine.py tests/test_ablation_modes.py
+git add app/sim/paper.py app/backtest/runner.py scripts/run_monthly_combine.py tests/test_ablation_modes.py
 git commit -m "feat: trail_1r ratchet exit mode in PaperBroker (ablation T4)"
 ```
 

@@ -242,7 +242,7 @@ import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.bot_config import StrategyParams
 from app.strategy.composer import Signal
 
@@ -358,7 +358,7 @@ from datetime import datetime, timezone
 
 
 def _bar(ts_utc: datetime, high: float, low: float, close: float, volume: int) -> "Bar":
-    from app.broker.events import Bar
+    from app.sim.events import Bar
     return Bar(
         instrument="MGC", timeframe="1min", ts=ts_utc,
         open=Decimal(str(close)), high=Decimal(str(high)),
@@ -1135,7 +1135,7 @@ async def _warm_up_vp(broker: "Broker", runner: "StrategyRunner", bot_cfg: BotCo
     If the fetch fails (network, SDK), the tracker starts without a prior
     profile and filters are bypassed (has_prior_profile() returns False).
     """
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     if not isinstance(broker, TopstepXBroker):
         return
 

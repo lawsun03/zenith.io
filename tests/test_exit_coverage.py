@@ -5,7 +5,7 @@ import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
-from app.broker.events import BrokerPosition, ExitCoverage
+from app.sim.events import BrokerPosition, ExitCoverage
 
 
 def test_fully_covered_when_stop_and_target_meet_size():
@@ -64,7 +64,7 @@ def _order(order_type, side, size, status=1):
 def _coverage_broker(position, open_orders):
     """Stub TopstepXBroker for exit_coverage. position is a BrokerPosition
     or None; open_orders is the list returned by search_open_orders."""
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     broker._connected = True
@@ -126,7 +126,7 @@ async def test_exit_coverage_flat_when_no_position():
 # ---------------------------------------------------------------------------
 
 def _placer_broker(position):
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
 
     broker = object.__new__(TopstepXBroker)
     broker._connected = True
@@ -190,7 +190,7 @@ async def test_place_protective_target_uses_close_side_for_short():
 async def test_paper_broker_reports_full_coverage():
     """Paper brackets are simulated and never naked — backtests must not
     trigger emergency remediation."""
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
 
     broker = PaperBroker.__new__(PaperBroker)
     pos = BrokerPosition(

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 
 log = logging.getLogger(__name__)

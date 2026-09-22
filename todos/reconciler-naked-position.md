@@ -24,7 +24,7 @@ Add a has_exit_tracking() method to the broker protocol. Reconciler checks: if o
 Findings 2026-06-08 (investigation, not yet implemented):
 
 NOT implemented. Confirmed absent:
-- No has_exit_tracking() on the broker protocol (app/broker/protocol.py).
+- No has_exit_tracking() on the broker protocol (app/sim/protocol.py).
 - Reconciler drift_kind is only "contract_count" | "balance" | None (reconciler.py:85). No "naked_position".
 - No bracket-placement grace period for naked detection.
 - No bracket re-attach logic anywhere — nothing re-creates stop/target orders for an

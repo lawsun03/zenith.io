@@ -26,7 +26,7 @@ Append `scripts/fetch_bars.py` (1-min) **and** the live intrabar recorder's 5s s
 
 ### B — Forming-bar-aware replay (the unlock; own design cycle)
 Teach the backtest to replay sub-minute samples as forming bars and drive `try_signal_from_forming`, and teach `PaperBroker` to model **intra-minute bracket fills** (stop/target touched within a minute, resolved in time order). Closes the fidelity gap and is also what makes the partials/BE backtest faithful.
-- Touches: `app/broker/paper.py` (intrabar fill model), `app/backtest/runner.py` (forming-bar feed + dedup mirroring the engine's `_forming_signal_fired`).
+- Touches: `app/sim/paper.py` (intrabar fill model), `app/backtest/runner.py` (forming-bar feed + dedup mirroring the engine's `_forming_signal_fired`).
 - Effort: meatiest; real design risk. **Gets its own brainstorm → spec → plan.**
 - Dependency: a sub-minute data format (can prototype against the existing `intrabar_MGC.csv` before any data spend).
 

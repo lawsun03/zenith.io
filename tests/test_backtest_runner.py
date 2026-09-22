@@ -17,7 +17,7 @@ from app.bot_config import StrategyParams
 from app.strategy.composer import ComposerConfig
 from app.strategy.displacement import DisplacementConfig
 from app.strategy.liquidity import LiquidityConfig
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 
 def _make_bars(n: int, instrument: str = "MGC") -> list[Bar]:

@@ -197,11 +197,11 @@ def test_engine_feeds_fills_to_phase_tracker():
     """Every realized fill delta must reach the tracker â€” the governor's
     cushion math is only as good as the balance it sees."""
     import asyncio
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState
-    from app.broker.events import Bar
+    from app.sim.events import Bar
 
     def bar(ts, price):
         return Bar(instrument="MGC", timeframe="1min", ts=ts,
@@ -229,11 +229,11 @@ def test_engine_rolls_phase_day_at_5pm_ct():
     """today_pnl must reset at the 5pm CT boundary or the best-day cap and
     winning-day counters compound across days."""
     import asyncio
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState
-    from app.broker.events import Bar
+    from app.sim.events import Bar
 
     def bar(ts, price=100):
         return Bar(instrument="MGC", timeframe="1min", ts=ts,
@@ -309,7 +309,7 @@ def test_phase_aware_sizing_uses_tracker_not_broker_equity():
     """In a shadow Combine the broker (practice) equity is unrelated capital;
     sizing must budget from the tracked $50k or a 1% trade risks 3x too much."""
     import asyncio
-    from app.broker.paper import PaperBroker
+    from app.sim.paper import PaperBroker
     from app.execution.engine import ExecutionEngine
     from app.risk.config import fifty_k_combine
     from app.risk.state import RiskState

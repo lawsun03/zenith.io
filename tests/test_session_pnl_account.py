@@ -73,7 +73,7 @@ class TestReaderAccountFilter:
 class TestWriterEmitsAccount:
     def test_append_fill_csv_writes_account_column(self, tmp_path, monkeypatch):
         import app.journaling as J
-        from app.broker.events import Fill
+        from app.sim.events import Fill
 
         master = tmp_path / "trades.csv"
         daily = tmp_path / "trades_daily.csv"

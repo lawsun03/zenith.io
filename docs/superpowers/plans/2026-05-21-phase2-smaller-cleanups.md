@@ -15,8 +15,8 @@
 | Action | Path | Responsibility |
 |---|---|---|
 | Modify | `bot_config.json` | Fix vp_filter_tolerance 20.0 → 2.0 |
-| Modify | `app/broker/events.py` | Add `is_stop: bool = False` to `Fill` |
-| Modify | `app/broker/paper.py` | Pass `is_stop=is_stop` when constructing Fill in `_close_bracket` |
+| Modify | `app/sim/events.py` | Add `is_stop: bool = False` to `Fill` |
+| Modify | `app/sim/paper.py` | Pass `is_stop=is_stop` when constructing Fill in `_close_bracket` |
 | Modify | `app/strategy/composer.py` | Add `cooldown_bars_after_stop` to `ComposerConfig`; add `_cooldown_remaining` counter; add `on_stop_loss()` method; check cooldown in `on_displacement`; decrement in `on_bar_close` |
 | Modify | `app/execution/engine.py` | In `_handle_fill`, call `runner.composer.on_stop_loss()` on stop exits; add `_prev_atr` cache to `StrategyRunner`; pass `atr=self._prev_atr` to `liquidity.on_bar` |
 | Modify | `app/strategy/liquidity.py` | Add `min_penetration_atr_factor: Decimal \| None = None` to `LiquidityConfig`; change `on_bar(bar, atr=None)` signature; compute effective penetration |
@@ -62,8 +62,8 @@ git commit -m "fix: VP tolerance was 20.0 (useless) — corrected to 2.0 price p
 ## Task 2: Post-Stop Cooldown
 
 **Files:**
-- Modify: `app/broker/events.py`
-- Modify: `app/broker/paper.py`
+- Modify: `app/sim/events.py`
+- Modify: `app/sim/paper.py`
 - Modify: `app/strategy/composer.py`
 - Modify: `app/execution/engine.py`
 - Create: `tests/test_phase2_cleanups.py`
@@ -81,7 +81,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import pytest
 
-from app.broker.events import Bar, Fill
+from app.sim.events import Bar, Fill
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 
 
@@ -179,7 +179,7 @@ Expected: failures on `cooldown_bars_after_stop` (not in ComposerConfig), `on_st
 
 - [ ] **Step 3: Add `is_stop` to Fill**
 
-In `app/broker/events.py`, modify the `Fill` dataclass (add `is_stop` as the last field with a default so all existing call sites remain valid):
+In `app/sim/events.py`, modify the `Fill` dataclass (add `is_stop` as the last field with a default so all existing call sites remain valid):
 
 ```python
 @dataclass(frozen=True)
@@ -198,7 +198,7 @@ class Fill:
 
 - [ ] **Step 4: Pass `is_stop` to Fill in PaperBroker**
 
-In `app/broker/paper.py`, find `_close_bracket`. The `Fill(...)` constructor call is inside it. Add `is_stop=is_stop` to that call:
+In `app/sim/paper.py`, find `_close_bracket`. The `Fill(...)` constructor call is inside it. Add `is_stop=is_stop` to that call:
 
 ```python
 await self._fanout(
@@ -340,7 +340,7 @@ Expected: all pass. If any test constructs a `Fill` without `is_stop`, it still 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add app/broker/events.py app/broker/paper.py app/strategy/composer.py app/execution/engine.py tests/test_phase2_cleanups.py
+git add app/sim/events.py app/sim/paper.py app/strategy/composer.py app/execution/engine.py tests/test_phase2_cleanups.py
 git commit -m "feat: post-stop cooldown — Fill.is_stop field, composer cooldown counter, engine wiring"
 ```
 

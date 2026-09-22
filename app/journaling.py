@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from app.api.journal import Journal
 from app.bot_config import BotConfig, load_bot_config
-from app.broker.events import Fill
+from app.sim.events import Fill
 from app.execution.engine import OrderOutcome
 from app.notifications import DiscordNotifier, EmailNotifier
 from app.strategy.composer import Signal

@@ -13,7 +13,7 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.bot_config import StrategyParams
 from app.strategy.composer import Signal
 from app.strategy.killzone import ET, Killzone, asia, london_open, ny_am, ny_pm

@@ -22,7 +22,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.orb import ORBConfig, ORBDetector
 
 # 2024-03-18 (Monday, EDT = UTC-4): chosen to be in DST (safe date)

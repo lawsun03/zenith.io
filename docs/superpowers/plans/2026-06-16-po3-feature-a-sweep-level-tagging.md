@@ -90,7 +90,7 @@ git commit -m "feat: PO3 Feature A config fields (sweep-level tagging, default-o
 # append to tests/test_sweep_levels.py
 from datetime import datetime, timezone
 from decimal import Decimal
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.sweep_levels import SweepLevelTracker
 
 def _bar(et_hour, et_min, o, h, l, c, day="2026-06-16"):
@@ -143,7 +143,7 @@ from datetime import date, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 ET = ZoneInfo("America/New_York")
 _RTH_OPEN = time(9, 30)
@@ -347,7 +347,7 @@ Sites (confirmed by `grep -n "ComposerConfig(" app/`): `app/backtest/runner.py:4
 ```python
         swept_level_type = None
         if self._sweep_levels is not None:
-            from app.broker.paper import TICK_SIZE
+            from app.sim.paper import TICK_SIZE
             tick = TICK_SIZE.get(cfg.instrument, Decimal("0.25"))
             swept_level_type = self._sweep_levels.tag(
                 awaiting.sweep.sweep_extreme, tick, cfg.sweep_levels_tag_tolerance_ticks,

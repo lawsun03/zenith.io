@@ -1,8 +1,8 @@
 ﻿"""Tests for PaperBroker slippage and commission modeling."""
 import asyncio
 from decimal import Decimal
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar, Fill
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar, Fill
 from datetime import datetime, timezone
 
 

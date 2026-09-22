@@ -3425,7 +3425,7 @@ strategy state visible in the backtest should be observable in the live dashboar
 live MFE/MAE completes the observability loop.
 
 **Mechanism:**
-1. In `app/broker/topstepx.py`: during an open position (after fill event, before exit), on
+1. In `app/sim/topstepx.py`: during an open position (after fill event, before exit), on
    each bar update, track:
    - `_peak_favorable_pts`: max((current_bar.close - fill_price) × direction) over all bars since fill
    - `_peak_adverse_pts`: max((fill_price - current_bar.close) × direction) over all bars since fill

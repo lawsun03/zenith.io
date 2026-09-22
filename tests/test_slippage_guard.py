@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.broker.topstepx import TopstepXBroker, SIDE_BUY, SIDE_SELL
+from app.sim.topstepx import TopstepXBroker, SIDE_BUY, SIDE_SELL
 
 
 def _broker(frac: str) -> TopstepXBroker:

@@ -33,7 +33,7 @@ from decimal import Decimal
 import pytest
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.execution.engine import StrategyRunner
 from app.strategy.armed_zone import ArmedZone, ArmedZoneTracker
 from app.strategy.composer import ComposerConfig, Signal, SweepDisplacementComposer
@@ -131,7 +131,7 @@ def _make_disp_event():
         low=Decimal("2401.0"), high=Decimal("2403.0"),
         side="bearish", created_at=BASE_TS,
     )
-    from app.broker.events import Bar as _Bar
+    from app.sim.events import Bar as _Bar
     b2 = _Bar(
         instrument="MGC", timeframe="1min", ts=BASE_TS,
         open=Decimal("2401"), high=Decimal("2401.2"),

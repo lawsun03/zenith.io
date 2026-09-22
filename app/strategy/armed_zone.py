@@ -18,7 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 log = logging.getLogger(__name__)
 

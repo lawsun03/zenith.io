@@ -264,7 +264,7 @@ Expected: FAIL — `TypeError: __init__() got an unexpected keyword argument 'ri
 In `app/execution/engine.py`, find the existing imports near the top of the file and add the two the engine needs for sizing. Add these lines alongside the other `app.` imports:
 
 ```python
-from app.broker.topstepx import _point_value
+from app.sim.topstepx import _point_value
 from app.risk.sizing import risk_based_size
 ```
 
@@ -587,5 +587,5 @@ The bot is running (PID 15824); the engine picks up the field on next launch (or
 - `risk_based_size(equity, risk_pct, stop_distance, point_value, max_size)` — identical signature in `app/risk/sizing.py` (T1), `tests/test_sizing.py` (T1), and the engine call (T3 Step 5).
 - `risk_per_trade_pct` is `Decimal` everywhere in Python (BotConfig, engine ctor, `_entry_size`), serialized via `_conv`/`float()` at the JSON boundary (T2, T5), and `number` in TS (T6) — boundary conversions are explicit.
 - `_entry_size(self, signal: Signal) -> int` defined in T3 Step 5, called in T3 Step 6.
-- `_point_value(instrument)` is the existing function in `app/broker/topstepx.py` (returns `Decimal`); engine imports it (T3 Step 3).
+- `_point_value(instrument)` is the existing function in `app/sim/topstepx.py` (returns `Decimal`); engine imports it (T3 Step 3).
 ```

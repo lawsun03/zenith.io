@@ -31,7 +31,7 @@ risk overrides, dynamic risk by setup quality.
   up to this cap on tight-stop setups.
 - **Disabled sentinel:** `risk_per_trade_pct <= 0` → fall back to the fixed `contracts`
   field (today's behavior), matching the project's "0 = disabled" convention.
-- **Point value:** reuse the canonical `app.broker.topstepx._point_value()` — the existing
+- **Point value:** reuse the canonical `app.sim.topstepx._point_value()` — the existing
   source of truth for live P&L. No second/driftable copy.
 
 ## Architecture

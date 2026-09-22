@@ -35,7 +35,7 @@ the fix session can start from a precise target.
   replays continuously so stale zones survive and fire.
 
 ### 2. A partial mitigation already landed in `PaperBroker.place_bracket`
-`app/broker/paper.py` (~line 216, comment dated 2026-06-10):
+`app/sim/paper.py` (~line 216, comment dated 2026-06-10):
 - Market fills now anchor to `_last_bar_close[instrument]` + slippage instead
   of the signal's entry. `inject_bar` updates `_last_bar_close` BEFORE
   resolving brackets / fanning out, so ordering is correct.

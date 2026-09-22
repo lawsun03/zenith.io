@@ -8,7 +8,7 @@ and rank-1 shorts are unaffected.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import ComposerConfig, SweepDisplacementComposer
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.liquidity import Swing, SweepEvent

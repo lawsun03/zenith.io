@@ -11,7 +11,7 @@ from datetime import date, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 
 ET = ZoneInfo("America/New_York")
 _RTH_OPEN = time(9, 30)

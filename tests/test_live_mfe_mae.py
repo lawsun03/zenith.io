@@ -12,8 +12,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
-from app.broker.topstepx import TopstepXBroker
+from app.sim.events import Bar
+from app.sim.topstepx import TopstepXBroker
 
 
 # ---------------------------------------------------------------------------

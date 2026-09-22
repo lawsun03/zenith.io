@@ -27,7 +27,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal, TYPE_CHECKING
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.displacement import FairValueGap
 
 if TYPE_CHECKING:

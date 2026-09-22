@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.orb import ORBComposer, ORBConfig, ORBDetector
 
 ET_ZONE = __import__("zoneinfo").ZoneInfo("America/New_York")

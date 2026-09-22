@@ -21,7 +21,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 from app.strategy.displacement import (DisplacementConfig, DisplacementDetector,
                                        DisplacementEvent)

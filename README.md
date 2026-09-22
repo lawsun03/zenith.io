@@ -216,5 +216,5 @@ is in `deploy/windows/`.
 - Contract count differs -> emergency flatten + lock out
 
 **Live trading**: Run `scripts/sdk_diagnostic.py` against a demo account before
-switching to live mode. The SDK field-name assumptions in `app/broker/topstepx.py`
+switching to live mode. The SDK field-name assumptions in `app/sim/topstepx.py`
 need verification on a real connection.

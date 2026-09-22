@@ -106,7 +106,7 @@ class SessionVWAP:
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.chop_breakout import ChopBreakoutConfig, ChopBreakoutDetector
 from app.strategy.displacement import DisplacementEvent, FairValueGap
 from app.strategy.liquidity import Swing
@@ -192,7 +192,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from app.bot_config import StrategyParams
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.composer import Signal
 from app.strategy.displacement import (DisplacementConfig, DisplacementDetector,
                                        DisplacementEvent)
@@ -670,7 +670,7 @@ class TestEngineExitChannel:
     def test_exit_request_flattens_open_position(self):
         import asyncio
         from dataclasses import dataclass as dc, field as f
-        from app.broker.paper import PaperBroker
+        from app.sim.paper import PaperBroker
         from app.execution.engine import ExecutionEngine
         from app.risk.config import fifty_k_combine
         from app.risk.state import RiskState

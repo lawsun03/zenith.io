@@ -12,11 +12,11 @@
 
 ## Background for the implementer (read once)
 
-- **Why REST, not subscribe():** `app/broker/topstepx.py` `_on_new_bar` hardcodes `tf_list[0]` — only the first subscribed timeframe is fetched and fanned out, and `Bar` events carry no routing tag. Adding `"4h"`/`"30min"` to `subscribe()` would NOT deliver them. The order path is real money (CLAUDE.md Rule 8) — do not touch NEW_BAR routing.
+- **Why REST, not subscribe():** `app/sim/topstepx.py` `_on_new_bar` hardcodes `tf_list[0]` — only the first subscribed timeframe is fetched and fanned out, and `Bar` events carry no routing tag. Adding `"4h"`/`"30min"` to `subscribe()` would NOT deliver them. The order path is real money (CLAUDE.md Rule 8) — do not touch NEW_BAR routing.
 - **Timeframe strings:** `_parse_timeframe` reads a trailing `h` as hours, `min` as minutes. Use `"4h"` and `"30min"`. **`"4hr"` silently falls back to 1min** — never use it.
 - **Existing pattern to mirror:** `_warm_up_vp` in `app/main.py` (around line 622) fetches historical bars via `broker.get_historical_bars(timeframe=..., days=..., limit=...)` and feeds a tracker at startup. The HTF warm-up and refresh use the same call.
 - **Signal pipeline today** (`app/execution/engine.py` `on_bar`, lines ~300–346): feed VP → `runner.on_bar` → if VP enabled+prior, `runner.vp.apply(signal)` (filters AND overrides target) → `_act_on_signal`. We split VP's filter from its target selection and insert HTF logic around it.
-- **Bar type:** `app/broker/events.py` `Bar` has `instrument, timeframe, ts, open, high, low, close, volume` (all Decimal except ts/volume/instrument/timeframe).
+- **Bar type:** `app/sim/events.py` `Bar` has `instrument, timeframe, ts, open, high, low, close, volume` (all Decimal except ts/volume/instrument/timeframe).
 - **Run tests with the venv python:** `.venv/Scripts/python.exe -m pytest ...` (plain `python` lacks pydantic).
 
 ---
@@ -125,7 +125,7 @@ Create `tests/test_htf.py`:
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.htf import HTFBiasTracker, HTFLevelFinder
 
 
@@ -212,7 +212,7 @@ import logging
 from decimal import Decimal
 from typing import Literal
 
-from app.broker.events import Bar
+from app.sim.events import Bar
 from app.strategy.liquidity import LiquidityConfig, LiquidityTracker
 
 log = logging.getLogger(__name__)
@@ -808,7 +808,7 @@ async def _build_htf_trackers(
     Either may be None if the feature is disabled. On fetch failure the tracker
     is returned empty (bias → neutral, find_target → None): fail-open.
     """
-    from app.broker.topstepx import TopstepXBroker
+    from app.sim.topstepx import TopstepXBroker
     if not isinstance(broker, TopstepXBroker):
         return None, None
 

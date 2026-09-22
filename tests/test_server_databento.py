@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api.journal import Journal
 from app.api.server import build_app
-from app.broker.paper import PaperBroker
+from app.sim.paper import PaperBroker
 from app.execution.reconciler import Reconciler, ReconcilerConfig
 from app.risk.config import fifty_k_combine
 from app.risk.state import RiskState

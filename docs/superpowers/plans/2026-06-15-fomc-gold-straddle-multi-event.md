@@ -340,7 +340,7 @@ Append to `app/strategy/news_straddle.py`:
 def build_news_straddle_schedulers(broker, specs, events_path: str, arm_lead_seconds: int):
     """One NewsStraddleScheduler per resolved spec — each single-instrument with its
     own offset/tp_r/size and only its own event_type's release times."""
-    from app.broker.paper import TICK_SIZE
+    from app.sim.paper import TICK_SIZE
     from app.notifications.news_straddle_scheduler import NewsStraddleScheduler
 
     schedulers = []

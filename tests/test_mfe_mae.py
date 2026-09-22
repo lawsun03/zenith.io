@@ -17,8 +17,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.events import Bar, Side
-from app.broker.paper import PaperBroker
+from app.sim.events import Bar, Side
+from app.sim.paper import PaperBroker
 
 
 def _bar(instrument: str, high: float, low: float, close: float,

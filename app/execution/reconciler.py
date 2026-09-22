@@ -52,11 +52,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from app.broker.protocol import Broker
+from app.sim.protocol import Broker
 from app.risk.state import LockoutReason, RiskState
 
 if TYPE_CHECKING:
-    from app.broker.events import ExitCoverage
+    from app.sim.events import ExitCoverage
     from app.notifications.email import EmailNotifier
 
 log = logging.getLogger(__name__)

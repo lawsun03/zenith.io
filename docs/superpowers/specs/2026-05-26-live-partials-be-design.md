@@ -8,7 +8,7 @@
 
 ## Background
 
-Partial-profit + BE-trail exists today **only** in `PaperBroker` (backtest), driven by `partial_profit_r` (`app/broker/paper.py`): on entry it computes `partial_target = entry ± R×partial_profit_r` and `partial_size = size // 2`; in `inject_bar`, when the partial target is touched it closes `partial_size`, moves the stop to break-even (`bracket.stop = bracket.entry`), and marks `partial_filled`. Live trading has none of this — it places one stop + one target at full size after the entry fills.
+Partial-profit + BE-trail exists today **only** in `PaperBroker` (backtest), driven by `partial_profit_r` (`app/sim/paper.py`): on entry it computes `partial_target = entry ± R×partial_profit_r` and `partial_size = size // 2`; in `inject_bar`, when the partial target is touched it closes `partial_size`, moves the stop to break-even (`bracket.stop = bracket.entry`), and marks `partial_filled`. Live trading has none of this — it places one stop + one target at full size after the entry fills.
 
 This spec ports the behavior to `TopstepXBroker`, which requires real order modification rather than simulated bar resolution.
 
@@ -133,7 +133,7 @@ Transitions: standard stop ↔ target OCO (the existing `_exit_groups` cancel lo
 |---|---|
 | `app/bot_config.py` | `BotConfig.partial_profit_r: Decimal = Decimal("0")` (top-level, next to `risk_per_trade_pct`); serialize in `save_bot_config` via the Decimal→str helper. |
 | `app/main.py` | Pass `partial_profit_r=bot_cfg.partial_profit_r` into `TopstepXBroker(...)`. |
-| `app/broker/topstepx.py` | `__init__` accepts `partial_profit_r: Decimal = Decimal("0")`, stores `self.partial_profit_r`. |
+| `app/sim/topstepx.py` | `__init__` accepts `partial_profit_r: Decimal = Decimal("0")`, stores `self.partial_profit_r`. |
 | `app/api/server.py` | `GET /api/config` returns `float(cfg.partial_profit_r)`; `PATCH` hot-applies `_broker.partial_profit_r = body.partial_profit_r` and returns it. (Affects the next entry; open positions keep their legs.) |
 | `frontend/src/types.ts` | `partial_profit_r: number`. |
 | `frontend/src/components/ConfigPanel.tsx` | "Partial profit (R, 0=off)" number field — init/submit/render — help text noting BE-move also applies to 1-lot entries. |

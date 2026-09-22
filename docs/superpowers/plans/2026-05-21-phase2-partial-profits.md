@@ -16,7 +16,7 @@
 
 | Action | Path | Responsibility |
 |---|---|---|
-| Modify | `app/broker/paper.py` | `_OpenBracket` partial fields; PaperBroker ctor arg; `place_bracket` computes partial target; `inject_bar` checks + acts on partial; `_close_partial` method |
+| Modify | `app/sim/paper.py` | `_OpenBracket` partial fields; PaperBroker ctor arg; `place_bracket` computes partial target; `inject_bar` checks + acts on partial; `_close_partial` method |
 | Modify | `app/backtest/runner.py` | `BacktestConfig.partial_profit_r`; pass to PaperBroker in `run_backtest` |
 | Modify | `scripts/walkforward.py` | `--partial-profit-r` CLI arg wired to `BacktestConfig` |
 | Create | `tests/test_partial_profit.py` | Unit tests for partial fill logic |
@@ -26,7 +26,7 @@
 ## Task 1: PaperBroker Partial-Profit Engine
 
 **Files:**
-- Modify: `app/broker/paper.py`
+- Modify: `app/sim/paper.py`
 - Create: `tests/test_partial_profit.py`
 
 - [ ] **Step 1: Write failing tests**
@@ -41,8 +41,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.broker.paper import PaperBroker
-from app.broker.events import Bar, Fill
+from app.sim.paper import PaperBroker
+from app.sim.events import Bar, Fill
 
 
 def _bar(ts, o, h, l, c, instrument="MGC"):
@@ -185,7 +185,7 @@ Expected: `TypeError: __init__() got an unexpected keyword argument 'partial_pro
 
 - [ ] **Step 3: Add fields to `_OpenBracket`**
 
-In `app/broker/paper.py`, replace the `_OpenBracket` dataclass with:
+In `app/sim/paper.py`, replace the `_OpenBracket` dataclass with:
 
 ```python
 @dataclass
@@ -324,7 +324,7 @@ Expected: no new failures beyond the known 5 pre-existing ones.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add app/broker/paper.py tests/test_partial_profit.py
+git add app/sim/paper.py tests/test_partial_profit.py
 git commit -m "feat: partial profit + BE-trail in PaperBroker (backtest only)"
 ```
 

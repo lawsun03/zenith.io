@@ -77,7 +77,7 @@ small (n=10, one week); revisit after another forensics pass.
   (stop_offset −293.25 → stop 29339.75 vs planned 29228.25; target 30659.4 vs
   30547.9). The entire bracket rode 111.5 pts higher than the planned geometry.
   The replay models the same fill (PaperBroker fills at bar close + 1 tick,
-  re-anchors brackets — `app/broker/paper.py:223-253`), so **backtest↔live fill
+  re-anchors brackets — `app/sim/paper.py:223-253`), so **backtest↔live fill
   parity is ~1 tick here; the backtest is not flattered by this trade.**
 - Existing guard for runaway plan deviation: `max_entry_slippage_frac` exists
   in both live and PaperBroker, currently disabled (0). Whether to cap plan
