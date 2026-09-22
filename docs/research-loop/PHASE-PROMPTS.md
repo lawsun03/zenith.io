@@ -14,76 +14,50 @@ phase 5 first will produce months of beautiful, meaningless backtests.
 
 ---
 
-## Phase 0a — Teardown
+## Phase 0a — Teardown — ✅ DONE (commits 1c0e373, 59a5ea1)
 
-Run this first, in its own session, before anything else. It is destructive; the tag is the
-safety net.
+Completed 2026-09-22. Recorded here because the original prompt was **wrong** and
+should not be re-run.
 
-```
-Read CLAUDE.md first, especially the "Repository boundaries" section.
+**What the original prompt got wrong:** it said to delete "the execution engine, paper
+and live broker abstractions." In this repo those are the *backtester's* foundation —
+`app/sim/events.py` holds the `Bar`/`Fill` types that 21 strategy modules import,
+`app/sim/paper.py` is the fill model `backtest/runner.py` depends on, and
+`app/execution/engine.py` is the backtest execution engine. Deleting them would have
+broken every backtest. `app/main.py` was also not purely live: `backtest/runner.py`
+imported `_aggregate_bars` and `_tf_to_seconds` from it.
 
-This repository is being converted to research and backtesting only. The live bot is stopped and
-is not coming back. Remove the execution path — but extract the risk module first, because the
-combine simulator depends on it.
+**What was actually done:**
 
-Work in this order. Do not reorder; step 1 must be green before step 3 runs.
+1. Tagged `pre-research-refactor` at 41af4eb.
+2. Renamed `app/broker/` → `app/sim/` (142 files) — the package holds simulation
+   primitives, not a broker. Suite unchanged: 929 passed.
+3. Extracted `app/builders.py` from `app/main.py` — the 13 non-live functions
+   (`_build_runner`, `_aggregate_bars`, journalers, state publisher). Deleted the
+   daemon half (`_run_live`, `_run_paper`, `_build_broker`, `_fetch_live_state`,
+   pid lock, signal handlers, `_async_main`).
+4. Extracted `app/strategy/event_times.py` — `load_event_times` was inside the
+   deleted straddle module but is generic macro-release infrastructure the research
+   loop needs.
+5. Deleted: `app/sim/topstepx.py`, `app/sync/`, `deploy/windows/`, the news_straddle
+   strategy/scheduler/backtest-engine and its config fields, three ProjectX scripts,
+   12 live-coupled test modules — 26 files total.
+6. Removed the `/api/accounts` live route and the `Outbox` type imports.
 
-STEP 0 — safety net
-- Create and push the tag `pre-research-refactor` on the current HEAD.
-- Create a branch `research-refactor` and do all work there.
+**Result:** 829 passed, 1 failed, 7 skipped. The single failure
+(`test_chart_health::test_archive_exists_and_nonempty`, a missing data archive) also
+failed before the refactor. Four pre-existing failures were *fixed* — they were
+`ModuleNotFound` on `project_x_py` via the `app.main` import chain.
 
-STEP 1 — extract the risk module
-- Move the trailing MLL, daily loss limit and soft-buffer logic into a standalone package
-  `risk/` with no imports from broker, execution, or any ProjectX module.
-- It becomes a pure scoring library: given a trade sequence and an account config, it reports
-  breaches. It no longer flattens positions, holds locks, or talks to anything.
-- Bring its tests with it, including the Hypothesis property-based tests on trailing-drawdown
-  invariants. Those tests caught real bugs (MLL floor below starting balance, re-entrant lock
-  deadlock) and must keep passing.
-- Account parameters come from docs/research-loop/accounts/*.json, not from hardcoded Topstep
-  constants.
-- Run the full risk test suite. It must be green before proceeding. Commit.
-
-STEP 2 — inventory
-- List every module that imports a broker, sends an order, or manages a live position.
-- Show me the list and a one-line note on anything you are unsure about, BEFORE deleting.
-  Do not delete anything you flagged as uncertain without asking.
-
-STEP 3 — remove the execution path
-Delete:
-- ProjectX / TopstepX API clients and the `project-x-py` dependency (also from pyproject/
-  requirements)
-- Any Tradovate or other broker client
-- The execution engine, order router, and fill reconciler
-- Paper and live broker abstractions
-- Order / fill / position-lifecycle types used only for live trading
-- The DigitalOcean outbox sync and the Windows Task Scheduler deployment scripts
-- Broker credential handling, and any related environment variables from .env.example
-
-Keep:
-- The backtest harness, Polars pipeline, walk-forward machinery
-- The strategy detectors (killzone gate, liquidity tracker, displacement detector) — these
-  become IR predicate implementations in phase 2, so do not delete them
-- The FastAPI / React dashboard
-- `risk/` as extracted in step 1
-
-STEP 4 — verify
-- Full test suite green. Report how many tests were removed along with the execution code and
-  confirm none of them covered logic that survives.
-- `grep -ri "projectx\|project_x\|tradovate\|place_order\|submit_order"` returns nothing outside
-  git history and docs.
-- Add a CI check (or a test) asserting nothing under `research/` imports a broker module.
-- The dashboard still builds and runs.
-
-Acceptance test:
-- Test suite green, with a count of removed vs remaining tests.
-- The risk property-based tests still pass, from their new home.
-- The grep above is clean.
-- `pre-research-refactor` tag exists and is pushed.
-
-Do NOT start on the data spine, the ledger, or anything in later phases. This session is
-teardown only.
-```
+**Known dead code left deliberately** (Rule 3 — surgical changes):
+- `frontend/src/components/{ConfigPanel,PhaseBanner}.tsx` still fetch `/api/accounts`,
+  but both are gated behind `config.mode === 'live'`, which can no longer be true.
+- `frontend/src/types.ts` and `StrategyDebug.tsx` still carry an optional
+  `news_straddle` field.
+- `app/execution/reconciler.py` reconciles broker state and has no caller now.
+- `app/builders.py` retains `_make_bar_journaler`, `_make_strategy_state_publisher`
+  and `_setup_logging`, which have no callers since the daemon was removed but are
+  needed when the research dashboard is wired up (CLAUDE.md Rule 13).
 
 ---
 
