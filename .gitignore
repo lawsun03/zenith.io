@@ -59,3 +59,9 @@ bot_config.json
 config_presets.json
 trades/
 backtests/_config_*.json
+
+# Databento raw pulls + continuous-series cache (re-derivable, never committed).
+# var/databento/continuous/*/holdout/ is additionally sealed with filesystem
+# permissions once populated — see docs/research-loop/README.md.
+/var/databento/
+.venv/

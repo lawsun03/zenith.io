@@ -1,0 +1,115 @@
+{
+  "corpus_start": "2010-06-06",
+  "corpus_end": "2026-09-22",
+  "holdout": {
+    "start": "2025-03-22",
+    "end": "2026-09-22",
+    "months": 18
+  },
+  "robustness_blocks": [
+    {
+      "name": "2010-13",
+      "start": "2010-06-06",
+      "end": "2013-12-31"
+    },
+    {
+      "name": "2014-17",
+      "start": "2014-01-01",
+      "end": "2017-12-31"
+    },
+    {
+      "name": "2018-21",
+      "start": "2018-01-01",
+      "end": "2021-12-31"
+    },
+    {
+      "name": "2022-25",
+      "start": "2022-01-01",
+      "end": "2025-12-31"
+    }
+  ],
+  "walk_forward_folds": [
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2011-12-31",
+      "test_start": "2012-01-01",
+      "test_end": "2012-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2012-12-31",
+      "test_start": "2013-01-01",
+      "test_end": "2013-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2013-12-31",
+      "test_start": "2014-01-01",
+      "test_end": "2014-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2014-12-31",
+      "test_start": "2015-01-01",
+      "test_end": "2015-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2015-12-31",
+      "test_start": "2016-01-01",
+      "test_end": "2016-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2016-12-31",
+      "test_start": "2017-01-01",
+      "test_end": "2017-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2017-12-31",
+      "test_start": "2018-01-01",
+      "test_end": "2018-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2018-12-31",
+      "test_start": "2019-01-01",
+      "test_end": "2019-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2019-12-31",
+      "test_start": "2020-01-01",
+      "test_end": "2020-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2020-12-31",
+      "test_start": "2021-01-01",
+      "test_end": "2021-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2021-12-31",
+      "test_start": "2022-01-01",
+      "test_end": "2022-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2022-12-31",
+      "test_start": "2023-01-01",
+      "test_end": "2023-12-31"
+    },
+    {
+      "fit_start": "2010-06-06",
+      "fit_end": "2023-12-31",
+      "test_start": "2024-01-01",
+      "test_end": "2024-12-31"
+    }
+  ],
+  "generated_at": "2026-09-22T08:56:32.919497+00:00",
+  "generator": "scripts/freeze_research_folds.py",
+  "frozen": true,
+  "_note": "Cut once, committed, and read-only at runtime. Robustness block end dates are fixed calendar boundaries and may nominally reach into the holdout window (e.g. 2022-25 vs an 18-month holdout) \u2014 that overlap is expected and harmless: research/data/loader.py independently refuses any read into [holdout.start, holdout.end] regardless of which fold or block requested it."
+}
