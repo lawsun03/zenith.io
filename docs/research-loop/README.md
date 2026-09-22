@@ -80,3 +80,4 @@ that could abuse them.
 - `ledger.sql` — the append-only research ledger DDL
 - `accounts/topstep-50k.json` — prop account rules for the combine simulator
 - `cost-model.md` — round-turn costs including the human-latency penalty
+- `folds.json` — frozen walk-forward folds, robustness blocks and holdout window (`research/data/folds.py` reads it; cut once by `scripts/freeze_research_folds.py`, never regenerated at runtime)
