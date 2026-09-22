@@ -36,7 +36,6 @@ from app.execution.reconciler import ReconcileReport
 from app.strategy.composer import Signal
 
 if TYPE_CHECKING:
-    from app.sync.outbox import Outbox
     from app.strategy.grader import SetupGrade
 
 
@@ -78,7 +77,7 @@ class Journal:
         max_signals: int = 100,
         max_fills: int = 200,
         max_reconciles: int = 50,
-        outbox: "Outbox | None" = None,
+        outbox: "Any | None" = None,
     ) -> None:
         self._signals: Deque[JournalEntry] = deque(maxlen=max_signals)
         self._fills: Deque[JournalEntry] = deque(maxlen=max_fills)
@@ -321,7 +320,6 @@ class Journal:
         phase: "dict | None" = None,
         orb_state: "dict | None" = None,
         pos_excursion: "dict | None" = None,
-        news_straddle: "dict | None" = None,
         cpi_day_router: "dict | None" = None,
     ) -> None:
         """Emit strategy_state WebSocket event each bar for the live dashboard."""
@@ -358,8 +356,6 @@ class Journal:
         payload["phase"] = phase  # None when practice; dict with tracker state otherwise
         if orb_state is not None:
             payload["orb_state"] = orb_state
-        if news_straddle is not None:
-            payload["news_straddle"] = news_straddle
         if cpi_day_router is not None:
             payload["cpi_day_router"] = cpi_day_router
         if pos_excursion is not None:

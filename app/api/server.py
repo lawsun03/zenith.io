@@ -61,8 +61,6 @@ from .schemas import (
     RandomSearchRequest,
 )
 
-if TYPE_CHECKING:
-    from app.sync.outbox import Outbox
 
 
 def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
@@ -210,7 +208,7 @@ def build_app(
     reconciler: Reconciler,
     journal: Journal,
     static_dir: Path | None = None,
-    outbox: "Outbox | None" = None,
+    outbox: "Any | None" = None,
     bot_config_path: Path | None = None,
     effective_instrument: str = "MGC",
     effective_timeframes: list[str] | None = None,
@@ -668,31 +666,6 @@ def build_app(
         body = BotConfig.model_validate(preset["config"])
         await _hot_apply(body)
         return JSONResponse({"ok": True, "name": name})
-
-    @app.get("/api/accounts")
-    async def list_accounts() -> JSONResponse:
-        """List TopstepX accounts. Only useful in live mode."""
-        if _mode != "live":
-            return JSONResponse({"accounts": []})
-        try:
-            from project_x_py import ProjectX  # type: ignore
-            async with ProjectX.from_env() as client:
-                await client.authenticate()
-                accounts = await client.list_accounts()
-            return JSONResponse({
-                "accounts": [
-                    {
-                        "name": a.name,
-                        "balance": a.balance,
-                        "can_trade": a.canTrade,
-                        "simulated": a.simulated,
-                    }
-                    for a in accounts
-                ]
-            })
-        except Exception as e:
-            log.warning("Could not list accounts: %s", e)
-            return JSONResponse({"accounts": [], "error": str(e)})
 
     @app.get("/api/bars/availability")
     async def bars_availability(timeframe: str = "5min") -> JSONResponse:

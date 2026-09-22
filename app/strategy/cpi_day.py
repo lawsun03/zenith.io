@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, date
 
 from app.strategy.killzone import ET
-from app.strategy.news_straddle import load_event_times
+from app.strategy.event_times import load_event_times
 
 
 def _et_date(ts: datetime) -> date:
@@ -63,21 +63,5 @@ def engine_cpi_dates(base_suppress: bool, cpi_dates: "frozenset[date]") -> "froz
     return cpi_dates if base_suppress else frozenset()
 
 
-def suppress_dates(specs, path: str) -> frozenset[date]:
-    """ET dates on which the BASE engine is blocked: the union of event dates for
-    every spec with suppress_base=True. Per-event, so CPI can stay additive while
-    FOMC suppresses the base."""
-    out: set[date] = set()
-    for s in specs:
-        if s.suppress_base:
-            out |= {_et_date(t) for t in load_event_times(path, s.event_type)}
-    return frozenset(out)
 
 
-def all_event_dates(specs, path: str) -> frozenset[date]:
-    """ET dates of every enabled straddle event (any spec), for the dashboard
-    'today_is_event_day' / 'next_event_date' read."""
-    out: set[date] = set()
-    for s in specs:
-        out |= {_et_date(t) for t in load_event_times(path, s.event_type)}
-    return frozenset(out)

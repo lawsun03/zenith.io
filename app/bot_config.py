@@ -167,32 +167,11 @@ class StrategyParams(BaseModel):
     vwap_band_sigma: Decimal = Decimal("2.5")
     vwap_stop_sigma: Decimal = Decimal("1.5")
 
-    # news_straddle engine (B89, default-off; engine="news_straddle" to select).
-    # CPI breakout-straddle confirmed on 1s data (B85). Resting OCO stop entries
-    # at range±offset; TIGHT stop at the broken range boundary (R=offset); TP=tp_r×R.
-    news_straddle_offset_ticks: int = 60
-    news_straddle_tp_r: Decimal = Decimal("3.0")
-    news_straddle_event_type: str = "CPI"          # filters data/news_events.csv
-    news_straddle_events_path: str = "data/news_events.csv"
-    # LIVE resting-OCO path (B92). Default-OFF — Lawrence decides go-live. When
-    # True (and engine="news_straddle"), a wall-clock scheduler arms a resting OCO
-    # stop straddle arm_lead_seconds before each event. Never auto-enables.
-    news_straddle_live_enabled: bool = False
-    news_straddle_contracts: int = 1               # size for the live straddle
-    news_straddle_arm_lead_seconds: int = 120      # place the OCO this far pre-release
-    # Pre-flight readiness check: warn this far before release if the straddle is
-    # at risk of not arming (feed/data unavailable), with time to react. Retry the
-    # readiness check this often until arm time. Arm timing itself is unchanged.
-    news_straddle_preflight_lead_seconds: int = 300
-    news_straddle_retry_interval_seconds: int = 60
-    # Per-event straddle specs. When non-empty, this is the source of truth and
-    # the legacy single news_straddle_* fields above are ignored (resolve_straddle_specs).
-    # Empty (default) = legacy single-event behavior, so existing CPI/MNQ live config is untouched.
-    news_straddle_events: list[NewsStraddleEvent] = Field(default_factory=list)
-    # CPI-day router (in-process day-gate). Default-OFF. When True, the base
-    # engine takes NO new entries on CPI trading days (pretrade CPI_DAY_BLOCK)
-    # and the news_straddle scheduler is constructed to own those days, while
-    # engine stays "combined". Phase-agnostic (combine and shadow alike).
+    # Economic events CSV (CPI, PPI, FOMC...). Used for macro-release
+    # classification and CPI-day routing.
+    events_csv_path: str = "data/news_events.csv"
+    events_type: str = "CPI"
+
     cpi_day_router_enabled: bool = False
     # B94/Lesson 163: the ADDITIVE overlay (base keeps trading on CPI days + straddle on
     # top) made +$304/mo vs the mode-SWITCH (suppress base) +$8/mo (~40x). Default FALSE =

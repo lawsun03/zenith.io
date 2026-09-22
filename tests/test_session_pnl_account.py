@@ -15,7 +15,7 @@ import csv
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.main import _daily_pnl_from_csv
+from app.builders import _daily_pnl_from_csv
 
 
 def _write_csv(path, rows, header):

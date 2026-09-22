@@ -279,7 +279,7 @@ def test_aggregate_bars_folds_1min_into_4h():
     """Aggregation must fold N consecutive 1-min bars into the correct 4h OHLCV.
     O = first bar's open, H = max high, L = min low, C = last bar's close,
     V = sum volumes. Bucket boundary at 4h-aligned UTC epoch."""
-    from app.main import _aggregate_bars, _tf_to_seconds
+    from app.builders import _aggregate_bars, _tf_to_seconds
     from datetime import datetime, timezone
 
     # Eight 1-min bars all within a single 4h bucket (00:00–04:00 UTC).
@@ -310,7 +310,7 @@ def test_aggregate_bars_folds_1min_into_4h():
 
 def test_aggregate_bars_splits_across_buckets():
     """Bars spanning multiple 4h windows must produce one bar per bucket."""
-    from app.main import _aggregate_bars, _tf_to_seconds
+    from app.builders import _aggregate_bars, _tf_to_seconds
     from datetime import datetime, timezone
 
     base = datetime(2026, 5, 27, 0, 0, tzinfo=timezone.utc)

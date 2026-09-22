@@ -52,7 +52,7 @@ def _refresh_backtest_htf(bars, s: StrategyParams, level_finder, bias_tracker, g
     Delivery FVGs are always refreshed: the 30min FVG check (criterion 5)
     is independent of whether HTF target selection is enabled.  Only swing
     levels (for target clarity / premium-discount) require level_finder."""
-    from app.main import _aggregate_bars, _tf_to_seconds  # lazy: avoid import cycle
+    from app.builders import _aggregate_bars, _tf_to_seconds  # lazy: avoid import cycle
     bias_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_bias_timeframe), s.htf_bias_timeframe)
     swing_bars = _aggregate_bars(bars, _tf_to_seconds(s.htf_swing_timeframe), s.htf_swing_timeframe)
     # Always feed delivery FVGs — criterion 5 doesn't require HTF target gate.
@@ -270,24 +270,6 @@ def _build_runner(cfg: BacktestConfig) -> StrategyRunner:
                 instrument=cfg.instrument,
                 timeframe=cfg.timeframe,
                 detector=ForbesDetector(ForbesConfig.from_params(cfg.instrument, s)),
-                strategy_cfg=s,
-            )
-        if s.engine == "news_straddle":
-            from app.sim.paper import TICK_SIZE
-            from app.strategy.news_straddle import (
-                NewsStraddleConfig, NewsStraddleDetector, NewsStraddleRunner,
-                load_event_times)
-            return NewsStraddleRunner(
-                instrument=cfg.instrument,
-                timeframe=cfg.timeframe,
-                detector=NewsStraddleDetector(NewsStraddleConfig(
-                    instrument=cfg.instrument,
-                    event_times=load_event_times(
-                        s.news_straddle_events_path, s.news_straddle_event_type),
-                    offset_ticks=s.news_straddle_offset_ticks,
-                    tp_r=s.news_straddle_tp_r,
-                    tick=TICK_SIZE.get(cfg.instrument, Decimal("0.25")),
-                )),
                 strategy_cfg=s,
             )
         if s.engine == "orb":

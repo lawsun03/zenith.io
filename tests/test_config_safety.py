@@ -19,7 +19,7 @@ def test_load_bot_config_strict_raises_on_bad_json(tmp_path):
 
 def test_build_runner_raises_on_unknown_engine():
     # WHY (#7): an unknown engine must NOT silently fall through to iFVG.
-    from app.main import _build_runner
+    from app.builders import _build_runner
     with pytest.raises(ValueError):
         _build_runner("MNQ", StrategyParams(engine="totally_bogus"), None, "5min", None)
     # The real default (ifvg) still builds.

@@ -17,7 +17,7 @@ from app.bot_config import (
     save_bot_config,
     strategy_for,
 )
-from app.main import _build_runner
+from app.builders import _build_runner
 
 
 def _cfg_with_mnq_override() -> BotConfig:
