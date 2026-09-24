@@ -76,6 +76,25 @@ The trial count comes from the ledger at the moment of testing, and is written t
 around 1.0, while a genuinely good rule has true Sharpe near 0.3 — you would reject every real
 rule and accept only flukes.
 
+## Gate 6 — deflated Sharpe
+
+`research.stats.deflated_sharpe.deflated_sharpe_ratio` (Bailey & López de Prado, 2014). It
+reproduces the paper's worked example, DSR = 0.9004, in `tests/test_statistics.py`. Pass
+threshold: 0.95.
+
+The expected-maximum benchmark SR0 needs **V[{SR_n}], the variance of the per-trade Sharpe
+ratios across the trials searched**. It is a property of the whole search, like loop-level PBO,
+so the caller computes it once per loop state and passes `sr_variance_across_trials`:
+
+- `empirical_sr_variance(trial_sharpes)`: the paper's value. Prefer it once enough trials
+  exist to measure the spread.
+- `null_sr_variance(n_obs)` = 1/(n_obs − 1): the spread under the zero-skill null. It's a
+  principled stand-in while the ledger is too thin, but it's usually more lenient than the
+  empirical value.
+
+It is required whenever n_trials > 1. There is deliberately no fallback. Using the SR estimate's
+own sampling variance instead reports 0.98 where the paper's answer is 0.90.
+
 ## Gate 7 — Sharpe ceiling
 
 Not a rejection, a **hold**. Observed Sharpe above 1.5 on this kind of system is more often a
