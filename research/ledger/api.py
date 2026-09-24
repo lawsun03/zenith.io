@@ -486,6 +486,38 @@ def per_trade_oos_sharpes(conn: sqlite3.Connection, timestamp: datetime) -> list
     return [r[0] for r in rows]
 
 
+def record_loop_pbo(conn: sqlite3.Connection, loop_pbo: float, *, computed_at: datetime | None = None) -> None:
+    """Upsert the single loop_state row with the most recently computed
+    loop-level PBO (research.loop.gate_runner.compute_loop_pbo). Not
+    append-only — this is current STATE, not a history of trials, and
+    ledger.sql gives it no triggers restricting it. research.loop.cycle
+    calls this once per cycle, whenever that cycle computed a real
+    (non-None) loop_pbo."""
+    ts_iso = isoformat_utc(computed_at or datetime.now(timezone.utc))
+    conn.execute(
+        """
+        INSERT INTO loop_state (id, loop_pbo, loop_pbo_computed_at, updated_at)
+        VALUES (1, :loop_pbo, :computed_at, :computed_at)
+        ON CONFLICT(id) DO UPDATE SET
+            loop_pbo = :loop_pbo, loop_pbo_computed_at = :computed_at, updated_at = :computed_at
+        """,
+        {"loop_pbo": loop_pbo, "computed_at": ts_iso},
+    )
+    conn.commit()
+
+
+def get_loop_pbo(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    """The most recently recorded loop-level PBO, or None if no cycle has
+    ever computed one (e.g. a fresh ledger, or every cycle so far only had
+    a single candidate — compute_loop_pbo needs at least 2)."""
+    row = conn.execute(
+        "SELECT loop_pbo, loop_pbo_computed_at FROM loop_state WHERE id = 1"
+    ).fetchone()
+    if row is None or row["loop_pbo"] is None:
+        return None
+    return dict(row)
+
+
 # --- canned view queries -----------------------------------------------
 # Thin wrappers so callers don't hand-write `SELECT * FROM v_...`. The
 # views themselves are defined in ledger.sql so they can't drift from the

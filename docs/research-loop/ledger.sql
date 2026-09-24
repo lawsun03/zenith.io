@@ -182,6 +182,22 @@ BEGIN
 END;
 
 
+-- Loop-level state that isn't a property of any one hypothesis row, so it
+-- has nowhere else to live. Single row (id=1, upserted), holding the most
+-- recently computed loop-level PBO (research.stats.cscv, gate 6's
+-- loop_pbo — research.loop.gate_runner.compute_loop_pbo computes it once
+-- per cycle over that cycle's own candidates and research.loop.cycle
+-- persists it here) so the chat agent (phase 7) can report "current PBO"
+-- without re-deriving it from data the ledger doesn't otherwise keep
+-- (a day-by-day return series per past candidate).
+CREATE TABLE IF NOT EXISTS loop_state (
+    id                    INTEGER PRIMARY KEY CHECK (id = 1),
+    loop_pbo              REAL,
+    loop_pbo_computed_at  TEXT,
+    updated_at            TEXT NOT NULL
+);
+
+
 -- Canned aggregates the chat agent queries. Views, so they cannot drift from the tables.
 
 CREATE VIEW IF NOT EXISTS v_rejections_by_gate AS

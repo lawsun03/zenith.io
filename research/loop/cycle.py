@@ -57,7 +57,7 @@ from typing import Sequence
 from app.sim.events import Bar
 from research.data.folds import load_folds
 from research.gates import cost
-from research.ledger.api import append_hypothesis, trial_count_at
+from research.ledger.api import append_hypothesis, record_loop_pbo, trial_count_at
 from research.loop.gate_runner import (
     DEFAULT_COMMISSION_PER_SIDE,
     DEFAULT_EVENT_TYPES,
@@ -266,6 +266,10 @@ def run_cycle(
                 result.n_cleared_all_gates += 1
             daily_returns_this_cycle.append(evaluation.daily_returns_with_releases)
             loop_pbo = compute_loop_pbo(daily_returns_this_cycle)
+            if loop_pbo is not None:
+                # phase 7's chat agent reads this back (research.ledger.api.
+                # get_loop_pbo) to report "current PBO" without a full replay.
+                record_loop_pbo(conn, loop_pbo, computed_at=now)
 
     log.info(
         "cycle complete: %d triaged, %d logged to the ledger (%d survived review, %d rejected "

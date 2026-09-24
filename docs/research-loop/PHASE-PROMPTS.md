@@ -429,3 +429,82 @@ Acceptance test:
 - Health numbers appear without being asked for.
 - An attempt to get the agent to update a row fails at the connection layer.
 ```
+
+---
+
+## Phase 7a — Commit 6b + 7, reset the demo ledger
+
+```
+Commit the uncommitted work as two commits, running the full suite before each:
+1. Phase 6b — gate wiring: research/loop/gate_runner.py and the cycle.py, pipeline.py,
+   ir_validity.py, ledger api/db and ledger.sql changes it needed, tests/test_loop_gate_wiring.py,
+   tests/test_loop_cycle.py, scripts/run_hypothesis_loop.py.
+2. Phase 7 — ledger chat agent: research/ledger_agent/, scripts/ledger_chat.py,
+   tests/test_ledger_agent_*.py.
+If a file belongs to both, ask me.
+
+Then reset the real ledger. var/ledger/research.db holds one demo row (mechanism "demo",
+ensemble family "trainer-demo") made to demo the trainer. It counts as a trial and is marked
+"blended" with empty gate_results, which is impossible for a real candidate. No real research
+has run yet, so:
+- Move (do not delete) var/ledger/research.db and its -wal/-shm files to
+  var/ledger/archive/demo-2026-09-23.db.
+- Only the hypothesis loop and gate runner may write hypotheses/ensembles rows at
+  LEDGER_DB_PATH; the trainer may write drill_sessions/drill_decisions. Demos, fixtures and
+  tests never touch LEDGER_DB_PATH. Add a test that enforces this.
+- Confirm the next run creates a fresh ledger with ledger.sql applied and a trial count of 0.
+```
+
+---
+
+## Phase 8 — First real run (you, in a terminal)
+
+1. Add OPENAI_API_KEY, MOONSHOT_API_KEY and XAI_API_KEY to `.env`.
+2. `python scripts/run_anomaly_pass.py --no-label` — free; builds and ranks the table.
+3. `python scripts/run_anomaly_pass.py` — Grok regime labels; stops at its spend cap.
+4. `python scripts/run_hypothesis_loop.py --max-shortlist 1 --max-variants 3` — at most 3 trials.
+5. `python scripts/ledger_chat.py` — check health and what happened to each row.
+6. Audit, in a fresh Claude Code session:
+
+```
+Read CLAUDE.md. Audit the first real run in var/ledger/research.db, read-only (open it with
+mode=ro). For every hypotheses row, report pass/fail on each check:
+- gate_results has 10 entries, each with measured and threshold; gates after the first
+  failure are marked unreached.
+- trial_count_at_test equals the variant-weighted count before that row, and
+  n_variants_swept matches param_grid.
+- gate 6 records which V[{SR_n}] source was used (null under 20 trials).
+- sharpe_recorded is min(with-releases, without-releases).
+- mechanism, falsifier, model_version and prompt_hash are real values, not placeholders.
+- any "blended" row cleared gates 0-9 and points to an ensemble.
+- holdout_touched is 0.
+Change no code and no data. If a check fails, name the invariant and the row id.
+```
+
+---
+
+## Phase 9 — Gate 10: human review and the holdout
+
+Needed before anything reaches the trainer. Build it once the audit is clean.
+
+```
+Read CLAUDE.md (rule 6, the holdout) and docs/research-loop/gates.md (gate 10) first.
+
+Build gate 10, the human review step. Nothing reaches the trainer without it. Put it outside
+research/ (e.g. scripts/review.py plus an API route), because research/ must never read the
+holdout.
+1. A review view listing ensembles whose members all cleared gates 0-9, showing each
+   member's mechanism, falsifier, gate results, disjoint-block results, both macro-release
+   Sharpes and combine payout probability.
+2. An explicit "open holdout" action for one ensemble: backtest it once on the 18-month
+   holdout, set holdout_touched=1 on its member rows, record the result, timestamp and who.
+   Require a typed confirmation. Refuse once 12 touches have been used this calendar year.
+3. Approve or reject. Only approved ensembles can be drilled; the trainer refuses the rest.
+
+Acceptance test:
+- research/ code still cannot read the holdout path (the existing test still passes).
+- The review action is the only code path that can.
+- The 13th touch in a year is refused.
+- The trainer refuses an unapproved ensemble.
+```
+

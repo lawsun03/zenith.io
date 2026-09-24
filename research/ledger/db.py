@@ -64,3 +64,29 @@ def get_connection(db_path: Path | str = LEDGER_DB_PATH) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL")
     apply_schema(conn)
     return conn
+
+
+def get_readonly_connection(db_path: Path | str = LEDGER_DB_PATH) -> sqlite3.Connection:
+    """A connection that cannot write, enforced by SQLite itself
+    (`PRAGMA query_only = ON`) — not by filtering what SQL text a caller
+    sends. Every INSERT/UPDATE/DELETE/CREATE/DROP/ALTER raises
+    `sqlite3.OperationalError: attempt to write a readonly database`
+    regardless of how the statement was constructed; there is no string
+    the caller (the phase-7 ledger chat agent, or anything else) can send
+    through this connection that bypasses it, short of a wholly separate
+    connection object.
+
+    For research.ledger_agent (docs/research-loop/PHASE-PROMPTS.md phase
+    7): "read-only database credentials, enforced at the connection level
+    not by prompt." Never runs `apply_schema` — a read-only connection
+    must not attempt the CREATE TABLE/ALTER TABLE calls that involves, and
+    a chat agent has nothing useful to say about a ledger that doesn't
+    exist yet. Raises `sqlite3.OperationalError` if `db_path` doesn't
+    exist, rather than silently creating it (get_connection's job, not
+    this one's).
+    """
+    db_path = Path(db_path)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
