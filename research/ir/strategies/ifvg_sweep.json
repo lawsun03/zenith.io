@@ -1,0 +1,46 @@
+{
+  "ir_version": "1.0",
+  "name": "iFVG sweep reversal (NY AM)",
+  "instruments": ["NQ", "ES", "GC"],
+  "session": { "start": "08:30", "end": "11:00", "tz": "America/New_York" },
+
+  "entry": {
+    "op": "or",
+    "operands": [
+      {
+        "op": "and",
+        "operands": [
+          { "op": "sweep_of", "level": "swing_low", "n": 2, "min_offset": 0.20,
+            "within_bars": 5, "recognizable": true },
+          { "op": "displacement", "direction": "up", "min_atr": 1.0,
+            "recognizable": true },
+          { "op": "fvg", "direction": "up", "recognizable": true }
+        ]
+      },
+      {
+        "op": "and",
+        "operands": [
+          { "op": "sweep_of", "level": "swing_high", "n": 2, "min_offset": 0.20,
+            "within_bars": 5, "recognizable": true },
+          { "op": "displacement", "direction": "down", "min_atr": 1.0,
+            "recognizable": true },
+          { "op": "fvg", "direction": "down", "recognizable": true }
+        ]
+      }
+    ]
+  },
+
+  "exit": { "op": "session_end", "recognizable": false },
+
+  "stop": {
+    "type": "structural",
+    "anchor": "sweep_extreme",
+    "multiple": 1.0,
+    "lookback": 14,
+    "buffer": 0.30
+  },
+
+  "target": { "type": "r_multiple", "multiple": 2.5 },
+
+  "sizing": { "family": "micro", "vol_target_annual": 0.15, "max_contracts": 10 }
+}

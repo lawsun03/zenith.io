@@ -1,0 +1,29 @@
+{
+  "ir_version": "1.0",
+  "name": "10am open line cross",
+  "instruments": ["NQ", "ES", "GC"],
+  "session": { "start": "10:00", "end": "11:30", "tz": "America/New_York" },
+
+  "entry": {
+    "op": "or",
+    "operands": [
+      { "op": "cross_of", "level": "session_open", "direction": "up",
+        "recognizable": true },
+      { "op": "cross_of", "level": "session_open", "direction": "down",
+        "recognizable": true }
+    ]
+  },
+
+  "exit": { "op": "session_end", "recognizable": false },
+
+  "stop": {
+    "type": "structural",
+    "anchor": "entry_bar",
+    "multiple": 1.0,
+    "lookback": 14
+  },
+
+  "target": { "type": "r_multiple", "multiple": 1.5 },
+
+  "sizing": { "family": "micro", "vol_target_annual": 0.15, "max_contracts": 10 }
+}
