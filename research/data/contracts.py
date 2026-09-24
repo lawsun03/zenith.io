@@ -13,7 +13,7 @@ from research.data.instruments import MONTH_CODE_TO_NUM, InstrumentSpec
 
 @dataclass(frozen=True, order=True)
 class ContractMonth:
-    """One listed contract month, e.g. GCZ24 = GC December 2024."""
+    """One listed contract month, e.g. GCZ4 = GC December 2024."""
     root: str
     month_code: str
     year: int  # four-digit
@@ -24,8 +24,13 @@ class ContractMonth:
 
     @property
     def raw_symbol(self) -> str:
-        """Databento raw_symbol spelling: ROOT + month code + 2-digit year."""
-        return f"{self.root}{self.month_code}{self.year % 100:02d}"
+        """Databento GLBX.MDP3 raw_symbol spelling: ROOT + month code +
+        single-digit year (verified against the live API — GLBX.MDP3 raw
+        symbols use one year digit, e.g. "GCZ4", not two ("GCZ24" does not
+        resolve). Unambiguous in practice because every caller also passes
+        a bounding date window narrow enough to contain only one decade's
+        contract with that digit."""
+        return f"{self.root}{self.month_code}{self.year % 10}"
 
     def __str__(self) -> str:
         return self.raw_symbol

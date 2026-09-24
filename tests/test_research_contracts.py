@@ -7,8 +7,10 @@ from research.data.instruments import INSTRUMENTS
 
 
 def test_raw_symbol_spelling():
+    """Single-digit year — verified against the live Databento API (GLBX.MDP3
+    raw_symbol resolution rejects "GCZ24" and accepts "GCZ4")."""
     m = ContractMonth("GC", "Z", 2024)
-    assert m.raw_symbol == "GCZ24"
+    assert m.raw_symbol == "GCZ4"
 
 
 def test_gc_months_covering_a_short_window_include_the_active_front_month():
@@ -18,8 +20,8 @@ def test_gc_months_covering_a_short_window_include_the_active_front_month():
     # June is itself a listed GC month (M); the prior listed month (Apr, J)
     # must also be present since it could still be the front contract early
     # in June.
-    assert "GCJ24" in symbols
-    assert "GCM24" in symbols
+    assert "GCJ4" in symbols
+    assert "GCM4" in symbols
 
 
 def test_es_only_lists_quarterly_months():

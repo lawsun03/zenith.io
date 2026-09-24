@@ -89,3 +89,34 @@ def test_cached_parquet_roundtrips_values_exactly(tmp_path):
     reloaded = pl.read_parquet(tmp_path / "GC" / "GCZ24.parquet").sort("ts")
     assert reloaded["close"].to_list() == pytest.approx([100.2, 101.2, 102.2])
     assert reloaded["volume"].to_list() == [1000, 1001, 1002]
+
+
+def test_cache_key_prevents_decade_collision(tmp_path):
+    """Databento's GLBX.MDP3 raw_symbol repeats every decade (research/data/
+    contracts.py: "GCZ3" spells both December 2013 and December 2023,
+    disambiguated only by the caller's date window). Without a decade-unique
+    cache_key, fetching both would merge two unrelated contracts into one
+    file, sorted together by timestamp with no error — exactly the bug this
+    test guards against."""
+    fetcher = RecordingFetcher()
+    fetch_contract(fetcher, tmp_path, "GC", "GCZ3", date(2013, 11, 1), date(2013, 11, 11),
+                    cache_key="GCZ2013")
+    fetch_contract(fetcher, tmp_path, "GC", "GCZ3", date(2023, 11, 1), date(2023, 11, 11),
+                    cache_key="GCZ2023")
+
+    assert (tmp_path / "GC" / "GCZ2013.parquet").exists()
+    assert (tmp_path / "GC" / "GCZ2023.parquet").exists()
+    assert not (tmp_path / "GC" / "GCZ3.parquet").exists()
+
+    df_2013 = pl.read_parquet(tmp_path / "GC" / "GCZ2013.parquet")
+    df_2023 = pl.read_parquet(tmp_path / "GC" / "GCZ2023.parquet")
+    assert df_2013["ts"].dt.date().max() < date(2014, 1, 1)
+    assert df_2023["ts"].dt.date().min() >= date(2023, 1, 1)
+
+
+def test_cache_key_defaults_to_raw_symbol(tmp_path):
+    """Single-decade callers (and every existing call site above) don't
+    need to think about this — cache_key defaults to raw_symbol."""
+    fetcher = RecordingFetcher()
+    fetch_contract(fetcher, tmp_path, "GC", "GCZ24", date(2024, 1, 1), date(2024, 1, 4))
+    assert (tmp_path / "GC" / "GCZ24.parquet").exists()

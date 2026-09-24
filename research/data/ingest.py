@@ -61,10 +61,27 @@ def fetch_contract(
     raw_symbol: str,
     start: date,
     end: date,
+    *,
+    cache_key: str | None = None,
 ) -> pl.DataFrame:
-    """Ensure `raw_dir/root/raw_symbol.parquet` covers [start, end), fetching
-    only what's missing, and return the full cached frame."""
-    path = raw_dir / root / f"{raw_symbol}.parquet"
+    """Ensure `raw_dir/root/cache_key.parquet` covers [start, end), fetching
+    only what's missing (via `raw_symbol`, the string actually sent to
+    `fetch_fn`), and return the full cached frame.
+
+    `cache_key` names the cache file when it must differ from `raw_symbol`.
+    This matters because Databento's GLBX.MDP3 raw_symbol spells a futures
+    contract with a SINGLE-digit year (research/data/contracts.py — e.g.
+    "GCZ3" for December Gold, verified against the live API), which repeats
+    every decade: 2013 and 2023 both spell "GCZ3", disambiguated only by
+    the request's date window, never by the string itself. A caller
+    fetching a range spanning more than one decade MUST pass a
+    decade-unique `cache_key` (e.g. the 4-digit-year form) — otherwise two
+    unrelated contracts silently merge into one cache file, sorted
+    together by timestamp with no error. Defaults to `raw_symbol` for
+    callers who know their range can't cross a decade boundary.
+    """
+    key = cache_key if cache_key is not None else raw_symbol
+    path = raw_dir / root / f"{key}.parquet"
 
     existing = pl.read_parquet(path) if path.exists() else None
     coverage = None
