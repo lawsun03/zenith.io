@@ -33,6 +33,8 @@ from research.anomaly.features import FEATURE_COLUMNS  # noqa: E402
 from research.anomaly.paths import ANOMALY_TABLE_PATH  # noqa: E402
 from research.anomaly.pipeline import load_table  # noqa: E402
 from research.data.folds import load_folds  # noqa: E402
+from research.data.loader import load_bars  # noqa: E402
+from research.ir.sizing import load_account_config  # noqa: E402
 from research.ledger.db import get_connection  # noqa: E402
 from research.ledger.paths import LEDGER_DB_PATH  # noqa: E402
 from research.loop.config import (  # noqa: E402
@@ -48,6 +50,7 @@ from research.loop.config import (  # noqa: E402
 )
 from research.loop.cycle import run_cycle  # noqa: E402
 from research.stats.budget import ANNUAL_HYPOTHESIS_CAP  # noqa: E402
+from research.trainer.decision_points import bars_from_frame  # noqa: E402
 
 log = logging.getLogger("run_hypothesis_loop")
 
@@ -68,6 +71,22 @@ def _data_range() -> str:
     folds = load_folds()
     end = folds.holdout_start - timedelta(days=1)
     return f"{folds.corpus_start.isoformat()}/{end.isoformat()}"
+
+
+def _load_bars_by_instrument() -> dict[str, list]:
+    """NQ/ES/GC bars over the corpus, excluding the holdout — every
+    candidate this cycle backtests trades all three pooled (CLAUDE.md
+    domain invariant 2), so they're loaded once up front, not per
+    candidate. load_bars's own holdout guard rejects a range whose end
+    reaches folds.holdout_start at all (research.data.loader.
+    _overlaps_holdout: `end >= holdout_start`), so this stops one day
+    short of it — matching _data_range's own end date exactly."""
+    folds = load_folds()
+    end = folds.holdout_start - timedelta(days=1)
+    return {
+        root: bars_from_frame(load_bars(root, folds.corpus_start, end, "back_adjusted"), root)
+        for root in ("NQ", "ES", "GC")
+    }
 
 
 def _collect_api_keys() -> dict[str, str]:
@@ -114,6 +133,10 @@ def main() -> None:
         sys.exit(1)
     anomaly_rows = table.to_dicts()
 
+    log.info("loading NQ/ES/GC corpus bars (excluding the holdout) — this is the slow part")
+    bars_by_instrument = _load_bars_by_instrument()
+    account = load_account_config("topstep-50k")
+
     conn = get_connection(Path(args.ledger_path))
     try:
         result = run_cycle(
@@ -127,6 +150,8 @@ def main() -> None:
             hypothesis_model_name=STAGE_MODELS[STAGE_HYPOTHESIS],
             hypothesis_temperature=STAGE_TEMPERATURE[STAGE_HYPOTHESIS],
             data_range=_data_range(),
+            bars_by_instrument=bars_by_instrument,
+            account=account,
             max_shortlist=args.max_shortlist,
             max_variants=args.max_variants,
             cap=args.cap,
@@ -136,9 +161,11 @@ def main() -> None:
 
     log.info(
         "cycle done: %d triaged, %d hypotheses logged (%d survived review, %d rejected "
-        "at review, %d generation/review failures)",
+        "at review, %d generation/review failures), %d gate-evaluated (%d cleared every gate, "
+        "%d gate-evaluation failures)",
         result.n_triaged, len(result.hypothesis_ids), result.n_survived_review,
-        result.n_review_rejected, result.n_generation_failed,
+        result.n_review_rejected, result.n_generation_failed, result.n_gate_evaluated,
+        result.n_cleared_all_gates, result.n_gate_evaluation_failed,
     )
     if result.budget_exhausted:
         log.error(

@@ -23,11 +23,21 @@ import pytest
 from research.ledger.db import get_connection
 from research.loop.cycle import run_cycle
 from research.loop.providers import ChatResponse
+from research.ir.sizing import load_account_config
 
 _STRATEGIES_DIR = Path(__file__).resolve().parents[1] / "research" / "ir" / "strategies"
 GOOD_IR = json.loads((_STRATEGIES_DIR / "ifvg_sweep.json").read_text())
 
 FEATURE_COLUMNS = ("realised_vol",)
+
+# Gate evaluation (phase 6b) now runs for every appended hypothesis. These
+# tests are about the four-stage cycle's OWN behaviour (triage/generate/
+# review/append), not backtest correctness, so they run it against empty
+# bars: gate 1 (frequency) fails cleanly on 0 trades — no exception, no
+# candidate ever clears every gate — which is exactly what these tests
+# assert either way.
+EMPTY_BARS = {"NQ": [], "ES": [], "GC": []}
+ACCOUNT = load_account_config("topstep-50k")
 
 
 def _anomaly_rows(n: int) -> list[dict]:
@@ -115,6 +125,7 @@ def test_cycle_writes_both_a_surviving_candidate_and_a_review_rejection(conn):
         hypothesis_model_name="gpt-6-astra",
         hypothesis_temperature=0.7,
         data_range="2010-06-06/2024-12-31",
+        bars_by_instrument=EMPTY_BARS, account=ACCOUNT,
         now=datetime(2024, 6, 1, tzinfo=timezone.utc),
     )
 
@@ -134,7 +145,10 @@ def test_cycle_writes_both_a_surviving_candidate_and_a_review_rejection(conn):
         assert row["falsifier"]
         assert row["model_version"]
         assert row["prompt_hash"]
-        assert row["outcome"] == "rejected"  # default until gates run — this cycle never runs gates
+        # gates DO run now (phase 6b), but every candidate here is backtested
+        # against EMPTY_BARS, so gate 1 (frequency) fails on 0 trades and
+        # nothing ever clears every gate to become "blended".
+        assert row["outcome"] == "rejected"
 
     # the survivor swept 4 variants, the review-rejected one swept exactly 1
     swept = sorted(r["n_variants_swept"] for r in ledger_rows)
@@ -152,6 +166,7 @@ def test_cycle_halts_cleanly_when_the_annual_cap_is_reached(conn):
         hypothesis_model_name="gpt-6-astra",
         hypothesis_temperature=0.7,
         data_range="2010-06-06/2024-12-31",
+        bars_by_instrument=EMPTY_BARS, account=ACCOUNT,
         cap=2,
         now=datetime(2024, 6, 1, tzinfo=timezone.utc),
     )
@@ -182,6 +197,7 @@ def test_cycle_skips_a_hypothesis_generation_failure_and_continues(conn):
         hypothesis_model_name="gpt-6-astra",
         hypothesis_temperature=0.7,
         data_range="2010-06-06/2024-12-31",
+        bars_by_instrument=EMPTY_BARS, account=ACCOUNT,
         now=datetime(2024, 6, 1, tzinfo=timezone.utc),
     )
 

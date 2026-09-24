@@ -18,10 +18,33 @@ def apply_schema(conn: sqlite3.Connection) -> None:
 
     That file is the single source of truth for the schema, including the
     append-only triggers — nothing here re-derives or duplicates it.
+
+    Additive column migrations are the one thing ledger.sql's own
+    `CREATE ... IF NOT EXISTS` convention can't express — SQLite has no
+    `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Those are listed in
+    `_COLUMN_MIGRATIONS` below and applied here, defensively (a database
+    created fresh from this same ledger.sql already has the column via its
+    CREATE TABLE statement, so "duplicate column" is the expected, ignored
+    outcome there).
     """
     sql = LEDGER_SQL_PATH.read_text()
     conn.executescript(sql)
+    for table, column, coltype in _COLUMN_MIGRATIONS:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc):
+                raise
     conn.commit()
+
+
+# (table, column, SQL type) — additive migrations for a ledger.db created
+# before that column existed in ledger.sql's CREATE TABLE. Each entry here
+# must also appear in ledger.sql's CREATE TABLE so a FRESH database and a
+# migrated one converge to the same schema.
+_COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("hypotheses", "sharpe_oos_per_trade", "REAL"),
+)
 
 
 def get_connection(db_path: Path | str = LEDGER_DB_PATH) -> sqlite3.Connection:

@@ -81,6 +81,12 @@ class CandidateInputs:
     combine_n_paths: int | None = None   # overrides account["simulation"]["monte_carlo_paths"]
     combine_seed: int | None = None      # deterministic Monte Carlo for tests
 
+    # gate 0 — set when this candidate's own row already exists in the
+    # ledger (research.loop.gate_runner runs the full battery AFTER
+    # append_hypothesis, so the duplicate-hash check must exclude the
+    # candidate's own just-inserted row, not just any matching hash).
+    hypothesis_id: str | None = None
+
 
 def gate_threshold(gate: int, inputs: CandidateInputs, *, n_trials: float, years: float) -> float | None:
     """The threshold that WOULD apply to `gate`, computable without running
@@ -121,7 +127,7 @@ def _evaluate_one(
     sr_variance_across_trials: float | None = None,
 ) -> GateResult:
     if gate == 0:
-        return ir_validity.evaluate(conn, inputs.ir_doc)
+        return ir_validity.evaluate(conn, inputs.ir_doc, exclude_hypothesis_id=inputs.hypothesis_id)
 
     if gate == 1:
         stats = frequency_stats(inputs.trades, inputs.sample_start, inputs.sample_end)

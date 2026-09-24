@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS hypotheses (
     -- performance
     sharpe_is                REAL,
     sharpe_oos               REAL,
+    sharpe_oos_per_trade     REAL,                       -- non-annualized (gate 6's DSR needs
+                                                          -- per-trial Sharpe in this convention,
+                                                          -- not sharpe_oos, which is annualized)
     sharpe_decay             REAL,                       -- (is - oos) / is
     sharpe_deflated          REAL,
     sr_cutoff_applied        REAL,                       -- the cutoff in force at test time

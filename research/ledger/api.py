@@ -202,7 +202,8 @@ def record_gate_results(
 # fields"). Listed explicitly so an unknown kwarg fails loud instead of
 # silently building `UPDATE ... SET typo = ?` for a column that doesn't exist.
 _SCORE_COLUMNS = frozenset({
-    "sharpe_is", "sharpe_oos", "sharpe_decay", "sharpe_deflated", "sr_cutoff_applied",
+    "sharpe_is", "sharpe_oos", "sharpe_oos_per_trade", "sharpe_decay", "sharpe_deflated",
+    "sr_cutoff_applied",
     "trades_total", "weeks_meeting_floor", "max_gap_days", "weekly_histogram",
     "cost_per_trade", "edge_cost_ratio", "block_results",
     "sharpe_with_releases", "sharpe_without_releases", "combine_payout_prob",
@@ -466,6 +467,23 @@ def trial_count_at(conn: sqlite3.Connection, timestamp: datetime) -> int:
         (ts_iso,),
     ).fetchone()
     return row[0]
+
+
+def per_trade_oos_sharpes(conn: sqlite3.Connection, timestamp: datetime) -> list[float]:
+    """Every recorded `sharpe_oos_per_trade` (non-annualized — see
+    ledger.sql's column comment) at or before `timestamp`, oldest scored
+    trials first come first. This is the input
+    research.stats.deflated_sharpe.empirical_sr_variance needs for gate 6's
+    V[{SR_n}] once enough trials have been scored (research.loop.gate_runner
+    decides the 20-trial cutover, not this function — it only reads)."""
+    ts_iso = isoformat_utc(timestamp)
+    rows = conn.execute(
+        "SELECT sharpe_oos_per_trade FROM hypotheses "
+        "WHERE created_at <= ? AND sharpe_oos_per_trade IS NOT NULL "
+        "ORDER BY created_at",
+        (ts_iso,),
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
 # --- canned view queries -----------------------------------------------
