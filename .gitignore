@@ -64,4 +64,8 @@ backtests/_config_*.json
 # var/databento/continuous/*/holdout/ is additionally sealed with filesystem
 # permissions once populated — see docs/research-loop/README.md.
 /var/databento/
+
+# Research ledger DB — runtime state generated from docs/research-loop/ledger.sql,
+# never committed. The DDL is the spec; this file is not.
+/var/ledger/
 .venv/
