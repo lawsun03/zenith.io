@@ -40,6 +40,7 @@ import { ActivityFeed } from './components/ActivityFeed'
 import { ConfigPanel } from './components/ConfigPanel'
 import { BacktestsPage } from './components/BacktestsPage'
 import { ResearchPage } from './components/ResearchPage'
+import { TrainerPage } from './components/TrainerPage'
 import { AnalyticsPage } from './pages/Analytics'
 import { TodosPage } from './pages/Todos'
 import { TradeAnalysisPage } from './pages/TradeAnalysis'
@@ -178,6 +179,7 @@ export default function App() {
       <Routes>
         <Route path="/backtests" element={<BacktestsPage />} />
         <Route path="/research" element={<ResearchPage />} />
+        <Route path="/trainer" element={<TrainerPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/todos" element={<TodosPage />} />
         <Route path="/trade-analysis/:date" element={<TADetail />} />

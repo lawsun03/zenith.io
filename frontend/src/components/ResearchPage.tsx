@@ -93,6 +93,7 @@ export function ResearchPage() {
             {state?.stopped ? 'LOOP STOPPED' : 'LOOP ARMED'}
           </span>
           <Link to="/backtests" className="text-dim hover:text-ink transition-colors">backtests</Link>
+          <Link to="/trainer" className="text-dim hover:text-ink transition-colors">trainer</Link>
           <Link to="/" className="text-dim hover:text-ink transition-colors">dashboard</Link>
         </div>
       </div>

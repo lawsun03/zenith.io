@@ -130,6 +130,55 @@ CREATE TABLE IF NOT EXISTS drill_sessions (
 CREATE INDEX IF NOT EXISTS idx_drill_ensemble ON drill_sessions(ensemble_id);
 
 
+-- Drill decisions: one row per decision point actually presented to a trainee.
+-- drill_sessions above is session-level aggregates only — sampling that biases
+-- toward "decision points you got wrong before" (PHASE-PROMPTS.md Phase 6,
+-- requirement 3) needs per-decision identity, which only this table carries.
+CREATE TABLE IF NOT EXISTS drill_decisions (
+    id                    TEXT PRIMARY KEY,
+    session_id            TEXT NOT NULL REFERENCES drill_sessions(id),
+    hypothesis_id         TEXT NOT NULL REFERENCES hypotheses(id),  -- which ensemble member
+    instrument            TEXT NOT NULL,
+    decision_ts           TEXT NOT NULL,
+    regime_label          TEXT,
+
+    ir_fired              INTEGER NOT NULL,
+    near_miss             INTEGER NOT NULL,
+    ir_side               TEXT,
+    ir_stop_price         TEXT,               -- Decimal as string
+
+    user_is_setup         INTEGER NOT NULL,
+    user_direction        TEXT,
+    user_stop_price       TEXT,
+
+    -- scored against the RULES, never against the market outcome
+    correct_setup         INTEGER NOT NULL,
+    correct_direction     INTEGER,            -- NULL when not applicable (no true-positive agreement)
+    correct_stop          INTEGER,
+
+    outcome_pnl_shadow    TEXT                -- recorded, NEVER read by scoring
+);
+
+CREATE INDEX IF NOT EXISTS idx_drill_decisions_session ON drill_decisions(session_id);
+CREATE INDEX IF NOT EXISTS idx_drill_decisions_lookup
+    ON drill_decisions(hypothesis_id, instrument, decision_ts);
+
+-- Append-only, same reason as `hypotheses`: the weighted sampler reads
+-- "was this gotten wrong before" from this table, and a training log that
+-- can be rewritten after the fact stops meaning anything.
+CREATE TRIGGER IF NOT EXISTS drill_decisions_no_delete
+BEFORE DELETE ON drill_decisions
+BEGIN
+    SELECT RAISE(ABORT, 'drill_decisions is append-only: sampling depends on the history staying intact');
+END;
+
+CREATE TRIGGER IF NOT EXISTS drill_decisions_no_rewrite
+BEFORE UPDATE ON drill_decisions
+BEGIN
+    SELECT RAISE(ABORT, 'drill_decisions is append-only: a training log is not editable after the fact');
+END;
+
+
 -- Canned aggregates the chat agent queries. Views, so they cannot drift from the tables.
 
 CREATE VIEW IF NOT EXISTS v_rejections_by_gate AS

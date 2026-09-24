@@ -56,3 +56,22 @@ class ForceSignalRequest(BaseModel):
 
 class AskClaudeRequest(BaseModel):
     question: str | None = None
+
+
+class TrainerStartSessionRequest(BaseModel):
+    ensemble_id: str
+    start_date: str            # "YYYY-MM-DD"
+    end_date: str               # "YYYY-MM-DD"
+    n_decisions: int = 20
+    regime_label: str | None = None
+    seed: int | None = None     # set for a reproducible queue
+
+
+class TrainerAnswerRequest(BaseModel):
+    is_setup: bool
+    direction: str | None = None    # "long" | "short" — ignored when is_setup is False
+    stop_price: str | None = None   # price as string — ignored when is_setup is False
+
+
+class TrainerCompleteRequest(BaseModel):
+    notes: str | None = None

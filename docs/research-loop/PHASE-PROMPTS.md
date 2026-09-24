@@ -328,6 +328,79 @@ Acceptance test:
 
 ---
 
+## Phase 6a — Commit phases 1–6
+
+Run as soon as Phase 6 finishes, in the same session.
+
+```
+Phase 6 is done. Before anything else, commit all uncommitted work as separate commits, one
+per phase, running the full test suite before each:
+
+1. Phase 1 — ledger + stats: research/ledger/, research/stats/, their tests. Two files were
+   corrected outside this session and must be kept exactly as they are: research/stats/
+   deflated_sharpe.py (fixed formula + required sr_variance_across_trials argument) and
+   tests/test_statistics.py (hand-computed expected values from the published papers — do
+   not edit it).
+2. Phase 2 — strategy IR: research/ir/, the IR schema change, IR tests.
+3. Phase 3 — anomaly pass + regime labels: research/anomaly/, scripts/run_anomaly_pass.py,
+   anomaly tests.
+4. Phase 4 — gates + ensemble: research/gates/ (including the significance.py and
+   pipeline.py changes that pass sr_variance_across_trials), gate tests, and the gate 6
+   section in docs/research-loop/gates.md.
+5. Phase 5 — hypothesis loop: research/loop/, scripts/run_hypothesis_loop.py, loop tests.
+6. Phase 6 — trainer: research/trainer/, frontend changes, trainer tests.
+
+The research/data changes, .env.example, .gitignore and ledger.sql go in whichever commit
+they belong to. If a file doesn't clearly belong to one phase, ask me instead of guessing.
+Never commit .env, Parquet caches, downloaded data, or anything under the holdout path.
+Show me `git log --oneline` and the final suite result when done.
+```
+
+---
+
+## Phase 6b — Wire the gates into the loop
+
+New session. Required before the loop is ever run for real: today the loop records
+hypotheses (spending the annual trial budget) that nothing ever tests.
+
+```
+Read CLAUDE.md and docs/research-loop/gates.md (including the gate 6 section) first.
+
+Gap: research/loop/cycle.py generates candidates and writes them to the ledger, but nothing
+runs them through research.gates.pipeline.evaluate_candidate. Wire it in.
+
+Scope:
+1. After a candidate's IR passes validation, backtest it twice (macro-release sessions
+   included and excluded) with research.ir.engine across NQ/ES/GC on the frozen folds, build
+   the two CandidateInputs, and call evaluate_candidate.
+2. Pipeline arguments are properties of the whole search. Compute them once per loop state,
+   not per candidate:
+   - n_trials = research.ledger.api.trial_count_at(now). Variant-weighted, never a row count.
+   - years = the corpus length actually used, excluding the holdout.
+   - sr_variance_across_trials = empirical_sr_variance over the PER-TRADE (non-annualized)
+     OOS Sharpe of every ledger trial that has one, once at least 20 exist; before that,
+     null_sr_variance(n_obs). If the ledger only stores annualized Sharpe, de-annualize it
+     with each trial's trades_per_year or add a column — tell me which you did. Record which
+     source was used, and its value, alongside the gate 6 result.
+   - loop_pbo = CSCV over the aligned daily OOS returns of all recorded candidates when there
+     are at least 2; None otherwise.
+3. Write everything with record_gate_results and record_candidate_scores: gate_results,
+   first_failed_gate, sharpe_is/oos/decay/deflated, sr_cutoff_applied, trial_count_at_test,
+   sharpe_with_releases/without_releases, combine_payout_prob, outcome.
+4. Survivors join the equal-weighted ensemble for their family. No ranking, no top-N.
+
+Acceptance test — in-memory ledger, mocked model clients, no real budget spent:
+- A fixture candidate runs end to end; its ledger row has all 10 gate results with thresholds.
+- A known-bad candidate stops at the right gate; later gates are recorded as unreached.
+- Gate 6 uses null_sr_variance below 20 recorded trials and empirical_sr_variance at 20+.
+  Test both.
+- A survivor lands in an ensemble, and nothing sorts survivors by performance.
+
+Do NOT run scripts/run_hypothesis_loop.py against the real ledger or real model APIs.
+```
+
+---
+
 ## Phase 7 — Ledger chat agent
 
 ```

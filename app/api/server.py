@@ -59,6 +59,9 @@ from .schemas import (
     ForceSignalRequest,
     NoteRequest,
     RandomSearchRequest,
+    TrainerAnswerRequest,
+    TrainerCompleteRequest,
+    TrainerStartSessionRequest,
 )
 
 
@@ -90,6 +93,12 @@ def _random_strategy_params(rng: random.Random | None = None) -> dict[str, Any]:
 # meant to be tail-anchored to the result-file polling that the frontend
 # already does, not a durable job system.
 _active_searches: dict[str, dict[str, Any]] = {}
+
+# In-memory trainer sessions: a drill in progress. Lost on restart — this
+# mirrors sessions.py's own docstring ("nothing here is written to the
+# ledger incrementally"), so a dropped connection loses an unfinished
+# session, never a corrupted one. Keyed by TrainerSession.session_id.
+_trainer_sessions: dict[str, dict[str, Any]] = {}
 
 log = logging.getLogger(__name__)
 
@@ -219,6 +228,7 @@ def build_app(
     runner_factory: Any = None,
     vp_warmup: Any = None,
     htf_rebuild: Any = None,
+    trainer_ledger_db_path: Path | None = None,
 ) -> FastAPI:
     """
     Construct the FastAPI app. Dependencies are passed in (not module
@@ -1884,6 +1894,249 @@ Notes:
         status_order = {"in-progress": 0, "open": 1, "done": 2}
         items.sort(key=lambda x: (status_order.get(x["status"], 9), priority_order.get(x["priority"], 9)))
         return items
+
+    # ------------------------------------------------------------------
+    # Replay trainer (docs/research-loop/PHASE-PROMPTS.md Phase 6)
+    #
+    # Read-only over the ledger except for the two writes a finished
+    # session produces (insert_drill_session/insert_drill_decision, both
+    # append-only). Scoring itself never touches these handlers — it all
+    # happens in research/trainer/scoring.py, called from TrainerSession.
+    # ------------------------------------------------------------------
+
+    _TRAINER_LOOKBACK_BARS = 120
+    _TRAINER_REVEAL_BARS = 60
+
+    def _trainer_conn():
+        from research.ledger.db import get_connection
+        if trainer_ledger_db_path is not None:
+            return get_connection(trainer_ledger_db_path)
+        return get_connection()
+
+    def _bar_json(b: Any) -> dict:
+        return {
+            "ts": b.ts.isoformat(), "open": str(b.open), "high": str(b.high),
+            "low": str(b.low), "close": str(b.close), "volume": b.volume,
+        }
+
+    def _load_trainer_bars(ensemble: Any, start: date, end: date) -> dict[str, list]:
+        from research.data.loader import load_bars
+        from research.trainer.decision_points import bars_from_frame
+        instruments = sorted({i for m in ensemble.members for i in m.ir_doc["instruments"]})
+        return {i: bars_from_frame(load_bars(i, start, end, "back_adjusted"), i) for i in instruments}
+
+    def _serialize_current(session: Any, bars_by_instrument: dict) -> dict | None:
+        """The trainee's view of the next decision point. Never includes
+        point.fired/side/stop_price/target_price/near_miss — those are the
+        answer, and only bars up to (and including) decision_ts, i.e. the
+        future is hidden by construction."""
+        candidate = session.current()
+        if candidate is None:
+            return None
+        bars = bars_by_instrument.get(candidate.instrument, [])
+        point_ts = candidate.point.ts
+        window = [b for b in bars if b.ts <= point_ts][-_TRAINER_LOOKBACK_BARS:]
+        return {
+            "index": session.cursor,
+            "total": len(session.queue),
+            "instrument": candidate.instrument,
+            "hypothesis_id": candidate.hypothesis_id,
+            "regime_label": candidate.regime_label,
+            "decision_ts": point_ts.isoformat(),
+            "bars": [_bar_json(b) for b in window],
+        }
+
+    @app.get("/api/trainer/ensembles")
+    async def trainer_ensembles() -> JSONResponse:
+        from research.ledger.api import list_active_ensembles
+        conn = _trainer_conn()
+        return JSONResponse(list_active_ensembles(conn))
+
+    @app.get("/api/trainer/regime-labels")
+    async def trainer_regime_labels() -> JSONResponse:
+        from research.trainer.regime import available_regime_labels
+        return JSONResponse(available_regime_labels())
+
+    @app.get("/api/trainer/sessions")
+    async def trainer_list_sessions(ensemble_id: str) -> JSONResponse:
+        """Fidelity trend for one ensemble — oldest first, so the frontend
+        can plot it left-to-right without re-sorting."""
+        from research.ledger.api import list_drill_sessions
+        conn = _trainer_conn()
+        return JSONResponse(list_drill_sessions(conn, ensemble_id))
+
+    @app.post("/api/trainer/sessions")
+    async def trainer_start_session(body: TrainerStartSessionRequest) -> JSONResponse:
+        from research.data.loader import HoldoutAccessError
+        from research.ledger.api import get_ensemble, previously_wrong_decisions
+        from research.trainer.sessions import build_queue, start_session
+
+        conn = _trainer_conn()
+        try:
+            ensemble = get_ensemble(conn, body.ensemble_id)
+        except KeyError:
+            return JSONResponse({"error": "no such ensemble"}, status_code=404)
+
+        try:
+            start_d = date.fromisoformat(body.start_date)
+            end_d = date.fromisoformat(body.end_date)
+        except ValueError:
+            return JSONResponse({"error": "start_date/end_date must be YYYY-MM-DD"}, status_code=400)
+
+        rng = random.Random(body.seed) if body.seed is not None else random.Random()
+        previously_wrong = previously_wrong_decisions(conn, body.ensemble_id)
+        try:
+            queue = build_queue(
+                ensemble, start=start_d, end=end_d, n_decisions=body.n_decisions,
+                regime_label=body.regime_label, previously_wrong=previously_wrong, rng=rng,
+            )
+        except HoldoutAccessError as e:
+            return JSONResponse({"error": str(e)}, status_code=403)
+
+        if not queue:
+            return JSONResponse(
+                {"error": "no decision points available for this range/filter"}, status_code=404)
+
+        bars_by_instrument = _load_trainer_bars(ensemble, start_d, end_d)
+        session = start_session(body.ensemble_id, queue)
+        _trainer_sessions[session.session_id] = {
+            "session": session, "ensemble": ensemble, "bars_by_instrument": bars_by_instrument,
+        }
+        return JSONResponse({
+            "session_id": session.session_id,
+            "n_decisions": len(queue),
+            "current": _serialize_current(session, bars_by_instrument),
+        })
+
+    @app.get("/api/trainer/sessions/{session_id}/current")
+    async def trainer_current(session_id: str) -> JSONResponse:
+        entry = _trainer_sessions.get(session_id)
+        if entry is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        session = entry["session"]
+        return JSONResponse({
+            "done": session.done,
+            "current": _serialize_current(session, entry["bars_by_instrument"]),
+        })
+
+    @app.post("/api/trainer/sessions/{session_id}/answer")
+    async def trainer_answer(session_id: str, body: TrainerAnswerRequest) -> JSONResponse:
+        from research.trainer.scoring import Answer
+
+        entry = _trainer_sessions.get(session_id)
+        if entry is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        session = entry["session"]
+        if session.done:
+            return JSONResponse({"error": "session already complete"}, status_code=400)
+
+        candidate = session.current()
+        try:
+            answer = Answer(
+                is_setup=body.is_setup,
+                direction=body.direction if body.is_setup else None,
+                stop_price=(
+                    Decimal(body.stop_price)
+                    if body.is_setup and body.stop_price is not None else None
+                ),
+            )
+        except Exception:
+            return JSONResponse({"error": "stop_price must be a decimal string"}, status_code=400)
+
+        score = session.answer_current(answer)
+        point = candidate.point
+        bars = entry["bars_by_instrument"].get(candidate.instrument, [])
+        # THE SCORING RULE: everything above this line is graded on IR
+        # agreement alone. What follows — the market outcome — is shown
+        # for information only and was never an input to `score`.
+        reveal_bars = [b for b in bars if b.ts > point.ts][:_TRAINER_REVEAL_BARS]
+
+        return JSONResponse({
+            "score": {
+                "correct_setup": score.correct_setup,
+                "correct_direction": score.correct_direction,
+                "correct_stop": score.correct_stop,
+            },
+            "ir_ground_truth": {
+                "fired": point.fired,
+                "near_miss": point.near_miss,
+                "side": point.side,
+                "stop_price": str(point.stop_price) if point.stop_price is not None else None,
+                "target_price": str(point.target_price) if point.target_price is not None else None,
+            },
+            "market_outcome_bars": [_bar_json(b) for b in reveal_bars],
+            "done": session.done,
+            "next": _serialize_current(session, entry["bars_by_instrument"]),
+        })
+
+    @app.post("/api/trainer/sessions/{session_id}/complete")
+    async def trainer_complete(session_id: str, body: TrainerCompleteRequest) -> JSONResponse:
+        from research.ledger.api import insert_drill_decision, insert_drill_session
+        from research.trainer.divergence import compute_divergence
+
+        entry = _trainer_sessions.pop(session_id, None)
+        if entry is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        session = entry["session"]
+        if not session.done:
+            _trainer_sessions[session_id] = entry  # put it back — not actually finished
+            return JSONResponse({"error": "session not finished"}, status_code=400)
+
+        tally = session.tally()
+        divergence = compute_divergence(entry["ensemble"], session.records, entry["bars_by_instrument"])
+        conn = _trainer_conn()
+
+        session_outcome = json.dumps({
+            "fraction_taken": str(divergence.fraction_taken),
+            "strategy_equity_r": [str(x) for x in divergence.strategy_equity_r],
+            "trainee_equity_r": [str(x) for x in divergence.trainee_equity_r],
+        })
+        drill_session_id = insert_drill_session(
+            conn, ensemble_id=session.ensemble_id, n_decisions=tally.n_decisions,
+            setups_correctly_taken=tally.setups_correctly_taken, setups_missed=tally.setups_missed,
+            false_positives=tally.false_positives, direction_errors=tally.direction_errors,
+            stop_placement_errors=tally.stop_placement_errors, fidelity_score=float(tally.fidelity),
+            outcome_pnl_shadow=session_outcome, notes=body.notes,
+        )
+
+        for idx, record in enumerate(session.records):
+            point = record.candidate.point
+            answer = record.answer
+            score = record.score
+            shadow_r = divergence.trainee_r_by_record_index.get(idx)
+            if shadow_r is None:
+                shadow_r = divergence.strategy_r_by_record_index.get(idx)
+            insert_drill_decision(
+                conn, session_id=drill_session_id, hypothesis_id=record.candidate.hypothesis_id,
+                instrument=record.candidate.instrument, decision_ts=point.ts,
+                regime_label=record.candidate.regime_label,
+                ir_fired=point.fired, near_miss=point.near_miss,
+                ir_side=point.side,
+                ir_stop_price=str(point.stop_price) if point.stop_price is not None else None,
+                user_is_setup=answer.is_setup, user_direction=answer.direction,
+                user_stop_price=str(answer.stop_price) if answer.stop_price is not None else None,
+                correct_setup=score.correct_setup, correct_direction=score.correct_direction,
+                correct_stop=score.correct_stop,
+                outcome_pnl_shadow=str(shadow_r) if shadow_r is not None else None,
+            )
+
+        return JSONResponse({
+            "session_id": drill_session_id,
+            "fidelity_score": float(tally.fidelity),
+            "n_decisions": tally.n_decisions,
+            "setups_correctly_taken": tally.setups_correctly_taken,
+            "setups_missed": tally.setups_missed,
+            "false_positives": tally.false_positives,
+            "direction_errors": tally.direction_errors,
+            "stop_placement_errors": tally.stop_placement_errors,
+            "divergence": {
+                "trades_available": divergence.trades_available,
+                "trades_taken": divergence.trades_taken,
+                "fraction_taken": str(divergence.fraction_taken),
+                "strategy_equity_r": [str(x) for x in divergence.strategy_equity_r],
+                "trainee_equity_r": [str(x) for x in divergence.trainee_equity_r],
+            },
+        })
 
     # ------------------------------------------------------------------
     # WebSocket — live event feed
