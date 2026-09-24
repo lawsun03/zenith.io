@@ -68,4 +68,8 @@ backtests/_config_*.json
 # Research ledger DB — runtime state generated from docs/research-loop/ledger.sql,
 # never committed. The DDL is the spec; this file is not.
 /var/ledger/
+
+# Anomaly table + Grok spend log — runtime state rebuilt by
+# scripts/run_anomaly_pass.py, never committed.
+/var/anomaly/
 .venv/
