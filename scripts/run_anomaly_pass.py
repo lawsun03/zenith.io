@@ -132,6 +132,9 @@ def main() -> None:
     )
     if run.budget_exhausted:
         log.error("Grok backfill budget cap ($%.2f) reached — labelling stopped early", args.cap)
+    if run.aborted:
+        log.error("labelling pass ABORTED early: %s", run.abort_reason)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

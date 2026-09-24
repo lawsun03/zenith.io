@@ -11,11 +11,38 @@ CLAUDE.md rule 5 — "use the model only for judgment calls" — is exactly
 what this is: Grok classifies what kind of day a session was, using search
 it's uniquely positioned to run. It never touches price arithmetic, gate
 thresholds, or anything the pipeline could compute deterministically.
+
+MIGRATION (2026-09): xAI removed the Live Search API
+(`search_parameters` on /v1/chat/completions) on 2026-01-12 — every call
+through it now returns 410 Gone, which is why every label was failing.
+This module now targets the Responses API (POST /v1/responses), input
+instead of messages, tools: [{"type": "web_search"}, {"type": "x_search"}]
+instead of search_parameters (docs.x.ai/developers/tools/web-search).
+Response shape, verified against docs.x.ai/developers/tools/citations and
+docs.x.ai/developers/cost-tracking (both first-party, fetched live while
+writing this):
+  - output text:  output[].content[] where content.type == "output_text",
+                   text is content.text
+  - citations:    that same content block's `annotations` list, each
+                   {"type": "url_citation", "url": ..., "title": ..., ...}
+  - real cost:    usage.cost_in_usd_ticks — xAI's own docs: "every REST
+                   completion and response" includes it, 1 USD = 1e10
+                   ticks, "the actual amount billed ... inclusive of all
+                   token costs and server-side tool invocation costs" —
+                   this is the one number here that's authoritative, not
+                   an estimate, so it's used whenever present.
+Neither docs.x.ai page that was reachable showed a full example response
+body with every field (citations page showed only the annotations
+excerpt), so parsing below is deliberately tolerant of the response
+shape sitting a little differently than expected — but the primary path
+matches what's documented, and any request that returns a shape none of
+this expects is a hard failure (rule 12), never a silently-wrong parse.
 """
 from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
@@ -24,22 +51,61 @@ from research.anomaly.labels import RegimeLabel, parse_label_response
 
 log = logging.getLogger(__name__)
 
-XAI_CHAT_COMPLETIONS_URL = "https://api.x.ai/v1/chat/completions"
+XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
 XAI_MODEL = "grok-4.7"
 
-# xAI's Live Search billing is per source consulted, not per call. This
-# constant is a conservative placeholder for when the API response doesn't
-# report actual usage — verify it against xAI's current Live Search
-# pricing before trusting cumulative spend, the same caveat
-# docs/research-loop/cost-model.md makes about broker fee schedules.
-_FALLBACK_COST_PER_CALL_USD = 0.25
+# docs.x.ai/developers/pricing, read live while writing this migration
+# (2026-09) — grok-4.7, < 200k context: $2.00 / 1M input tokens,
+# $6.00 / 1M output tokens. Used ONLY when the response genuinely carries
+# no usage.cost_in_usd_ticks (see module docstring) — that field is the
+# real, authoritative, already-tool-cost-inclusive figure and is always
+# preferred when present.
+_INPUT_COST_PER_TOKEN_USD = 2.00 / 1_000_000
+_OUTPUT_COST_PER_TOKEN_USD = 6.00 / 1_000_000
+# docs.x.ai/developers/pricing: web_search and x_search are each
+# $5 / 1,000 calls when billed per call (x_search has separate per-post/
+# per-profile meters for some usage; $5/1k calls is the closest single
+# number available for a rough estimate here).
+_TOOL_CALL_COST_USD = 5.00 / 1_000
+_USD_TICKS_PER_DOLLAR = 10_000_000_000
+
+# Statuses that will never succeed on retry — abort the whole pass
+# immediately rather than skip-and-continue (an expired/wrong key or a
+# dead endpoint will fail every remaining call identically).
+FATAL_STATUS_CODES = frozenset({401, 403, 404, 410})
+
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+# A tool-using call (web_search + x_search, an agentic loop xAI runs
+# server-side) genuinely takes 45-90+ seconds on success — verified
+# against real grok-4.7 calls (2026-09): two calls in a 9-call live batch
+# timed out at the previous 90s limit while others succeeded well past
+# 60s. 180s gives real search loops headroom without waiting forever on a
+# genuinely hung connection.
+REQUEST_TIMEOUT_SECONDS = 180
 
 
 class LabelFetchError(RuntimeError):
     """A single session's label call failed or returned something that
     couldn't be parsed. Recoverable at the pipeline level: the session is
     logged and skipped, not defaulted to a category it was never told.
+
+    Carries the HTTP status and a response-body excerpt whenever the
+    failure came from an HTTP response, so the pipeline's warning can
+    include both (CLAUDE.md rule 12 — the log line, not just this
+    exception's str(), is what an operator actually reads).
     """
+
+    def __init__(self, message: str, *, status_code: int | None = None, body_excerpt: str | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.body_excerpt = body_excerpt
+
+
+class LabelFetchFatalError(LabelFetchError):
+    """A status in FATAL_STATUS_CODES — the caller (research.anomaly.
+    pipeline.label_top_decile) must abort the whole pass immediately, not
+    skip this session and try the next one."""
 
 
 @dataclass(frozen=True)
@@ -70,52 +136,127 @@ def build_prompt(instrument: str, session_date: date, feature_summary: dict[str,
     )
 
 
+def _extract_output_text_and_citations(body: dict) -> tuple[str, list[str]]:
+    """output[].content[] where content.type == "output_text" ->
+    (text, [citation urls from that block's annotations]) — of the LAST
+    such block, not the first.
+
+    Verified against a live grok-4.7 response (2026-09): a completed,
+    tool-using response's `output` array is NOT one message — it's
+    reasoning items, an early narration message ("I'll look up..." with
+    its own output_text block), the tool-call items, and finally the
+    actual answer as a later message. Taking the first output_text block
+    silently returns that narration instead of the answer; the last one
+    is the model's final synthesized message once every tool call has
+    resolved.
+
+    Raises KeyError/IndexError (caller wraps as LabelFetchError) if no
+    output_text block exists at all — that is a shape this module doesn't
+    understand, and CLAUDE.md rule 12 says that's a failure, not a guess.
+    """
+    last: tuple[str, list[str]] | None = None
+    for item in body["output"]:
+        for block in item.get("content", []):
+            if block.get("type") == "output_text":
+                citations = [
+                    a["url"] for a in block.get("annotations", []) if a.get("type") == "url_citation" and a.get("url")
+                ]
+                last = (block["text"], citations)
+    if last is None:
+        raise KeyError("no output_text content block in response")
+    return last
+
+
+def _extract_json_object(text: str) -> dict:
+    """The prompt asks for ONLY a JSON object, but nothing on the Responses
+    API enforces that structurally here (unlike the old response_format
+    on /v1/chat/completions) — so this tolerates the model wrapping the
+    object in prose or a markdown code fence, same spirit as the citation-
+    parsing tolerance above, while still failing loud if there is no JSON
+    object in the text at all."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = _JSON_OBJECT_RE.search(text)
+    if not match:
+        raise ValueError(f"no JSON object found in response text: {text!r}")
+    return json.loads(match.group(0))
+
+
+def _cost_from_usage(usage: dict) -> tuple[float, bool]:
+    """(cost_usd, was_estimated). Prefers usage.cost_in_usd_ticks — xAI's
+    own real, tool-cost-inclusive billed amount — over any estimate."""
+    ticks = usage.get("cost_in_usd_ticks")
+    if ticks is not None:
+        return float(ticks) / _USD_TICKS_PER_DOLLAR, False
+
+    input_tokens = usage.get("input_tokens")
+    output_tokens = usage.get("output_tokens")
+    tool_usage = usage.get("server_side_tool_usage") or {}
+    tool_calls = sum(v for v in tool_usage.values() if isinstance(v, (int, float)))
+    if input_tokens is not None and output_tokens is not None:
+        estimate = (
+            input_tokens * _INPUT_COST_PER_TOKEN_USD
+            + output_tokens * _OUTPUT_COST_PER_TOKEN_USD
+            + tool_calls * _TOOL_CALL_COST_USD
+        )
+        return estimate, True
+
+    return _TOOL_CALL_COST_USD * 2, True  # genuinely nothing to go on — two tool calls' worth, as a floor
+
+
 def make_xai_label_fn(api_key: str) -> LabelFn:
-    """Adapter to the real xAI chat-completions API with Live Search
-    enabled. Not exercised by tests — those inject a fake LabelFn.
+    """Adapter to the real xAI Responses API with web_search + x_search
+    tools enabled. Not exercised by tests — those inject a fake LabelFn.
     """
     import requests
 
     def _label(instrument: str, session_date: date, feature_summary: dict[str, float]) -> LabelResult:
         payload: dict[str, Any] = {
             "model": XAI_MODEL,
-            "messages": [
-                {"role": "user", "content": build_prompt(instrument, session_date, feature_summary)}
-            ],
-            "search_parameters": {
-                "mode": "on",
-                "sources": [{"type": "web"}, {"type": "x"}],
-            },
-            "response_format": {"type": "json_object"},
+            "input": [{"role": "user", "content": build_prompt(instrument, session_date, feature_summary)}],
+            "tools": [{"type": "web_search"}, {"type": "x_search"}],
         }
+        context = f"{instrument} {session_date}"
         try:
             resp = requests.post(
-                XAI_CHAT_COMPLETIONS_URL,
+                XAI_RESPONSES_URL,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
-            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise LabelFetchError(f"{context}: request failed: {exc}") from exc
+
+        if not resp.ok:
+            excerpt = resp.text[:500]
+            error_cls = LabelFetchFatalError if resp.status_code in FATAL_STATUS_CODES else LabelFetchError
+            raise error_cls(
+                f"{context}: HTTP {resp.status_code} from {XAI_RESPONSES_URL} — {excerpt}",
+                status_code=resp.status_code, body_excerpt=excerpt,
+            )
+
+        body: dict | None = None
+        try:
             body = resp.json()
-            content = body["choices"][0]["message"]["content"]
-            label = parse_label_response(json.loads(content))
-        except Exception as exc:  # noqa: BLE001 — any failure here is a per-session skip, not a crash
-            raise LabelFetchError(f"{instrument} {session_date}: {exc}") from exc
+            text, citation_urls = _extract_output_text_and_citations(body)
+            parsed = _extract_json_object(text)
+            if citation_urls and not parsed.get("sources"):
+                parsed = {**parsed, "sources": citation_urls}
+            label = parse_label_response(parsed)
+        except Exception as exc:  # noqa: BLE001 — a parse failure is a per-session skip, not a crash
+            excerpt = json.dumps(body)[:500] if body is not None else resp.text[:500]
+            raise LabelFetchError(f"{context}: couldn't parse response: {exc} — body excerpt: {excerpt}") from exc
 
         usage = body.get("usage", {})
-        num_sources = usage.get("num_sources_used")
-        cost_usd = usage.get("cost_usd")
-        if cost_usd is None:
-            cost_usd = (
-                num_sources * 0.025 if num_sources is not None else _FALLBACK_COST_PER_CALL_USD
-            )
+        cost_usd, was_estimated = _cost_from_usage(usage)
+        if was_estimated:
             log.warning(
-                "xAI response for %s %s carried no usage.cost_usd — using estimate $%.4f; "
-                "verify against xAI's current Live Search pricing",
-                instrument,
-                session_date,
-                cost_usd,
+                "xAI response for %s carried no usage.cost_in_usd_ticks — using an estimate "
+                "$%.4f from token/tool-call counts; verify against docs.x.ai/developers/pricing",
+                context, cost_usd,
             )
-        return LabelResult(label=label, cost_usd=float(cost_usd))
+        return LabelResult(label=label, cost_usd=cost_usd)
 
     return _label

@@ -7,9 +7,10 @@ from datetime import date, timedelta
 import polars as pl
 import pytest
 
-from research.anomaly.grok_client import LabelFetchError, LabelResult
+from research.anomaly.grok_client import LabelFetchError, LabelFetchFatalError, LabelResult
 from research.anomaly.labels import RegimeLabel
 from research.anomaly.pipeline import (
+    MAX_CONSECUTIVE_LABEL_FAILURES,
     _ensure_regime_columns,
     label_top_decile,
     sessions_needing_labels,
@@ -114,6 +115,65 @@ def test_label_top_decile_skips_fetch_errors_without_aborting(tmp_path):
     assert run.labelled == 2
     assert run.skipped == 1
     assert run.table["regime_label"].null_count() == 1
+
+
+def test_label_top_decile_aborts_after_consecutive_failures(tmp_path):
+    """CLAUDE.md rule 12: a broken integration (every call failing) must
+    stop the pass, not burn through every remaining session logging the
+    same failure."""
+    n = MAX_CONSECUTIVE_LABEL_FAILURES + 3
+    table = _table(n)
+
+    def always_fails(instrument, session_date, feature_summary):
+        raise LabelFetchError("boom", status_code=500, body_excerpt="server error")
+
+    spend = SpendLedger.load(tmp_path / "spend.json")
+    run = label_top_decile(table, always_fails, spend, top_fraction=1.0, cap=100.0)
+
+    assert run.aborted is True
+    assert run.abort_reason is not None
+    assert str(MAX_CONSECUTIVE_LABEL_FAILURES) in run.abort_reason
+    assert run.skipped == MAX_CONSECUTIVE_LABEL_FAILURES  # stopped exactly at the threshold
+    assert run.labelled == 0
+
+
+def test_label_top_decile_a_success_resets_the_consecutive_failure_count(tmp_path):
+    """4 failures, 1 success, 4 more failures must NOT abort — only
+    MAX_CONSECUTIVE_LABEL_FAILURES in an unbroken row does."""
+    table = _table(9)
+    calls = {"n": 0}
+
+    def mostly_flaky(instrument, session_date, feature_summary):
+        calls["n"] += 1
+        if calls["n"] == 5:
+            return LabelResult(
+                label=RegimeLabel(category="none_identified", description="d", confidence=0.1, sources=()),
+                cost_usd=0.1,
+            )
+        raise LabelFetchError("boom")
+
+    spend = SpendLedger.load(tmp_path / "spend.json")
+    run = label_top_decile(table, mostly_flaky, spend, top_fraction=1.0, cap=100.0)
+
+    assert run.aborted is False
+    assert run.labelled == 1
+    assert run.skipped == 8
+
+
+def test_label_top_decile_aborts_immediately_on_a_fatal_status(tmp_path):
+    table = _table(5)
+    calls = {"n": 0}
+
+    def dead_key(instrument, session_date, feature_summary):
+        calls["n"] += 1
+        raise LabelFetchFatalError("nope", status_code=401, body_excerpt="invalid api key")
+
+    spend = SpendLedger.load(tmp_path / "spend.json")
+    run = label_top_decile(table, dead_key, spend, top_fraction=1.0, cap=100.0)
+
+    assert run.aborted is True
+    assert "401" in run.abort_reason
+    assert calls["n"] == 1  # never tried a second session
 
 
 def test_label_top_decile_stops_at_budget_cap_and_keeps_partial_progress(tmp_path):

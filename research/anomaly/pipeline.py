@@ -20,11 +20,16 @@ from pathlib import Path
 import polars as pl
 
 from research.anomaly.features import FEATURE_COLUMNS, compute_all_features
-from research.anomaly.grok_client import LabelFetchError, LabelFn
+from research.anomaly.grok_client import LabelFetchError, LabelFetchFatalError, LabelFn
 from research.anomaly.ranking import rank_anomalies
 from research.anomaly.spend import GROK_BACKFILL_CAP_USD, GrokBudgetExceeded, SpendLedger
 
 log = logging.getLogger(__name__)
+
+# CLAUDE.md rule 12 (fail loud): a run that's failing every call is a
+# broken integration, not a sequence of unlucky sessions — stop burning
+# through the rest of the batch once this many calls in a row have failed.
+MAX_CONSECUTIVE_LABEL_FAILURES = 5
 
 _REGIME_COLUMNS = (
     "regime_label",
@@ -82,6 +87,8 @@ class LabellingRun:
     skipped: int
     spend_usd: float
     budget_exhausted: bool = False
+    aborted: bool = False
+    abort_reason: str | None = None
 
 
 def _feature_summary(row: dict) -> dict[str, float]:
@@ -110,22 +117,56 @@ def label_top_decile(
     returned.
 
     A single session's label call failing to parse or fetch (LabelFetchError)
-    is logged loudly and skipped — it does not abort labelling the rest of
-    the batch, but it is never silently treated as "none_identified".
+    is logged loudly (HTTP status + a response-body excerpt when the
+    failure came from one) and skipped — it does not abort labelling the
+    rest of the batch on its own. But CLAUDE.md rule 12 cuts both ways:
+    MAX_CONSECUTIVE_LABEL_FAILURES failures in a row means the integration
+    itself is broken (a dead endpoint, an expired key), not a run of
+    unlucky sessions, and the whole pass aborts rather than silently
+    burning through every remaining session logging the same failure.
+    A LabelFetchFatalError (401/403/404/410 — never succeeds on retry)
+    aborts immediately, on the first occurrence, regardless of count.
     """
     to_label = sessions_needing_labels(table, top_fraction=top_fraction)
     updates: list[dict] = []
     skipped = 0
     budget_exhausted = False
+    aborted = False
+    abort_reason: str | None = None
+    consecutive_failures = 0
 
     for row in to_label.iter_rows(named=True):
         instrument, session_date = row["instrument"], row["session_date"]
         try:
             result = label_fn(instrument, session_date, _feature_summary(row))
-        except LabelFetchError:
-            log.warning("regime label fetch failed for %s %s — skipped", instrument, session_date)
+        except LabelFetchFatalError as exc:
+            abort_reason = (
+                f"fatal error (status={exc.status_code}) fetching a label for {instrument} "
+                f"{session_date}, aborting the rest of this pass: {exc}"
+                + (f" — body: {exc.body_excerpt}" if exc.body_excerpt else "")
+            )
+            log.error(abort_reason)
+            aborted = True
+            break
+        except LabelFetchError as exc:
+            log.warning(
+                "regime label fetch failed for %s %s (status=%s) — skipped: %s%s",
+                instrument, session_date, exc.status_code, exc,
+                f" — body: {exc.body_excerpt}" if exc.body_excerpt else "",
+            )
             skipped += 1
+            consecutive_failures += 1
+            if consecutive_failures >= MAX_CONSECUTIVE_LABEL_FAILURES:
+                abort_reason = (
+                    f"{consecutive_failures} consecutive label-fetch failures — aborting the "
+                    "rest of this pass rather than continuing to burn through every session"
+                )
+                log.error(abort_reason)
+                aborted = True
+                break
             continue
+        else:
+            consecutive_failures = 0
 
         try:
             spend.charge(result.cost_usd, cap=cap, context=f"{instrument} {session_date}")
@@ -160,6 +201,8 @@ def label_top_decile(
         skipped=skipped,
         spend_usd=spend.total_usd,
         budget_exhausted=budget_exhausted,
+        aborted=aborted,
+        abort_reason=abort_reason,
     )
 
 
