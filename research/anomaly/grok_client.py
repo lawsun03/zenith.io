@@ -42,7 +42,9 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
+import time
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
@@ -83,6 +85,18 @@ _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 # 60s. 180s gives real search loops headroom without waiting forever on a
 # genuinely hung connection.
 REQUEST_TIMEOUT_SECONDS = 180
+
+# 429 handling. Several labels are in flight at once (--concurrency), so a
+# rate limit is expected traffic, not a failure: back off and retry inside
+# the worker instead of letting it count toward the pipeline's
+# consecutive-failure abort. Retry-After is honoured when the server sends
+# one. A 429 whose body says the account is out of credit is a billing
+# problem that no amount of waiting fixes (OpenAI returned exactly that for
+# an empty balance) — that one is treated as fatal, not retried.
+RATE_LIMIT_MAX_RETRIES = 6
+RATE_LIMIT_BASE_DELAY_SECONDS = 2.0
+RATE_LIMIT_MAX_DELAY_SECONDS = 60.0
+_BILLING_MARKERS = ("insufficient", "credit", "balance", "billing")
 
 
 class LabelFetchError(RuntimeError):
@@ -206,6 +220,44 @@ def _cost_from_usage(usage: dict) -> tuple[float, bool]:
     return _TOOL_CALL_COST_USD * 2, True  # genuinely nothing to go on — two tool calls' worth, as a floor
 
 
+def _is_billing_429(resp: Any) -> bool:
+    body = (resp.text or "").lower()
+    return any(marker in body for marker in _BILLING_MARKERS)
+
+
+def _post_with_rate_limit_backoff(
+    do_post: Callable[[], Any],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    jitter: Callable[[], float] = random.random,
+    max_retries: int = RATE_LIMIT_MAX_RETRIES,
+    context: str = "",
+) -> Any:
+    """Call `do_post()`; on HTTP 429 wait (Retry-After if given, else
+    exponential from RATE_LIMIT_BASE_DELAY_SECONDS, capped, plus up to 25%
+    jitter so concurrent workers don't retry in lockstep) and try again, up
+    to `max_retries` times. Returns the final response either way — the
+    caller turns a still-429 into a LabelFetchError. A billing 429 is
+    returned immediately, unretried."""
+    for attempt in range(max_retries + 1):
+        resp = do_post()
+        if resp.status_code != 429 or attempt == max_retries or _is_billing_429(resp):
+            return resp
+        retry_after = resp.headers.get("Retry-After")
+        try:
+            delay = float(retry_after) if retry_after is not None else None
+        except ValueError:
+            delay = None
+        if delay is None:
+            delay = RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** attempt)
+            delay += delay * 0.25 * jitter()
+        delay = min(delay, RATE_LIMIT_MAX_DELAY_SECONDS)
+        log.warning("xAI 429 rate limit for %s — backing off %.1fs (retry %d/%d)",
+                    context, delay, attempt + 1, max_retries)
+        sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def make_xai_label_fn(api_key: str) -> LabelFn:
     """Adapter to the real xAI Responses API with web_search + x_search
     tools enabled. Not exercised by tests — those inject a fake LabelFn.
@@ -220,18 +272,22 @@ def make_xai_label_fn(api_key: str) -> LabelFn:
         }
         context = f"{instrument} {session_date}"
         try:
-            resp = requests.post(
-                XAI_RESPONSES_URL,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=REQUEST_TIMEOUT_SECONDS,
+            resp = _post_with_rate_limit_backoff(
+                lambda: requests.post(
+                    XAI_RESPONSES_URL,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
+                ),
+                context=context,
             )
         except requests.RequestException as exc:
             raise LabelFetchError(f"{context}: request failed: {exc}") from exc
 
         if not resp.ok:
             excerpt = resp.text[:500]
-            error_cls = LabelFetchFatalError if resp.status_code in FATAL_STATUS_CODES else LabelFetchError
+            fatal = resp.status_code in FATAL_STATUS_CODES or (resp.status_code == 429 and _is_billing_429(resp))
+            error_cls = LabelFetchFatalError if fatal else LabelFetchError
             raise error_cls(
                 f"{context}: HTTP {resp.status_code} from {XAI_RESPONSES_URL} — {excerpt}",
                 status_code=resp.status_code, body_excerpt=excerpt,

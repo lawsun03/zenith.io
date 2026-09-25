@@ -36,7 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from research.anomaly.grok_client import LabelFn, make_xai_label_fn  # noqa: E402
-from research.anomaly.paths import ANOMALY_TABLE_PATH, GROK_SPEND_PATH  # noqa: E402
+from research.anomaly.paths import ANOMALY_TABLE_PATH, GROK_SPEND_PATH, LABELS_JSONL_PATH  # noqa: E402
 from research.anomaly.pipeline import load_table, run_pass, save_table  # noqa: E402
 from research.anomaly.spend import GROK_BACKFILL_CAP_USD, SpendLedger  # noqa: E402
 from research.data.folds import load_folds  # noqa: E402
@@ -86,6 +86,8 @@ def main() -> None:
     parser.add_argument("--top-fraction", type=float, default=0.10)
     parser.add_argument("--cap", type=float, default=GROK_BACKFILL_CAP_USD, help="Grok spend cap, USD")
     parser.add_argument("--table-path", default=str(ANOMALY_TABLE_PATH))
+    parser.add_argument("--concurrency", type=int, default=4,
+                        help="Grok label calls in flight at once (backs off on 429s)")
     args = parser.parse_args()
 
     _load_env_file(REPO_ROOT / ".env")
@@ -116,6 +118,8 @@ def main() -> None:
         spend=spend,
         top_fraction=top_fraction,
         cap=args.cap,
+        concurrency=args.concurrency,
+        labels_path=LABELS_JSONL_PATH,
     )
     save_table(run.table, table_path)
     elapsed = time.perf_counter() - start
@@ -132,6 +136,16 @@ def main() -> None:
     )
     if run.budget_exhausted:
         log.error("Grok backfill budget cap ($%.2f) reached — labelling stopped early", args.cap)
+    if run.interrupted:
+        log.warning(
+            "interrupted: %d label(s) from this run saved to %s and merged into %s "
+            "(spend recorded: $%.2f) — re-run to label the rest",
+            run.labelled, LABELS_JSONL_PATH, table_path, spend.total_usd,
+        )
+        logging.shutdown()
+        if run.abandoned:
+            os._exit(130)  # worker threads are still blocked on abandoned HTTP calls
+        sys.exit(130)
     if run.aborted:
         log.error("labelling pass ABORTED early: %s", run.abort_reason)
         sys.exit(1)
