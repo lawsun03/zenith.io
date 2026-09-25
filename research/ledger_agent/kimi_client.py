@@ -54,7 +54,7 @@ def make_kimi_tool_chat_fn(
         import requests
 
         payload: dict[str, Any] = {
-            "model": model, "messages": messages, "temperature": temperature, "tools": tools,
+            "model": model, "messages": messages, "tools": tools,  # kimi-k3 only accepts the default temperature
         }
         try:
             resp = requests.post(

@@ -97,7 +97,6 @@ def smoke_test_openai(api_key: str) -> bool:
     payload = {
         "model": ASTRA_MODEL,
         "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
-        "temperature": 0.0,
     }
     try:
         resp = requests.post(
@@ -125,7 +124,6 @@ def smoke_test_moonshot(api_key: str) -> bool:
     payload = {
         "model": KIMI_MODEL,
         "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
-        "temperature": 0.0,
     }
     try:
         resp = requests.post(

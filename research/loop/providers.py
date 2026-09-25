@@ -55,16 +55,20 @@ class ChatCallError(RuntimeError):
 
 
 def _post_chat_completion(
-    url: str, api_key: str, model: str, temperature: float, prompt: str, *, timeout: int = 120,
+    url: str, api_key: str, model: str, temperature: float | None, prompt: str, *, timeout: int = 120,
 ) -> ChatResponse:
     import requests
 
     payload: dict[str, Any] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
         "response_format": {"type": "json_object"},
     }
+    # gpt-6-astra and kimi-k3 both reject any temperature but the default
+    # (1) with a 400 (verified live 2026-09-24), so OpenAI/Moonshot factories
+    # pass None and the field is omitted rather than sent.
+    if temperature is not None:
+        payload["temperature"] = temperature
     try:
         resp = requests.post(
             url,
@@ -83,14 +87,14 @@ def _post_chat_completion(
 
 def make_openai_chat_fn(api_key: str, *, temperature: float, model: str = ASTRA_MODEL) -> ChatFn:
     def _chat(prompt: str) -> ChatResponse:
-        return _post_chat_completion(OPENAI_CHAT_COMPLETIONS_URL, api_key, model, temperature, prompt)
+        return _post_chat_completion(OPENAI_CHAT_COMPLETIONS_URL, api_key, model, None, prompt)
 
     return _chat
 
 
 def make_moonshot_chat_fn(api_key: str, *, temperature: float, model: str = KIMI_MODEL) -> ChatFn:
     def _chat(prompt: str) -> ChatResponse:
-        return _post_chat_completion(MOONSHOT_CHAT_COMPLETIONS_URL, api_key, model, temperature, prompt)
+        return _post_chat_completion(MOONSHOT_CHAT_COMPLETIONS_URL, api_key, model, None, prompt)
 
     return _chat
 

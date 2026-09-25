@@ -33,14 +33,16 @@ STAGE_MODELS: dict[str, str] = {
     STAGE_VARIANT_ENUMERATION: KIMI_MODEL,
 }
 
-# Lower temperature where the job is judgment/consistency (triage,
-# adversarial review), higher where it's meant to explore (drafting the
-# hypothesis itself, enumerating variants around it).
+# gpt-6-astra and kimi-k3 both reject any temperature but the default (1)
+# with a 400 (verified live 2026-09-24), so providers.py never sends one.
+# These values are what gets recorded to the ledger as provenance
+# (hypotheses.temperature), so they must be what the API really used —
+# per-stage temperature tuning isn't available on these models.
 STAGE_TEMPERATURE: dict[str, float] = {
-    STAGE_TRIAGE: 0.2,
-    STAGE_HYPOTHESIS: 0.7,
-    STAGE_ADVERSARIAL_REVIEW: 0.2,
-    STAGE_VARIANT_ENUMERATION: 0.4,
+    STAGE_TRIAGE: 1.0,
+    STAGE_HYPOTHESIS: 1.0,
+    STAGE_ADVERSARIAL_REVIEW: 1.0,
+    STAGE_VARIANT_ENUMERATION: 1.0,
 }
 
 MODEL_PROVIDER: dict[str, str] = {
