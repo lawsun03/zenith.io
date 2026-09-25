@@ -104,6 +104,23 @@ class LevelTracker:
         self.prior_week_high: Decimal | None = None
         self.prior_week_low: Decimal | None = None
 
+        # Indicator levels. Fixed names (sma_7/sma_21/vwap), not a parameterised
+        # `level`, because the IR's level field is a closed enum — a small,
+        # deliberate vocabulary keeps the search surface narrow (CLAUDE.md
+        # rule 2). SMAs are of the 1-minute close over the last N bars fed,
+        # across session boundaries; VWAP is anchored at session_start each
+        # ET day (typical price (H+L+C)/3 x volume). Every value at bar t
+        # uses only bars <= t (same contract as session_open etc.).
+        self.sma_7: Decimal | None = None
+        self.sma_21: Decimal | None = None
+        self.vwap: Decimal | None = None
+        self._closes_7: deque[Decimal] = deque(maxlen=7)
+        self._closes_21: deque[Decimal] = deque(maxlen=21)
+        self._sum_7 = Decimal("0")
+        self._sum_21 = Decimal("0")
+        self._vwap_pv = Decimal("0")
+        self._vwap_v = 0
+
         self._day_high: Decimal | None = None
         self._day_low: Decimal | None = None
         self._week_high: Decimal | None = None
@@ -121,6 +138,9 @@ class LevelTracker:
             self._day_high = bar.high
             self._day_low = bar.low
             self._in_session_today = False
+            self._vwap_pv = Decimal("0")
+            self._vwap_v = 0
+            self.vwap = None
         else:
             self._day_high = max(self._day_high, bar.high)
             self._day_low = min(self._day_low, bar.low)
@@ -147,6 +167,25 @@ class LevelTracker:
         if not self._in_session_today and et.time() >= self._session_start:
             self.session_open = bar.open
             self._in_session_today = True
+
+        if et.time() >= self._session_start and bar.volume > 0:
+            typical = (bar.high + bar.low + bar.close) / Decimal(3)
+            self._vwap_pv += typical * bar.volume
+            self._vwap_v += bar.volume
+            self.vwap = self._vwap_pv / Decimal(self._vwap_v)
+
+        self.sma_7 = self._roll("_closes_7", "_sum_7", 7, bar.close)
+        self.sma_21 = self._roll("_closes_21", "_sum_21", 21, bar.close)
+
+    def _roll(self, window_attr: str, sum_attr: str, n: int, close: Decimal) -> Decimal | None:
+        window: deque[Decimal] = getattr(self, window_attr)
+        total: Decimal = getattr(self, sum_attr)
+        if len(window) == n:
+            total -= window[0]
+        window.append(close)
+        total += close
+        setattr(self, sum_attr, total)
+        return total / Decimal(n) if len(window) == n else None
 
     def get(self, name: str) -> Decimal | None:
         if name in ("opening_range_high", "opening_range_low",
@@ -498,15 +537,39 @@ class FvgLeaf(Node):
 
 class CrossOfLeaf(Node):
     """Price crosses a named level. direction=up: close crosses from at/
-    below the level to above it; down: mirror; either: either direction."""
+    below the level to above it; down: mirror; either: either direction.
 
-    def __init__(self, level: str, direction: str = "either") -> None:
+    With `level_b` set, it is `level` that crosses `level_b` instead (e.g.
+    sma_7 crossing sma_21): up = level goes from at/below level_b to above
+    it. Neither series' value at bar t depends on any later bar."""
+
+    def __init__(self, level: str, direction: str = "either", level_b: str | None = None) -> None:
         super().__init__()
         self.level = level
+        self.level_b = level_b
         self.direction = direction
         self._prev_close: Decimal | None = None
+        self._prev_diff: Decimal | None = None
 
     def _evaluate(self, bar: Bar, ctx: EvalCtx) -> bool:
+        if self.level_b is not None:
+            a, b = ctx.levels.get(self.level), ctx.levels.get(self.level_b)
+            prev_diff = self._prev_diff
+            if a is None or b is None:
+                self._prev_diff = None
+                return False
+            diff = a - b
+            self._prev_diff = diff
+            if prev_diff is None:
+                return False
+            crossed_up = prev_diff <= 0 < diff
+            crossed_down = prev_diff >= 0 > diff
+            if self.direction == "up":
+                return crossed_up
+            if self.direction == "down":
+                return crossed_down
+            return crossed_up or crossed_down
+
         lvl = ctx.levels.get(self.level)
         prev = self._prev_close
         self._prev_close = bar.close
@@ -789,7 +852,7 @@ def compile_predicate(node: dict, session_end: dtime = dtime(16, 0)) -> Node:
     elif op == "fvg":
         leaf = FvgLeaf(direction=direction)
     elif op == "cross_of":
-        leaf = CrossOfLeaf(level=node["level"], direction=direction)
+        leaf = CrossOfLeaf(level=node["level"], direction=direction, level_b=node.get("level_b"))
     elif op == "close_beyond":
         leaf = CloseBeyondLeaf(level=node["level"], direction=direction,
                                 min_atr=_dec(node, "min_atr", Decimal("0")))

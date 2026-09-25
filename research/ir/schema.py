@@ -52,6 +52,7 @@ _LEVELS = {
     "opening_range_high", "opening_range_low",
     "swing_high", "swing_low",
     "prior_week_high", "prior_week_low",
+    "sma_7", "sma_21", "vwap",
 }
 
 _RECOGNIZABLE_OPS = {

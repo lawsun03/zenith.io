@@ -4,6 +4,10 @@ Seed session: {instrument} on {session_date}, regime label "{regime_label}". Why
 
 Your hypothesis must have a stated causal MECHANISM — a specific, checkable reason this pattern should recur across all three instruments, not just an observation that it happened once. A mechanism like "price often reverses after a big move" is too vague to falsify; a mechanism must name the market behaviour it depends on and why that behaviour is structural rather than incidental to this one session.
 
+Do not default to one style of strategy. Any mechanism family is fair game: trend-following (sma_7 crossing sma_21, price holding above or below vwap), mean reversion back to vwap or a moving average, opening-range or session-level breakouts, momentum (consecutive_closes, displacement), volatility expansion, time-of-day effects. ICT-style constructs (sweep_of, fvg) are ONE option among many, never the default. A hypothesis built only from cross_of / close_beyond / retrace_to against sma_7, sma_21 and vwap is exactly as welcome as one built from sweeps and gaps; pick whatever best fits the seed session's mechanism. sma_7 and sma_21 are simple moving averages of the 1-minute close; vwap is volume-weighted average price anchored at the strategy's session start each day. cross_of takes an optional level_b, in which case it fires when `level` crosses `level_b` (e.g. level sma_7, level_b sma_21, direction up = a bullish crossover).
+
+A structural stop with anchor sweep_extreme only works when the entry contains a sweep_of; otherwise use stop.type atr or realised_sigma (or anchor entry_bar), or the strategy will never place a trade.
+
 The rule must be expressed as a strategy IR document with this exact shape:
 {{
   "ir_version": "1.0",
