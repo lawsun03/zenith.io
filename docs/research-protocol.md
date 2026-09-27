@@ -1,6 +1,6 @@
 # Research protocol — repo mapping
 
-Maps the Zenith Research Protocol Spec (2026-09-27) onto this repo. Where the
+Maps the Zenith Research Protocol Spec (2026-09-27, `docs/research-protocol-spec.md`) onto this repo. Where the
 spec and the repo disagree on naming or layout, the repo wins and the mapping
 is recorded here.
 
