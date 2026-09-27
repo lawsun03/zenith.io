@@ -52,18 +52,28 @@ class CombineTrade:
 
 
 def trades_to_combine_trades(
-    trades: Sequence[Trade], contracts: Sequence[int], point_value: Decimal,
+    trades: Sequence[Trade], contracts: Sequence[int], point_value: Decimal | Sequence[Decimal],
 ) -> list[CombineTrade]:
     """Convert the rule-level trade sequence to dollar P&L at the sizing
     this candidate's IR document actually specifies (research.ir.sizing) —
     the one place account size is allowed to touch anything downstream of
-    the rule (CLAUDE.md domain invariant 4)."""
+    the rule (CLAUDE.md domain invariant 4).
+
+    `point_value` is one scalar for a single-instrument sequence, or one value
+    per trade for a pooled sequence whose micro/full ratio differs by
+    instrument (silver's SIL is 1/5 of SI; NQ/ES/GC micros are 1/10)."""
     if len(trades) != len(contracts):
         raise ValueError("trades and contracts must be the same length and aligned by index")
+    if isinstance(point_value, Decimal):
+        point_values = [point_value] * len(trades)
+    else:
+        point_values = list(point_value)
+        if len(point_values) != len(trades):
+            raise ValueError("per-trade point_value must be the same length as trades")
     out = []
-    for t, c in zip(trades, contracts):
+    for t, c, pv in zip(trades, contracts, point_values):
         net_points = t.pnl_points - t.commission_points_equivalent
-        out.append(CombineTrade(ts=t.exit_ts, pnl_dollars=net_points * point_value * c))
+        out.append(CombineTrade(ts=t.exit_ts, pnl_dollars=net_points * pv * c))
     return out
 
 

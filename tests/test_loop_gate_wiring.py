@@ -209,3 +209,18 @@ def test_a_candidate_that_fails_never_joins_an_ensemble(conn):
 # (test_survivor_joins_an_equal_weighted_ensemble: weight is exactly "1"
 # for a lone survivor, not derived from any score) plus the existing
 # source-level guard on the two files that actually could rank.
+
+
+def test_silver_micro_is_sil_and_ratio_is_one_fifth_not_one_tenth():
+    # SIL is 1,000 oz vs SI's 5,000 oz. Assuming "M"+root (MSI) or a uniform
+    # 0.1 would over-cost silver gate 8 by 2x or look up a symbol that doesn't exist.
+    assert gate_runner._micro_symbol(ACCOUNT, "SI") == "SIL"
+    assert gate_runner._micro_full_ratio(ACCOUNT, "SI") == Decimal("0.2")
+    for root in ("NQ", "ES", "GC"):
+        assert gate_runner._micro_full_ratio(ACCOUNT, root) == Decimal("0.1")
+
+
+def test_micro_lookup_fails_loud_when_account_has_no_micro():
+    account = {"instruments": {"SI": {"point_value": "5000"}}}
+    with pytest.raises(ValueError):
+        gate_runner._micro_symbol(account, "SI")

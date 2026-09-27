@@ -79,3 +79,22 @@ def test_mismatched_lengths_raise():
     import pytest
     with pytest.raises(ValueError):
         trades_to_combine_trades([], [1], point_value=Decimal("20"))
+
+
+def test_per_trade_point_value_prices_each_trade_at_its_own_ratio():
+    # Silver's micro is 1/5 of full, NQ's is 1/10: a scalar would mis-cost one of them.
+    def _t(inst):
+        return Trade(
+            instrument=inst, side="long", entry_ts=BASE_TS, entry_price=Decimal("100"),
+            stop_price=Decimal("90"), target_price=Decimal("120"), exit_ts=BASE_TS,
+            exit_price=Decimal("110"), exit_reason="target",
+            pnl_points=Decimal("1000"), commission_points_equivalent=Decimal("0"),
+        )
+    out = trades_to_combine_trades([_t("NQ"), _t("SI")], [1, 1], [Decimal("0.1"), Decimal("0.2")])
+    assert [o.pnl_dollars for o in out] == [Decimal("100.0"), Decimal("200.0")]
+
+
+def test_per_trade_point_value_length_mismatch_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        trades_to_combine_trades([], [], [Decimal("1")])

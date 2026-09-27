@@ -56,9 +56,11 @@ Verify against your broker's current schedule before trusting a gate-2 result.
 | MNQ | 0.25 | $0.50 | Primary execution instrument |
 | MES | 0.25 | $1.25 | |
 | MGC | 0.10 | $1.00 | |
+| SIL | 0.005 | $5.00 | Micro silver (1,000 oz) — not `MSI` |
 | NQ | 0.25 | $5.00 | Research series only |
 | ES | 0.25 | $12.50 | Research series only |
 | GC | 0.10 | $10.00 | Research series only |
+| SI | 0.005 | $25.00 | Research series only (5,000 oz) |
 
 ## Why this gate matters more than the others
 

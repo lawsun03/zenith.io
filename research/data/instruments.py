@@ -1,6 +1,6 @@
 """Instrument specs for the research corpus.
 
-Root (full-size) symbols only — NQ, ES, GC. Micro sizing (MNQ/MES/MGC) is a
+Root (full-size) symbols only — NQ, ES, GC, SI. Micro sizing (MNQ/MES/MGC/SIL) is a
 sizing-layer concern (CLAUDE.md rule 4) and has no place here.
 """
 from __future__ import annotations
@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-Root = Literal["NQ", "ES", "GC"]
+Root = Literal["NQ", "ES", "GC", "SI"]
 
-ROOTS: tuple[Root, ...] = ("NQ", "ES", "GC")
+ROOTS: tuple[Root, ...] = ("NQ", "ES", "GC", "SI")
 
 
 @dataclass(frozen=True)
@@ -24,11 +24,13 @@ class InstrumentSpec:
 
 
 # GC lists the standard bi-monthly COMEX cycle: Feb, Apr, Jun, Aug, Oct, Dec.
+# SI lists Jan, Mar, May, Jul, Sep, Dec (COMEX silver's standard cycle).
 # NQ/ES list the quarterly financial cycle: Mar, Jun, Sep, Dec.
 INSTRUMENTS: dict[Root, InstrumentSpec] = {
     "NQ": InstrumentSpec("NQ", "GLBX.MDP3", Decimal("0.25"), ("H", "M", "U", "Z")),
     "ES": InstrumentSpec("ES", "GLBX.MDP3", Decimal("0.25"), ("H", "M", "U", "Z")),
     "GC": InstrumentSpec("GC", "GLBX.MDP3", Decimal("0.10"), ("G", "J", "M", "Q", "V", "Z")),
+    "SI": InstrumentSpec("SI", "GLBX.MDP3", Decimal("0.005"), ("F", "H", "K", "N", "U", "Z")),
 }
 
 MONTH_CODE_TO_NUM: dict[str, int] = {

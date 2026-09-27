@@ -36,9 +36,11 @@
     "MNQ": { "tick_value": "0.50",  "tick_size": "0.25", "point_value": "2.00",  "underlying": "NQ" },
     "MES": { "tick_value": "1.25",  "tick_size": "0.25", "point_value": "5.00",  "underlying": "ES" },
     "MGC": { "tick_value": "1.00",  "tick_size": "0.10", "point_value": "10.00", "underlying": "GC" },
+    "SIL": { "tick_value": "5.00",  "tick_size": "0.005", "point_value": "1000.00", "underlying": "SI" },
     "NQ":  { "tick_value": "5.00",  "tick_size": "0.25", "point_value": "20.00" },
     "ES":  { "tick_value": "12.50", "tick_size": "0.25", "point_value": "50.00" },
-    "GC":  { "tick_value": "10.00", "tick_size": "0.10", "point_value": "100.00" }
+    "GC":  { "tick_value": "10.00", "tick_size": "0.10", "point_value": "100.00" },
+    "SI":  { "tick_value": "25.00", "tick_size": "0.005", "point_value": "5000.00" }
   },
 
   "simulation": {

@@ -19,10 +19,11 @@ including the rules the JSON Schema cannot express":
           enum and `additionalProperties: false` already block these as
           *keys*, but this check is schema-version-independent and catches
           a future loosening immediately.
-       c. instruments is exactly {"NQ", "ES", "GC"} — already fully implied
-          by minItems=maxItems=3 + a 3-value enum + uniqueItems, but stated
-          explicitly so it keeps holding if the schema's cardinality
-          constraints are ever loosened.
+       c. instruments is exactly one of two pools: the legacy {"NQ", "ES",
+          "GC"} (so pre-silver strategies keep backtesting bit-identically)
+          or {"NQ", "ES", "GC", "SI"}. Never a subset — per-instrument
+          fitting is banned (CLAUDE.md rule 2). Stated explicitly so it
+          keeps holding if the schema's cardinality constraints loosen.
 
 validate() returns a list of human-readable error strings; empty = valid.
 Never raises on a malformed document — a strategy is data, and a bad
@@ -43,7 +44,8 @@ _SCHEMA_PATH = (
 
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
-_INSTRUMENTS = {"NQ", "ES", "GC"}
+_LEGACY_POOL = frozenset({"NQ", "ES", "GC"})
+_POOL = frozenset({"NQ", "ES", "GC", "SI"})
 
 _LEVELS = {
     "prior_day_high", "prior_day_low",
@@ -138,10 +140,11 @@ def _check_instruments(value: Any, errors: list[str]) -> None:
     if not isinstance(value, list):
         errors.append("instruments must be an array")
         return
-    if len(value) != 3 or set(value) != _INSTRUMENTS or len(set(value)) != 3:
+    if len(set(value)) != len(value) or frozenset(value) not in (_LEGACY_POOL, _POOL):
         errors.append(
-            "instruments must be exactly [\"NQ\", \"ES\", \"GC\"] (pooled "
-            "fitting is mandatory, CLAUDE.md rule 2) — got "
+            "instruments must be exactly [\"NQ\", \"ES\", \"GC\", \"SI\"] "
+            "(or the legacy [\"NQ\", \"ES\", \"GC\"]) — pooled "
+            "fitting is mandatory, CLAUDE.md rule 2 — got "
             f"{value!r}"
         )
 

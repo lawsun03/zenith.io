@@ -12,11 +12,11 @@
     "name": { "type": "string", "minLength": 3, "maxLength": 80 },
 
     "instruments": {
-      "description": "Always all three. Per-instrument fitting is banned (see CLAUDE.md rule 2).",
+      "description": "Always the full pool: NQ, ES, GC and SI (the 3-instrument NQ/ES/GC legacy pool is still accepted so pre-silver strategies stay valid; research.ir.schema enforces exactly one of the two). Per-instrument fitting is banned (see CLAUDE.md rule 2).",
       "type": "array",
-      "items": { "enum": ["NQ", "ES", "GC"] },
+      "items": { "enum": ["NQ", "ES", "GC", "SI"] },
       "minItems": 3,
-      "maxItems": 3,
+      "maxItems": 4,
       "uniqueItems": true
     },
 

@@ -1,6 +1,6 @@
 """Wires research.gates.pipeline into the hypothesis loop
 (docs/research-loop/PHASE-PROMPTS.md Phase 6b): backtests a candidate
-across NQ/ES/GC on the frozen folds, builds the two CandidateInputs
+across NQ/ES/GC/SI on the frozen folds, builds the two CandidateInputs
 (macro-release sessions included and excluded), and records the full
 gate 0-9 battery to the ledger.
 
@@ -17,11 +17,11 @@ of each function for the mechanics):
   (and therefore every Sharpe-based gate) byte-for-byte unchanged while
   making `point_value=1` yield the true pooled dollar edge for gate 2.
   Gate 8 reuses the same dollar-scaled trades with `combine_point_value`
-  set to the (verified-uniform) micro/full point-value ratio — exact for
-  docs/research-loop/accounts/topstep-50k.json, where every micro/full
-  pair happens to be exactly 0.1; `_micro_full_ratio` raises loudly if a
-  future account file ever makes that ratio non-uniform across
-  instruments, rather than silently mis-costing gate 8.
+  set per trade to ITS instrument's micro/full point-value ratio. The ratio
+  is not uniform (NQ/ES/GC micros are 1/10, silver's SIL is 1/5), so a
+  single scalar would mis-cost gate 8. Each micro is found through the
+  account file's `underlying` field — never by name (silver's micro is
+  SIL, not MSI) — and a missing micro raises rather than guessing.
 
 - Gate 3's sweep_surface is reconstructed from the ledger's persisted
   `param_grid` (field-path -> swept values) applied to the base IR as a
@@ -225,24 +225,22 @@ def _weighted_tick_value(trades: Sequence[Trade], tick_value_by_instrument: dict
     return total / len(trades)
 
 
-def _micro_full_ratio(account: dict, instruments: Sequence[str]) -> Decimal:
-    """The micro/full point_value ratio for gate 8 — verified uniform
-    across every instrument actually traded, since CandidateInputs.
-    combine_point_value is a single scalar applied to every pooled trade.
-    Raises rather than silently mis-costing gate 8 if a future account
-    file ever makes this ratio non-uniform (CLAUDE.md rule 12: fail loud)."""
-    ratios = set()
-    for instrument in instruments:
-        full = Decimal(account["instruments"][instrument]["point_value"])
-        micro_symbol = "M" + instrument
-        micro = Decimal(account["instruments"][micro_symbol]["point_value"])
-        ratios.add(micro / full)
-    if len(ratios) != 1:
-        raise ValueError(
-            f"micro/full point_value ratio is not uniform across {instruments}: {ratios} — "
-            "gate 8's combine_point_value cannot be a single scalar over pooled trades"
-        )
-    return ratios.pop()
+def _micro_symbol(account: dict, instrument: str) -> str:
+    """The account-file micro whose `underlying` is `instrument`. Raises if
+    there is not exactly one, rather than guessing a spelling."""
+    matches = [
+        sym for sym, spec in account["instruments"].items()
+        if spec.get("underlying") == instrument
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one micro with underlying {instrument!r}, found {matches}")
+    return matches[0]
+
+
+def _micro_full_ratio(account: dict, instrument: str) -> Decimal:
+    full = Decimal(account["instruments"][instrument]["point_value"])
+    micro = Decimal(account["instruments"][_micro_symbol(account, instrument)]["point_value"])
+    return micro / full
 
 
 def _size_contracts_pooled(
@@ -266,7 +264,7 @@ def _size_contracts_pooled(
         instrument_trades_per_year = len(instrument_trades) / years_span if years_span > 0 else 0
         sized = size_trades(
             list(instrument_trades), Decimal(str(sizing_cfg["vol_target_annual"])), account,
-            "M" + instrument, max_contracts=sizing_cfg.get("max_contracts"),
+            _micro_symbol(account, instrument), max_contracts=sizing_cfg.get("max_contracts"),
             trades_per_year=instrument_trades_per_year,
         )
         for idx, c in zip(indices, sized):
@@ -362,7 +360,8 @@ def build_candidate_inputs(
 
     dollar_trades = _dollar_scale_trades(native_trades, point_value_by_instrument)
     tick_value = _weighted_tick_value(native_trades, tick_value_by_instrument)
-    combine_point_value = _micro_full_ratio(account, ir_doc["instruments"])
+    ratio_by_instrument = {i: _micro_full_ratio(account, i) for i in ir_doc["instruments"]}
+    combine_point_value = [ratio_by_instrument[t.instrument] for t in native_trades]
     contracts = _size_contracts_pooled(native_trades, ir_doc, account, years_span=years_span)
 
     axes, sweep_surface = _sweep_surface(

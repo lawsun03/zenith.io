@@ -77,7 +77,7 @@ class CandidateInputs:
     # `combine_point_value` prices — micros in production.
     account: dict | None = None
     contracts: Sequence[int] | None = None
-    combine_point_value: Decimal | None = None
+    combine_point_value: Decimal | Sequence[Decimal] | None = None
     combine_n_paths: int | None = None   # overrides account["simulation"]["monte_carlo_paths"]
     combine_seed: int | None = None      # deterministic Monte Carlo for tests
 
@@ -171,8 +171,9 @@ def _evaluate_one(
     if gate == 8:
         if inputs.account is None or inputs.contracts is None:
             raise ValueError("gate 8 requires `account` and `contracts` on CandidateInputs")
+        cpv = inputs.combine_point_value
         combine_trades = combine.trades_to_combine_trades(
-            inputs.trades, inputs.contracts, inputs.combine_point_value or inputs.point_value,
+            inputs.trades, inputs.contracts, inputs.point_value if cpv is None else cpv,
         )
         rng = random.Random(inputs.combine_seed) if inputs.combine_seed is not None else None
         payout_prob = combine.run_combine_simulation(

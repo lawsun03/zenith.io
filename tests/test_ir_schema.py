@@ -117,3 +117,17 @@ def test_stop_buffer_zero_is_valid() -> None:
     doc = _load("ifvg_sweep.json")
     doc["stop"]["buffer"] = 0
     assert validate(doc) == []
+
+
+def test_four_instrument_pool_including_silver_is_valid() -> None:
+    doc = _load("ifvg_sweep.json")
+    doc["instruments"] = ["NQ", "ES", "GC", "SI"]
+    assert validate(doc) == []
+
+
+@pytest.mark.parametrize("pool", [["SI"], ["NQ", "SI"], ["NQ", "ES", "SI"], ["GC", "SI"]])
+def test_silver_cannot_be_fitted_alone_or_in_a_subset(pool: list[str]) -> None:
+    # Invariant 2: a silver-only (or any partial) pool is a per-instrument fit.
+    doc = _load("ifvg_sweep.json")
+    doc["instruments"] = pool
+    assert any("instruments must be exactly" in e for e in validate(doc))
