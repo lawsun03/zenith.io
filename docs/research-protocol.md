@@ -9,8 +9,8 @@ is recorded here.
 | Step | Spec | State |
 |---|---|---|
 | 1 | Engine fill model + tests (§5) | **Done** — `PaperBroker(strict_fills=True)`, `tests/engine/test_fills.py`. Seed-strategy reproduction pending (needs data, see below). |
-| 2 | Cost model + metrics (§6) | **Done** except `prop_sim` — `app/backtest/costs.py`, `app/backtest/metrics.py`, `research_metrics` in every CLI result. |
-| 3 | Protocol lock + ledger tables (§2, §10) | Not started |
+| 2 | Cost model + metrics (§6) | **Done** — `app/backtest/costs.py`, `app/backtest/metrics.py`, `research_metrics` in every CLI result. `prop_sim` landed with step 3. |
+| 3 | Protocol lock + ledger tables (§2, §10) | **Done** — `app/research/`, `research/protocols/metals-intraday-v1.yaml` (draft, **not locked**), `prop_rules/topstep_50k.yaml`, `app/backtest/prop_sim.py`. |
 | 4 | Vault + holdout service (§3) | Not started |
 | 5 | Luck module (§7) | Not started |
 | 6 | Pooling + correlation (§8, §9) | Not started |
@@ -23,12 +23,13 @@ is recorded here.
 |---|---|
 | `engine` | `app/backtest/runner.py` (`run_backtest`) driving `app/broker/paper.py` (`PaperBroker`). Same broker backs paper mode, so protocol rules sit behind `strict_fills`. |
 | CLI | `python -m app.backtest` — strict fills **on** by default; `--legacy-fills` for paper-mode parity. Result JSON records `strict_fills`. |
-| `ledger` | Today: `research/JOURNAL.md`, `research/findings.json`, `LESSONS.md`, `BACKLOG.md`. No DB yet — step 3 adds SQLite tables. |
-| `protocol` | Today: `research/PROTOCOL.md` (autonomous-loop rules, prose). Step 3 adds `research/protocols/<id>.yaml`. |
+| `ledger` | `app/research/ledger.py` `Ledger` → `research/ledger.db` (SQLite, gitignored, local). All §10 tables exist; step 3 writes only `protocols`. Prose history stays in `research/JOURNAL.md`, `research/findings.json`, `LESSONS.md`, `BACKLOG.md`. |
+| `protocol` | `research/protocols/<id>.yaml` + `app/research/protocol.py`. `zenith protocol lock <id>` is `python -m app.research protocol lock <id>` (also `verify`). `research/PROTOCOL.md` stays the autonomous loop's prose rules. |
+| `agent_api` | `app/research/agent_api.py` `AgentAPI`: `get_protocol` only so far; write/lock raise `PermissionError`. |
 | research loop | `research/PROTOCOL.md` + `research/SESSION_PROMPT.md` + `scripts/research_loop.ps1` |
 | `costs` | `app/backtest/costs.py` `CostSpec`. It reads tick, tick value and commission from `app/broker/paper.py` (one source) and adds slippage by order type: market 1, stop 1, limit 0. |
 | `metrics` | `app/backtest/metrics.py` `research_metrics()`. The CLI writes it as `research_metrics`, and each trade gets `gross_R`, `net_R`, `net_R_stress` and `cost_R`. |
-| prop sim | `app/backtest/funded_sim.py` (daily granularity) |
+| prop sim | `app/backtest/prop_sim.py` (per trade, rules from `prop_rules/<account>.yaml`, written as `research_metrics.prop_sim`). `app/backtest/funded_sim.py` stays as the daily-granularity combine/XFA chain (`funded_pipeline`). |
 | data | `scripts/fetch_bars_databento.py` → `bars/bars_<SYM>.csv` (gitignored). Budget: `research/databento_ledger.txt`. |
 | SI/GC study, seed strategies, replay trainer, multi-model agents, vault | Not in the repo. |
 
@@ -90,12 +91,6 @@ gapped open, whipsaw defaults to the stop, market entries fill at close + 1 tick
   forced flattens are slipped, targets are not. Every entry is a market order.
 
 **Not covered yet:**
-- `prop_sim` (a new combine each month, rules from `prop_rules/*.yaml`) is
-  deferred to step 3, which adds the YAML files. The existing
-  `funded_pipeline` block (`app/backtest/funded_sim.py`) is the daily-granularity
-  version.
-- `risk_vs_prop_mll` uses the 50K combine's $2,000 trailing max loss until prop
-  rules become data.
 - Partial exits: the runner pairs each entry with one exit, so trades with a
   partial are misreported. Research runs should leave `partial_profit_r` at 0.
 - SIL has no `DEFAULT_COMMISSION` entry, so it falls back to $0.74 per side.
@@ -105,3 +100,79 @@ gapped open, whipsaw defaults to the stop, market entries fill at close + 1 tick
   overnight by design. Under strict fills the session guard closes them at 5pm CT
   (with an ERROR log). Use `--legacy-fills` for those engines, or treat them as
   outside the protocol, which requires flat daily.
+
+## §2 protocol lock + §10 ledger (step 3)
+
+- **Lock:** `python -m app.research protocol lock <id> [--by lawrence]` parses
+  the YAML, validates it, hashes the canonical form (JSON, sorted keys) with
+  SHA-256, writes the row to `protocols`, and makes the file read-only.
+  Comments and whitespace aren't hashed. Re-locking an unchanged file does
+  nothing. A changed file under a locked id is refused, so bump the id
+  (`-v2`).
+- **Validation at lock:** required keys are present, `protocol_id` matches the
+  file name, `holdout_status` is a known value, every universe instrument has
+  costs, and each instrument's `tick`/`tick_value` equals `app/broker/paper.py`.
+  A mismatched tick value would stop net R reconciling with the simulated P&L.
+  Commission and slippage may differ from the broker.
+- **Run gate:** `python -m app.backtest --protocol <id> [--ledger path]` verifies
+  the hash before loading anything and exits 2 on no lock, a mismatch, an
+  instrument outside `universe`, or `--legacy-fills`. The result JSON records
+  `protocol_id` and `protocol_hash` (null without `--protocol`). Costs and
+  `cost_stress_multiplier` then come from the protocol, not the broker tables.
+- **Ledger guarantees (SQLite triggers):** a protocol's `hash`/`yaml` can't be
+  updated and its row can't be deleted. `trials` and `holdout_evals` rows
+  can't be deleted. `families.source_ref` must be non-blank.
+  `holdout_evals` is unique on `(strategy_hash, protocol_id)`, which gives step
+  4's one-shot rule a database backstop.
+- **holdout_status:** the YAML value seeds the ledger at lock. After that the
+  ledger is authoritative, because step 4's burn counter can't edit a locked
+  file.
+- **Agents:** `AgentAPI(agent_name, model_id, ledger)`. `get_protocol` goes
+  through the same hash gate. `write_protocol`/`lock_protocol` raise
+  `PermissionError` and log the agent and model.
+
+**Repo deviations from the spec schema:**
+- `universe` lists the traded micros (`MNQ, MES, MGC, SIL`), not the full
+  contracts, because the universe name is also the costs key and the
+  backtest `--instrument`.
+- `prop_sim.risk_per_trade_usd` (default 200) is new. It is the dollar risk
+  per trade for the combine replay.
+- Holdout starts as `partially_used`, per the holdout decision above.
+
+**prop_sim:**
+- A new combine starts on the first day of each month and runs until it
+  passes, fails or the data ends. Combines overlap.
+- Each trade risks `risk_per_trade_usd`, floored to whole contracts at the
+  trade's own risk per contract. A trade too wide for one contract is skipped
+  and counted.
+- Trailing max loss, the profit target and the 50% consistency rule run
+  through `PhaseTracker`, the live governor's module. The daily loss limit is
+  handled in `prop_sim`, with action `stop_day` or `fail`.
+- Outcomes: `passed`, `failed_max_loss`, `failed_daily_loss`, `unresolved`,
+  and `unresolved_consistency_blocked` (target reached but best day ≥ 50%).
+  `pass_rate` is computed over resolved combines only.
+- `risk_vs_prop_mll` now reads the rules file's `max_loss`.
+
+**Not covered yet:**
+- **`metals-intraday-v1` is a draft.** Lawrence sets the real values and runs
+  the lock; nothing was locked in this session.
+- **`prop_rules/topstep_50k.yaml` has `last_checked: null`.** Its values are
+  copied from the `CombineRules` defaults, and the $1,000 Combine DLL is
+  unverified. Every `prop_sim` result carries a warning until the file is
+  checked against help.topstep.com.
+- `consistency_best_day_frac` must be 0.5, because `account_phase` hardcodes
+  Topstep's rule. Another firm's fraction needs that module changed first.
+- `prop_sim` sees P&L only at trade exit, so intratrade max-loss and DLL
+  touches are understated.
+- `--protocol` is optional, so the autonomous loop keeps running without one.
+  Step 7 makes it mandatory for agents.
+- `families`, `variants`, `trials`, `holdout_evals`, `graduations`,
+  `forward_trades` and `decay_events` exist but have no writers yet (steps
+  4–8). No `strategy_hash` helper exists yet (§4); add it with `run_dev`.
+- The OS read-only bit doesn't stop root or an admin. The hash check is the
+  real gate.
+- This container has no `project_x_py`. The end-to-end CLI check stubbed it:
+  the protocol run wrote `protocol_id`, `protocol_hash` and `prop_sim`, and
+  the unlocked, edited and off-universe runs were refused. The 0-trade fixture
+  bars mean `prop_sim` ran on no trades end to end. The unit tests cover
+  trades.

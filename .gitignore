@@ -59,3 +59,6 @@ bot_config.json
 config_presets.json
 trades/
 backtests/_config_*.json
+
+# Research ledger (local SQLite; protocol hashes, trials, holdout evals)
+research/ledger.db*

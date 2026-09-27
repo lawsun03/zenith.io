@@ -21,9 +21,16 @@ from typing import Any
 
 from app.backtest.costs import cost_spec
 from app.backtest.metrics import research_metrics
+from app.backtest.prop_sim import (
+    DEFAULT_ACCOUNT, DEFAULT_RISK_PER_TRADE_USD, load_prop_rules, prop_sim,
+)
 from app.backtest.runner import BacktestConfig, run_backtest as _runner_backtest
 from app.bot_config import BotConfig, load_bot_config, strategy_for
 from app.replay import load_bars_csv
+from app.research.ledger import DEFAULT_LEDGER_PATH, Ledger
+from app.research.protocol import (
+    LockedProtocol, ProtocolError, protocol_cost_spec, verify_protocol,
+)
 
 log = logging.getLogger("topstep_bot.backtest")
 
@@ -50,6 +57,7 @@ async def _run_backtest(
     start_date: str | None = None,
     end_date: str | None = None,
     strict_fills: bool = False,
+    protocol: LockedProtocol | None = None,
 ) -> dict:
     t0 = time.time()
     bc = BacktestConfig(
@@ -68,9 +76,22 @@ async def _run_backtest(
     )
     result = await _runner_backtest(bc)
     duration = time.time() - t0
+    prop_cfg = protocol.data["prop_sim"] if protocol else {}
     try:
-        metrics = research_metrics(result.trades, cost_spec(instrument), bc.slippage_ticks_market)
-    except KeyError as e:
+        rules = load_prop_rules(prop_cfg.get("account", DEFAULT_ACCOUNT))
+        if protocol:
+            spec = protocol_cost_spec(protocol, instrument)
+            stress = float(protocol.data["cost_stress_multiplier"])
+        else:
+            spec, stress = cost_spec(instrument), 2.0
+        metrics = research_metrics(result.trades, spec, bc.slippage_ticks_market,
+                                   stress_multiplier=stress,
+                                   mll_usd=rules.combine.mll_distance)
+        if prop_cfg.get("enabled", True):
+            metrics["prop_sim"] = prop_sim(
+                result.trades, rules,
+                Decimal(str(prop_cfg.get("risk_per_trade_usd", DEFAULT_RISK_PER_TRADE_USD))))
+    except (KeyError, ValueError, OSError, ProtocolError) as e:
         log.error("research metrics skipped: %s", e)
         metrics = {"error": str(e)}
 
@@ -119,6 +140,8 @@ async def _run_backtest(
         "bars_path": str(bars_path),
         "bars_processed": result.bars_processed,
         "strict_fills": strict_fills,
+        "protocol_id": protocol.id if protocol else None,
+        "protocol_hash": protocol.hash if protocol else None,
         "starting_balance": str(starting_balance),
         "ending_balance": str(starting_balance + s.net_pnl),
         "duration_seconds": round(duration, 2),
@@ -159,6 +182,9 @@ async def _amain(argv: list[str] | None = None) -> int:
                         help="Disable MLL/DLL/DPL (exploration only — not representative of live conditions)")
     parser.add_argument("--legacy-fills", action="store_true",
                         help="Paper-mode fill rules (touch fills, stops never gap). Default is strict research fills.")
+    parser.add_argument("--protocol", default=None,
+                        help="Locked protocol id (research/protocols/<id>.yaml); refuses to run on a hash mismatch")
+    parser.add_argument("--ledger", default=str(DEFAULT_LEDGER_PATH))
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -166,6 +192,24 @@ async def _amain(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)-5s %(name)s | %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    protocol = None
+    if args.protocol:
+        if args.legacy_fills:
+            log.error("--legacy-fills is not allowed under a protocol (spec §5 fill rules)")
+            return 2
+        ledger = Ledger(args.ledger)
+        try:
+            protocol = verify_protocol(args.protocol, ledger)
+        except ProtocolError as e:
+            log.error("refusing to run: %s", e)
+            return 2
+        finally:
+            ledger.close()
+        if args.instrument not in protocol.data["universe"]:
+            log.error("refusing to run: %s is not in protocol %s universe %s",
+                      args.instrument, protocol.id, protocol.data["universe"])
+            return 2
 
     cfg = load_bot_config(Path(args.config))
     timeframe = args.timeframe or (cfg.timeframes[0] if cfg.timeframes else "1min")
@@ -189,6 +233,7 @@ async def _amain(argv: list[str] | None = None) -> int:
         start_date=args.start_date,
         end_date=args.end_date,
         strict_fills=not args.legacy_fills,
+        protocol=protocol,
     )
     completed_at = datetime.now(timezone.utc).isoformat()
 
