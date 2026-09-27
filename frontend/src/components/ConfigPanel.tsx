@@ -32,7 +32,7 @@ interface FieldDef {
   options?: string[]
 }
 
-const INSTRUMENTS = ['MGC', 'MNQ', 'NQ', 'GC', 'MES', 'ES']
+const INSTRUMENTS = ['MGC', 'MNQ', 'NQ', 'GC', 'MES', 'ES', 'SIL', 'SI']
 const TIMEFRAMES   = ['1min', '3min', '5min', '15min', '30min', '1h']
 
 const FIELDS: FieldDef[] = [

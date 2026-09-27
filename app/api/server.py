@@ -150,6 +150,8 @@ _DATABENTO_SYMBOL_MAP: dict[str, str] = {
     "MGC": "GC.c.0",
     "MES": "ES.c.0",
     "MNQ": "NQ.c.0",
+    "SIL": "SI.c.0",
+    "SI":  "SI.c.0",
 }
 
 

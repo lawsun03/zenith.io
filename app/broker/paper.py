@@ -78,6 +78,8 @@ class _OpenBracket:
 #   /MCL (micro crude):    tick = $0.01, tick value = $1   → $100/point
 #   /MBT (micro Bitcoin):  tick = 5.0,   tick value = $0.50  → $0.10/point (0.1 BTC)
 #   /GC  (full gold):      tick = $0.10, tick value = $10  → $100/point
+#   /SIL (micro silver):   tick = $0.005, tick value = $5  → $1,000/point
+#   /SI  (full silver):    tick = $0.005, tick value = $25 → $5,000/point
 TICK_VALUE = {
     "MGC": Decimal("1"),     # micro gold
     "MNQ": Decimal("0.5"),   # micro Nasdaq
@@ -85,6 +87,8 @@ TICK_VALUE = {
     "MCL": Decimal("1"),     # micro crude
     "MBT": Decimal("0.50"),  # micro Bitcoin (0.1 BTC × $5 tick)
     "GC":  Decimal("10"),    # full gold contract
+    "SIL": Decimal("5"),     # micro silver
+    "SI":  Decimal("25"),    # full silver contract
 }
 
 # Tick size per instrument (price units). Used for slippage calculation.
@@ -95,6 +99,8 @@ TICK_SIZE = {
     "MCL": Decimal("0.01"),
     "GC":  Decimal("0.10"),
     "MBT": Decimal("5"),
+    "SIL": Decimal("0.005"),
+    "SI":  Decimal("0.005"),
 }
 
 # Default commission per side per contract (round-trip = 2×).
@@ -612,6 +618,8 @@ class PaperBroker:
             "MES": Decimal("4"),    # tick = 0.25
             "MCL": Decimal("100"),  # tick = 0.01
             "MBT": Decimal("0.2"),  # tick = 5.0 price units → 0.2 ticks per point
+            "SIL": Decimal("200"),  # tick = 0.005
+            "SI":  Decimal("200"),  # tick = 0.005
         }.get(instrument, Decimal("1"))
 
     def _unrealized_for(self, b: _OpenBracket) -> Decimal:

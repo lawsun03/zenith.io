@@ -33,6 +33,8 @@ _POINT_VALUE: dict[str, Decimal] = {
     "MBT":  Decimal("0.10"),  # Micro Bitcoin: 0.1 BTC, so $1/BTC move = $0.10/contract
     "M2K":  Decimal("5"),     # Micro Russell 2000
     "RTY":  Decimal("50"),    # Russell 2000
+    "SIL":  Decimal("1000"),  # Micro Silver: 1,000 oz
+    "SI":   Decimal("5000"),  # Silver: 5,000 oz
 }
 
 

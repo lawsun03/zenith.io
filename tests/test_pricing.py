@@ -23,7 +23,7 @@ from app.broker.pricing import _point_value, _POINT_VALUE
 # Instruments priced by BOTH modules must agree on dollars-per-point.
 # paper: $/point = tick_value ($/tick) × ticks_per_point (ticks/point)
 # pricing: $/point = _point_value directly
-_SHARED = ["MGC", "MNQ", "MES", "MCL", "MBT"]
+_SHARED = ["MGC", "MNQ", "MES", "MCL", "MBT", "SIL", "SI"]
 
 
 @pytest.mark.parametrize("inst", _SHARED)
@@ -58,3 +58,14 @@ def test_existing_instruments_unchanged_regression():
     assert _point_value("MNQ") == Decimal("2")
     assert _point_value("MES") == Decimal("5")
     assert _point_value("MCL") == Decimal("100")
+
+
+def test_silver_known_dollar_values():
+    # CME Silver: SI = 5,000 oz, SIL (micro) = 1,000 oz, both tick $0.005/oz.
+    # A $0.10 move = $100 on SIL and $500 on SI — a 50x error here (the 0.25
+    # default tick) would wreck slippage and stop math in silver backtests.
+    assert _tick_value("SIL") == Decimal("5")
+    assert _tick_value("SI") == Decimal("25")
+    assert _point_value("SIL") * Decimal("0.10") == Decimal("100.000")
+    assert _point_value("SI") * Decimal("0.10") == Decimal("500.000")
+    assert TICK_SIZE["SIL"] == TICK_SIZE["SI"] == Decimal("0.005")

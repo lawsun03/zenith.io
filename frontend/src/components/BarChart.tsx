@@ -18,6 +18,7 @@ const TF_LABELS: Record<string, string> = {
 const INSTRUMENT_NAMES: Record<string, string> = {
   MGC: 'Micro Gold', MNQ: 'Micro Nasdaq', MES: 'Micro S&P',
   GC: 'Gold', NQ: 'Nasdaq', ES: 'S&P 500',
+  SIL: 'Micro Silver', SI: 'Silver',
 }
 
 interface Props {
