@@ -79,6 +79,12 @@ def validate(data: dict, protocol_id: str) -> None:
     status = data["periods"].get("holdout_status")
     if status not in HOLDOUT_STATUSES:
         raise ProtocolError(f"{protocol_id}: holdout_status {status!r} not in {HOLDOUT_STATUSES}")
+    # The one-shot rule is also a unique index in the ledger; a protocol
+    # claiming more than one eval per strategy would be silently capped.
+    if data["budgets"].get("holdout_evals_per_strategy") != 1:
+        raise ProtocolError(f"{protocol_id}: budgets.holdout_evals_per_strategy must be 1")
+    if int(data["budgets"].get("holdout_evals_before_burned", 0)) < 1:
+        raise ProtocolError(f"{protocol_id}: budgets.holdout_evals_before_burned must be >= 1")
     uncosted = [i for i in data["universe"] if i not in data["costs"]]
     if uncosted:
         raise ProtocolError(f"{protocol_id}: universe instruments without costs {uncosted}")

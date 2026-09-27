@@ -109,8 +109,9 @@ def test_ledger_rejects_rewriting_a_locked_hash(pdir, ledger):
 def test_ledger_never_deletes_trials(pdir, ledger):
     lock_protocol(PID, ledger, "lawrence", pdir)
     c = ledger._conn
-    c.execute("INSERT INTO families VALUES ('f1','n','paper','doi:x','h','lawrence',?)", (PID,))
-    c.execute("INSERT INTO variants VALUES ('v1','f1','sh1','{}','abc','lawrence','t')")
+    c.execute("INSERT INTO families (id, name, source_type, source_ref, hypothesis, created_by, protocol_id) VALUES ('f1','n','paper','doi:x','h','lawrence',?)", (PID,))
+    c.execute("INSERT INTO variants (id, family_id, strategy_hash, params_json, engine_commit, "
+              "code_hash, created_by, created_at) VALUES ('v1','f1','sh1','{}','abc','c','lawrence','t')")
     c.execute("INSERT INTO trials (variant_id, instrument, period, metrics_json) "
               "VALUES ('v1','MGC','dev','{}')")
     with pytest.raises(sqlite3.IntegrityError, match="never deleted"):
@@ -120,7 +121,7 @@ def test_ledger_never_deletes_trials(pdir, ledger):
 def test_family_requires_a_source_ref(pdir, ledger):
     lock_protocol(PID, ledger, "lawrence", pdir)
     with pytest.raises(sqlite3.IntegrityError):
-        ledger._conn.execute("INSERT INTO families VALUES ('f1','n','paper','  ','h','x',?)", (PID,))
+        ledger._conn.execute("INSERT INTO families (id, name, source_type, source_ref, hypothesis, created_by, protocol_id) VALUES ('f1','n','paper','  ','h','x',?)", (PID,))
 
 
 def test_agent_can_read_but_not_write_or_lock(pdir, ledger):

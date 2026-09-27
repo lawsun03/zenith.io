@@ -16,6 +16,8 @@ frontend/node_modules/
 
 # Bars data (large CSVs, re-fetchable)
 bars/
+# Dev split from `python -m app.research vault ingest` (holdout goes to the vault)
+data/dev/
 intrabar_*.csv
 
 # Live trade logs (regenerated from broker every session)

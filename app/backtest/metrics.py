@@ -103,10 +103,17 @@ def research_metrics(trades: list[dict], spec: CostSpec, applied_slip_ticks: int
         rows.append((datetime.fromisoformat(t["entry_ts"]), r))
     if skipped:
         log.warning("research_metrics: %d trade(s) without stop distance excluded", skipped)
-    rows.sort(key=lambda x: x[0])
+    return summarize_r(rows, stress_multiplier, mll_usd, excluded_no_stop=skipped)
 
+
+def summarize_r(rows: list[tuple[datetime, dict]], stress_multiplier: float = 2.0,
+                mll_usd: Decimal = Decimal("2000"), excluded_no_stop: int = 0) -> dict:
+    """§6 summary over (entry_ts, trade_r dict) rows. Split out of
+    research_metrics so pooled results (several instruments' rows
+    concatenated) use the same code as single-instrument ones."""
+    rows = sorted(rows, key=lambda x: x[0])
     n = len(rows)
-    out: dict = {"n_trades": n, "excluded_no_stop": skipped,
+    out: dict = {"n_trades": n, "excluded_no_stop": excluded_no_stop,
                  "stress_multiplier": stress_multiplier}
     if n == 0:
         return out

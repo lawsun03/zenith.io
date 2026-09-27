@@ -11,7 +11,7 @@ is recorded here.
 | 1 | Engine fill model + tests (§5) | **Done** — `PaperBroker(strict_fills=True)`, `tests/engine/test_fills.py`. Seed-strategy reproduction pending (needs data, see below). |
 | 2 | Cost model + metrics (§6) | **Done** — `app/backtest/costs.py`, `app/backtest/metrics.py`, `research_metrics` in every CLI result. `prop_sim` landed with step 3. |
 | 3 | Protocol lock + ledger tables (§2, §10) | **Done** — `app/research/`, `research/protocols/metals-intraday-v1.yaml` (draft, **not locked**), `prop_rules/topstep_50k.yaml`, `app/backtest/prop_sim.py`. |
-| 4 | Vault + holdout service (§3) | Not started |
+| 4 | Vault + holdout service (§3), `strategy_hash` (§4) | **Code done; OS isolation pending Lawrence's pick** — `app/research/vault.py`, `holdout.py`, `identity.py`, `seeds.py`. Acceptance (2) and (3) pass in tests. (1) needs the Windows setup below. |
 | 5 | Luck module (§7) | Not started |
 | 6 | Pooling + correlation (§8, §9) | Not started |
 | 7 | Agent API (§11) | Not started |
@@ -23,15 +23,18 @@ is recorded here.
 |---|---|
 | `engine` | `app/backtest/runner.py` (`run_backtest`) driving `app/broker/paper.py` (`PaperBroker`). Same broker backs paper mode, so protocol rules sit behind `strict_fills`. |
 | CLI | `python -m app.backtest` — strict fills **on** by default; `--legacy-fills` for paper-mode parity. Result JSON records `strict_fills`. |
-| `ledger` | `app/research/ledger.py` `Ledger` → `research/ledger.db` (SQLite, gitignored, local). All §10 tables exist; step 3 writes only `protocols`. Prose history stays in `research/JOURNAL.md`, `research/findings.json`, `LESSONS.md`, `BACKLOG.md`. |
+| `ledger` | `app/research/ledger.py` `Ledger` → `research/ledger.db` (SQLite, gitignored, local). All §10 tables exist (schema v2). Writers: `protocols` (step 3), `holdout_evals`, `families` (seeds) (step 4). Prose history stays in `research/JOURNAL.md`, `research/findings.json`, `LESSONS.md`, `BACKLOG.md`. |
 | `protocol` | `research/protocols/<id>.yaml` + `app/research/protocol.py`. `zenith protocol lock <id>` is `python -m app.research protocol lock <id>` (also `verify`). `research/PROTOCOL.md` stays the autonomous loop's prose rules. |
-| `agent_api` | `app/research/agent_api.py` `AgentAPI`: `get_protocol` only so far; write/lock raise `PermissionError`. |
+| `agent_api` | `app/research/agent_api.py` `AgentAPI`: `get_protocol`, `request_holdout` (queues only). Write/lock raise `PermissionError`. Refuses to construct when it can list the vault. |
+| `vault` (storage) | `app/research/vault.py`: `vault ingest` splits `bars/bars_<SYM>.csv` into `data/dev/<protocol>/` (gitignored) and `$ZENITH_VAULT_DIR/<protocol>/holdout/`. `vault check` is the worker-side isolation check. |
+| `vault_service` | `app/research/holdout.py`: `request_holdout()` (ledger only, the worker's side) and `VaultService.evaluate/release` (needs the vault, the human's side). CLI: `python -m app.research holdout queue\|release\|decline\|evaluate`. No HTTP route yet (see step 4). |
+| `strategy_hash` (§4) | `app/research/identity.py`. |
 | research loop | `research/PROTOCOL.md` + `research/SESSION_PROMPT.md` + `scripts/research_loop.ps1` |
 | `costs` | `app/backtest/costs.py` `CostSpec`. It reads tick, tick value and commission from `app/broker/paper.py` (one source) and adds slippage by order type: market 1, stop 1, limit 0. |
 | `metrics` | `app/backtest/metrics.py` `research_metrics()`. The CLI writes it as `research_metrics`, and each trade gets `gross_R`, `net_R`, `net_R_stress` and `cost_R`. |
 | prop sim | `app/backtest/prop_sim.py` (per trade, rules from `prop_rules/<account>.yaml`, written as `research_metrics.prop_sim`). `app/backtest/funded_sim.py` stays as the daily-granularity combine/XFA chain (`funded_pipeline`). |
 | data | `scripts/fetch_bars_databento.py` → `bars/bars_<SYM>.csv` (gitignored). Budget: `research/databento_ledger.txt`. |
-| SI/GC study, seed strategies, replay trainer, multi-model agents, vault | Not in the repo. |
+| SI/GC study, seed strategy code, replay trainer, multi-model agents | Not in the repo. The seed *families* are registered by `python -m app.research seeds register <protocol>`. |
 
 ## Holdout decision (2026-09-27)
 
@@ -168,7 +171,7 @@ gapped open, whipsaw defaults to the stop, market entries fill at close + 1 tick
   Step 7 makes it mandatory for agents.
 - `families`, `variants`, `trials`, `holdout_evals`, `graduations`,
   `forward_trades` and `decay_events` exist but have no writers yet (steps
-  4–8). No `strategy_hash` helper exists yet (§4); add it with `run_dev`.
+  4–8). *(Step 4: `families`, `variants` and `holdout_evals` now have writers, and `strategy_hash` exists.)*
 - The OS read-only bit doesn't stop root or an admin. The hash check is the
   real gate.
 - This container has no `project_x_py`. The end-to-end CLI check stubbed it:
@@ -176,3 +179,141 @@ gapped open, whipsaw defaults to the stop, market entries fill at close + 1 tick
   the unlocked, edited and off-universe runs were refused. The 0-trade fixture
   bars mean `prop_sim` ran on no trades end to end. The unit tests cover
   trades.
+
+## §3 vault + §4 strategy identity (step 4)
+
+**strategy_hash** (`app/research/identity.py`): SHA-256 over canonical JSON of
+`engine_commit` (git HEAD), `code_hash`, `params` (sorted keys), `universe`
+(sorted) and `protocol_id`.
+- `engine_commit()` refuses when `app/` has uncommitted or untracked changes,
+  because the commit wouldn't describe the code that ran.
+- `code_hash()` defaults to every `.py` under `app/strategy/`. It hashes each
+  relative path plus the file's bytes with CRLF normalised to LF, so a Windows
+  `autocrlf` checkout and a Linux checkout agree.
+- `variants` gained a `code_hash` column so the vault can say which part changed.
+
+**Ingest** (`python -m app.research vault ingest <protocol> [--bars-dir bars] [--dev-dir data/dev] [--replace]`):
+- The split is by CME session (`trading_day_ct`, 5pm CT roll). Dev covers
+  `dev.start..dev.end` and goes to `data/dev/<protocol>/bars_<SYM>.csv`.
+  Holdout goes to `<vault>/<protocol>/holdout/bars_<SYM>.csv`, with a
+  `manifest.json` on each side (row counts, session span, sha256).
+- **Embargo:** the first `embargo_days` sessions after dev end are dropped.
+  They're taken from the union of all instruments' sessions, so every
+  instrument shares one holdout start. The holdout starts at the later of
+  that and `holdout.start`. For `metals-intraday-v1` that is the session
+  after the 5th post-2022 session (around 2023-01-10), not 2023-01-06. The
+  stricter date wins, and the effective start is written to both manifests.
+- Bars outside dev and holdout are dropped, including anything after
+  `holdout.end`. An existing split is refused unless `--replace` is passed.
+  Out-of-order timestamps raise an error.
+- **The source CSV is left in place,** and ingest logs a WARNING per
+  instrument. `bars/bars_<SYM>.csv` still holds the holdout sessions, and the
+  current autonomous loop and scripts read `bars/`. Moving it is part of the
+  isolation setup below, not something ingest does silently.
+
+**Holdout service** (`app/research/holdout.py`, the spec's `vault_service`):
+- The spec's `POST /holdout/evaluate` is split by who can run it:
+  - `request_holdout()` needs only the ledger. The worker calls it through
+    `AgentAPI.request_holdout(strategy_hash, protocol_id)`. It records a
+    `pending` row, or a `refused` row and raises `HoldoutRefused`.
+  - `VaultService` only constructs in a process that can list the vault.
+    `evaluate(strategy_hash, protocol_id, requested_by)` is the human's direct
+    call. `release(eval_id, approved_by)` evaluates a queued agent request.
+    `holdout decline` declines one.
+  - The approval queue is `holdout queue` (CLI) for now; the UI list is step 8.
+    An agent can't release its own request, because releasing needs vault read
+    access, which the OS setup denies the worker. That is why there is no HTTP
+    endpoint: an unauthenticated localhost route would let any local process
+    claim to be the human. Step 8's UI calls `release()` inside the
+    human-owned server process.
+- **Refusals**, each recorded as a `refused` row with the reason:
+  - an unknown hash;
+  - a family registered under another protocol;
+  - `holdout_status: burned`;
+  - an existing `pending` or `evaluated` row for this (strategy, protocol);
+  - a `holdout_contaminated` family (repo addition: evaluating it would spend
+    a burn count for no evidence);
+  - not passed dev.
+  At release time it also refuses when the current checkout doesn't hash to
+  the requested `strategy_hash`, when vault bars are missing for a universe
+  instrument, and when the engine crashes. None of these count toward the
+  burn. An unlocked or edited protocol raises `ProtocolError` with no row,
+  because there is no locked protocol for the row to reference.
+- **Result:** `{per_instrument: §6 research_metrics (incl. prop_sim), pooled:
+  summarize_r over all instruments' trades concatenated, criteria: §2
+  pass_criteria_holdout}`. Stored in `holdout_evals.metrics_json` and
+  returned. No bars, trades or equity curves: a test checks that a
+  trade-only sentinel never reaches the result or the ledger.
+- **Holdout criteria:** pooled `net_R_mean ≥ net_R_min` and
+  `net_R_mean ≥ dev_net_R_mean − max_shortfall_vs_dev_se × SE(holdout)`.
+  Fewer than 2 holdout trades fails.
+- **Burn counter:** only `evaluated` rows count. In the same `BEGIN
+  IMMEDIATE` transaction as the row update, `holdout_evals_used += 1`, and
+  `sealed` becomes `partially_used`. At `holdout_evals_before_burned` the
+  status becomes `burned`. If another eval burned the holdout while this one
+  ran, this eval is refused and its metrics are discarded.
+- **Default runner:** `run_bot_config_variant` treats `params_json` as a
+  `BotConfig` dump and runs the same `_run_backtest` path as `python -m
+  app.backtest --protocol` (strict fills, protocol costs). Step 7's
+  `run_dev` must use the same function.
+
+**"Passed dev" is stubbed against `trials`, not blocked on step 5.**
+`dev_result()` reads the latest `trials` row with `instrument='pooled'` and
+`period='dev'` for the strategy. It passes only if `passed_dev=1`,
+`fdr_pass=1`, `dsr IS NOT NULL` and `metrics_json.net_R_mean` is present.
+Nothing writes that row yet, so today every strategy is refused (fail
+closed). Step 5 must write exactly that row. The `trials` shape is the
+contract, so step 5 needs no change here.
+
+**Ledger schema v2** (auto-migrates v1 on open):
+- `holdout_evals` gained `caller_kind` (human/agent), `model_id`, `status`
+  (pending/evaluated/refused/declined), `reason` and `decided_at`.
+- The table-level `UNIQUE(strategy_hash, protocol_id)` became a partial
+  unique index over `pending`/`evaluated`, so refusals can be logged too.
+- New triggers: decided rows are immutable, `burned` is terminal, and
+  `holdout_evals_used` never decreases.
+- `families.holdout_contaminated` and `variants.code_hash` are new columns.
+- Protocol validation now requires `budgets.holdout_evals_per_strategy == 1`
+  (the index enforces one) and `holdout_evals_before_burned ≥ 1`.
+
+**Seeds:** `python -m app.research seeds register <protocol>` registers
+`gold-pdhl-sweep@<protocol>` and `silver-825-orb@<protocol>` with
+`source_type=user`, the §12 rules as the hypothesis, and
+`holdout_contaminated=1`. It is idempotent. It needs a locked protocol,
+because `families.protocol_id` is a foreign key, and **`metals-intraday-v1`
+isn't locked yet, so nothing is registered in your ledger.** Variants come
+with the seed code (step 8).
+
+### Vault isolation: needs an OS decision (not set up)
+
+The code reads the vault path from `ZENITH_VAULT_DIR` and never assumes a
+location. Proposed options:
+
+| | Setup | Vault hidden from worker | Human gate real | Ledger safe from agents |
+|---|---|---|---|---|
+| **A (recommended)** | New standard (non-admin) Windows user `zenith-research`. Agents and the research loop run as it. Vault at e.g. `C:\ZenithVault`, NTFS ACL with inheritance off: Lawrence + SYSTEM only. Raw `bars/` moves into the vault; the worker gets `data/dev/` only. | yes | yes: agents can't read the bars, so they can't release | possible later: step 7 can make `ledger.db` writable only by Lawrence |
+| B | New `zenith-vault` user owns the vault. The holdout CLI runs as it (`runas`). Agents keep running as Lawrence. | only for non-elevated processes | no: an agent running as Lawrence can do anything Lawrence can | no |
+| C | Vault path outside the repo, no ACL | no, convention only | no | no |
+
+Only A meets acceptance (1) and the spec's "if the worker can read `vault/`,
+the setup is wrong." Once a choice is made, the check on the Windows box is
+`python -m app.research vault check <protocol>` run as the research user. It
+must print `OK`. `AgentAPI` also refuses to construct if it can list the vault.
+
+### Not covered yet (step 4)
+- **Acceptance (1) is unverified on Windows:** the OS setup hasn't been chosen
+  or done. In tests the guard is exercised with a readable directory (it
+  refuses), with a mocked `PermissionError` (it passes), and with a real
+  `chmod 000` directory as a non-root user (it passes; skipped when running
+  as root).
+- `bars/bars_<SYM>.csv` with 2023–26 data is still readable in the repo. The
+  vault is only meaningful after that file moves (option A).
+- `ledger.db` is writable by whoever runs the worker, so an agent could forge
+  a `trials` pass row or edit rows with the triggers dropped. Step 7 has to
+  put ledger writes behind the agent API.
+- With `ZENITH_VAULT_DIR` unset, `AgentAPI` logs a WARNING and skips the
+  isolation check.
+- Pooled metrics concatenate trades. The equal-weight-by-instrument pool (§8)
+  is step 6. `prop_sim` is per instrument only.
+- The spec says graduated strategies may see holdout trades. Not built; step 8.
+- No UI: the approvals queue and the holdout meter are step 8.
