@@ -111,6 +111,7 @@ class BacktestConfig:
     partial_profit_r: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled
     max_entry_slippage_frac: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled; refuse entries > frac × stop distance from market
     trail_1r: bool = False  # ablation T4: trailing 1R-ratchet exit, no TP, no partials
+    strict_fills: bool = False  # research-protocol fill rules; off = paper-mode parity
     # When set, the runner is built faithfully from this live StrategyParams —
     # including the VolumeProfileTracker and the VP gate (vp_enabled, target
     # override). This is the only way the backtest matches live behavior. When
@@ -606,6 +607,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         partial_profit_r=cfg.partial_profit_r,
         max_entry_slippage_frac=cfg.max_entry_slippage_frac,
         trail_1r=cfg.trail_1r,
+        strict_fills=cfg.strict_fills,
     )
     if cfg.strategy_params is not None and cfg.strategy_params.be_trail_r > 0:
         broker._be_trail_r = cfg.strategy_params.be_trail_r

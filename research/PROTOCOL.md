@@ -17,10 +17,11 @@ discipline below, then exit. State lives in files; the next session continues.
    estimate to the ledger total, abort if it would exceed the cap. Append every
    actual spend as a line `YYYY-MM-DD $X.XX <symbol> <range>`. TopstepX
    fetches (`scripts/fetch_bars.py`) are free — prefer them for recent data.
-4. **Frozen holdout = calendar year 2022.** Exploratory work may NOT evaluate
-   on 2022. A finished candidate (one you'd recommend) gets exactly ONE
-   confirmatory 2022 run, recorded in the journal. 2021 H2 / 2023 / 2024 /
-   2025-26 are open. (2024 = original train year; 2025-26 = original test.)
+4. **Holdout = 2023-01-06 → 2026-09-25, status `partially_used`** (superseded
+   the 2022 holdout on 2026-09-27; see `docs/research-protocol.md`). Dev =
+   2015–2022. Exploratory work may NOT evaluate on the holdout window. This
+   loop already used 2023–26 heavily, so a holdout pass here is weak evidence;
+   the forward test is the clean check.
 5. **Stop rules:** a variant losing on BOTH its objective metric and PF vs its
    baseline is rejected — no parameter rescue, no tuning sweeps. Fixed,
    pre-declared defaults only. Both periods (2024 + 2025-26) always reported

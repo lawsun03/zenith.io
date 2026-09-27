@@ -47,6 +47,7 @@ async def _run_backtest(
     enforce_risk_limits: bool = True,
     start_date: str | None = None,
     end_date: str | None = None,
+    strict_fills: bool = False,
 ) -> dict:
     t0 = time.time()
     bc = BacktestConfig(
@@ -61,6 +62,7 @@ async def _run_backtest(
         enabled_killzones=config.enabled_killzones,
         strategy_params=strategy_for(config, instrument),
         enforce_risk_limits=enforce_risk_limits,
+        strict_fills=strict_fills,
     )
     result = await _runner_backtest(bc)
     duration = time.time() - t0
@@ -109,6 +111,7 @@ async def _run_backtest(
         "end_date": end_date,
         "bars_path": str(bars_path),
         "bars_processed": result.bars_processed,
+        "strict_fills": strict_fills,
         "starting_balance": str(starting_balance),
         "ending_balance": str(starting_balance + s.net_pnl),
         "duration_seconds": round(duration, 2),
@@ -146,6 +149,8 @@ async def _amain(argv: list[str] | None = None) -> int:
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--no-risk-limits", action="store_true",
                         help="Disable MLL/DLL/DPL (exploration only — not representative of live conditions)")
+    parser.add_argument("--legacy-fills", action="store_true",
+                        help="Paper-mode fill rules (touch fills, stops never gap). Default is strict research fills.")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -175,6 +180,7 @@ async def _amain(argv: list[str] | None = None) -> int:
         enforce_risk_limits=not args.no_risk_limits,
         start_date=args.start_date,
         end_date=args.end_date,
+        strict_fills=not args.legacy_fills,
     )
     completed_at = datetime.now(timezone.utc).isoformat()
 

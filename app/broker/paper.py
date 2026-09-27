@@ -39,6 +39,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
+from app.risk.flatten import trading_day_ct
+
 from .events import Bar, BracketResult, BrokerPosition, ExitCoverage, Fill, MarkToMarket, Side
 from .protocol import BarHandler, EquityHandler, FillHandler
 
@@ -133,6 +135,8 @@ class PaperBroker:
         partial_profit_r: Decimal = Decimal("0"),    # 0 = disabled; 1.0 = take half at 1R
         max_entry_slippage_frac: Decimal = Decimal("0"),  # 0 = disabled; refuse entry if |entry−market| > frac × stop distance
         trail_1r: bool = False,  # ablation T4: no TP, stop ratchets +1R per +1R MFE
+        strict_fills: bool = False,  # research-protocol fill rules (docs/research-protocol.md §5)
+        limit_through_ticks: int = 1,  # strict only: ticks a resting limit must trade through
     ) -> None:
         self._starting_balance = starting_balance
         self._balance = starting_balance
@@ -142,6 +146,8 @@ class PaperBroker:
         self._partial_profit_r = partial_profit_r
         self._max_entry_slippage_frac = max_entry_slippage_frac
         self._trail_1r = trail_1r
+        self._strict = strict_fills
+        self._limit_through_ticks = limit_through_ticks
         self._be_trail_r = Decimal("0")   # set by run_backtest via strategy_params
         self._connected = False
 
@@ -407,12 +413,28 @@ class PaperBroker:
         stop/target was touched, then fans the bar out to handlers.
         """
         self._current_bar_ts = bar.ts
+        prev_close = self._last_bar_close.get(bar.instrument)
         self._last_bar_close[bar.instrument] = bar.close
 
         # Snapshot keys — modifying the dict while iterating would be a bug.
         for oid in list(self._open.keys()):
             bracket = self._open.get(oid)
             if bracket is None or bracket.instrument != bar.instrument:
+                continue
+
+            # Strict: a position never survives the 5pm CT session break, so it
+            # can never straddle a contract roll on continuous data. Reaching
+            # here means the flatten window failed — close at the last bar of
+            # the entry session and fail loud rather than carry.
+            if self._strict and prev_close is not None and bracket.entry_time and (
+                trading_day_ct(bar.ts)
+                != trading_day_ct(datetime.fromtimestamp(bracket.entry_time, tz=timezone.utc))
+            ):
+                log.error(
+                    "strict fills: %s still open at session change (%s) — closing at prior close %s, no carry",
+                    bracket.order_id, bar.ts, prev_close,
+                )
+                await self._close_bracket(bracket, prev_close, reason="session_end", ts=bar.ts, is_stop=True)
                 continue
 
             # MFE/MAE: update before stop/target check so the favorable leg of
@@ -452,10 +474,7 @@ class PaperBroker:
                 and bracket.partial_target is not None
                 and bracket.partial_size > 0
             ):
-                partial_hit = (
-                    (bracket.side == "long" and bar.high >= bracket.partial_target)
-                    or (bracket.side == "short" and bar.low <= bracket.partial_target)
-                )
+                partial_hit = self._limit_hit(bracket.side, bracket.partial_target, bar)
                 if partial_hit:
                     await self._close_partial(bracket, bracket.partial_target, bar.ts)
                     bracket.size -= bracket.partial_size
@@ -468,16 +487,14 @@ class PaperBroker:
                 (bracket.side == "long" and bar.low <= bracket.stop)
                 or (bracket.side == "short" and bar.high >= bracket.stop)
             )
-            target_hit = bracket.trail_r is None and (
-                (bracket.side == "long" and bar.high >= bracket.target)
-                or (bracket.side == "short" and bar.low <= bracket.target)
-            )
+            target_hit = bracket.trail_r is None and self._limit_hit(bracket.side, bracket.target, bar)
 
             if stop_hit and target_hit:
-                exit_price = bracket.stop if self._pessimistic else bracket.target
-                reason = "stop (whipsaw)" if self._pessimistic else "target (whipsaw)"
+                pessimistic = self._pessimistic or self._strict
+                exit_price = self._stop_fill(bracket, bar) if pessimistic else bracket.target
+                reason = "stop (whipsaw)" if pessimistic else "target (whipsaw)"
             elif stop_hit:
-                exit_price = bracket.stop
+                exit_price = self._stop_fill(bracket, bar)
                 reason = "stop"
             elif target_hit:
                 exit_price = bracket.target
@@ -600,6 +617,28 @@ class PaperBroker:
             "Bracket %s closed at %s (%s); P&L=%s",
             bracket.order_id, exit_price, reason, pnl,
         )
+
+    def _limit_hit(self, side: Side, price: Decimal, bar: Bar) -> bool:
+        """Resting sell limit (long exit) above / buy limit (short exit) below.
+        Strict mode requires trading THROUGH the price: a touch can leave the
+        order unfilled in the queue. Fill price is always the limit itself."""
+        through = Decimal("0")
+        if self._strict:
+            through = TICK_SIZE.get(bar.instrument, Decimal("0.10")) * self._limit_through_ticks
+        if side == "long":
+            return bar.high >= price + through
+        return bar.low <= price - through
+
+    def _stop_fill(self, bracket: _OpenBracket, bar: Bar) -> Decimal:
+        """Stop trigger price, or — strict — the open when the bar gaps through
+        the stop (a stop becomes a market order at the first available price).
+        Adverse slippage is applied later in _close_bracket."""
+        if self._strict:
+            if bracket.side == "long" and bar.open < bracket.stop:
+                return bar.open
+            if bracket.side == "short" and bar.open > bracket.stop:
+                return bar.open
+        return bracket.stop
 
     def _commission_for(self, instrument: str) -> Decimal:
         """Look up commission per side per contract."""
