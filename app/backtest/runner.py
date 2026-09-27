@@ -565,6 +565,7 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 "exit_ts": f["ts"],
                 "exit_price": f["fill_price"],
                 "realized_pnl": f["realized_pnl_delta"],
+                "exit_is_stop": f.get("is_stop", False),
                 "hold_seconds": hold,
                 "_entry_order_id": open_entry.get("order_id", ""),
             }
@@ -688,6 +689,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             "fill_price": str(fill.fill_price),
             "size": fill.size,
             "is_entry": fill.is_entry,
+            "is_stop": fill.is_stop,
             "realized_pnl_delta": str(fill.realized_pnl_delta),
             "killzone": _kz_for_fill(fill.broker_order_id),
             "order_id": fill.broker_order_id or "",

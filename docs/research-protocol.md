@@ -9,7 +9,7 @@ is recorded here.
 | Step | Spec | State |
 |---|---|---|
 | 1 | Engine fill model + tests (§5) | **Done** — `PaperBroker(strict_fills=True)`, `tests/engine/test_fills.py`. Seed-strategy reproduction pending (needs data, see below). |
-| 2 | Cost model + metrics (§6) | Not started |
+| 2 | Cost model + metrics (§6) | **Done** except `prop_sim` — `app/backtest/costs.py`, `app/backtest/metrics.py`, `research_metrics` in every CLI result. |
 | 3 | Protocol lock + ledger tables (§2, §10) | Not started |
 | 4 | Vault + holdout service (§3) | Not started |
 | 5 | Luck module (§7) | Not started |
@@ -26,7 +26,8 @@ is recorded here.
 | `ledger` | Today: `research/JOURNAL.md`, `research/findings.json`, `LESSONS.md`, `BACKLOG.md`. No DB yet — step 3 adds SQLite tables. |
 | `protocol` | Today: `research/PROTOCOL.md` (autonomous-loop rules, prose). Step 3 adds `research/protocols/<id>.yaml`. |
 | research loop | `research/PROTOCOL.md` + `research/SESSION_PROMPT.md` + `scripts/research_loop.ps1` |
-| `costs` | Today: `TICK_SIZE`, `TICK_VALUE`, `DEFAULT_COMMISSION` in `app/broker/paper.py`; `_POINT_VALUE` in `app/broker/pricing.py`. |
+| `costs` | `app/backtest/costs.py` `CostSpec`. It reads tick, tick value and commission from `app/broker/paper.py` (one source) and adds slippage by order type: market 1, stop 1, limit 0. |
+| `metrics` | `app/backtest/metrics.py` `research_metrics()`. The CLI writes it as `research_metrics`, and each trade gets `gross_R`, `net_R`, `net_R_stress` and `cost_R`. |
 | prop sim | `app/backtest/funded_sim.py` (daily granularity) |
 | data | `scripts/fetch_bars_databento.py` → `bars/bars_<SYM>.csv` (gitignored). Budget: `research/databento_ledger.txt`. |
 | SI/GC study, seed strategies, replay trainer, multi-model agents, vault | Not in the repo. |
@@ -75,3 +76,32 @@ gapped open, whipsaw defaults to the stop, market entries fill at close + 1 tick
 2. The strategy re-implemented with stop entries (see above).
 3. For the full spec: 2015+ data for NQ, ES, GC, SI. Only 2021+ is on disk, and
    the Databento cap in `research/databento_ledger.txt` is $20 ($11.20 spent).
+
+## §6 metrics (step 2)
+
+- **Gross R** is the fill prices with the broker's applied slippage removed.
+  **Net R** then charges the `CostSpec` (slippage by order type plus round-trip
+  commission). **Net R stress** multiplies slippage by 2; commission is never
+  stressed.
+- The costs are consistent: net R × risk in dollars equals the broker's own
+  realized P&L to the cent (`test_net_R_matches_broker_realized_pnl_to_the_cent`).
+- `cost_R_flag` is set when the median cost exceeds 0.15R.
+- R is per contract. Exit type comes from the fill's `is_stop` flag: stops and
+  forced flattens are slipped, targets are not. Every entry is a market order.
+
+**Not covered yet:**
+- `prop_sim` (a new combine each month, rules from `prop_rules/*.yaml`) is
+  deferred to step 3, which adds the YAML files. The existing
+  `funded_pipeline` block (`app/backtest/funded_sim.py`) is the daily-granularity
+  version.
+- `risk_vs_prop_mll` uses the 50K combine's $2,000 trailing max loss until prop
+  rules become data.
+- Partial exits: the runner pairs each entry with one exit, so trades with a
+  partial are misreported. Research runs should leave `partial_profit_r` at 0.
+- SIL has no `DEFAULT_COMMISSION` entry, so it falls back to $0.74 per side.
+  The spec's example is $2.00 round trip. Set the real figure before trusting
+  SIL `net_R`.
+- The swing engines (`ob_swing`, `fvg_swing`, `ifvg_swing`, `sweep_swing`) hold
+  overnight by design. Under strict fills the session guard closes them at 5pm CT
+  (with an ERROR log). Use `--legacy-fills` for those engines, or treat them as
+  outside the protocol, which requires flat daily.

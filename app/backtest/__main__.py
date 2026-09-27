@@ -19,6 +19,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from app.backtest.costs import cost_spec
+from app.backtest.metrics import research_metrics
 from app.backtest.runner import BacktestConfig, run_backtest as _runner_backtest
 from app.bot_config import BotConfig, load_bot_config, strategy_for
 from app.replay import load_bars_csv
@@ -66,6 +68,11 @@ async def _run_backtest(
     )
     result = await _runner_backtest(bc)
     duration = time.time() - t0
+    try:
+        metrics = research_metrics(result.trades, cost_spec(instrument), bc.slippage_ticks_market)
+    except KeyError as e:
+        log.error("research metrics skipped: %s", e)
+        metrics = {"error": str(e)}
 
     s = result.stats
     stats = {
@@ -117,6 +124,7 @@ async def _run_backtest(
         "duration_seconds": round(duration, 2),
         "stats": stats,
         "funded_pipeline": funded_pipeline,
+        "research_metrics": metrics,
         "trades": result.trades,
         "signals": _to_jsonable(result.signals),
         "fills": _to_jsonable(result.fills),
