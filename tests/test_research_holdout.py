@@ -9,6 +9,7 @@ disk-touching function directly at one.
 from __future__ import annotations
 
 import stat
+import sys
 from datetime import datetime, timedelta
 
 import polars as pl
@@ -77,6 +78,10 @@ def date_two_years_after(d):
     return d.replace(year=d.year + 2)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="chmod 0o000 does not seal a directory on Windows; the seal needs icacls ACLs",
+)
 def test_sealed_holdout_directory_cannot_be_physically_read(tmp_path):
     """The real enforcement: a filesystem-permission-sealed directory raises
     PermissionError when research/ code's own read function is pointed at

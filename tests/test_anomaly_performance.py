@@ -31,8 +31,10 @@ from research.anomaly.labels import RegimeLabel
 from research.anomaly.pipeline import build_anomaly_table, label_top_decile
 from research.anomaly.spend import SpendLedger
 from research.data.folds import load_folds
-from research.data.instruments import ROOTS
 
+# The acceptance criterion is three instruments; the pool has since grown (SI), so
+# this is pinned here rather than read from research.data.instruments.ROOTS.
+ACCEPTANCE_ROOTS = ("NQ", "ES", "GC")
 RTH_MINUTES = 390  # 09:30 - 16:00 ET
 ET_UTC_OFFSET_HOURS = 5  # constant approximation of America/New_York, see module docstring
 
@@ -79,7 +81,7 @@ def _instant_label_fn(instrument, session_date, feature_summary):
 @pytest.fixture(scope="module")
 def synthetic_corpus() -> pl.DataFrame:
     base_prices = {"NQ": 15000.0, "ES": 4500.0, "GC": 2000.0}
-    frames = [_synthetic_bars(root, base_prices[root]) for root in ROOTS]
+    frames = [_synthetic_bars(root, base_prices[root]) for root in ACCEPTANCE_ROOTS]
     return pl.concat(frames)
 
 
@@ -94,7 +96,7 @@ def test_anomaly_pass_completes_for_three_instruments_in_under_60_seconds(synthe
     elapsed = time.perf_counter() - start
 
     assert run.table.height > 0
-    for root in ROOTS:
+    for root in ACCEPTANCE_ROOTS:
         assert (run.table["instrument"] == root).any()
     assert run.labelled > 0
     assert run.table.filter(pl.col("regime_label").is_not_null()).height == run.labelled
