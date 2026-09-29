@@ -1,0 +1,58 @@
+# DRAFT — not locked. Lawrence sets the real values, then:
+#   python -m app.research protocol lock metals-intraday-v1
+# After lock the file is read-only and any value change needs a new id
+# (e.g. metals-intraday-v2). Comments/whitespace are not hashed.
+#
+# Repo mapping (docs/research-protocol.md): universe lists the traded micro
+# contract, which is also the costs key and the backtest --instrument.
+protocol_id: metals-intraday-v1
+created: 2026-09-27
+owner: lawrence
+universe: [MNQ, MES, MGC, SIL]
+bar_data: databento_glbx_ohlcv_1m
+periods:
+  dev:     {start: 2015-01-01, end: 2022-12-31}
+  embargo_days: 5
+  holdout: {start: 2023-01-06, end: 2026-09-25}
+  # 2023-26 was read repeatedly by the autonomous loop (holdout decision 2026-09-27).
+  holdout_status: partially_used
+session:
+  timezone: America/New_York
+  flat_by: "16:10"                   # verify against current Topstep rules
+  no_trades_across_roll: true
+costs:                                # commission per round trip per contract; slip_ticks per side
+  MNQ: {tick: 0.25, tick_value: 0.50, commission: 1.50, slip_ticks: {market: 1, stop: 1, limit: 0}}
+  MES: {tick: 0.25, tick_value: 1.25, commission: 1.50, slip_ticks: {market: 1, stop: 1, limit: 0}}
+  MGC: {tick: 0.10, tick_value: 1.00, commission: 1.50, slip_ticks: {market: 1, stop: 1, limit: 0}}
+  SIL: {tick: 0.005, tick_value: 5.00, commission: 2.00, slip_ticks: {market: 1, stop: 1, limit: 0}}
+cost_stress_multiplier: 2.0
+requirements:
+  min_trades_per_week_combined: 3
+  min_trades_dev_per_instrument: 150
+pass_criteria_dev:
+  pooled_gross_t_min: 2.0
+  pooled_net_R_min: 0.0
+  pooled_net_R_stress_min: 0.0
+  instruments_net_positive_min: 3
+  years_net_positive_frac_min: 0.6
+  drop_best_year_net_R_min: 0.0
+  dsr_min: 0.95
+  family_fdr_q: 0.10
+pass_criteria_holdout:
+  net_R_min: 0.0
+  max_shortfall_vs_dev_se: 2.0
+budgets:
+  max_variants_per_family: 200
+  max_families_per_run: 10
+  holdout_evals_per_strategy: 1
+  holdout_evals_before_burned: 25
+correlation:
+  max_daily_pnl_corr_with_graduated: 0.5
+prop_sim:
+  enabled: true
+  account: topstep_50k                # prop_rules/topstep_50k.yaml
+  risk_per_trade_usd: 200             # repo addition: $ risk per trade, floored to whole contracts
+kill_switch:
+  drawdown_multiple_of_worst_backtest: 1.5
+  review_at_trades: [30, 60]
+  stop_if_mean_R_below_at_60: 0.0

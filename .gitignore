@@ -16,6 +16,8 @@ frontend/node_modules/
 
 # Bars data (large CSVs, re-fetchable)
 bars/
+# Dev split from `python -m app.research vault ingest` (holdout goes to the vault)
+data/dev/
 intrabar_*.csv
 
 # Live trade logs (regenerated from broker every session)
@@ -73,3 +75,6 @@ backtests/_config_*.json
 # scripts/run_anomaly_pass.py, never committed.
 /var/anomaly/
 .venv/
+
+# Research ledger (local SQLite; protocol hashes, trials, holdout evals)
+research/ledger.db*

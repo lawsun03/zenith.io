@@ -111,6 +111,7 @@ class BacktestConfig:
     partial_profit_r: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled
     max_entry_slippage_frac: Decimal = field(default_factory=lambda: Decimal("0"))  # 0 = disabled; refuse entries > frac × stop distance from market
     trail_1r: bool = False  # ablation T4: trailing 1R-ratchet exit, no TP, no partials
+    strict_fills: bool = False  # research-protocol fill rules; off = paper-mode parity
     # When set, the runner is built faithfully from this live StrategyParams —
     # including the VolumeProfileTracker and the VP gate (vp_enabled, target
     # override). This is the only way the backtest matches live behavior. When
@@ -546,6 +547,7 @@ def _reconstruct_trades(fills: list[dict]) -> list[dict]:
                 "exit_ts": f["ts"],
                 "exit_price": f["fill_price"],
                 "realized_pnl": f["realized_pnl_delta"],
+                "exit_is_stop": f.get("is_stop", False),
                 "hold_seconds": hold,
                 "_entry_order_id": open_entry.get("order_id", ""),
             }
@@ -588,6 +590,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
         partial_profit_r=cfg.partial_profit_r,
         max_entry_slippage_frac=cfg.max_entry_slippage_frac,
         trail_1r=cfg.trail_1r,
+        strict_fills=cfg.strict_fills,
     )
     if cfg.strategy_params is not None and cfg.strategy_params.be_trail_r > 0:
         broker._be_trail_r = cfg.strategy_params.be_trail_r
@@ -668,6 +671,7 @@ async def run_backtest(cfg: BacktestConfig) -> BacktestResult:
             "fill_price": str(fill.fill_price),
             "size": fill.size,
             "is_entry": fill.is_entry,
+            "is_stop": fill.is_stop,
             "realized_pnl_delta": str(fill.realized_pnl_delta),
             "killzone": _kz_for_fill(fill.broker_order_id),
             "order_id": fill.broker_order_id or "",

@@ -1,0 +1,18 @@
+# Topstep 50K Trading Combine rules, as data (spec §2). Read by
+# app/backtest/prop_sim.py. Rules change often (8 times Nov 2025 – Apr 2026):
+# check topstep.com and set last_checked before trusting prop_sim numbers.
+# While last_checked is null every prop_sim result carries a warning.
+account: topstep_50k
+firm: topstep
+last_checked: null                    # YYYY-MM-DD, checked against help.topstep.com
+source: https://help.topstep.com
+# Values below copied from app/risk/account_phase.py CombineRules defaults.
+starting_balance: 50000
+profit_target: 3000
+max_loss: 2000
+# intraday = trail the closed-trade high (conservative; the repo's default).
+# eod = trail end-of-day balance.
+max_loss_trailing: intraday
+daily_loss_limit: 1000                # $; null = no DLL. UNVERIFIED for the Combine.
+daily_loss_limit_action: stop_day     # stop_day = no more trades that day; fail = combine failed
+consistency_best_day_frac: 0.5        # best day must be < this fraction of total profit to pass
